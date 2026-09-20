@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260920.k13" />
+  <link rel="stylesheet" href="style.css?v=20260920.k12" />
 </head>
 <body>
   <div id="app">
@@ -28,6 +28,7 @@
           <span id="cloudStatus" class="cloud-status" title="Cloud sync status"></span>
           <a id="btnNewTab" href="#" target="_blank" class="new-tab-link" title="Open in new window (unrestricted popups & Google login)" style="display:none;">↗ New tab</a>
         </div>
+        <button id="btnCppTranslator" type="button" class="btn-cpp-translate" title="Translate raw C++ LemLib auton code into visual blocks & map">📥 C++ Translator</button>
         <button id="btnImport" title="Import .vpath">Import</button>
         <button id="btnExport" title="Export .vpath">Export .vpath</button>
         <button id="btnClear" class="danger">Clear</button>
@@ -247,7 +248,10 @@
               <option value="above">Above (// comment on preceding line)</option>
             </select>
           </div>
-          <button id="btnGenerate" class="primary full">Generate / Refresh Code</button>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <button id="btnGenerate" class="primary" style="flex:1;">Generate Code</button>
+            <button id="btnCppTranslatorSide" type="button" class="btn-cpp-translate-side" style="flex:1;" title="Import & translate raw C++ auton code into blocks">📥 C++ → Blocks</button>
+          </div>
           <textarea id="codeOut" readonly spellcheck="false"></textarea>
           <button id="btnCopy">Copy to Clipboard</button>
         </section>
@@ -313,6 +317,104 @@
           <strong>Seamless Concurrency Architecture:</strong> Actions flagged as <strong>Multitask (Async)</strong> fork seamlessly into parallel execution tracks (e.g. <code>custom code</code> subsystem tasks while chassis drives <code>moveToPoint</code>) and cleanly converge into subsequent sequential steps (e.g. <code>swingToPoint</code>) via <code>chassis.waitUntilDone()</code>.
         </p>
         <button type="button" id="flowchartModalDoneBtn" class="primary">Close Diagram</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw C++ Auton to Blocks Translator Modal -->
+  <div id="cppTranslateModal" class="modal cpp-translate-modal" hidden>
+    <div class="modal-card cpp-translate-card">
+      <div class="cpp-translate-header">
+        <div class="cpp-translate-title-wrap">
+          <span class="cpp-translate-badge">LemLib v0.5+ · Two-Way Parser Engine</span>
+          <h2>📥 C++ Auton Code to Blocks Translator</h2>
+        </div>
+        <button type="button" id="cppTranslateClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="cpp-translate-body">
+        <p class="cpp-translate-intro">
+          Paste any raw VEX V5 C++ autonomous code (full routine functions or snippets). The translator automatically parses <strong>start poses</strong> (<code>setPose</code>), <strong>LemLib motions</strong> (<code>moveToPoint</code>, <code>moveToPose</code>, <code>turnToHeading</code>, <code>swingToPoint</code>, etc.), struct parameters, custom subsystem commands, comments, and infers <strong>multitask asyncness</strong> and non-blocking concurrency.
+        </p>
+
+        <div class="cpp-presets-bar">
+          <span class="cpp-presets-label">Sample Routines:</span>
+          <button type="button" class="btn-cpp-sample" data-sample="preload_rush">⚡ Preload &amp; Mogo Rush</button>
+          <button type="button" class="btn-cpp-sample" data-sample="multitask_subsystems">⚡ Concurrent Intake &amp; Subsystems</button>
+          <button type="button" class="btn-cpp-sample" data-sample="boomerang_swings">⚡ Boomerang &amp; Swings</button>
+          <button type="button" class="btn-cpp-sample" data-sample="clear">🧹 Clear</button>
+        </div>
+
+        <div class="cpp-input-wrapper">
+          <label for="cppCodeInput" class="cpp-input-label">
+            <span>Raw C++ Autonomous Code:</span>
+            <span class="cpp-input-hint">Supports setPose, all LemLib motions, struct params, pros::Task, &amp; subsystems</span>
+          </label>
+          <textarea id="cppCodeInput" class="cpp-code-textarea" spellcheck="false" placeholder="// Paste your VEX V5 LemLib autonomous C++ code here...
+void autonomous() {
+    chassis.setPose(-60, -60, 0);
+    intake.move(127); // spin intake
+    chassis.moveToPoint(-24, -24, 2000, {.forwards = true, .maxSpeed = 110});
+    chassis.moveToPose(0, 48, 90, 2500, {.lead = 0.5, .forwards = false});
+    clamp.set_value(true); // grab goal
+    chassis.turnToHeading(180, 1500);
+}"></textarea>
+        </div>
+
+        <!-- Live Analysis / Preview Breakdown -->
+        <div id="cppAnalysisCard" class="cpp-analysis-card">
+          <div class="cpp-analysis-header">
+            <span id="cppAnalysisStatus" class="cpp-analysis-status">Ready to parse</span>
+            <span id="cppAnalysisCount" class="cpp-analysis-count">0 items detected</span>
+          </div>
+          <div class="cpp-analysis-grid">
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatPose">—</div>
+              <div class="cpp-stat-lbl">Start Pose (X, Y, θ)</div>
+            </div>
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatMotions">0</div>
+              <div class="cpp-stat-lbl">Motion Steps</div>
+            </div>
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatCustom">0</div>
+              <div class="cpp-stat-lbl">Custom Code Blocks</div>
+            </div>
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatAsync">0</div>
+              <div class="cpp-stat-lbl">Inferred Multitask (Async)</div>
+            </div>
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatComments">0</div>
+              <div class="cpp-stat-lbl">Parsed Comments</div>
+            </div>
+          </div>
+          <div id="cppParsedPreviewList" class="cpp-parsed-preview-list">
+            <!-- Dynamic pill sequence of parsed actions -->
+          </div>
+        </div>
+
+        <div class="cpp-options-row">
+          <div class="cpp-option-group">
+            <label class="cpp-radio-label">
+              <input type="radio" name="cppImportTarget" value="active" checked />
+              <span>Replace Active Routine (<strong id="cppActiveRoutineName">Routine 1</strong>)</span>
+            </label>
+            <label class="cpp-radio-label">
+              <input type="radio" name="cppImportTarget" value="new" />
+              <span>Create as New Routine:</span>
+            </label>
+            <input type="text" id="cppNewRoutineName" class="cpp-routine-name-input" value="Imported Auton" placeholder="Routine Name" />
+          </div>
+        </div>
+      </div>
+
+      <div class="cpp-translate-footer">
+        <div id="cppErrorMsg" class="cpp-error-msg" hidden></div>
+        <div class="cpp-footer-actions">
+          <button type="button" id="cppTranslateCancelBtn">Cancel</button>
+          <button type="button" id="cppTranslateApplyBtn" class="primary">🚀 Translate &amp; Apply to Visual Editor</button>
+        </div>
       </div>
     </div>
   </div>
@@ -544,6 +646,7 @@ void autonomous() {
               <li><strong>All routines (switch):</strong> Generates a complete <code>switch (autonSelector)</code> block containing all routines in your project.</li>
               <li><strong>Indentation:</strong> Choose 2 spaces (standard), 4 spaces (PROS default), 0 spaces, 1 tab, or a custom number of spaces to match your team's code style.</li>
               <li><strong>Multitasking (Async):</strong> When enabled, appends <code>, true</code> as LemLib's async parameter so motions run non-blocking in the background while custom subsystem code (intake, lift, clamp) executes concurrently.</li>
+              <li><strong>📥 C++ to Blocks Translator:</strong> Import any existing C++ autonomous routine or snippet back into the visual planner. The parser extracts start poses, motion commands, struct parameters, comments, and automatically infers concurrency and async execution for subsystem commands.</li>
             </ul>
           </div>
         </div>
@@ -602,12 +705,12 @@ void autonomous() {
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.k13"></script>
+  <script src="version.js?v=20260920.k12"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.k13"></script>
-  <script src="app.js?v=20260920.k13"></script>
+  <script src="firebase-config.js?v=20260920.k12"></script>
+  <script src="app.js?v=20260920.k12"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

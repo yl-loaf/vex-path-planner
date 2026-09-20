@@ -3726,6 +3726,790 @@
     });
   }
 
+  // ===================================================================
+  // -- Raw C++ Autonomous to Blocks Translator Engine ----------------
+  // ===================================================================
+
+  // Safe comma splitter that preserves braces {}, parens (), and brackets []
+  function splitCppArgsSafe(str) {
+    if (!str) return [];
+    const args = [];
+    let cur = "";
+    let braceDepth = 0;
+    let parenDepth = 0;
+    let inString = false;
+    let stringChar = "";
+
+    for (let i = 0; i < str.length; i++) {
+      const c = str[i];
+      if (inString) {
+        cur += c;
+        if (c === stringChar && str[i - 1] !== "\\") inString = false;
+        continue;
+      }
+      if (c === '"' || c === "'") {
+        inString = true;
+        stringChar = c;
+        cur += c;
+      } else if (c === "{" || c === "<") {
+        braceDepth++;
+        cur += c;
+      } else if (c === "}" || c === ">") {
+        if (braceDepth > 0) braceDepth--;
+        cur += c;
+      } else if (c === "(") {
+        parenDepth++;
+        cur += c;
+      } else if (c === ")") {
+        if (parenDepth > 0) parenDepth--;
+        cur += c;
+      } else if (c === "," && braceDepth === 0 && parenDepth === 0) {
+        args.push(cur.trim());
+        cur = "";
+      } else {
+        cur += c;
+      }
+    }
+    if (cur.trim().length > 0) {
+      args.push(cur.trim());
+    }
+    return args;
+  }
+
+  // Parse LemLib struct parameters like {.forwards = false, .maxSpeed = 100, .earlyExitRange = 2}
+  function parseLemlibStructParams(rawParamsStr) {
+    const res = {
+      forwards: true,
+      maxSpeed: null,
+      minSpeed: null,
+      earlyExitRange: 0,
+      lead: 0.6,
+      async: false,
+    };
+    if (!rawParamsStr) return res;
+
+    const fMatch = rawParamsStr.match(/\.forwards\s*=\s*(true|false)/i);
+    if (fMatch) res.forwards = fMatch[1].toLowerCase() === "true";
+
+    const maxM = rawParamsStr.match(/\.maxSpeed\s*=\s*([-\d.]+)/i);
+    if (maxM) res.maxSpeed = parseFloat(maxM[1]);
+
+    const minM = rawParamsStr.match(/\.minSpeed\s*=\s*([-\d.]+)/i);
+    if (minM) res.minSpeed = parseFloat(minM[1]);
+
+    const eerM = rawParamsStr.match(/\.earlyExitRange\s*=\s*([-\d.]+)/i);
+    if (eerM) res.earlyExitRange = parseFloat(eerM[1]);
+
+    const leadM = rawParamsStr.match(/\.lead\s*=\s*([-\d.]+)/i);
+    if (leadM) res.lead = parseFloat(leadM[1]);
+
+    const asyncM = rawParamsStr.match(/\.async\s*=\s*(true|false)/i);
+    if (asyncM) res.async = asyncM[1].toLowerCase() === "true";
+
+    return res;
+  }
+
+  // Parse DriveSide enum (e.g. DriveSide::LEFT, lemlib::DriveSide::RIGHT, "LEFT")
+  function parseDriveSideEnum(sideStr) {
+    if (!sideStr) return "LEFT";
+    const s = sideStr.toUpperCase();
+    if (s.includes("RIGHT")) return "RIGHT";
+    return "LEFT";
+  }
+
+  // Comprehensive C++ Autonomous Parser
+  function parseCppAuton(rawCode) {
+    if (!rawCode || !rawCode.trim()) {
+      return {
+        success: false,
+        routineName: "Imported Auton",
+        startPose: null,
+        actions: [],
+        stats: { motionsCount: 0, customCount: 0, asyncCount: 0, commentsCount: 0 },
+        log: ["No C++ code provided to parse."],
+      };
+    }
+
+    const log = [];
+    let routineName = "Imported Auton";
+
+    // Detect function signature e.g. void autonomous() or void redLeftAuton()
+    const fnMatch = rawCode.match(/void\s+([a-zA-Z0-9_]+)\s*\([^)]*\)\s*\{/i);
+    if (fnMatch && fnMatch[1]) {
+      const rawFn = fnMatch[1];
+      if (rawFn.toLowerCase() === "autonomous") {
+        routineName = "Autonomous";
+      } else {
+        // format camelCase or snake_case to Title Case
+        const formatted = rawFn
+          .replace(/_/g, " ")
+          .replace(/([a-z])([A-Z])/g, "$1 $2")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        routineName = formatted || "Imported Auton";
+      }
+      log.push(`Detected autonomous routine function: ${fnMatch[1]} -> "${routineName}"`);
+    }
+
+    // Normalize text and split into logical lines
+    const rawLines = rawCode.replace(/\r\n/g, "\n").split("\n");
+    const cleanedLines = [];
+
+    // Filter out opening wrapper void ... { and final }
+    let insideFn = false;
+    let openBraces = 0;
+
+    for (let i = 0; i < rawLines.length; i++) {
+      let l = rawLines[i].trim();
+      if (!l) continue;
+
+      if (/^void\s+[a-zA-Z0-9_]+\s*\([^)]*\)\s*\{/i.test(l)) {
+        insideFn = true;
+        openBraces++;
+        continue;
+      }
+      if (insideFn && l === "}" && i >= rawLines.length - 2) {
+        continue;
+      }
+      cleanedLines.push({ raw: rawLines[i], text: l, lineNum: i + 1 });
+    }
+
+    let detectedStartPose = null;
+    const actions = [];
+    let pendingComments = [];
+    let pendingCustomLines = [];
+
+    function flushCustomBlock() {
+      if (pendingCustomLines.length === 0) return;
+
+      const fullCode = pendingCustomLines.join("\n").trim();
+      if (!fullCode) {
+        pendingCustomLines = [];
+        return;
+      }
+
+      const customAct = defaultAction("custom");
+      customAct.customCode = fullCode;
+
+      // Extract comment for custom block
+      if (pendingComments.length > 0) {
+        customAct.label = pendingComments.join(" · ").trim();
+        pendingComments = [];
+      } else {
+        // check for inline comment
+        const cMatch = fullCode.match(/\/\/\s*(.+)$/m);
+        if (cMatch) {
+          customAct.label = cleanCommentText(cMatch[1]);
+        }
+      }
+
+      // Calculate customDuration from pros::delay or pros::c::delay
+      let totalDelayMs = 0;
+      const delayMatches = fullCode.matchAll(/pros::(?:c::)?delay\s*\(\s*([-\d.]+)\s*\)/g);
+      for (const dm of delayMatches) {
+        const ms = parseFloat(dm[1]);
+        if (!isNaN(ms) && ms > 0) totalDelayMs += ms;
+      }
+      if (totalDelayMs > 0) {
+        customAct.customDuration = Number((totalDelayMs / 1000).toFixed(2));
+      } else {
+        customAct.customDuration = 0;
+      }
+
+      // Check for async tasks e.g. pros::Task or non-blocking continuous subsystem
+      const isTask = /pros::Task\b|pros::task::create\b/i.test(fullCode);
+      const isContinuousSubsystem = /intake\.move|conveyor\.move|flywheel\.move|piston\.set_value|clamp\.set_value/i.test(fullCode) && totalDelayMs === 0;
+
+      if (isTask || isContinuousSubsystem) {
+        customAct.async = true;
+        customAct.showFlowchart = true;
+        log.push(`Inferred async concurrency for custom subsystem block: "${customAct.label || 'Subsystem Task'}"`);
+      }
+
+      actions.push(customAct);
+      pendingCustomLines = [];
+    }
+
+    for (let idx = 0; idx < cleanedLines.length; idx++) {
+      const item = cleanedLines[idx];
+      let line = item.text;
+
+      // Handle pure comment line
+      if (line.startsWith("//")) {
+        const cText = cleanCommentText(line.replace(/^\/\/\s*/, ""));
+        if (cText) pendingComments.push(cText);
+        continue;
+      }
+
+      // Handle multi-line comment /* ... */
+      if (line.startsWith("/*") && line.endsWith("*/")) {
+        const cText = cleanCommentText(line.replace(/^\/\*\s*/, "").replace(/\s*\*\/$/, ""));
+        if (cText) pendingComments.push(cText);
+        continue;
+      }
+
+      // Extract inline comment if any
+      let inlineComment = "";
+      const inlineMatch = line.match(/\/\/\s*(.+)$/);
+      if (inlineMatch) {
+        inlineComment = cleanCommentText(inlineMatch[1]);
+        line = line.replace(/\/\/\s*.+$/, "").trim();
+      }
+
+      // Check for chassis.setPose
+      const setPoseMatch = line.match(/chassis\.setPose\s*\(\s*(?:lemlib::)?(?:Pose\s*\(\s*)?([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)(?:\s*,\s*([a-zA-Z0-9_]+))?\s*\)?\s*\)/i);
+      if (setPoseMatch) {
+        flushCustomBlock();
+        const px = parseFloat(setPoseMatch[1]);
+        const py = parseFloat(setPoseMatch[2]);
+        const pt = parseFloat(setPoseMatch[3]);
+        detectedStartPose = {
+          x: isNaN(px) ? -60 : px,
+          y: isNaN(py) ? -60 : py,
+          theta: isNaN(pt) ? 0 : pt,
+        };
+        log.push(`Found start pose: chassis.setPose(${detectedStartPose.x}, ${detectedStartPose.y}, ${detectedStartPose.theta}°)`);
+        pendingComments = [];
+        continue;
+      }
+
+      // Check for LemLib Motion Commands:
+      // 1. moveToPoint(x, y, timeout, [params], [async])
+      const mtPointMatch = line.match(/chassis\.moveToPoint\s*\(([^;]+)\)/i);
+      if (mtPointMatch) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(mtPointMatch[1]);
+        const act = defaultAction("moveToPoint");
+        act.x = parseFloat(args[0]) || 0;
+        act.y = parseFloat(args[1]) || 0;
+        act.timeout = parseInt(args[2], 10) || 2000;
+
+        let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+        if (structParamStr) {
+          const p = parseLemlibStructParams(structParamStr);
+          act.forwards = p.forwards;
+          if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+          if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+          if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+          if (p.async) act.async = true;
+        }
+        // Check trailing async arg
+        const lastArg = args[args.length - 1]?.trim().toLowerCase();
+        if (lastArg === "true") act.async = true;
+
+        // Attach comments
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+
+        if (act.async) act.showFlowchart = true;
+        actions.push(act);
+        log.push(`Parsed moveToPoint(${act.x}, ${act.y}) timeout: ${act.timeout}ms, async: ${act.async}`);
+        continue;
+      }
+
+      // 2. moveToPose(x, y, theta, timeout, [params], [async])
+      const mtPoseMatch = line.match(/chassis\.moveToPose\s*\(([^;]+)\)/i);
+      if (mtPoseMatch) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(mtPoseMatch[1]);
+        const act = defaultAction("moveToPose");
+        act.x = parseFloat(args[0]) || 0;
+        act.y = parseFloat(args[1]) || 0;
+        act.theta = parseFloat(args[2]) || 0;
+        act.timeout = parseInt(args[3], 10) || 2500;
+
+        let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+        if (structParamStr) {
+          const p = parseLemlibStructParams(structParamStr);
+          act.forwards = p.forwards;
+          if (p.lead != null) act.lead = p.lead;
+          if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+          if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+          if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+          if (p.async) act.async = true;
+        }
+        const lastArg = args[args.length - 1]?.trim().toLowerCase();
+        if (lastArg === "true") act.async = true;
+
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+
+        if (act.async) act.showFlowchart = true;
+        actions.push(act);
+        log.push(`Parsed moveToPose(${act.x}, ${act.y}, ${act.theta}°) timeout: ${act.timeout}ms, lead: ${act.lead}`);
+        continue;
+      }
+
+      // 3. turnToPoint(x, y, timeout, [params], [async])
+      const ttPointMatch = line.match(/chassis\.turnToPoint\s*\(([^;]+)\)/i);
+      if (ttPointMatch) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(ttPointMatch[1]);
+        const act = defaultAction("turnToPoint");
+        act.x = parseFloat(args[0]) || 0;
+        act.y = parseFloat(args[1]) || 0;
+        act.timeout = parseInt(args[2], 10) || 1500;
+
+        let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+        if (structParamStr) {
+          const p = parseLemlibStructParams(structParamStr);
+          act.forwards = p.forwards;
+          if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+          if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+          if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+          if (p.async) act.async = true;
+        }
+        const lastArg = args[args.length - 1]?.trim().toLowerCase();
+        if (lastArg === "true") act.async = true;
+
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+
+        if (act.async) act.showFlowchart = true;
+        actions.push(act);
+        log.push(`Parsed turnToPoint(${act.x}, ${act.y}) timeout: ${act.timeout}ms`);
+        continue;
+      }
+
+      // 4. turnToHeading(theta, timeout, [params], [async])
+      const ttHeadingMatch = line.match(/chassis\.turnToHeading\s*\(([^;]+)\)/i);
+      if (ttHeadingMatch) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(ttHeadingMatch[1]);
+        const act = defaultAction("turnToHeading");
+        act.theta = parseFloat(args[0]) || 0;
+        act.timeout = parseInt(args[1], 10) || 1500;
+
+        let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+        if (structParamStr) {
+          const p = parseLemlibStructParams(structParamStr);
+          if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+          if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+          if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+          if (p.async) act.async = true;
+        }
+        const lastArg = args[args.length - 1]?.trim().toLowerCase();
+        if (lastArg === "true") act.async = true;
+
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+
+        if (act.async) act.showFlowchart = true;
+        actions.push(act);
+        log.push(`Parsed turnToHeading(${act.theta}°) timeout: ${act.timeout}ms`);
+        continue;
+      }
+
+      // 5. swingToPoint(x, y, side, timeout, [params], [async])
+      const swPointMatch = line.match(/chassis\.swingToPoint\s*\(([^;]+)\)/i);
+      if (swPointMatch) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(swPointMatch[1]);
+        const act = defaultAction("swingToPoint");
+        act.x = parseFloat(args[0]) || 0;
+        act.y = parseFloat(args[1]) || 0;
+        act.lockedSide = parseDriveSideEnum(args[2]);
+        act.timeout = parseInt(args[3], 10) || 2000;
+
+        let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+        if (structParamStr) {
+          const p = parseLemlibStructParams(structParamStr);
+          act.forwards = p.forwards;
+          if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+          if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+          if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+          if (p.async) act.async = true;
+        }
+        const lastArg = args[args.length - 1]?.trim().toLowerCase();
+        if (lastArg === "true") act.async = true;
+
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+
+        if (act.async) act.showFlowchart = true;
+        actions.push(act);
+        log.push(`Parsed swingToPoint(${act.x}, ${act.y}, ${act.lockedSide}) timeout: ${act.timeout}ms`);
+        continue;
+      }
+
+      // 6. swingToHeading(theta, side, timeout, [params], [async])
+      const swHeadingMatch = line.match(/chassis\.swingToHeading\s*\(([^;]+)\)/i);
+      if (swHeadingMatch) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(swHeadingMatch[1]);
+        const act = defaultAction("swingToHeading");
+        act.theta = parseFloat(args[0]) || 0;
+        act.lockedSide = parseDriveSideEnum(args[1]);
+        act.timeout = parseInt(args[2], 10) || 2000;
+
+        let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+        if (structParamStr) {
+          const p = parseLemlibStructParams(structParamStr);
+          act.forwards = p.forwards;
+          if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+          if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+          if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+          if (p.async) act.async = true;
+        }
+        const lastArg = args[args.length - 1]?.trim().toLowerCase();
+        if (lastArg === "true") act.async = true;
+
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+
+        if (act.async) act.showFlowchart = true;
+        actions.push(act);
+        log.push(`Parsed swingToHeading(${act.theta}°, ${act.lockedSide}) timeout: ${act.timeout}ms`);
+        continue;
+      }
+
+      // 7. Non-LemLib line: Subsystem / pros::delay / pros::Task / Custom C++
+      let fullLine = item.text;
+      if (inlineComment) {
+        fullLine = `${item.text} // ${inlineComment}`;
+      }
+      pendingCustomLines.push(fullLine);
+    }
+
+    // Flush any trailing custom code lines
+    flushCustomBlock();
+
+    // Contextual Multi-task / Concurrency Post-processing
+    // If a custom action with duration 0s or task is followed by a chassis motion, ensure async is marked
+    for (let i = 0; i < actions.length - 1; i++) {
+      const cur = actions[i];
+      const next = actions[i + 1];
+      if (cur.type === "custom" && cur.customDuration === 0 && next.type !== "custom") {
+        cur.async = true;
+        cur.showFlowchart = true;
+      }
+    }
+
+    // Calculate statistics
+    let motionsCount = 0;
+    let customCount = 0;
+    let asyncCount = 0;
+    let commentsCount = 0;
+
+    actions.forEach((a) => {
+      if (a.type === "custom") customCount++;
+      else motionsCount++;
+      if (a.async) asyncCount++;
+      if (a.label) commentsCount++;
+    });
+
+    return {
+      success: actions.length > 0 || detectedStartPose !== null,
+      routineName,
+      startPose: detectedStartPose,
+      actions,
+      stats: {
+        motionsCount,
+        customCount,
+        asyncCount,
+        commentsCount,
+      },
+      log,
+    };
+  }
+
+  // Sample templates for quick 1-click loading and testing
+  const CPP_SAMPLE_ROUTINES = {
+    preload_rush: `// Autonomous: 4-Ring Alliance Stake & Mogo Rush
+void autonomous() {
+  // Set robot starting pose touching alliance wall
+  chassis.setPose(-60, -60, 0);
+
+  // Spin intake to grab preload ring
+  intake.move(127); // spin intake full
+  chassis.moveToPoint(-24, -24, 2000, {.forwards = true, .maxSpeed = 110, .earlyExitRange = 2});
+
+  // Rush center mobile goal in reverse
+  chassis.moveToPose(0, 48, 90, 2500, {.lead = 0.5, .forwards = false}); // clamp mogo
+
+  // Clamp goal and pause briefly
+  clamp.set_value(true); // grab goal
+  pros::delay(200);
+
+  // Turn and score alliance stake
+  chassis.turnToHeading(180, 1500, {.maxSpeed = 90}); // face stake
+  chassis.moveToPoint(24, 48, 2000); // score stack
+}`,
+
+    multitask_subsystems: `// Autonomous: Concurrent Subsystems & Async Movement
+void redLeftAuton() {
+  chassis.setPose(-54, -54, 45);
+
+  // Start concurrent intake task while driving
+  pros::Task intakeTask([]{
+    intake.move(127);
+  }); // async intake task
+
+  // Drive forward to first stack with async enabled
+  chassis.moveToPoint(-24, -24, 2000, {.maxSpeed = 120}, true); // drive async
+
+  // Raise lift while chassis is in motion
+  lift.move_absolute(1200, 100);
+  chassis.waitUntilDone(); // sync barrier
+
+  // Deploy pneumatic clamp on mogo
+  clamp.set_value(true);
+  pros::delay(150);
+
+  // Swing to corner and score
+  chassis.swingToHeading(270, DriveSide::LEFT, 1800); // swing corner
+}`,
+
+    boomerang_swings: `// Autonomous: Boomerang Paths & Swing Motions
+void skillsAuton() {
+  chassis.setPose(0, -60, 0);
+
+  // Boomerang curve to mogo
+  chassis.moveToPose(24, -24, 45, 2500, {.lead = 0.65, .forwards = true}); // curved approach
+
+  // Swing turn around obstacle
+  chassis.swingToPoint(48, 0, DriveSide::RIGHT, 2000, {.forwards = true}); // swing right side
+
+  // Turn directly to alliance wall
+  chassis.turnToHeading(180, 1400); // turn to wall
+  chassis.moveToPoint(48, -48, 2000, {.forwards = false, .maxSpeed = 100}); // reverse to stake
+}`,
+  };
+
+  // Wire C++ Auton Translator Modal
+  function wireCppTranslateModal() {
+    const modal = document.getElementById("cppTranslateModal");
+    const btnOpenHead = document.getElementById("btnCppTranslator");
+    const btnOpenSide = document.getElementById("btnCppTranslatorSide");
+    const btnClose = document.getElementById("cppTranslateClose");
+    const btnCancel = document.getElementById("cppTranslateCancelBtn");
+    const btnApply = document.getElementById("cppTranslateApplyBtn");
+    const codeInput = document.getElementById("cppCodeInput");
+    const sampleBtns = document.querySelectorAll(".btn-cpp-sample");
+    const activeNameEl = document.getElementById("cppActiveRoutineName");
+    const newNameInput = document.getElementById("cppNewRoutineName");
+    const errorEl = document.getElementById("cppErrorMsg");
+
+    const statPose = document.getElementById("cppStatPose");
+    const statMotions = document.getElementById("cppStatMotions");
+    const statCustom = document.getElementById("cppStatCustom");
+    const statAsync = document.getElementById("cppStatAsync");
+    const statComments = document.getElementById("cppStatComments");
+    const analysisStatus = document.getElementById("cppAnalysisStatus");
+    const analysisCount = document.getElementById("cppAnalysisCount");
+    const previewList = document.getElementById("cppParsedPreviewList");
+
+    if (!modal) return;
+
+    let lastParsed = null;
+
+    function updateActiveRoutineLabel() {
+      const cur = activePath();
+      if (activeNameEl && cur) {
+        activeNameEl.textContent = cur.name || "Active Routine";
+      }
+    }
+
+    function openModal() {
+      updateActiveRoutineLabel();
+      modal.hidden = false;
+      if (errorEl) errorEl.hidden = true;
+      if (codeInput && !codeInput.value.trim()) {
+        // Load default sample if empty
+        codeInput.value = CPP_SAMPLE_ROUTINES.preload_rush;
+      }
+      runLiveAnalysis();
+      if (codeInput) codeInput.focus();
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+    }
+
+    function runLiveAnalysis() {
+      const text = codeInput ? codeInput.value : "";
+      if (!text || !text.trim()) {
+        if (statPose) statPose.textContent = "—";
+        if (statMotions) statMotions.textContent = "0";
+        if (statCustom) statCustom.textContent = "0";
+        if (statAsync) statAsync.textContent = "0";
+        if (statComments) statComments.textContent = "0";
+        if (analysisStatus) analysisStatus.textContent = "Paste C++ code above";
+        if (analysisCount) analysisCount.textContent = "0 items";
+        if (previewList) previewList.innerHTML = '<span style="color:#64748b;font-size:0.72rem;">No actions parsed yet</span>';
+        lastParsed = null;
+        return;
+      }
+
+      const res = parseCppAuton(text);
+      lastParsed = res;
+
+      if (statPose) {
+        statPose.textContent = res.startPose
+          ? `(${res.startPose.x}, ${res.startPose.y}, ${res.startPose.theta}°)`
+          : "— (keep current)";
+      }
+      if (statMotions) statMotions.textContent = String(res.stats.motionsCount);
+      if (statCustom) statCustom.textContent = String(res.stats.customCount);
+      if (statAsync) statAsync.textContent = String(res.stats.asyncCount);
+      if (statComments) statComments.textContent = String(res.stats.commentsCount);
+
+      const totalItems = res.actions.length + (res.startPose ? 1 : 0);
+      if (analysisCount) analysisCount.textContent = `${totalItems} item${totalItems === 1 ? "" : "s"} detected`;
+
+      if (analysisStatus) {
+        if (res.actions.length > 0) {
+          analysisStatus.innerHTML = `<span style="color:#34d399;">✓ Parsed ${res.actions.length} action blocks successfully</span>`;
+        } else if (res.startPose) {
+          analysisStatus.innerHTML = `<span style="color:#38bdf8;">✓ Parsed start pose</span>`;
+        } else {
+          analysisStatus.innerHTML = `<span style="color:#fbbf24;">⚠️ No movement actions recognized</span>`;
+        }
+      }
+
+      if (newNameInput && res.routineName && res.routineName !== "Imported Auton") {
+        newNameInput.value = res.routineName;
+      }
+
+      // Render parsed preview pills
+      if (previewList) {
+        if (res.actions.length === 0 && !res.startPose) {
+          previewList.innerHTML = '<span style="color:#64748b;font-size:0.72rem;">No LemLib actions recognized. Check C++ syntax.</span>';
+        } else {
+          let pillsHtml = "";
+          if (res.startPose) {
+            pillsHtml += `<span class="cpp-preview-pill" style="border-color:#38bdf8;background:rgba(56,189,248,0.15);color:#7dd3fc;"><span class="pill-num">🏁</span> Start: (${res.startPose.x}, ${res.startPose.y}, ${res.startPose.theta}°)</span>`;
+          }
+          res.actions.forEach((a, i) => {
+            const isAsync = a.async;
+            const isCustom = a.type === "custom";
+            let icon = "📍";
+            if (isCustom) icon = "⚡";
+            else if (a.type.includes("turn")) icon = "🔄";
+            else if (a.type.includes("swing")) icon = "🌊";
+            else if (a.type === "moveToPose") icon = "🎯";
+
+            let desc = a.type;
+            if (isCustom) {
+              const snippet = (a.customCode || "").split("\n")[0] || "custom code";
+              desc = snippet.length > 18 ? snippet.slice(0, 16) + "…" : snippet;
+              if (a.customDuration > 0) desc += ` (${a.customDuration}s)`;
+              else desc += ` (0s)`;
+            } else if (a.type === "moveToPoint") {
+              desc = `moveToPoint(${a.x}, ${a.y})`;
+            } else if (a.type === "moveToPose") {
+              desc = `moveToPose(${a.x}, ${a.y}, ${a.theta}°)`;
+            } else if (a.type.includes("Heading")) {
+              desc = `${a.type}(${a.theta}°)`;
+            } else if (a.type.includes("Point")) {
+              desc = `${a.type}(${a.x}, ${a.y})`;
+            }
+
+            const commentTag = a.label ? ` <span style="color:#94a3b8;">// ${escapeHtml(a.label)}</span>` : "";
+            const asyncTag = isAsync ? ` <span style="color:#d8b4fe;font-weight:700;">⚡ASYNC</span>` : "";
+
+            pillsHtml += `<span class="cpp-preview-pill ${isAsync ? 'async' : ''} ${isCustom ? 'custom' : ''}"><span class="pill-num">${i + 1}.</span> ${icon} ${escapeHtml(desc)}${asyncTag}${commentTag}</span>`;
+          });
+          previewList.innerHTML = pillsHtml;
+        }
+      }
+    }
+
+    function applyTranslation() {
+      if (!lastParsed || (!lastParsed.actions.length && !lastParsed.startPose)) {
+        if (errorEl) {
+          errorEl.textContent = "Please paste valid LemLib C++ autonomous code before applying.";
+          errorEl.hidden = false;
+        }
+        return;
+      }
+
+      const targetRadio = document.querySelector('input[name="cppImportTarget"]:checked');
+      const isNew = targetRadio && targetRadio.value === "new";
+      const customName = newNameInput ? newNameInput.value.trim() : "";
+      const routineName = customName || lastParsed.routineName || `Routine ${paths.length + 1}`;
+
+      if (isNew) {
+        addPath(routineName);
+      } else {
+        const cur = activePath();
+        if (cur && customName && targetRadio.value === "active" && lastParsed.routineName !== "Imported Auton") {
+          cur.name = routineName;
+          syncPathSelect();
+        }
+      }
+
+      // Apply start pose if found
+      if (lastParsed.startPose) {
+        pose = { ...lastParsed.startPose };
+        activePath().pose = { ...lastParsed.startPose };
+        syncStartInputs();
+      }
+
+      // Apply actions
+      actions = lastParsed.actions.map((a) => ({ ...a, id: uid() }));
+      activePath().actions = actions;
+
+      selectedId = actions.length > 0 ? actions[0].id : null;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      try { updateTimeDisplay(); } catch (_) {}
+      pushHistory("cpp_translate_import");
+
+      closeModal();
+      showToast(`📥 Successfully imported & translated ${actions.length} action blocks onto the visual editor and field map!`);
+    }
+
+    if (btnOpenHead) btnOpenHead.onclick = openModal;
+    if (btnOpenSide) btnOpenSide.onclick = openModal;
+    if (btnClose) btnClose.onclick = closeModal;
+    if (btnCancel) btnCancel.onclick = closeModal;
+    if (btnApply) btnApply.onclick = applyTranslation;
+
+    if (codeInput) {
+      codeInput.addEventListener("input", runLiveAnalysis);
+      codeInput.addEventListener("paste", () => setTimeout(runLiveAnalysis, 50));
+    }
+
+    sampleBtns.forEach((btn) => {
+      btn.onclick = () => {
+        const sampleKey = btn.dataset.sample;
+        if (sampleKey === "clear") {
+          if (codeInput) codeInput.value = "";
+        } else if (CPP_SAMPLE_ROUTINES[sampleKey]) {
+          if (codeInput) codeInput.value = CPP_SAMPLE_ROUTINES[sampleKey];
+        }
+        runLiveAnalysis();
+      };
+    });
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeModal();
+    });
+  }
+
 
 // -- Init ---------------------------------------------------------
   wireBotSettings();
@@ -3769,6 +4553,7 @@
   wireClearModal();
   wireHelpModal();
   wireFlowchartModal();
+  wireCppTranslateModal();
   loadLocal();
   syncPathSelect();
   syncStartInputs();
