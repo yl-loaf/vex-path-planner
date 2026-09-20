@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>VEX V5 LemLib Path Planner – Push Back</title>
-  <link rel="stylesheet" href="style.css?v=20260920i" />
+  <link rel="stylesheet" href="style.css?v=20260920.j1" />
 </head>
 <body>
   <div id="app">
@@ -134,6 +137,11 @@
     </div>
   </div>
 
+  <footer id="buildFooter" class="build-footer">
+    Build <span id="buildNumber">…</span>
+    <button type="button" id="btnCheckUpdate" class="linkish" title="Check for newer build">Check for updates</button>
+  </footer>
+
   <input type="file" id="fileInput" accept=".vpath,application/json" hidden />
 
   <div id="clearModal" class="modal" hidden>
@@ -148,10 +156,36 @@
       </div>
     </div>
   </div>
+  <script src="version.js?v=20260920.j1"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920i"></script>
-  <script src="app.js?v=20260920i"></script>
+  <script src="firebase-config.js?v=20260920.j1"></script>
+  <script src="app.js?v=20260920.j1"></script>
+  <script>
+    (function () {
+      var el = document.getElementById("buildNumber");
+      if (el) el.textContent = window.APP_BUILD || "unknown";
+      var btn = document.getElementById("btnCheckUpdate");
+      if (btn) {
+        btn.onclick = async function () {
+          try {
+            var r = await fetch("version.js?_=" + Date.now(), { cache: "no-store" });
+            var t = await r.text();
+            var m = t.match(/APP_BUILD\s*=\s*["']([^"']+)["']/);
+            var remote = m && m[1];
+            var local = window.APP_BUILD || "";
+            if (remote && local && remote !== local) {
+              if (confirm("Newer build available (" + remote + "). Reload now?")) location.reload();
+            } else {
+              alert("Latest build: " + (remote || local || "unknown"));
+            }
+          } catch (e) {
+            alert("Could not check for updates.");
+          }
+        };
+      }
+    })();
+  </script>
 </body>
 </html>
