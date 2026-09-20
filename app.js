@@ -184,6 +184,7 @@
       x: 0,
       y: 0,
       theta: 0,
+      lead: 0.6,
       timeout: 2000,
       forwards: true,
       maxSpeed: bot.defaultMaxSpeed,
@@ -254,82 +255,96 @@
     return Math.max(lo, Math.min(hi, v));
   }
 
-  /** Rough linear speed inches/sec from bot settings + maxSpeed 0-127 */
+  // -- LemLib Movement Math & Differential-Drive Physics ----------------
 
-  /** Unit forward vector for LemLib heading (0°=+Y, CW+) */
-  function headingUnit(deg) {
-    const r = (deg * Math.PI) / 180;
-    return { x: Math.sin(r), y: Math.cos(r) };
+  /**
+   * Theoretical max wheel linear speed in inches/second:
+   * vMax = (pi * wheelDiam * driveRpm) / 60 * efficiency (approx 0.95)
+   */
+  function getMaxLinearSpeed(customBot) {
+    const b = customBot || bot;
+    const theoretical = (Math.max(b.wheelDiam || 3.25, 0.5) * Math.PI * Math.max(b.driveRpm || 600, 1)) / 60;
+    return theoretical * 0.95;
   }
 
   /**
-   * Cubic Bezier control points for differential-drive path.
-   * Control handles lie along start/end headings so the path does not
-   * require sideways (strafe) motion — only forward/back + turn.
+   * Maximum turn rate in degrees/sec for differential drivetrain with trackWidth:
+   * maxOmegaDeg = (2 * vMax / trackWidth) * (180 / Math.PI)
    */
-  function bezierControls(x0, y0, th0, x1, y1, th1, forwards) {
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const dist = Math.hypot(dx, dy) || 0.01;
-    // handle length ~ 35% of segment (boomerang-like lead-in/out)
-    let k = dist * 0.35;
-    // reverse drive: travel opposite of chassis forward
-    const s0 = headingUnit(forwards === false ? normalizeAngle(th0 + 180) : th0);
-    const s1 = headingUnit(forwards === false ? normalizeAngle(th1 + 180) : th1);
-    return {
-      p0: { x: x0, y: y0 },
-      p1: { x: x0 + s0.x * k, y: y0 + s0.y * k },
-      p2: { x: x1 - s1.x * k, y: y1 - s1.y * k },
-      p3: { x: x1, y: y1 },
-    };
+  function getMaxTurnRateDps(customBot) {
+    const b = customBot || bot;
+    const vMax = getMaxLinearSpeed(b);
+    const w = Math.max(b.trackWidth || 12, 1);
+    return (2 * vMax / w) * (180 / Math.PI);
   }
 
-  function cubicBezier(t, p0, p1, p2, p3) {
-    const u = 1 - t;
-    const uu = u * u;
-    const tt = t * t;
-    return {
-      x: uu * u * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + tt * t * p3.x,
-      y: uu * u * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + tt * t * p3.y,
-    };
+  /**
+   * LemLib motor desaturation algorithm (matching src/lemlib/util.cpp: desaturate)
+   * Prioritizes angular steering over lateral driving when total power saturates.
+   */
+  function lemlibDesaturate(lateral, angular, maxSpeed = 1.0) {
+    let left = lateral + angular;
+    let right = lateral - angular;
+    const maxVal = Math.max(Math.abs(left), Math.abs(right));
+    if (maxVal > maxSpeed) {
+      left = (left / maxVal) * maxSpeed;
+      right = (right / maxVal) * maxSpeed;
+    }
+    return { left, right };
   }
 
-  /** Tangent heading (LemLib deg) along cubic Bezier at t */
-  function bezierHeading(t, p0, p1, p2, p3, forwards) {
-    const u = 1 - t;
-    // derivative of cubic Bezier
-    const tx =
-      3 * u * u * (p1.x - p0.x) +
-      6 * u * t * (p2.x - p1.x) +
-      3 * t * t * (p3.x - p2.x);
-    const ty =
-      3 * u * u * (p1.y - p0.y) +
-      6 * u * t * (p2.y - p1.y) +
-      3 * t * t * (p3.y - p2.y);
-    let th = angleToPoint(0, 0, tx, ty);
-    if (forwards === false) th = normalizeAngle(th + 180);
-    return th;
+  /**
+   * LemLib rate limiter (matching src/lemlib/util.cpp: slew)
+   */
+  function lemlibSlew(target, current, maxRate, dt) {
+    if (maxRate <= 0) return target;
+    const step = Math.abs(maxRate * dt);
+    const diff = target - current;
+    if (Math.abs(diff) > step) {
+      return current + step * Math.sign(diff);
+    }
+    return target;
   }
 
+  /**
+   * LemLib discrete PID controller (matching src/lemlib/PID.cpp)
+   */
+  class LemLibPID {
+    constructor(kP, kI, kD) {
+      this.kP = kP;
+      this.kI = kI;
+      this.kD = kD;
+      this.prevError = 0;
+      this.totalError = 0;
+      this.initialized = false;
+    }
 
-  function estimateLinearIps(maxSpeed) {
-    const theoretical = (bot.wheelDiam * Math.PI * bot.driveRpm) / 60;
-    // drivetrain efficiency / slip factor
-    return theoretical * 0.22 * (clamp(maxSpeed, 1, 127) / 127);
-  }
+    reset() {
+      this.prevError = 0;
+      this.totalError = 0;
+      this.initialized = false;
+    }
 
-  /** Rough turn rate deg/sec */
-  function estimateTurnDps(maxSpeed) {
-    // scale with track width: narrower turns faster for same wheel speed
-    const base = 200 * (clamp(maxSpeed, 1, 127) / 127);
-    return base * (12 / Math.max(bot.trackWidth, 4));
+    update(error, dt = 0.01) {
+      if (!this.initialized) {
+        this.prevError = error;
+        this.initialized = true;
+      }
+      if ((error > 0 && this.prevError < 0) || (error < 0 && this.prevError > 0)) {
+        this.totalError = 0;
+      }
+      this.totalError += error * dt;
+      const deriv = dt > 0 ? (error - this.prevError) / dt : 0;
+      this.prevError = error;
+      return this.kP * error + this.kI * this.totalError + this.kD * deriv;
+    }
   }
 
   /** Apply a swing about locked side: returns new {x,y,theta} after turning dth degrees (CW+) */
   function applySwing(x, y, theta, endTheta, lockedSide) {
     const dth = angleError(theta, endTheta);
     if (Math.abs(dth) < 1e-6) return { x, y, theta: endTheta };
-    const halfTrack = bot.trackWidth / 2;
+    const halfTrack = (bot.trackWidth || 12) / 2;
     const lockLeft = (lockedSide || "LEFT") === "LEFT";
     const pivotLocalX = lockLeft ? -halfTrack : halfTrack;
     // robot right unit at current heading (0=+Y CW+)
@@ -345,6 +360,236 @@
     const nx = relX * cosA + relY * sinA;
     const ny = -relX * sinA + relY * cosA;
     return { x: pivotWX + nx, y: pivotWY + ny, theta: endTheta };
+  }
+
+  /**
+   * Simulates a single action using authentic LemLib motion control math
+   * and differential-drive kinematics with a 10ms discrete integration loop.
+   *
+   * Returns: { endPose, path: [{x, y, theta, t, vLin, omegaDeg}], duration, carrot: {x, y} }
+   */
+  function simulateAction(action, fromPose, customBot) {
+    const b = customBot || bot;
+    const vMax = getMaxLinearSpeed(b);
+    const trackWidth = Math.max(b.trackWidth || 12, 1);
+    const dt = 0.01; // 10ms LemLib loop period
+    const tau = 0.07; // motor response time constant (70ms)
+
+    const defMax = b.defaultMaxSpeed != null ? b.defaultMaxSpeed : 127;
+    const defMin = b.defaultMinSpeed != null ? b.defaultMinSpeed : 0;
+    const maxSpeed = clamp((action.maxSpeed != null ? action.maxSpeed : defMax) / 127, 0.1, 1.0);
+    const minSpeed = clamp((action.minSpeed != null ? action.minSpeed : defMin) / 127, 0, 1.0);
+    const timeoutS = Math.max(0.1, (action.timeout || 2000) / 1000);
+    const earlyExitRange = Math.max(0, action.earlyExitRange || 0);
+
+    let pose = { x: fromPose.x, y: fromPose.y, theta: fromPose.theta };
+    let vLin = 0;
+    let omegaDeg = 0;
+    let t = 0;
+    let points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
+    let carrotPoint = null;
+
+    if (action.type === "custom") {
+      const dur = Math.min(0.35, timeoutS);
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+      return { endPose: pose, path: points, duration: dur, carrot: null };
+    }
+
+    if (action.type === "moveToPose") {
+      const lead = action.lead != null ? clamp(action.lead, 0, 1.0) : 0.6;
+      const reversed = action.forwards === false;
+      const target = { x: action.x, y: action.y, theta: action.theta };
+      // When reversed, chassis rear approaches target along target.theta
+      const approachTheta = reversed ? normalizeAngle(target.theta + 180) : target.theta;
+      const approachRad = (approachTheta * Math.PI) / 180;
+      let close = false;
+
+      while (t < timeoutS) {
+        const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
+        if (dist < 7.5 && !close) close = true;
+
+        let carrot;
+        if (close) {
+          carrot = { x: target.x, y: target.y };
+        } else {
+          const leadDist = lead * dist;
+          carrot = {
+            x: target.x - Math.sin(approachRad) * leadDist,
+            y: target.y - Math.cos(approachRad) * leadDist,
+          };
+        }
+        if (!carrotPoint) carrotPoint = { ...carrot };
+
+        const carrotAngle = angleToPoint(pose.x, pose.y, carrot.x, carrot.y);
+        const desiredHeading = close ? target.theta : (reversed ? normalizeAngle(carrotAngle + 180) : carrotAngle);
+        const angError = angleError(pose.theta, desiredHeading);
+
+        // LemLib settling exit condition
+        if (close && dist < 0.65 && Math.abs(angError) < 2.0) break;
+        if (earlyExitRange > 0 && dist < earlyExitRange) break;
+
+        const alignCos = Math.cos((angError * Math.PI) / 180);
+        let latPower = clamp(dist / 14, 0, maxSpeed);
+        if (close) {
+          latPower *= Math.max(0, alignCos);
+        } else {
+          // Slow down linearly if heading is misaligned with carrot
+          latPower *= Math.max(0.15, alignCos);
+        }
+        if (reversed) latPower = -latPower;
+
+        let angPower = clamp(angError / 32, -maxSpeed, maxSpeed);
+
+        // Desaturation / overturn prioritization
+        const desat = lemlibDesaturate(latPower, angPower, maxSpeed);
+        const targetVLin = ((desat.left + desat.right) / 2) * vMax;
+        const targetOmega = (((desat.left - desat.right) * vMax) / trackWidth) * (180 / Math.PI);
+
+        vLin += ((targetVLin - vLin) / tau) * dt;
+        omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
+
+        const midTheta = normalizeAngle(pose.theta + (omegaDeg * dt) / 2);
+        const rad = (midTheta * Math.PI) / 180;
+        pose.x += Math.sin(rad) * vLin * dt;
+        pose.y += Math.cos(rad) * vLin * dt;
+        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+
+        t += dt;
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg });
+      }
+
+      // Settle cleanly to exact target pose
+      pose.x = target.x;
+      pose.y = target.y;
+      pose.theta = target.theta;
+      return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: carrotPoint };
+    }
+
+    if (action.type === "moveToPoint") {
+      const reversed = action.forwards === false;
+      const target = { x: action.x, y: action.y };
+      let close = false;
+
+      while (t < timeoutS) {
+        const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
+        if (dist < 7.5 && !close) close = true;
+
+        const targetAngle = angleToPoint(pose.x, pose.y, target.x, target.y);
+        const desiredHeading = reversed ? normalizeAngle(targetAngle + 180) : targetAngle;
+        const angError = angleError(pose.theta, desiredHeading);
+
+        if (dist < 0.65 + earlyExitRange) break;
+
+        const alignCos = Math.cos((angError * Math.PI) / 180);
+        let latPower = clamp(dist / 14, 0, maxSpeed);
+        if (close) {
+          latPower *= Math.max(0, alignCos);
+        } else {
+          latPower *= Math.max(0.18, alignCos);
+        }
+        if (reversed) latPower = -latPower;
+
+        // LemLib turns off angular steering when settling within 7.5 in
+        const angPower = close ? 0 : clamp(angError / 32, -maxSpeed, maxSpeed);
+
+        const desat = lemlibDesaturate(latPower, angPower, maxSpeed);
+        const targetVLin = ((desat.left + desat.right) / 2) * vMax;
+        const targetOmega = (((desat.left - desat.right) * vMax) / trackWidth) * (180 / Math.PI);
+
+        vLin += ((targetVLin - vLin) / tau) * dt;
+        omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
+
+        const midTheta = normalizeAngle(pose.theta + (omegaDeg * dt) / 2);
+        const rad = (midTheta * Math.PI) / 180;
+        pose.x += Math.sin(rad) * vLin * dt;
+        pose.y += Math.cos(rad) * vLin * dt;
+        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+
+        t += dt;
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg });
+      }
+
+      pose.x = target.x;
+      pose.y = target.y;
+      return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: null };
+    }
+
+    if (action.type === "turnToHeading" || action.type === "turnToPoint") {
+      let targetHeading = pose.theta;
+      if (action.type === "turnToHeading") {
+        targetHeading = action.theta;
+      } else {
+        targetHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
+        if (action.forwards === false) targetHeading = normalizeAngle(targetHeading + 180);
+      }
+
+      const maxOmega = getMaxTurnRateDps(b);
+
+      while (t < timeoutS) {
+        const angError = angleError(pose.theta, targetHeading);
+        if (Math.abs(angError) < 1.0 + earlyExitRange) break;
+
+        let angPower = clamp(angError / 26, -maxSpeed, maxSpeed);
+        if (Math.abs(angPower) < minSpeed) angPower = Math.sign(angPower) * minSpeed;
+
+        const targetOmega = angPower * maxOmega;
+        omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
+
+        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+        t += dt;
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg });
+      }
+
+      pose.theta = targetHeading;
+      return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
+    }
+
+    if (action.type === "swingToHeading" || action.type === "swingToPoint") {
+      let targetHeading = pose.theta;
+      if (action.type === "swingToHeading") {
+        targetHeading = action.theta;
+      } else {
+        targetHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
+        if (action.forwards === false) targetHeading = normalizeAngle(targetHeading + 180);
+      }
+
+      let vDrive = 0;
+
+      while (t < timeoutS) {
+        const angError = angleError(pose.theta, targetHeading);
+        if (Math.abs(angError) < 1.0 + earlyExitRange) break;
+
+        let pwr = clamp(angError / 26, -maxSpeed, maxSpeed);
+        if (Math.abs(pwr) < minSpeed) pwr = Math.sign(pwr) * minSpeed;
+
+        const targetVDrive = pwr * vMax;
+        vDrive += ((targetVDrive - vDrive) / tau) * dt;
+
+        // Circular arc about locked wheel:
+        // Left locked: vL = 0, vR = -vDrive -> CW rotation when angError > 0
+        // Right locked: vR = 0, vL = vDrive -> CW rotation when angError > 0
+        const vL = vDrive / 2;
+        const wDeg = (vDrive / trackWidth) * (180 / Math.PI);
+
+        const midTheta = normalizeAngle(pose.theta + (wDeg * dt) / 2);
+        const rad = (midTheta * Math.PI) / 180;
+        pose.x += Math.sin(rad) * vL * dt;
+        pose.y += Math.cos(rad) * vL * dt;
+        pose.theta = normalizeAngle(pose.theta + wDeg * dt);
+
+        t += dt;
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: vL, omegaDeg: wDeg });
+      }
+
+      // Exact geometry settlement
+      const exactSwing = applySwing(fromPose.x, fromPose.y, fromPose.theta, targetHeading, action.lockedSide);
+      pose.x = exactSwing.x;
+      pose.y = exactSwing.y;
+      pose.theta = targetHeading;
+      return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
+    }
+
+    return { endPose: pose, path: points, duration: 0.1, carrot: null };
   }
 
 
@@ -700,37 +945,10 @@
   }
 
   function computePoses() {
+    buildSimPath();
     const poses = [{ x: pose.x, y: pose.y, theta: pose.theta }];
-    let cur = { ...poses[0] };
-    for (const a of actions) {
-      if (a.type === "custom") {
-        poses.push({ ...cur });
-        continue;
-      }
-      if (isMove(a.type)) {
-        cur.x = a.x;
-        cur.y = a.y;
-        if (a.type === "moveToPose") cur.theta = a.theta;
-        else {
-          const prev = poses[poses.length - 1];
-          let face = angleToPoint(prev.x, prev.y, a.x, a.y);
-          if (a.forwards === false) face = normalizeAngle(face + 180);
-          cur.theta = face;
-        }
-      } else if (a.type === "turnToPoint") {
-        let face = angleToPoint(cur.x, cur.y, a.x, a.y);
-        if (a.forwards === false) face = normalizeAngle(face + 180);
-        cur.theta = face;
-      } else if (a.type === "swingToPoint") {
-        let face = angleToPoint(cur.x, cur.y, a.x, a.y);
-        if (a.forwards === false) face = normalizeAngle(face + 180);
-        cur = applySwing(cur.x, cur.y, cur.theta, face, a.lockedSide);
-      } else if (a.type === "turnToHeading") {
-        cur.theta = a.theta;
-      } else if (a.type === "swingToHeading") {
-        cur = applySwing(cur.x, cur.y, cur.theta, a.theta, a.lockedSide);
-      }
-      poses.push({ ...cur });
+    for (const seg of simSegments) {
+      poses.push({ ...seg.endPose });
     }
     return poses;
   }
@@ -754,35 +972,22 @@
       ctx.beginPath(); ctx.moveTo(p1.cx, p1.cy); ctx.lineTo(p2.cx, p2.cy); ctx.stroke();
     }
 
-    const poses = computePoses();
+    buildSimPath();
+    const poses = [{ x: pose.x, y: pose.y, theta: pose.theta }];
+    for (const seg of simSegments) {
+      poses.push({ ...seg.endPose });
+    }
 
-    // Differential-drive paths: cubic Bezier along headings (no strafe)
+    // Render the simulated differential-drive path from LemLib kinematics
     ctx.strokeStyle = "#3b82f6";
     ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.beginPath();
     let pen = false;
-    for (let i = 1; i < poses.length; i++) {
-      const a = actions[i - 1];
-      const a0 = poses[i - 1];
-      const a1 = poses[i];
-      if (!a || a.type === "custom") continue;
-      if (!isMove(a.type)) {
-        // turns/swings: short arc at place or swing arc already in poses
-        const p0 = fieldToCanvas(a0.x, a0.y);
-        const p1 = fieldToCanvas(a1.x, a1.y);
-        if (!pen) { ctx.moveTo(p0.cx, p0.cy); pen = true; }
-        ctx.lineTo(p1.cx, p1.cy);
-        continue;
-      }
-      const bc = bezierControls(
-        a0.x, a0.y, a0.theta,
-        a1.x, a1.y, a1.theta,
-        a.forwards !== false
-      );
-      const steps = Math.max(12, Math.round(Math.hypot(a1.x - a0.x, a1.y - a0.y) * 0.8));
-      for (let s = 0; s <= steps; s++) {
-        const t = s / steps;
-        const pt = cubicBezier(t, bc.p0, bc.p1, bc.p2, bc.p3);
+    for (const seg of simSegments) {
+      if (!seg.action || seg.action.type === "custom") continue;
+      for (const pt of seg.points) {
         const c = fieldToCanvas(pt.x, pt.y);
         if (!pen) { ctx.moveTo(c.cx, c.cy); pen = true; }
         else ctx.lineTo(c.cx, c.cy);
@@ -790,33 +995,36 @@
     }
     ctx.stroke();
 
-    // light control-handle hints for selected move
+    // LemLib Boomerang visual feedback for selected action
     if (selectedId) {
       const si = actions.findIndex((x) => x.id === selectedId);
-      if (si >= 0 && isMove(actions[si].type) && poses[si] && poses[si + 1]) {
+      if (si >= 0 && simSegments[si]) {
+        const seg = simSegments[si];
         const a = actions[si];
-        const a0 = poses[si];
-        const a1 = poses[si + 1];
-        const bc = bezierControls(a0.x, a0.y, a0.theta, a1.x, a1.y, a1.theta, a.forwards !== false);
-        ctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        const c0 = fieldToCanvas(bc.p0.x, bc.p0.y);
-        const c1 = fieldToCanvas(bc.p1.x, bc.p1.y);
-        const c2 = fieldToCanvas(bc.p2.x, bc.p2.y);
-        const c3 = fieldToCanvas(bc.p3.x, bc.p3.y);
-        ctx.beginPath();
-        ctx.moveTo(c0.cx, c0.cy);
-        ctx.lineTo(c1.cx, c1.cy);
-        ctx.moveTo(c3.cx, c3.cy);
-        ctx.lineTo(c2.cx, c2.cy);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
-        for (const c of [c1, c2]) {
+        if (a.type === "moveToPose" && seg.carrot) {
+          const fromPt = si === 0 ? pose : simSegments[si - 1].endPose;
+          const cFrom = fieldToCanvas(fromPt.x, fromPt.y);
+          const cCarrot = fieldToCanvas(seg.carrot.x, seg.carrot.y);
+          const cTgt = fieldToCanvas(a.x, a.y);
+
+          ctx.strokeStyle = "rgba(249, 115, 22, 0.7)";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
           ctx.beginPath();
-          ctx.arc(c.cx, c.cy, 3, 0, Math.PI * 2);
+          ctx.moveTo(cFrom.cx, cFrom.cy);
+          ctx.lineTo(cCarrot.cx, cCarrot.cy);
+          ctx.lineTo(cTgt.cx, cTgt.cy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Carrot marker
+          ctx.fillStyle = "#f97316";
+          ctx.beginPath();
+          ctx.arc(cCarrot.cx, cCarrot.cy, 5, 0, Math.PI * 2);
           ctx.fill();
+          ctx.fillStyle = "#fdba74";
+          ctx.font = "bold 10px sans-serif";
+          ctx.fillText("Carrot", cCarrot.cx + 8, cCarrot.cy + 3);
         }
       }
     }
@@ -859,7 +1067,20 @@
 
     if (simRunning && simPath.length) {
       const p = simPath[Math.min(simIdx, simPath.length - 1)];
-      drawRobot(p.x, p.y, p.theta, "#c084fc", 1);
+      drawRobot(p.x, p.y, p.theta, "#38bdf8", 1);
+      // Real-time speed vector
+      if (Math.abs(p.vLin || 0) > 1) {
+        const cp = fieldToCanvas(p.x, p.y);
+        const rad = headingRad(p.theta);
+        const dir = p.vLin >= 0 ? 1 : -1;
+        const arrowLen = Math.min(32, Math.abs(p.vLin) * 0.35);
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cp.cx, cp.cy);
+        ctx.lineTo(cp.cx + Math.cos(rad) * arrowLen * dir, cp.cy - Math.sin(rad) * arrowLen * dir);
+        ctx.stroke();
+      }
     }
   }
 
@@ -915,6 +1136,11 @@
         const headField = needsHeading(a.type)
           ? `<label>θ° <input type="number" data-f="theta" step="1" value="${a.theta}"/></label>`
           : "";
+        const leadField = a.type === "moveToPose"
+          ? `<label title="Boomerang carrot lead multiplier (default 0.6)">Lead
+               <input type="number" data-f="lead" min="0" max="1" step="0.05" value="${a.lead != null ? a.lead : 0.6}"/>
+             </label>`
+          : "";
         const sideField = needsSide(a.type)
           ? `<label>Side
                <select data-f="lockedSide">
@@ -928,6 +1154,7 @@
           <div class="row">
             ${pointFields}
             ${headField}
+            ${leadField}
             ${sideField}
           </div>
           <div class="speed-timeout-row">
@@ -1069,6 +1296,9 @@
       const pt = a.theta + (a.offsetTheta || 0);
       const params = [];
       if (!a.forwards) params.push(".forwards = false");
+      if (a.type === "moveToPose" && a.lead != null && Number(a.lead) !== 0.6) {
+        params.push(`.lead = ${Number(a.lead)}`);
+      }
       const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
       const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
       if (a.maxSpeed != null && Number(a.maxSpeed) !== Number(defMax)) {
@@ -1153,224 +1383,70 @@
   }
 
   function estimateActionTime(a, fromPose) {
-    // Returns estimated seconds for one action (physical estimate, capped by timeout)
-    const timeoutS = Math.max(0.1, (a.timeout || 2000) / 1000);
-    if (a.type === "custom") return Math.min(0.4, timeoutS);
-
-    const maxS = a.maxSpeed != null ? a.maxSpeed : 127;
-    const ips = estimateLinearIps(maxS);
-    const dps = estimateTurnDps(maxS);
-
-    if (isMove(a.type)) {
-      const dist = Math.hypot(a.x - fromPose.x, a.y - fromPose.y);
-      let face = angleToPoint(fromPose.x, fromPose.y, a.x, a.y);
-      if (a.forwards === false) face = normalizeAngle(face + 180);
-      const ang = Math.abs(angleError(fromPose.theta, face));
-      const tLin = dist / Math.max(ips, 0.1);
-      const tAng = ang / Math.max(dps, 1);
-      // moveToPoint blends turn+drive; roughly max + partial overlap
-      const t = a.type === "moveToPose" ? tLin + tAng * 0.35 : Math.max(tLin, tAng * 0.5) + Math.min(tLin, tAng) * 0.3;
-      return Math.min(Math.max(t, 0.15), timeoutS);
-    }
-
-    // turns / swings
-    let endTh = fromPose.theta;
-    if (a.type === "turnToHeading" || a.type === "swingToHeading") endTh = a.theta;
-    else {
-      endTh = angleToPoint(fromPose.x, fromPose.y, a.x, a.y);
-      if (a.forwards === false) endTh = normalizeAngle(endTh + 180);
-    }
-    const ang = Math.abs(angleError(fromPose.theta, endTh));
-    // swing is a bit slower (one side driven)
-    const factor = isSwing(a.type) ? 1.25 : 1;
-    const t = (ang / Math.max(dps, 1)) * factor;
-    return Math.min(Math.max(t, 0.1), timeoutS);
+    if (a.type === "custom") return Math.min(0.35, Math.max(0.1, (a.timeout || 2000) / 1000));
+    const res = simulateAction(a, fromPose, bot);
+    return res.duration;
   }
 
   function estimateTotalTime() {
-    let cur = { x: pose.x, y: pose.y, theta: pose.theta };
+    buildSimPath();
     let total = 0;
-    for (const a of actions) {
-      if (a.async) {
-        // async: doesn't block the chain for full duration — count partial
-        total += estimateActionTime(a, cur) * 0.15;
+    for (const seg of simSegments) {
+      if (seg.action.async) {
+        total += seg.duration * 0.15;
       } else {
-        total += estimateActionTime(a, cur);
-      }
-      // advance pose for next estimate
-      if (a.type === "custom") continue;
-      if (isMove(a.type)) {
-        cur.x = a.x;
-        cur.y = a.y;
-        if (a.type === "moveToPose") cur.theta = a.theta;
-        else {
-          let face = angleToPoint(cur.x, cur.y, a.x, a.y);
-          // after move, already at point — face toward last approach
-          face = angleToPoint(
-            // use previous position approx: from slightly behind
-            cur.x, cur.y, a.x, a.y
-          );
-          // at target, heading faces the point we came toward from previous
-        }
-        const prevX = cur.x, prevY = cur.y;
-        // recompute properly
-      }
-    }
-    // cleaner second pass
-    cur = { x: pose.x, y: pose.y, theta: pose.theta };
-    total = 0;
-    for (const a of actions) {
-      const t = estimateActionTime(a, cur);
-      total += a.async ? t * 0.15 : t;
-      if (a.type === "custom") continue;
-      if (isMove(a.type)) {
-        const from = { ...cur };
-        cur.x = a.x;
-        cur.y = a.y;
-        if (a.type === "moveToPose") cur.theta = a.theta;
-        else {
-          let face = angleToPoint(from.x, from.y, a.x, a.y);
-          if (a.forwards === false) face = normalizeAngle(face + 180);
-          cur.theta = face;
-        }
-      } else if (a.type === "turnToPoint") {
-        let face = angleToPoint(cur.x, cur.y, a.x, a.y);
-        if (a.forwards === false) face = normalizeAngle(face + 180);
-        cur.theta = face;
-      } else if (a.type === "swingToPoint") {
-        let face = angleToPoint(cur.x, cur.y, a.x, a.y);
-        if (a.forwards === false) face = normalizeAngle(face + 180);
-        cur = applySwing(cur.x, cur.y, cur.theta, face, a.lockedSide);
-      } else if (a.type === "turnToHeading") {
-        cur.theta = a.theta;
-      } else if (a.type === "swingToHeading") {
-        cur = applySwing(cur.x, cur.y, cur.theta, a.theta, a.lockedSide);
+        total += seg.duration;
       }
     }
     return total;
   }
 
-  function updateTimeDisplay(elapsed, totalEst) {
+  function updateTimeDisplay(elapsed, totalEst, currentVLin, currentOmegaDeg) {
     const el = document.getElementById("timeEst");
     if (!el) return;
     if (elapsed != null && totalEst != null) {
-      el.textContent = `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s est`;
+      let speedText = "";
+      if (currentVLin != null && currentOmegaDeg != null) {
+        speedText = ` · ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`;
+      }
+      el.textContent = `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s${speedText}`;
     } else {
       const t = estimateTotalTime();
-      el.textContent = actions.length ? `Est. time: ~${t.toFixed(2)}s` : `Est. time: —`;
+      el.textContent = actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)` : `Est. time: —`;
     }
   }
 
   function buildSimPath() {
+    simSegments = [];
     simPath = [];
     let cur = { x: pose.x, y: pose.y, theta: pose.theta };
-    const stepsPerSec = 50;
     let t = 0;
-    simPath.push({ ...cur, t });
+    simPath.push({ ...cur, t: 0, vLin: 0, omegaDeg: 0 });
 
     for (const a of actions) {
-      if (a.type === "custom") {
-        const dur = 0.35;
-        const n = Math.max(6, Math.round(dur * stepsPerSec));
-        for (let i = 1; i <= n; i++) {
-          t += dur / n;
-          simPath.push({ x: cur.x, y: cur.y, theta: cur.theta, t });
-        }
-        continue;
+      const seg = simulateAction(a, cur, bot);
+      simSegments.push({
+        action: a,
+        points: seg.path,
+        endPose: seg.endPose,
+        duration: seg.duration,
+        carrot: seg.carrot,
+      });
+
+      const segPts = seg.path;
+      for (let i = 1; i < segPts.length; i++) {
+        const pt = segPts[i];
+        simPath.push({
+          x: pt.x,
+          y: pt.y,
+          theta: pt.theta,
+          t: t + pt.t,
+          vLin: pt.vLin,
+          omegaDeg: pt.omegaDeg,
+        });
       }
-
-      const duration = estimateActionTime(a, cur);
-      const n = Math.max(12, Math.round(duration * stepsPerSec));
-
-      if (isMove(a.type)) {
-        // Differential drive: follow cubic Bezier (no sideways strafe)
-        const start = { ...cur };
-        const endX = a.x;
-        const endY = a.y;
-        const backwards = a.forwards === false;
-
-        let endTheta;
-        if (a.type === "moveToPose") {
-          endTheta = a.theta;
-        } else {
-          endTheta = angleToPoint(start.x, start.y, endX, endY);
-          if (backwards) endTheta = normalizeAngle(endTheta + 180);
-        }
-
-        const bc = bezierControls(
-          start.x, start.y, start.theta,
-          endX, endY, endTheta,
-          !backwards
-        );
-
-        for (let i = 1; i <= n; i++) {
-          const u = i / n;
-          // ease slightly for nicer motion
-          const e = u * u * (3 - 2 * u);
-          const pt = cubicBezier(e, bc.p0, bc.p1, bc.p2, bc.p3);
-          cur.x = pt.x;
-          cur.y = pt.y;
-          // chassis faces along path tangent (omni helps turn; no mecanum strafe)
-          let th = bezierHeading(e, bc.p0, bc.p1, bc.p2, bc.p3, !backwards);
-          if (a.type === "moveToPose" && u > 0.7) {
-            // settle to commanded pose heading near the end
-            const blend = (u - 0.7) / 0.3;
-            const dth = angleError(th, endTheta);
-            th = normalizeAngle(th + dth * blend);
-          }
-          cur.theta = th;
-
-          t += duration / n;
-          simPath.push({ x: cur.x, y: cur.y, theta: cur.theta, t });
-        }
-        cur.x = endX;
-        cur.y = endY;
-        cur.theta = endTheta;
-      } else {
-        // turnTo* / swingTo*
-        let endTheta = cur.theta;
-        if (a.type === "turnToHeading" || a.type === "swingToHeading") {
-          endTheta = a.theta;
-        } else {
-          endTheta = angleToPoint(cur.x, cur.y, a.x, a.y);
-          if (a.forwards === false) endTheta = normalizeAngle(endTheta + 180);
-        }
-
-        const startTheta = cur.theta;
-        const isSw = a.type === "swingToPoint" || a.type === "swingToHeading";
-        const halfTrack = bot.trackWidth / 2;
-        const startX0 = cur.x, startY0 = cur.y;
-        const dthTotal = angleError(startTheta, endTheta);
-
-        for (let i = 1; i <= n; i++) {
-          const u = i / n;
-          const th = normalizeAngle(startTheta + dthTotal * u);
-
-          if (isSw) {
-            const lockLeft = (a.lockedSide || "LEFT") === "LEFT";
-            const pivotLocalX = lockLeft ? -halfTrack : halfTrack;
-            const rightX = Math.sin(((startTheta + 90) * Math.PI) / 180);
-            const rightY = Math.cos(((startTheta + 90) * Math.PI) / 180);
-            const pivotWX = startX0 + rightX * pivotLocalX;
-            const pivotWY = startY0 + rightY * pivotLocalX;
-            const relX = startX0 - pivotWX;
-            const relY = startY0 - pivotWY;
-            const ang = (dthTotal * u * Math.PI) / 180;
-            const cosA = Math.cos(ang), sinA = Math.sin(ang);
-            // CW rotation of relative vector
-            const nx = relX * cosA + relY * sinA;
-            const ny = -relX * sinA + relY * cosA;
-            cur.x = pivotWX + nx;
-            cur.y = pivotWY + ny;
-            cur.theta = th;
-          } else {
-            cur.theta = th;
-          }
-          t += duration / n;
-          simPath.push({ x: cur.x, y: cur.y, theta: cur.theta, t });
-        }
-        cur.theta = endTheta;
-      }
+      t += seg.duration;
+      cur = { ...seg.endPose };
     }
   }
 
@@ -1380,7 +1456,7 @@
     simRunning = true;
     simIdx = 0;
     const startTime = performance.now();
-    const totalT = simPath[simPath.length - 1].t;
+    const totalT = simPath.length ? simPath[simPath.length - 1].t : 0;
     const totalEst = estimateTotalTime();
 
     function frame(now) {
@@ -1392,9 +1468,10 @@
         else break;
       }
       simIdx = idx;
-      updateTimeDisplay(Math.min(elapsed, totalT), totalEst);
+      const pt = simPath[simIdx] || { vLin: 0, omegaDeg: 0 };
+      updateTimeDisplay(Math.min(elapsed, totalT), totalEst, pt.vLin, pt.omegaDeg);
       draw();
-      if (elapsed < totalT + 0.25) animId = requestAnimationFrame(frame);
+      if (elapsed < totalT + 0.15) animId = requestAnimationFrame(frame);
       else {
         simRunning = false;
         updateTimeDisplay(totalT, totalEst);
