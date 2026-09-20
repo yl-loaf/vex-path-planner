@@ -284,6 +284,7 @@
       offsetY: 0,
       offsetTheta: 0,
       customCode: "",
+      customDuration: 0,
       label: "",
     };
   }
@@ -486,8 +487,10 @@
     let carrotPoint = null;
 
     if (action.type === "custom") {
-      const dur = Math.min(0.35, timeoutS);
-      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+      const dur = action.customDuration != null ? Math.max(0, Number(action.customDuration)) : 0;
+      if (dur > 0) {
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+      }
       return { endPose: pose, path: points, duration: dur, carrot: null };
     }
 
@@ -706,6 +709,25 @@
     }
 
     return { endPose: pose, path: points, duration: 0.1, carrot: null };
+  }
+
+  /**
+   * Intelligently calculates the recommended timeout for an action with 100ms of clearance
+   * to guard against battery voltage drops and real-world friction variations.
+   * Simulates the exact physical kinematics motion profile.
+   */
+  function calculateIntelligentTimeout(action, fromPose, customBot) {
+    if (!action) return 1000;
+    if (action.type === "custom") {
+      const dur = action.customDuration != null ? Math.max(0, Number(action.customDuration)) : 0;
+      return dur === 0 ? 0 : Math.max(100, Math.round(dur * 1000 + 100));
+    }
+    const b = customBot || bot;
+    const virtualAct = { ...action, timeout: 60000 };
+    const sim = simulateAction(virtualAct, fromPose || { x: 0, y: 0, theta: 0 }, b);
+    const simMs = Math.round(sim.duration * 1000);
+    const batteryClearanceMs = 100; // 100ms clearance for battery voltage sag
+    return Math.max(200, simMs + batteryClearanceMs);
   }
 
 
@@ -1373,6 +1395,73 @@
       .replace(/'/g, "&apos;");
   }
 
+  function cleanCommentText(label) {
+    if (!label) return "";
+    let clean = String(label).trim();
+    if (clean.startsWith("//")) clean = clean.replace(/^\/\/\s*/, "");
+    return clean;
+  }
+
+  /**
+   * Computes multitasking concurrency info between two adjacent actions.
+   * Compares execution durations and determines which action takes precedence.
+   */
+  function getMultitaskPrecedence(actA, idxA, actB, idxB, poses) {
+    if (!actA || !actB) return null;
+    const poseA = (poses && poses[idxA]) ? poses[idxA] : { x: pose.x, y: pose.y, theta: pose.theta };
+    const poseB = (poses && poses[idxB]) ? poses[idxB] : (actA.type === "custom" ? poseA : (poses && poses[idxA + 1] ? poses[idxA + 1] : poseA));
+
+    const durA = estimateActionTime(actA, poseA);
+    const durB = estimateActionTime(actB, poseB);
+
+    const nameA = actA.label ? cleanCommentText(actA.label) : (actA.type === "custom" ? "Custom Task" : actA.type);
+    const nameB = actB.label ? cleanCommentText(actB.label) : (actB.type === "custom" ? "Custom Task" : actB.type);
+
+    let precedenceStep = null;
+    let diff = Math.abs(durA - durB);
+    let summary = "";
+    let leadTitle = "";
+    let leadDur = 0;
+    let trailDur = 0;
+
+    if (durA > durB) {
+      precedenceStep = "A";
+      leadTitle = `Step ${idxA + 1} (${nameA})`;
+      leadDur = durA;
+      trailDur = durB;
+      const trailName = `Step ${idxB + 1} (${nameB})`;
+      summary = `Step ${idxA + 1} (${nameA}, ${durA.toFixed(2)}s) takes precedence over ${trailName} (${durB.toFixed(2)}s) by +${diff.toFixed(2)}s`;
+    } else if (durB > durA) {
+      precedenceStep = "B";
+      leadTitle = `Step ${idxB + 1} (${nameB})`;
+      leadDur = durB;
+      trailDur = durA;
+      const trailName = `Step ${idxA + 1} (${nameA})`;
+      summary = `Step ${idxB + 1} (${nameB}, ${durB.toFixed(2)}s) takes precedence over ${trailName} (${durA.toFixed(2)}s) by +${diff.toFixed(2)}s`;
+    } else {
+      precedenceStep = "EQUAL";
+      leadTitle = "Both Steps (Equal)";
+      leadDur = durA;
+      trailDur = durB;
+      summary = `Equal duration: Both Step ${idxA + 1} and Step ${idxB + 1} complete in ${durA.toFixed(2)}s`;
+    }
+
+    return {
+      durA,
+      durB,
+      diff,
+      precedenceStep,
+      leadTitle,
+      leadDur,
+      trailDur,
+      summary,
+      nameA,
+      nameB,
+      isInstantA: durA === 0,
+      isInstantB: durB === 0
+    };
+  }
+
   function getActionDetails(act, i) {
     if (!act) return { title: "End of Routine", sub: "chassis.waitUntilDone()", type: "end" };
     const stepNum = i + 1;
@@ -1405,37 +1494,47 @@
     const prevAct = idx > 0 ? actions[idx - 1] : null;
     const nextAct = idx < actions.length - 1 ? actions[idx + 1] : null;
     const afterNextAct = idx < actions.length - 2 ? actions[idx + 2] : null;
-
-    // We build the seamless branching flow:
-    // Left Track: Step N (e.g. Move to point or Previous action)
-    // Fork into parallel execution:
-    //   Left: Custom Code (Subsystem / Sub-task)
-    //   Right: Move to point (Concurrent chassis movement)
-    // Merging into sequential step:
-    //   Unified convergence -> Swing to point / Subsequent step
+    const poses = computePoses();
 
     let stepA, stepB, stepC, stepD;
+    let mPrec = null;
+
     if (a.type === "custom") {
-      stepA = prevAct ? getActionDetails(prevAct, idx - 1) : { title: "Step 0. Start", sub: "Autonomous Entry", type: "start" };
+      stepA = prevAct ? getActionDetails(prevAct, idx - 1) : { title: "Step 0. Start", sub: "Autonomous Entry", type: "start", durStr: "0.00s" };
       stepB = getActionDetails(a, idx); // Custom code
-      stepC = nextAct ? getActionDetails(nextAct, idx + 1) : { title: `Step ${idx + 2}. Parallel Motion`, sub: "Chassis Drive Thread", type: "moveToPoint" };
-      stepD = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: "Next Sequential Step", sub: "chassis.waitUntilDone();", type: "swingToPoint" };
+      stepC = nextAct ? getActionDetails(nextAct, idx + 1) : { title: `Step ${idx + 2}. Parallel Motion`, sub: "Chassis Drive Thread", type: "moveToPoint", durStr: "1.20s" };
+      stepD = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: "Next Sequential Step", sub: "chassis.waitUntilDone();", type: "swingToPoint", durStr: "0.80s" };
+      if (nextAct) {
+        mPrec = getMultitaskPrecedence(a, idx, nextAct, idx + 1, poses);
+      }
     } else {
       stepA = getActionDetails(a, idx); // e.g. move to point
       if (nextAct && nextAct.type === "custom") {
         stepB = getActionDetails(nextAct, idx + 1);
-        stepC = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: `Step ${idx + 3}. Parallel Motion`, sub: "Chassis Drive Thread", type: "moveToPoint" };
+        stepC = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: `Step ${idx + 3}. Parallel Motion`, sub: "Chassis Drive Thread", type: "moveToPoint", durStr: "1.20s" };
         const stepAfter = idx < actions.length - 3 ? actions[idx + 3] : null;
-        stepD = stepAfter ? getActionDetails(stepAfter, idx + 3) : { title: "Next Sequential Step", sub: "chassis.waitUntilDone();", type: "swingToPoint" };
+        stepD = stepAfter ? getActionDetails(stepAfter, idx + 3) : { title: "Next Sequential Step", sub: "chassis.waitUntilDone();", type: "swingToPoint", durStr: "0.80s" };
+        mPrec = getMultitaskPrecedence(a, idx, nextAct, idx + 1, poses);
       } else {
-        stepB = { title: `${idx + 2}. Custom Code`, sub: nextAct ? (nextAct.label || "Subsystem task") : "subsystem.action()", type: "custom" };
-        stepC = nextAct ? getActionDetails(nextAct, idx + 1) : { title: `${idx + 2}. moveToPoint`, sub: "Chassis Motion Track", type: "moveToPoint" };
-        stepD = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: `${idx + 3}. swingToPoint`, sub: "chassis.waitUntilDone()", type: "swingToPoint" };
+        stepB = { title: `${idx + 2}. Custom Code`, sub: nextAct ? (nextAct.label ? cleanCommentText(nextAct.label) : "Subsystem task") : "subsystem.action()", type: "custom", durStr: nextAct && nextAct.type === "custom" ? `${(nextAct.customDuration || 0).toFixed(2)}s` : "0.00s (Instant)" };
+        stepC = nextAct ? getActionDetails(nextAct, idx + 1) : { title: `${idx + 2}. moveToPoint`, sub: "Chassis Motion Track", type: "moveToPoint", durStr: "1.00s" };
+        stepD = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: `${idx + 3}. swingToPoint`, sub: "chassis.waitUntilDone()", type: "swingToPoint", durStr: "0.80s" };
+        if (nextAct) {
+          mPrec = getMultitaskPrecedence(a, idx, nextAct, idx + 1, poses);
+        }
       }
     }
 
     const w = 340;
-    const h = 420;
+    const h = 440;
+
+    const precText = mPrec
+      ? (mPrec.precedenceStep === "A"
+          ? `🏆 Precedence: ${mPrec.leadTitle} (+${mPrec.diff.toFixed(2)}s)`
+          : (mPrec.precedenceStep === "B"
+              ? `🏆 Precedence: ${mPrec.leadTitle} (+${mPrec.diff.toFixed(2)}s)`
+              : "🏆 Precedence: Equal Duration"))
+      : "⚡ Concurrent Execution";
 
     return `
       <svg class="flowchart-svg" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Seamless Multitask Concurrency Flowchart">
@@ -1467,75 +1566,73 @@
 
         <!-- 1. TOP ANCHOR NODE: STEP A (e.g. Move to point) -->
         <g id="fc-node-a-${uid}">
-          <rect x="25" y="16" width="135" height="42" rx="8" fill="#172554" stroke="#38bdf8" stroke-width="1.8" />
-          <text x="92" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#f0f9ff">${escapeXml(stepA.title)}</text>
-          <text x="92" y="48" text-anchor="middle" font-size="8" fill="#7dd3fc">${escapeXml(stepA.sub || "chassis motion")}</text>
+          <rect x="25" y="14" width="135" height="42" rx="8" fill="#172554" stroke="#38bdf8" stroke-width="1.8" />
+          <text x="92" y="31" text-anchor="middle" font-size="10" font-weight="700" fill="#f0f9ff">${escapeXml(stepA.title)}</text>
+          <text x="92" y="45" text-anchor="middle" font-size="8" fill="#7dd3fc">${escapeXml(stepA.sub || "chassis motion")} (${escapeXml(stepA.durStr || "")})</text>
         </g>
 
         <!-- STREAMLINED SEAMLESS BRANCH CONNECTOR: Top Step A -> Left (Custom Code) & Right (Move To Point) -->
-        <!-- Direct vertical drop from step A to step B (custom code) -->
-        <path d="M 92 58 L 92 128" stroke="#c084fc" stroke-width="2" fill="none" marker-end="url(#fc-arr-purple-${uid})" />
-        <text x="86" y="94" text-anchor="end" font-size="7.5" font-weight="700" fill="#c084fc">ASYNC FORK ↓</text>
+        <path d="M 92 56 L 92 120" stroke="#c084fc" stroke-width="2" fill="none" marker-end="url(#fc-arr-purple-${uid})" />
+        <text x="86" y="90" text-anchor="end" font-size="7.5" font-weight="700" fill="#c084fc">ASYNC FORK ↓</text>
 
-        <!-- Smooth S-curve branch from step A across to step C (Right, Move to point) -->
-        <path d="M 125 58 C 125 90, 245 88, 245 128" stroke="#60a5fa" stroke-width="2" stroke-dasharray="3,3" fill="none" marker-end="url(#fc-arr-blue-${uid})" />
-        <text x="180" y="86" text-anchor="middle" font-size="7.5" font-weight="700" fill="#93c5fd">CONCURRENT ↓</text>
+        <path d="M 125 56 C 125 86, 245 84, 245 120" stroke="#60a5fa" stroke-width="2" stroke-dasharray="3,3" fill="none" marker-end="url(#fc-arr-blue-${uid})" />
+        <text x="180" y="82" text-anchor="middle" font-size="7.5" font-weight="700" fill="#93c5fd">CONCURRENT ↓</text>
 
         <!-- 2. PARALLEL BRANCHES (LEFT: CUSTOM CODE | RIGHT: MOVE TO POINT) -->
         <!-- LEFT: Custom Code (Subsystem Thread) -->
         <g id="fc-node-b-${uid}">
-          <rect x="25" y="132" width="135" height="44" rx="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="2" />
-          <rect x="25" y="132" width="135" height="15" rx="8" fill="rgba(168,85,247,0.2)" />
-          <text x="32" y="143" font-size="7.5" font-weight="800" fill="#d8b4fe">⚡ THREAD 1 · SUBSYSTEM</text>
-          <text x="92" y="159" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fae8ff">${escapeXml(stepB.title)}</text>
-          <text x="92" y="170" class="fc-custom-snip" text-anchor="middle" font-size="7.5" font-family="monospace" fill="#c084fc">${escapeXml(stepB.sub)}</text>
+          <rect x="25" y="124" width="135" height="48" rx="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="2" />
+          <rect x="25" y="124" width="135" height="15" rx="8" fill="rgba(168,85,247,0.2)" />
+          <text x="32" y="135" font-size="7.5" font-weight="800" fill="#d8b4fe">⚡ THREAD 1 · SUBSYSTEM</text>
+          <text x="92" y="150" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fae8ff">${escapeXml(stepB.title)}</text>
+          <text x="92" y="161" class="fc-custom-snip" text-anchor="middle" font-size="7.5" font-family="monospace" fill="#c084fc">${escapeXml(stepB.sub)} · ${escapeXml(stepB.durStr || "")}</text>
         </g>
 
         <!-- RIGHT: Move to point (Chassis Thread) -->
         <g id="fc-node-c-${uid}">
-          <rect x="180" y="132" width="135" height="44" rx="8" fill="#0f172a" stroke="#3b82f6" stroke-width="2" />
-          <rect x="180" y="132" width="135" height="15" rx="8" fill="rgba(59,130,246,0.2)" />
-          <text x="187" y="143" font-size="7.5" font-weight="800" fill="#93c5fd">🤖 THREAD 2 · CHASSIS</text>
-          <text x="247" y="159" text-anchor="middle" font-size="9.5" font-weight="700" fill="#eff6ff">${escapeXml(stepC.title)}</text>
-          <text x="247" y="170" text-anchor="middle" font-size="7.5" fill="#60a5fa">${escapeXml(stepC.sub || "chassis.moveToPoint()")}</text>
+          <rect x="180" y="124" width="135" height="48" rx="8" fill="#0f172a" stroke="#3b82f6" stroke-width="2" />
+          <rect x="180" y="124" width="135" height="15" rx="8" fill="rgba(59,130,246,0.2)" />
+          <text x="187" y="135" font-size="7.5" font-weight="800" fill="#93c5fd">🤖 THREAD 2 · CHASSIS</text>
+          <text x="247" y="150" text-anchor="middle" font-size="9.5" font-weight="700" fill="#eff6ff">${escapeXml(stepC.title)}</text>
+          <text x="247" y="161" text-anchor="middle" font-size="7.5" fill="#60a5fa">${escapeXml(stepC.sub || "chassis.moveToPoint()")} · ${escapeXml(stepC.durStr || "")}</text>
         </g>
 
         <!-- SUB-STEP CONNECTIONS IN PARALLEL -->
-        <!-- Left: downward continuation to completion of task -->
-        <path d="M 92 176 L 92 232" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-purple-${uid})" />
-        <!-- Right: downward continuation representing drive execution -->
-        <path d="M 247 176 L 247 232" stroke="#60a5fa" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-blue-${uid})" />
+        <path d="M 92 172 L 92 224" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-purple-${uid})" />
+        <path d="M 247 172 L 247 224" stroke="#60a5fa" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-blue-${uid})" />
 
         <!-- SYNCHRONIZATION BAR / WAITING POINT -->
         <!-- Left Sub-badge -->
-        <rect x="35" y="235" width="115" height="24" rx="6" fill="#2e1065" stroke="#7e22ce" stroke-width="1.2" />
-        <text x="92" y="250" text-anchor="middle" font-size="7.5" font-weight="600" fill="#e9d5ff">Subsystem Ready</text>
+        <rect x="30" y="226" width="125" height="24" rx="6" fill="#2e1065" stroke="#7e22ce" stroke-width="1.2" />
+        <text x="92" y="241" text-anchor="middle" font-size="7.5" font-weight="600" fill="#e9d5ff">Task: ${escapeXml(stepB.durStr || "Ready")}</text>
 
         <!-- Right Sub-badge -->
-        <rect x="190" y="235" width="115" height="24" rx="6" fill="#1e3a8a" stroke="#2563eb" stroke-width="1.2" />
-        <text x="247" y="250" text-anchor="middle" font-size="7.5" font-weight="600" fill="#bfdbfe">Chassis At Target</text>
+        <rect x="185" y="226" width="125" height="24" rx="6" fill="#1e3a8a" stroke="#2563eb" stroke-width="1.2" />
+        <text x="247" y="241" text-anchor="middle" font-size="7.5" font-weight="600" fill="#bfdbfe">Drive: ${escapeXml(stepC.durStr || "At Target")}</text>
+
+        <!-- PRECEDENCE BANNER IN SVG -->
+        <rect x="30" y="258" width="280" height="22" rx="6" fill="#1e1b4b" stroke="#c084fc" stroke-width="1.3" />
+        <text x="170" y="272" text-anchor="middle" font-size="8" font-weight="800" fill="#f5d0fe">${escapeXml(precText)}</text>
 
         <!-- 3. SEAMLESS RE-JOIN CONVERGENCE (CHASSIS.WAITUNTILDONE) -->
-        <!-- Left track curve inward to center sync -->
-        <path d="M 92 260 C 92 284, 150 286, 160 298" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
-        <!-- Right track curve inward to center sync -->
-        <path d="M 247 260 C 247 284, 190 286, 180 298" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
+        <path d="M 92 280 C 92 304, 150 306, 160 318" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
+        <path d="M 247 280 C 247 304, 190 306, 180 318" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
 
         <!-- Unified Convergence Sync Node -->
         <g id="fc-node-sync-${uid}">
-          <rect x="55" y="302" width="230" height="34" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.8" />
-          <text x="170" y="317" text-anchor="middle" font-size="9" font-weight="800" fill="#d1fae5">⚡ SYNC &amp; RE-JOIN POINT</text>
-          <text x="170" y="329" text-anchor="middle" font-size="7.5" font-family="monospace" fill="#a7f3d0">chassis.waitUntilDone();</text>
+          <rect x="45" y="322" width="250" height="34" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.8" />
+          <text x="170" y="337" text-anchor="middle" font-size="9" font-weight="800" fill="#d1fae5">⚡ SYNC &amp; RE-JOIN POINT</text>
+          <text x="170" y="349" text-anchor="middle" font-size="7.5" font-family="monospace" fill="#a7f3d0">chassis.waitUntilDone();</text>
         </g>
 
         <!-- Straight arrow down to next sequential step (e.g. Swing to point) -->
-        <path d="M 170 336 L 170 366" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
+        <path d="M 170 356 L 170 384" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
 
         <!-- 4. STEP D (e.g. Swing to point) -->
         <g id="fc-node-d-${uid}">
-          <rect x="25" y="368" width="290" height="38" rx="8" fill="#3b0764" stroke="#a855f7" stroke-width="1.8" />
-          <text x="170" y="385" text-anchor="middle" font-size="10" font-weight="700" fill="#fdf4ff">${escapeXml(stepD.title)}</text>
-          <text x="170" y="398" text-anchor="middle" font-size="8" fill="#d8b4fe">${escapeXml(stepD.sub || "sequential execution")}</text>
+          <rect x="25" y="386" width="290" height="38" rx="8" fill="#3b0764" stroke="#a855f7" stroke-width="1.8" />
+          <text x="170" y="403" text-anchor="middle" font-size="10" font-weight="700" fill="#fdf4ff">${escapeXml(stepD.title)}</text>
+          <text x="170" y="416" text-anchor="middle" font-size="8" fill="#d8b4fe">${escapeXml(stepD.sub || "sequential execution")} (${escapeXml(stepD.durStr || "")})</text>
         </g>
       </svg>
     `;
@@ -1550,18 +1647,20 @@
         </div>`;
     }
 
+    const poses = computePoses();
     const items = [];
     let i = 0;
     while (i < actions.length) {
       const cur = actions[i];
       if (cur.async && i < actions.length - 1) {
-        // Parallel pair
+        const mPrec = getMultitaskPrecedence(cur, i, actions[i + 1], i + 1, poses);
         items.push({
           type: "parallel",
           actA: cur,
           idxA: i,
           actB: actions[i + 1],
-          idxB: i + 1
+          idxB: i + 1,
+          mPrec
         });
         i += 2;
       } else {
@@ -1574,7 +1673,7 @@
       }
     }
 
-    const rowH = 76;
+    const rowH = 88;
     const totalH = 60 + items.length * rowH + 60;
     const w = 420;
 
@@ -1601,36 +1700,48 @@
         const bgColor = item.act.type === "custom" ? "#083344" : item.act.type.startsWith("swing") ? "#3b0764" : "#172554";
         svgRows += `
           <g>
-            <rect x="85" y="${curY}" width="250" height="42" rx="8" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.8"/>
+            <rect x="85" y="${curY}" width="250" height="46" rx="8" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.8"/>
             <text x="210" y="${curY + 18}" text-anchor="middle" font-size="10" font-weight="700" fill="#f8fafc">${escapeXml(details.title)}</text>
-            <text x="210" y="${curY + 32}" text-anchor="middle" font-size="8" fill="#94a3b8">${escapeXml(details.sub)}</text>
-            ${!isLast ? `<path d="M 210 ${curY + 42} L 210 ${nextY}" stroke="#94a3b8" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-neutral-all)"/>` : ""}
+            <text x="210" y="${curY + 32}" text-anchor="middle" font-size="8" fill="#94a3b8">${escapeXml(details.sub)} · ~${escapeXml(details.durStr)}</text>
+            ${!isLast ? `<path d="M 210 ${curY + 46} L 210 ${nextY}" stroke="#94a3b8" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-neutral-all)"/>` : ""}
           </g>
         `;
       } else {
         // Parallel pair (multitask)
         const detA = getActionDetails(item.actA, item.idxA);
         const detB = getActionDetails(item.actB, item.idxB);
+        const precLabel = item.mPrec
+          ? (item.mPrec.precedenceStep === "A"
+              ? `🏆 Step ${item.idxA + 1} takes precedence (${item.mPrec.leadDur.toFixed(2)}s)`
+              : (item.mPrec.precedenceStep === "B"
+                  ? `🏆 Step ${item.idxB + 1} takes precedence (${item.mPrec.leadDur.toFixed(2)}s)`
+                  : "🏆 Equal duration"))
+          : "⚡ Parallel Multitask";
+
         svgRows += `
           <g>
             <!-- Parallel bracket / fork indicator -->
             <path d="M 210 ${curY - 14} C 210 ${curY - 4}, 110 ${curY - 4}, 110 ${curY}" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-purple-all)"/>
             <path d="M 210 ${curY - 14} C 210 ${curY - 4}, 310 ${curY - 4}, 310 ${curY}" stroke="#60a5fa" stroke-width="1.8" stroke-dasharray="3,3" fill="none" marker-end="url(#fc-arr-blue-all)"/>
-            <text x="210" y="${curY - 6}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#c084fc">⚡ PARALLEL MULTITASK ⚡</text>
+            <text x="210" y="${curY - 6}" text-anchor="middle" font-size="7" font-weight="700" fill="#c084fc">⚡ PARALLEL CONCURRENT ⚡</text>
 
-            <!-- Left track card (Custom/Subsystem) -->
-            <rect x="25" y="${curY}" width="170" height="44" rx="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="1.8"/>
-            <text x="110" y="${curY + 18}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fae8ff">${escapeXml(detA.title)}</text>
-            <text x="110" y="${curY + 32}" text-anchor="middle" font-size="7.5" fill="#d8b4fe">${escapeXml(detA.sub)}</text>
+            <!-- Left track card (Subsystem / Custom) -->
+            <rect x="25" y="${curY}" width="170" height="46" rx="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="1.8"/>
+            <text x="110" y="${curY + 17}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fae8ff">${escapeXml(detA.title)}</text>
+            <text x="110" y="${curY + 31}" text-anchor="middle" font-size="7.5" fill="#d8b4fe">${escapeXml(detA.sub)} · ${escapeXml(detA.durStr)}</text>
 
             <!-- Right track card (Chassis drive) -->
-            <rect x="225" y="${curY}" width="170" height="44" rx="8" fill="#0f172a" stroke="#3b82f6" stroke-width="1.8"/>
-            <text x="310" y="${curY + 18}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#eff6ff">${escapeXml(detB.title)}</text>
-            <text x="310" y="${curY + 32}" text-anchor="middle" font-size="7.5" fill="#93c5fd">${escapeXml(detB.sub)}</text>
+            <rect x="225" y="${curY}" width="170" height="46" rx="8" fill="#0f172a" stroke="#3b82f6" stroke-width="1.8"/>
+            <text x="310" y="${curY + 17}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#eff6ff">${escapeXml(detB.title)}</text>
+            <text x="310" y="${curY + 31}" text-anchor="middle" font-size="7.5" fill="#93c5fd">${escapeXml(detB.sub)} · ${escapeXml(detB.durStr)}</text>
+
+            <!-- Precedence indicator pill in routine SVG -->
+            <rect x="95" y="${curY + 50}" width="230" height="18" rx="5" fill="#1e1b4b" stroke="#a855f7" stroke-width="1"/>
+            <text x="210" y="${curY + 62}" text-anchor="middle" font-size="7" font-weight="700" fill="#f0abfc">${escapeXml(precLabel)}</text>
 
             <!-- Re-join convergence -->
-            <path d="M 110 ${curY + 44} C 110 ${curY + 56}, 210 ${curY + 56}, 210 ${nextY}" stroke="#34d399" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-emerald-all)"/>
-            <path d="M 310 ${curY + 44} C 310 ${curY + 56}, 210 ${curY + 56}, 210 ${nextY}" stroke="#34d399" stroke-width="1.8" fill="none"/>
+            <path d="M 110 ${curY + 46} C 110 ${curY + 68}, 210 ${curY + 68}, 210 ${nextY}" stroke="#34d399" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-emerald-all)"/>
+            <path d="M 310 ${curY + 46} C 310 ${curY + 68}, 210 ${curY + 68}, 210 ${nextY}" stroke="#34d399" stroke-width="1.8" fill="none"/>
           </g>
         `;
       }
@@ -1686,21 +1797,50 @@
     `;
   }
 
+  let toastTimer = null;
+  function showToast(message) {
+    const el = document.getElementById("toastNotification");
+    if (!el) return;
+    el.textContent = message;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.classList.remove("show");
+    }, 3200);
+  }
+
   function renderFlow() {
     actionFlow.innerHTML = "";
+    const poses = computePoses();
+
     actions.forEach((a, idx) => {
       const block = document.createElement("div");
       block.className = "action-block";
+      const fromPose = poses[idx] || { x: pose.x, y: pose.y, theta: pose.theta };
+      const nextAct = idx < actions.length - 1 ? actions[idx + 1] : null;
+
+      // Multitask precedence for connector & card
+      let mPrecConn = null;
+      let mPrecCard = null;
 
       if (idx > 0) {
         const prev = actions[idx - 1];
         const conn = document.createElement("div");
         if (prev && prev.async) {
+          mPrecConn = getMultitaskPrecedence(prev, idx - 1, a, idx, poses);
+          const precTag = mPrecConn
+            ? (mPrecConn.precedenceStep === "A"
+                ? `⚡ Step ${idx} (${mPrecConn.nameA}) takes precedence (+${mPrecConn.diff.toFixed(2)}s)`
+                : (mPrecConn.precedenceStep === "B"
+                    ? `⚡ Step ${idx + 1} (${mPrecConn.nameB}) takes precedence (+${mPrecConn.diff.toFixed(2)}s)`
+                    : `⚡ Equal duration (${mPrecConn.durA.toFixed(2)}s)`))
+            : "MULTITASKING (RUNS CONCURRENTLY)";
+
           conn.className = "connector multitask-connector";
           conn.innerHTML = `
             <div class="multitask-connector-bar"></div>
-            <div class="multitask-connector-pill" title="Step ${idx} and Step ${idx + 1} run concurrently (Multitasking)">
-              <span>⚡</span> MULTITASKING (RUNS CONCURRENTLY) <span>⚡</span>
+            <div class="multitask-connector-pill" title="${mPrecConn ? escapeHtml(mPrecConn.summary) : 'Concurrent Multitask Execution'}">
+              <span>⚡</span> ${escapeHtml(precTag)} <span>⚡</span>
             </div>
             <div class="multitask-connector-bar"></div>`;
         } else {
@@ -1708,6 +1848,10 @@
           conn.textContent = "▼";
         }
         block.appendChild(conn);
+      }
+
+      if (a.async && nextAct) {
+        mPrecCard = getMultitaskPrecedence(a, idx, nextAct, idx + 1, poses);
       }
 
       const card = document.createElement("div");
@@ -1720,6 +1864,7 @@
 
       let body = "";
       if (a.type === "custom") {
+        const durVal = a.customDuration != null ? Number(a.customDuration) : 0;
         body = `
           <label class="wide">Custom C++ (injected as-is)
             <textarea data-f="customCode" rows="3" placeholder="// e.g. intake.move(127); or chassis.waitUntil(12);">${escapeHtml(a.customCode)}</textarea>
@@ -1732,6 +1877,54 @@
             <button type="button" class="snippet-chip" data-snip="chassis.waitUntil(12);">⏱️ Wait 12"</button>
             <button type="button" class="snippet-chip" data-snip="chassis.waitUntilDone();">⏳ Wait Done</button>
           </div>
+          <div class="custom-duration-row">
+            <div class="custom-duration-header">
+              <span class="custom-duration-label">
+                ⏱️ Estimated Time to Complete
+                <span class="custom-duration-hint">(0s = Instant / Continuous background, e.g. spinning intake)</span>
+              </span>
+              <span class="custom-duration-badge ${durVal > 0 ? "has-duration" : "instant"}">
+                ${durVal > 0 ? `${durVal.toFixed(2)}s Duration` : "0s · Instant (Spin Intake)"}
+              </span>
+            </div>
+            <div class="custom-duration-input-wrap">
+              <label class="custom-duration-input-label">
+                <span>Duration:</span>
+                <input type="number" data-f="customDuration" min="0" max="60" step="0.05" value="${durVal}" />
+                <span class="custom-duration-unit">sec</span>
+              </label>
+              <div class="custom-duration-presets">
+                <button type="button" class="btn-dur-preset ${durVal === 0 ? "active" : ""}" data-act="set-dur" data-dur="0" title="0s means non-blocking / instant (e.g. spinning intake)">⚡ 0s (Spin Intake)</button>
+                <button type="button" class="btn-dur-preset ${durVal === 0.2 ? "active" : ""}" data-act="set-dur" data-dur="0.2">0.2s</button>
+                <button type="button" class="btn-dur-preset ${durVal === 0.5 ? "active" : ""}" data-act="set-dur" data-dur="0.5">0.5s</button>
+                <button type="button" class="btn-dur-preset ${durVal === 1.0 ? "active" : ""}" data-act="set-dur" data-dur="1.0">1.0s</button>
+                <button type="button" class="btn-dur-preset ${durVal === 2.0 ? "active" : ""}" data-act="set-dur" data-dur="2.0">2.0s</button>
+              </div>
+            </div>
+          </div>
+          ${mPrecCard ? `
+          <div class="multitask-precedence-box">
+            <div class="m-prec-header">
+              <span class="m-prec-title">🏆 Multitask Precedence &amp; Timing</span>
+              <span class="m-prec-tag ${mPrecCard.precedenceStep === "A" ? "tag-self" : "tag-other"}">
+                ${mPrecCard.precedenceStep === "A" ? "THIS ACTION TAKES PRECEDENCE" : (mPrecCard.precedenceStep === "B" ? "NEXT ACTION TAKES PRECEDENCE" : "EQUAL PRECEDENCE")}
+              </span>
+            </div>
+            <div class="m-prec-body">
+              <div class="m-prec-grid">
+                <div class="m-prec-col self">
+                  <span class="m-col-lbl">Step ${idx + 1} (${escapeHtml(mPrecCard.nameA)}):</span>
+                  <span class="m-col-val">${mPrecCard.durA === 0 ? "0.00s (Instant)" : `${mPrecCard.durA.toFixed(2)}s`}</span>
+                </div>
+                <span class="m-prec-vs">vs</span>
+                <div class="m-prec-col other">
+                  <span class="m-col-lbl">Step ${idx + 2} (${escapeHtml(mPrecCard.nameB)}):</span>
+                  <span class="m-col-val">${mPrecCard.durB === 0 ? "0.00s (Instant)" : `${mPrecCard.durB.toFixed(2)}s`}</span>
+                </div>
+              </div>
+              <div class="m-prec-summary">${escapeHtml(mPrecCard.summary)}</div>
+            </div>
+          </div>` : ""}
           <div class="multitask-panel ${a.async ? "on" : ""}">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
               <label class="multitask-toggle-label">
@@ -1748,8 +1941,20 @@
               </button>
             </div>
             ${(a.async || a.showFlowchart) ? renderFlowchartHtml(a, idx) : ""}
+          </div>
+          <div class="move-comment-row">
+            <label class="move-comment-label">
+              <span class="move-comment-header">
+                <span class="move-comment-tag">💬 Task Comment</span>
+                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(cleanCommentText(a.label))}` : "e.g. // spin intake"}</span>
+              </span>
+              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label || '')}" placeholder="e.g. spin intake motor or deploy clamp"/>
+            </label>
           </div>`;
       } else {
+        const simDur = estimateActionTime(a, fromPose);
+        const intelligentTimeout = calculateIntelligentTimeout(a, fromPose, bot);
+
         const pointFields = needsPoint(a.type)
           ? `<label>X <input type="number" data-f="x" step="0.1" value="${a.x}"/></label>
              <label>Y <input type="number" data-f="y" step="0.1" value="${a.y}"/></label>`
@@ -1779,7 +1984,10 @@
             ${sideField}
           </div>
           <div class="speed-timeout-row">
-            <div class="st-label">Speed &amp; timeout</div>
+            <div class="st-header">
+              <span class="st-label">Speed &amp; Timeout</span>
+              <span class="st-sub">Physical sim: ~${simDur.toFixed(2)}s</span>
+            </div>
             <div class="row">
               <label>Max speed (0–127)
                 <input type="number" data-f="maxSpeed" min="0" max="127" step="1" value="${a.maxSpeed}"/>
@@ -1787,8 +1995,12 @@
               <label>Min speed
                 <input type="number" data-f="minSpeed" min="0" max="127" step="1" value="${a.minSpeed}"/>
               </label>
-              <label>Timeout (ms)
-                <input type="number" data-f="timeout" min="0" step="100" value="${a.timeout}"/>
+              <label class="timeout-label">
+                <span class="timeout-label-text">Timeout (ms) <span class="calc-sub-hint">+100ms batt</span></span>
+                <div class="timeout-input-group">
+                  <input type="number" data-f="timeout" min="0" step="50" value="${a.timeout}"/>
+                  <button type="button" class="btn-calc-timeout" data-act="apply-intelligent-timeout" data-idx="${idx}" title="Set intelligent timeout (~${intelligentTimeout}ms = physical motion sim + 100ms clearance for battery voltage sag)">⚡ ~${intelligentTimeout}ms</button>
+                </div>
               </label>
               <label>Early exit (in)
                 <input type="number" data-f="earlyExitRange" step="0.1" value="${a.earlyExitRange}"/>
@@ -1802,6 +2014,29 @@
               <span class="rev-hint">(forwards = false)</span>
             </label>
           </div>
+          ${mPrecCard ? `
+          <div class="multitask-precedence-box">
+            <div class="m-prec-header">
+              <span class="m-prec-title">🏆 Multitask Precedence &amp; Timing</span>
+              <span class="m-prec-tag ${mPrecCard.precedenceStep === "A" ? "tag-self" : "tag-other"}">
+                ${mPrecCard.precedenceStep === "A" ? "CHASSIS MOTION TAKES PRECEDENCE" : (mPrecCard.precedenceStep === "B" ? "CONCURRENT TASK TAKES PRECEDENCE" : "EQUAL PRECEDENCE")}
+              </span>
+            </div>
+            <div class="m-prec-body">
+              <div class="m-prec-grid">
+                <div class="m-prec-col self">
+                  <span class="m-col-lbl">Step ${idx + 1} (${escapeHtml(mPrecCard.nameA)}):</span>
+                  <span class="m-col-val">${mPrecCard.durA === 0 ? "0.00s (Instant)" : `${mPrecCard.durA.toFixed(2)}s`}</span>
+                </div>
+                <span class="m-prec-vs">vs</span>
+                <div class="m-prec-col other">
+                  <span class="m-col-lbl">Step ${idx + 2} (${escapeHtml(mPrecCard.nameB)}):</span>
+                  <span class="m-col-val">${mPrecCard.durB === 0 ? "0.00s (Instant)" : `${mPrecCard.durB.toFixed(2)}s`}</span>
+                </div>
+              </div>
+              <div class="m-prec-summary">${escapeHtml(mPrecCard.summary)}</div>
+            </div>
+          </div>` : ""}
           <div class="multitask-panel ${a.async ? "on" : ""}">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
               <label class="multitask-toggle-label">
@@ -1831,19 +2066,20 @@
             <label class="move-comment-label">
               <span class="move-comment-header">
                 <span class="move-comment-tag">💬 Move Comment (C++ code)</span>
-                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(a.label)}` : "e.g. // rush goal"}</span>
+                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(cleanCommentText(a.label))}` : "e.g. // rush goal"}</span>
               </span>
-              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label)}" placeholder="e.g. intake stack or rush mogo"/>
+              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label || '')}" placeholder="e.g. rush goal, clamp mogo, or intake preload"/>
             </label>
           </div>`;
       }
 
+      const cleanLbl = cleanCommentText(a.label);
       card.innerHTML = `
         <div class="card-title">
           <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type}</span>
           ${a.async ? '<span class="badge multitask-badge" title="Multitasking / Async: Non-blocking action running concurrently with the next step">⚡ MULTITASK</span>' : ""}
           ${a.forwards === false && a.type !== "custom" ? '<span class="badge reverse">REV</span>' : ""}
-          <span class="hint-inline ${a.label ? "has-comment" : ""}">${a.label ? `// ${escapeHtml(a.label)}` : ""}</span>
+          <span class="hint-inline ${cleanLbl ? "has-comment" : ""}">${cleanLbl ? `// ${escapeHtml(cleanLbl)}` : ""}</span>
           <div style="margin-left:auto;display:flex;gap:2px">
             <button class="icon" data-act="up" title="Move up">↑</button>
             <button class="icon" data-act="down" title="Move down">↓</button>
@@ -1879,7 +2115,6 @@
           const f = el.dataset.f;
           let v;
           if (el.type === "checkbox") {
-            // data-invert: checked means the logical opposite (Drive in reverse → forwards=false)
             v = el.dataset.invert ? !el.checked : el.checked;
           } else if (el.type === "number") v = Number(el.value);
           else v = el.value;
@@ -1890,13 +2125,30 @@
           markDirty();
           renderFlow();
           draw();
+          generateCode();
+          updateTimeDisplay();
         });
+
         el.addEventListener("input", () => {
+          const f = el.dataset.f;
           if (el.type === "number" || el.tagName === "TEXTAREA" || el.type === "text") {
-            const f = el.dataset.f;
             a[f] = el.type === "number" ? Number(el.value) : el.value;
             markDirty();
             if (["x", "y", "theta"].includes(f)) draw();
+            if (f === "label") {
+              const clean = cleanCommentText(el.value);
+              const previewEl = card.querySelector(".move-comment-preview");
+              if (previewEl) previewEl.textContent = clean ? "// " + clean : "e.g. // rush goal";
+              const headerHint = card.querySelector(".hint-inline");
+              if (headerHint) {
+                headerHint.textContent = clean ? "// " + clean : "";
+                headerHint.className = "hint-inline" + (clean ? " has-comment" : "");
+              }
+              generateCode();
+            }
+            if (f === "customDuration") {
+              updateTimeDisplay();
+            }
             if (f === "customCode") {
               const snipText =
                 (el.value || "")
@@ -1927,6 +2179,30 @@
             openFlowchartModal(a, idx);
             return;
           }
+          if (act === "apply-intelligent-timeout") {
+            const fromP = poses[idx] || { x: pose.x, y: pose.y, theta: pose.theta };
+            const calcT = calculateIntelligentTimeout(a, fromP, bot);
+            a.timeout = calcT;
+            markDirty();
+            renderFlow();
+            generateCode();
+            showToast(`⚡ Set timeout to ${calcT}ms (+100ms clearance for battery sag)`);
+            return;
+          }
+          if (act === "set-dur") {
+            a.customDuration = Number(btn.dataset.dur);
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            updateTimeDisplay();
+            if (a.customDuration === 0) {
+              showToast(`⏱️ Set custom code duration to 0s (Non-blocking / e.g. spinning intake)`);
+            } else {
+              showToast(`⏱️ Set custom code duration to ${a.customDuration}s`);
+            }
+            return;
+          }
           const i = actions.findIndex((x) => x.id === a.id);
           if (act === "del") {
             actions.splice(i, 1);
@@ -1939,6 +2215,8 @@
           markDirty();
           renderFlow();
           draw();
+          generateCode();
+          updateTimeDisplay();
         });
       });
 
@@ -1979,13 +2257,22 @@
     return " ".repeat(isNaN(numVal) ? 2 : numVal);
   }
 
+  function getCommentStyle() {
+    const sel = document.getElementById("codeCommentStyleSelect");
+    return sel ? sel.value : (localStorage.getItem("lemlib_code_comment_style") || "inline");
+  }
+
   function emitRoutineBody(pose0, acts, indent) {
     const ind = indent != null ? indent : "  ";
+    const commentStyle = getCommentStyle();
     let code = "";
     code += `${ind}chassis.setPose(${num(pose0.x)}, ${num(pose0.y)}, ${num(pose0.theta)});\n`;
     for (const a of acts) {
-      if (a.label) code += `${ind}// ${a.label}\n`;
+      const cleanComment = cleanCommentText(a.label);
       if (a.type === "custom") {
+        if (cleanComment) {
+          code += `${ind}// ${cleanComment}\n`;
+        }
         const lines = (a.customCode || "").split("\n");
         for (const line of lines) {
           if (line.trim().length === 0) code += "\n";
@@ -2013,27 +2300,36 @@
       const paramStr = params.length ? `, {${params.join(", ")}}` : "";
       const asyncArg = a.async ? ", true" : "";
 
+      let inlineComment = "";
+      if (cleanComment) {
+        if (commentStyle === "above") {
+          code += `${ind}// ${cleanComment}\n`;
+        } else {
+          inlineComment = ` // ${cleanComment}`;
+        }
+      }
+
       switch (a.type) {
         case "moveToPoint":
-          code += `${ind}chassis.moveToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          code += `${ind}chassis.moveToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
           break;
         case "moveToPose":
-          code += `${ind}chassis.moveToPose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          code += `${ind}chassis.moveToPose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
           break;
         case "turnToPoint":
-          code += `${ind}chassis.turnToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          code += `${ind}chassis.turnToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
           break;
         case "turnToHeading":
-          code += `${ind}chassis.turnToHeading(${num(pt)}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          code += `${ind}chassis.turnToHeading(${num(pt)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
           break;
         case "swingToPoint":
-          code += `${ind}chassis.swingToPoint(${num(px)}, ${num(py)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          code += `${ind}chassis.swingToPoint(${num(px)}, ${num(py)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
           break;
         case "swingToHeading":
-          code += `${ind}chassis.swingToHeading(${num(pt)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          code += `${ind}chassis.swingToHeading(${num(pt)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
           break;
         default:
-          code += `${ind}// unknown action ${a.type}\n`;
+          code += `${ind}// unknown action ${a.type}${inlineComment}\n`;
       }
     }
     return code;
@@ -2079,19 +2375,31 @@
   }
 
   function estimateActionTime(a, fromPose) {
-    if (a.type === "custom") return Math.min(0.35, Math.max(0.1, (a.timeout || 2000) / 1000));
-    const res = simulateAction(a, fromPose, bot);
+    if (!a) return 0;
+    if (a.type === "custom") {
+      return a.customDuration != null ? Math.max(0, Number(a.customDuration)) : 0;
+    }
+    const res = simulateAction(a, fromPose || { x: 0, y: 0, theta: 0 }, bot);
     return res.duration;
   }
 
   function estimateTotalTime() {
-    buildSimPath();
+    const poses = computePoses();
     let total = 0;
-    for (const seg of simSegments) {
-      if (seg.action.async) {
-        total += seg.duration * 0.15;
+    let i = 0;
+    while (i < actions.length) {
+      const cur = actions[i];
+      const curPose = poses[i] || { x: pose.x, y: pose.y, theta: pose.theta };
+      const durA = estimateActionTime(cur, curPose);
+      if (cur.async && i < actions.length - 1) {
+        const next = actions[i + 1];
+        const nextPose = cur.type === "custom" ? curPose : (poses[i + 1] || curPose);
+        const durB = estimateActionTime(next, nextPose);
+        total += Math.max(durA, durB);
+        i += 2;
       } else {
-        total += seg.duration;
+        total += durA;
+        i++;
       }
     }
     return total;
@@ -3492,6 +3800,39 @@
   document.querySelectorAll('input[name="codeMode"]').forEach((el) => {
     el.addEventListener("change", () => generateCode());
   });
+
+  const btnAutoAll = document.getElementById("btnAutoAllTimeouts");
+  if (btnAutoAll) {
+    btnAutoAll.onclick = () => {
+      if (!actions || !actions.length) {
+        showToast("No actions in routine to calculate.");
+        return;
+      }
+      const poses = computePoses();
+      let updatedCount = 0;
+      actions.forEach((a, i) => {
+        if (a.type !== "custom") {
+          const fromPose = poses[i] || { x: pose.x, y: pose.y, theta: pose.theta };
+          a.timeout = calculateIntelligentTimeout(a, fromPose, bot);
+          updatedCount++;
+        }
+      });
+      markDirty();
+      renderFlow();
+      generateCode();
+      showToast(`⚡ Calculated intelligent timeouts (+100ms clearance) for ${updatedCount} movement${updatedCount === 1 ? '' : 's'}`);
+    };
+  }
+
+  const codeCommentStyleSelect = document.getElementById("codeCommentStyleSelect");
+  if (codeCommentStyleSelect) {
+    codeCommentStyleSelect.value = getCommentStyle();
+    codeCommentStyleSelect.onchange = () => {
+      localStorage.setItem("lemlib_code_comment_style", codeCommentStyleSelect.value);
+      generateCode();
+      showToast(`💬 Code comment style set to: ${codeCommentStyleSelect.options[codeCommentStyleSelect.selectedIndex].text}`);
+    };
+  }
 
   const btnNewTab = document.getElementById("btnNewTab");
   if (btnNewTab && window.self !== window.top) {

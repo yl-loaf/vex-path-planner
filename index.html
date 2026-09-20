@@ -47,7 +47,8 @@
       <aside class="panel flowchart-panel">
         <div class="panel-header">
           <h2>Path Flowchart</h2>
-          <div style="display:flex;align-items:center;gap:6px;">
+          <div style="display:flex;align-items:center;gap:4px;">
+            <button type="button" id="btnAutoAllTimeouts" class="btn-flowchart-routine" style="background:#0f2942;border-color:#0284c7;color:#38bdf8;" title="Intelligently calculate timeouts for all moves with +100ms clearance for battery">⚡ Auto Timeouts (+100ms)</button>
             <button type="button" id="btnOpenRoutineFlowchart" class="btn-flowchart-routine" title="View interactive seamless multitask flowchart for full routine">⚡ Flowchart</button>
             <span id="saveStatus" class="save-status">Saved</span>
           </div>
@@ -276,6 +277,8 @@
     Build <span id="buildNumber">…</span>
     <button type="button" id="btnCheckUpdate" class="linkish" title="Check for newer build">Check for updates</button>
   </footer>
+
+  <div id="toastNotification" class="toast-notify"></div>
 
   <input type="file" id="fileInput" accept=".vpath,application/json" hidden />
 
