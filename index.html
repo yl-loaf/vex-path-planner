@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>VEX V5 LemLib Path Planner – Push Back</title>
-  <link rel="stylesheet" href="style.css?v=20260920.j1" />
+  <link rel="stylesheet" href="style.css?v=20260920.k1" />
 </head>
 <body>
   <div id="app">
@@ -41,6 +41,18 @@
         <div class="panel-header">
           <h2>Path Flowchart</h2>
           <span id="saveStatus" class="save-status">Saved</span>
+        </div>
+
+        <div class="path-selector" id="pathSelector">
+          <label class="path-label">Auton routine
+            <select id="pathSelect"></select>
+          </label>
+          <div class="path-btns">
+            <button type="button" id="btnPathAdd" title="New routine">+ New</button>
+            <button type="button" id="btnPathRename" title="Rename">Rename</button>
+            <button type="button" id="btnPathDup" title="Duplicate">Dup</button>
+            <button type="button" id="btnPathDel" class="danger" title="Delete routine">Del</button>
+          </div>
         </div>
 
         <div class="start-card" id="startCard">
@@ -113,6 +125,10 @@
 
         <section class="code-section">
           <h2>Generated LemLib Code</h2>
+          <div class="code-mode-row">
+            <label><input type="radio" name="codeMode" value="current" checked /> Current routine</label>
+            <label><input type="radio" name="codeMode" value="all" /> All routines (switch)</label>
+          </div>
           <button id="btnGenerate" class="primary full">Generate / Refresh Code</button>
           <textarea id="codeOut" readonly spellcheck="false"></textarea>
           <button id="btnCopy">Copy to Clipboard</button>
@@ -156,12 +172,12 @@
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.j1"></script>
+  <script src="version.js?v=20260920.k1"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.j1"></script>
-  <script src="app.js?v=20260920.j1"></script>
+  <script src="firebase-config.js?v=20260920.k1"></script>
+  <script src="app.js?v=20260920.k1"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
