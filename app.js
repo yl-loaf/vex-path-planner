@@ -342,25 +342,19 @@
   }
 
   /** Apply a swing about locked side: returns new {x,y,theta} after turning dth degrees (CW+) */
-  function applySwing(x, y, theta, endTheta, lockedSide) {
+  function applySwing(x, y, theta, endTheta, lockedSide, customTrackWidth) {
     const dth = angleError(theta, endTheta);
     if (Math.abs(dth) < 1e-6) return { x, y, theta: endTheta };
-    const halfTrack = (bot.trackWidth || 12) / 2;
+    const trackWidth = customTrackWidth || (bot.trackWidth || 12);
+    const h = trackWidth / 2;
     const lockLeft = (lockedSide || "LEFT") === "LEFT";
-    const pivotLocalX = lockLeft ? -halfTrack : halfTrack;
-    // robot right unit at current heading (0=+Y CW+)
-    const rightX = Math.sin(((theta + 90) * Math.PI) / 180);
-    const rightY = Math.cos(((theta + 90) * Math.PI) / 180);
-    const pivotWX = x + rightX * pivotLocalX;
-    const pivotWY = y + rightY * pivotLocalX;
-    const relX = x - pivotWX;
-    const relY = y - pivotWY;
-    const ang = (dth * Math.PI) / 180;
-    const cosA = Math.cos(ang), sinA = Math.sin(ang);
-    // CW rotation of relative vector
-    const nx = relX * cosA + relY * sinA;
-    const ny = -relX * sinA + relY * cosA;
-    return { x: pivotWX + nx, y: pivotWY + ny, theta: endTheta };
+    const rad0 = (theta * Math.PI) / 180;
+    const pivotX = lockLeft ? x - h * Math.cos(rad0) : x + h * Math.cos(rad0);
+    const pivotY = lockLeft ? y + h * Math.sin(rad0) : y - h * Math.sin(rad0);
+    const endRad = (endTheta * Math.PI) / 180;
+    const endX = lockLeft ? pivotX + h * Math.cos(endRad) : pivotX - h * Math.cos(endRad);
+    const endY = lockLeft ? pivotY - h * Math.sin(endRad) : pivotY + h * Math.sin(endRad);
+    return { x: endX, y: endY, theta: endTheta };
   }
 
   /**
@@ -546,19 +540,32 @@
     }
 
     if (action.type === "swingToHeading" || action.type === "swingToPoint") {
-      let targetHeading = pose.theta;
-      if (action.type === "swingToHeading") {
-        targetHeading = action.theta;
-      } else {
-        targetHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
-        if (action.forwards === false) targetHeading = normalizeAngle(targetHeading + 180);
+      const lockLeft = (action.lockedSide || "LEFT") === "LEFT";
+      const h = trackWidth / 2;
+      const rad0 = (fromPose.theta * Math.PI) / 180;
+      const pivotX = lockLeft ? fromPose.x - h * Math.cos(rad0) : fromPose.x + h * Math.cos(rad0);
+      const pivotY = lockLeft ? fromPose.y + h * Math.sin(rad0) : fromPose.y - h * Math.sin(rad0);
+
+      function getCenter(th) {
+        const rad = (th * Math.PI) / 180;
+        const cx = lockLeft ? pivotX + h * Math.cos(rad) : pivotX - h * Math.cos(rad);
+        const cy = lockLeft ? pivotY - h * Math.sin(rad) : pivotY + h * Math.sin(rad);
+        return { x: cx, y: cy };
       }
 
       let vDrive = 0;
 
       while (t < timeoutS) {
+        let targetHeading = pose.theta;
+        if (action.type === "swingToHeading") {
+          targetHeading = action.theta;
+        } else {
+          targetHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
+          if (action.forwards === false) targetHeading = normalizeAngle(targetHeading + 180);
+        }
+
         const angError = angleError(pose.theta, targetHeading);
-        if (Math.abs(angError) < 1.0 + earlyExitRange) break;
+        if (Math.abs(angError) < 0.6 + earlyExitRange && t > 0.04) break;
 
         let pwr = clamp(angError / 26, -maxSpeed, maxSpeed);
         if (Math.abs(pwr) < minSpeed) pwr = Math.sign(pwr) * minSpeed;
@@ -566,27 +573,34 @@
         const targetVDrive = pwr * vMax;
         vDrive += ((targetVDrive - vDrive) / tau) * dt;
 
-        // Circular arc about locked wheel:
-        // Left locked: vL = 0, vR = -vDrive -> CW rotation when angError > 0
-        // Right locked: vR = 0, vL = vDrive -> CW rotation when angError > 0
-        const vL = vDrive / 2;
+        // Driven wheel turns around stationary locked wheel:
         const wDeg = (vDrive / trackWidth) * (180 / Math.PI);
-
-        const midTheta = normalizeAngle(pose.theta + (wDeg * dt) / 2);
-        const rad = (midTheta * Math.PI) / 180;
-        pose.x += Math.sin(rad) * vL * dt;
-        pose.y += Math.cos(rad) * vL * dt;
         pose.theta = normalizeAngle(pose.theta + wDeg * dt);
 
+        const c = getCenter(pose.theta);
+        pose.x = c.x;
+        pose.y = c.y;
+
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: vL, omegaDeg: wDeg });
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vDrive) / 2, omegaDeg: wDeg });
       }
 
-      // Exact geometry settlement
-      const exactSwing = applySwing(fromPose.x, fromPose.y, fromPose.theta, targetHeading, action.lockedSide);
-      pose.x = exactSwing.x;
-      pose.y = exactSwing.y;
-      pose.theta = targetHeading;
+      // Exact geometry settlement to eliminate any discrete integration residual
+      let finalHeading = pose.theta;
+      if (action.type === "swingToHeading") {
+        finalHeading = action.theta;
+      } else {
+        finalHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
+        if (action.forwards === false) finalHeading = normalizeAngle(finalHeading + 180);
+      }
+      pose.theta = finalHeading;
+      const finalC = getCenter(finalHeading);
+      pose.x = finalC.x;
+      pose.y = finalC.y;
+      if (points.length) {
+        points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+      }
+
       return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
     }
 
@@ -1044,6 +1058,37 @@
       ctx.fillStyle = "#fff";
       ctx.font = "11px sans-serif";
       ctx.fillText(String(i) + (isRev ? "R" : ""), p.cx + 8, p.cy - 6);
+
+      // Target aim visualization for swingToPoint and turnToPoint
+      if (a.type === "swingToPoint" || a.type === "turnToPoint") {
+        const tp = fieldToCanvas(a.x, a.y);
+        ctx.save();
+        ctx.strokeStyle = sel ? "#38bdf8" : "rgba(56, 189, 248, 0.4)";
+        ctx.lineWidth = sel ? 1.5 : 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(p.cx, p.cy);
+        ctx.lineTo(tp.cx, tp.cy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Target reticle
+        ctx.strokeStyle = sel ? "#38bdf8" : "rgba(56, 189, 248, 0.7)";
+        ctx.lineWidth = sel ? 2 : 1.2;
+        ctx.beginPath();
+        ctx.arc(tp.cx, tp.cy, sel ? 7 : 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(tp.cx - 9, tp.cy); ctx.lineTo(tp.cx + 9, tp.cy);
+        ctx.moveTo(tp.cx, tp.cy - 9); ctx.lineTo(tp.cx, tp.cy + 9);
+        ctx.stroke();
+        if (sel) {
+          ctx.fillStyle = "#38bdf8";
+          ctx.font = "bold 10px sans-serif";
+          ctx.fillText(`Aim ${i}`, tp.cx + 8, tp.cy - 6);
+        }
+        ctx.restore();
+      }
     }
 
     drawRobot(pose.x, pose.y, pose.theta, "#22c55e", 0.95, selectedId === "start");
@@ -1493,11 +1538,17 @@
     const s = fieldToCanvas(pose.x, pose.y);
     if (Math.hypot(cx - s.cx, cy - s.cy) < HIT_R + 4) return { kind: "start" };
 
+    const poses = computePoses();
     for (let i = actions.length - 1; i >= 0; i--) {
       const a = actions[i];
       if (!needsPoint(a.type) && !isMove(a.type)) continue;
       const p = fieldToCanvas(a.x, a.y);
       if (Math.hypot(cx - p.cx, cy - p.cy) < HIT_R) return { kind: "action", id: a.id };
+      // Also allow clicking on the robot settled pose for turn/swing
+      if (poses[i + 1]) {
+        const rp = fieldToCanvas(poses[i + 1].x, poses[i + 1].y);
+        if (Math.hypot(cx - rp.cx, cy - rp.cy) < HIT_R) return { kind: "action", id: a.id };
+      }
     }
     return null;
   }
