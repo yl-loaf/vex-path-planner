@@ -39,10 +39,116 @@
   fieldImg.onload = () => { imgReady = true; draw(); };
   fieldImg.onerror = () => { imgReady = true; draw(); };
 
-  let pose = { x: -60, y: -60, theta: 0 };
-  let actions = [];
+  let paths = [
+    {
+      id: "p_default",
+      name: "Red Left",
+      pose: { x: -60, y: -60, theta: 0 },
+      actions: [],
+    },
+  ];
+  let activePathId = "p_default";
   let selectedId = null;
   let drag = null;
+
+  function activePath() {
+    return paths.find((p) => p.id === activePathId) || paths[0];
+  }
+  // Live aliases used throughout the app
+  let pose = paths[0].pose;
+  let actions = paths[0].actions;
+
+  function bindActive() {
+    const p = activePath();
+    pose = p.pose;
+    actions = p.actions;
+  }
+
+  function uidPath() {
+    return "p" + Math.random().toString(36).slice(2, 9);
+  }
+
+  function syncPathSelect() {
+    const sel = document.getElementById("pathSelect");
+    if (!sel) return;
+    sel.innerHTML = "";
+    paths.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if (p.id === activePathId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  function switchPath(id) {
+    if (!paths.some((p) => p.id === id)) return;
+    activePathId = id;
+    bindActive();
+    selectedId = null;
+    syncPathSelect();
+    syncStartInputs();
+    renderFlow();
+    draw();
+    generateCode();
+    updateTimeDisplay();
+    markDirty();
+  }
+
+  function addPath(name) {
+    const n = name || `Routine ${paths.length + 1}`;
+    const p = {
+      id: uidPath(),
+      name: n,
+      pose: { x: -60, y: -60, theta: 0 },
+      actions: [],
+    };
+    paths.push(p);
+    switchPath(p.id);
+  }
+
+  function renameActivePath() {
+    const p = activePath();
+    const n = prompt("Routine name:", p.name);
+    if (!n || !n.trim()) return;
+    p.name = n.trim();
+    syncPathSelect();
+    markDirty();
+    generateCode();
+  }
+
+  function duplicateActivePath() {
+    const src = activePath();
+    const p = {
+      id: uidPath(),
+      name: src.name + " Copy",
+      pose: { ...src.pose },
+      actions: src.actions.map((a) => ({ ...a, id: uid() })),
+    };
+    paths.push(p);
+    switchPath(p.id);
+  }
+
+  function deleteActivePath() {
+    if (paths.length <= 1) {
+      alert("Keep at least one routine.");
+      return;
+    }
+    const p = activePath();
+    if (!confirm(`Delete routine "${p.name}"?`)) return;
+    const idx = paths.findIndex((x) => x.id === p.id);
+    paths.splice(idx, 1);
+    activePathId = paths[Math.max(0, idx - 1)].id;
+    bindActive();
+    selectedId = null;
+    syncPathSelect();
+    syncStartInputs();
+    renderFlow();
+    draw();
+    markDirty();
+    generateCode();
+  }
+
 
   let simRunning = false;
   let simPath = [];
@@ -133,6 +239,63 @@
   }
 
   /** Rough linear speed inches/sec from bot settings + maxSpeed 0-127 */
+
+  /** Unit forward vector for LemLib heading (0°=+Y, CW+) */
+  function headingUnit(deg) {
+    const r = (deg * Math.PI) / 180;
+    return { x: Math.sin(r), y: Math.cos(r) };
+  }
+
+  /**
+   * Cubic Bezier control points for differential-drive path.
+   * Control handles lie along start/end headings so the path does not
+   * require sideways (strafe) motion — only forward/back + turn.
+   */
+  function bezierControls(x0, y0, th0, x1, y1, th1, forwards) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const dist = Math.hypot(dx, dy) || 0.01;
+    // handle length ~ 35% of segment (boomerang-like lead-in/out)
+    let k = dist * 0.35;
+    // reverse drive: travel opposite of chassis forward
+    const s0 = headingUnit(forwards === false ? normalizeAngle(th0 + 180) : th0);
+    const s1 = headingUnit(forwards === false ? normalizeAngle(th1 + 180) : th1);
+    return {
+      p0: { x: x0, y: y0 },
+      p1: { x: x0 + s0.x * k, y: y0 + s0.y * k },
+      p2: { x: x1 - s1.x * k, y: y1 - s1.y * k },
+      p3: { x: x1, y: y1 },
+    };
+  }
+
+  function cubicBezier(t, p0, p1, p2, p3) {
+    const u = 1 - t;
+    const uu = u * u;
+    const tt = t * t;
+    return {
+      x: uu * u * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + tt * t * p3.x,
+      y: uu * u * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + tt * t * p3.y,
+    };
+  }
+
+  /** Tangent heading (LemLib deg) along cubic Bezier at t */
+  function bezierHeading(t, p0, p1, p2, p3, forwards) {
+    const u = 1 - t;
+    // derivative of cubic Bezier
+    const tx =
+      3 * u * u * (p1.x - p0.x) +
+      6 * u * t * (p2.x - p1.x) +
+      3 * t * t * (p3.x - p2.x);
+    const ty =
+      3 * u * u * (p1.y - p0.y) +
+      6 * u * t * (p2.y - p1.y) +
+      3 * t * t * (p3.y - p2.y);
+    let th = angleToPoint(0, 0, tx, ty);
+    if (forwards === false) th = normalizeAngle(th + 180);
+    return th;
+  }
+
+
   function estimateLinearIps(maxSpeed) {
     const theoretical = (bot.wheelDiam * Math.PI * bot.driveRpm) / 60;
     // drivetrain efficiency / slip factor
@@ -208,6 +371,11 @@
 
   // -- Persistence --------------------------------------------------
   function markDirty() {
+    const ap = activePath();
+    if (ap) {
+      ap.pose = pose;
+      ap.actions = actions;
+    }
     saveStatus.textContent = "Unsaved...";
     saveStatus.className = "save-status dirty";
     clearTimeout(saveTimer);
@@ -215,10 +383,22 @@
     try { updateTimeDisplay(); } catch (_) {}
     try { generateCode(); } catch (_) {}
     try { scheduleCloudSave(); } catch (_) {}
+    try { scheduleHistoryPush(); } catch (_) {}
   }
 
   function saveLocal() {
-    const data = { version: 1, pose, actions, bot, savedAt: new Date().toISOString() };
+    // keep active path data in sync
+    bindActive();
+    const ap = activePath();
+    ap.pose = pose;
+    ap.actions = actions;
+    const data = {
+      version: 2,
+      paths,
+      activePathId,
+      bot,
+      savedAt: new Date().toISOString(),
+    };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       saveStatus.textContent = "Saved";
@@ -233,9 +413,28 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
-      if (data.pose) pose = data.pose;
-      if (Array.isArray(data.actions)) actions = data.actions;
       if (data.bot) bot = { ...bot, ...data.bot };
+      if (Array.isArray(data.paths) && data.paths.length) {
+        paths = data.paths.map((p) => ({
+          id: p.id || uidPath(),
+          name: p.name || "Routine",
+          pose: p.pose || { x: -60, y: -60, theta: 0 },
+          actions: Array.isArray(p.actions) ? p.actions : [],
+        }));
+        activePathId = data.activePathId || paths[0].id;
+        if (!paths.some((p) => p.id === activePathId)) activePathId = paths[0].id;
+      } else if (data.pose || data.actions) {
+        // v1 single-path migrate
+        paths = [{
+          id: uidPath(),
+          name: "Imported",
+          pose: data.pose || { x: -60, y: -60, theta: 0 },
+          actions: Array.isArray(data.actions) ? data.actions : [],
+        }];
+        activePathId = paths[0].id;
+      }
+      bindActive();
+      syncPathSelect();
       syncBotInputs();
       syncStartInputs();
       renderFlow();
@@ -246,12 +445,16 @@
   }
 
   function exportVPath() {
+    bindActive();
+    activePath().pose = pose;
+    activePath().actions = actions;
     const data = {
-      version: 1,
+      version: 2,
       format: "vpath",
       game: "Push Back 2025-26",
-      pose,
-      actions,
+      paths,
+      activePathId,
+      bot,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -267,14 +470,38 @@
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
-        if (!data.pose || !Array.isArray(data.actions)) throw new Error("Invalid .vpath");
-        pose = data.pose;
-        actions = data.actions.map((a) => ({
-          ...defaultAction(a.type || "moveToPoint"),
-          ...a,
-          id: a.id || uid(),
-        }));
+        if (Array.isArray(data.paths) && data.paths.length) {
+          paths = data.paths.map((p) => ({
+            id: p.id || uidPath(),
+            name: p.name || "Routine",
+            pose: p.pose || { x: -60, y: -60, theta: 0 },
+            actions: (p.actions || []).map((a) => ({
+              ...defaultAction(a.type || "moveToPoint"),
+              ...a,
+              id: a.id || uid(),
+            })),
+          }));
+          activePathId = data.activePathId || paths[0].id;
+        } else if (data.pose && Array.isArray(data.actions)) {
+          paths = [{
+            id: uidPath(),
+            name: data.name || "Imported",
+            pose: data.pose,
+            actions: data.actions.map((a) => ({
+              ...defaultAction(a.type || "moveToPoint"),
+              ...a,
+              id: a.id || uid(),
+            })),
+          }];
+          activePathId = paths[0].id;
+        } else {
+          throw new Error("Invalid .vpath");
+        }
+        if (data.bot) bot = { ...bot, ...data.bot };
+        bindActive();
         selectedId = null;
+        syncPathSelect();
+        syncBotInputs();
         syncStartInputs();
         renderFlow();
         draw();
@@ -411,18 +638,70 @@
 
     const poses = computePoses();
 
+    // Differential-drive paths: cubic Bezier along headings (no strafe)
     ctx.strokeStyle = "#3b82f6";
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    let started = false;
-    for (let i = 0; i < poses.length; i++) {
-      const a = i === 0 ? null : actions[i - 1];
-      if (i > 0 && a && !isMove(a.type) && a.type !== "custom") continue;
-      const p = fieldToCanvas(poses[i].x, poses[i].y);
-      if (!started) { ctx.moveTo(p.cx, p.cy); started = true; }
-      else ctx.lineTo(p.cx, p.cy);
+    let pen = false;
+    for (let i = 1; i < poses.length; i++) {
+      const a = actions[i - 1];
+      const a0 = poses[i - 1];
+      const a1 = poses[i];
+      if (!a || a.type === "custom") continue;
+      if (!isMove(a.type)) {
+        // turns/swings: short arc at place or swing arc already in poses
+        const p0 = fieldToCanvas(a0.x, a0.y);
+        const p1 = fieldToCanvas(a1.x, a1.y);
+        if (!pen) { ctx.moveTo(p0.cx, p0.cy); pen = true; }
+        ctx.lineTo(p1.cx, p1.cy);
+        continue;
+      }
+      const bc = bezierControls(
+        a0.x, a0.y, a0.theta,
+        a1.x, a1.y, a1.theta,
+        a.forwards !== false
+      );
+      const steps = Math.max(12, Math.round(Math.hypot(a1.x - a0.x, a1.y - a0.y) * 0.8));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const pt = cubicBezier(t, bc.p0, bc.p1, bc.p2, bc.p3);
+        const c = fieldToCanvas(pt.x, pt.y);
+        if (!pen) { ctx.moveTo(c.cx, c.cy); pen = true; }
+        else ctx.lineTo(c.cx, c.cy);
+      }
     }
     ctx.stroke();
+
+    // light control-handle hints for selected move
+    if (selectedId) {
+      const si = actions.findIndex((x) => x.id === selectedId);
+      if (si >= 0 && isMove(actions[si].type) && poses[si] && poses[si + 1]) {
+        const a = actions[si];
+        const a0 = poses[si];
+        const a1 = poses[si + 1];
+        const bc = bezierControls(a0.x, a0.y, a0.theta, a1.x, a1.y, a1.theta, a.forwards !== false);
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        const c0 = fieldToCanvas(bc.p0.x, bc.p0.y);
+        const c1 = fieldToCanvas(bc.p1.x, bc.p1.y);
+        const c2 = fieldToCanvas(bc.p2.x, bc.p2.y);
+        const c3 = fieldToCanvas(bc.p3.x, bc.p3.y);
+        ctx.beginPath();
+        ctx.moveTo(c0.cx, c0.cy);
+        ctx.lineTo(c1.cx, c1.cy);
+        ctx.moveTo(c3.cx, c3.cy);
+        ctx.lineTo(c2.cx, c2.cy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
+        for (const c of [c1, c2]) {
+          ctx.beginPath();
+          ctx.arc(c.cx, c.cy, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
 
     for (let i = 1; i < poses.length; i++) {
       const a = actions[i - 1];
@@ -430,13 +709,14 @@
       if (!needsPoint(a.type) && !isMove(a.type)) continue;
       const p = fieldToCanvas(poses[i].x, poses[i].y);
       const sel = a.id === selectedId;
-      ctx.fillStyle = sel ? "#60a5fa" : "#3b82f6";
+      const isRev = a.forwards === false;
+      ctx.fillStyle = sel ? "#60a5fa" : isRev ? "#f97316" : "#3b82f6";
       ctx.beginPath();
       ctx.arc(p.cx, p.cy, sel ? 7 : 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#fff";
       ctx.font = "11px sans-serif";
-      ctx.fillText(String(i), p.cx + 8, p.cy - 6);
+      ctx.fillText(String(i) + (isRev ? "R" : ""), p.cx + 8, p.cy - 6);
     }
 
     drawRobot(pose.x, pose.y, pose.theta, "#22c55e", 0.95, selectedId === "start");
@@ -530,19 +810,34 @@
           <div class="row">
             ${pointFields}
             ${headField}
-            <label>Timeout ms <input type="number" data-f="timeout" step="100" value="${a.timeout}"/></label>
             ${sideField}
           </div>
+          <div class="speed-timeout-row">
+            <div class="st-label">Speed &amp; timeout</div>
+            <div class="row">
+              <label>Max speed (0–127)
+                <input type="number" data-f="maxSpeed" min="0" max="127" step="1" value="${a.maxSpeed}"/>
+              </label>
+              <label>Min speed
+                <input type="number" data-f="minSpeed" min="0" max="127" step="1" value="${a.minSpeed}"/>
+              </label>
+              <label>Timeout (ms)
+                <input type="number" data-f="timeout" min="0" step="100" value="${a.timeout}"/>
+              </label>
+              <label>Early exit (in)
+                <input type="number" data-f="earlyExitRange" step="0.1" value="${a.earlyExitRange}"/>
+              </label>
+            </div>
+          </div>
           <div class="check-row">
-            <label><input type="checkbox" data-f="forwards" ${a.forwards ? "checked" : ""}/> Forwards</label>
+            <label class="reverse-toggle ${a.forwards === false ? "on" : ""}">
+              <input type="checkbox" data-f="forwards" data-invert="1" ${a.forwards === false ? "checked" : ""}/>
+              Drive in reverse
+              <span class="rev-hint">(forwards = false)</span>
+            </label>
             <label><input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/> async</label>
           </div>
-          <div class="row">
-            <label>MaxSpd <input type="number" data-f="maxSpeed" min="0" max="127" value="${a.maxSpeed}"/></label>
-            <label>MinSpd <input type="number" data-f="minSpeed" min="0" max="127" value="${a.minSpeed}"/></label>
-            <label>EarlyExit <input type="number" data-f="earlyExitRange" step="0.1" value="${a.earlyExitRange}"/></label>
-          </div>
-          <div class="offset-row">
+                    <div class="offset-row">
             <div class="label">Code-only offsets (hidden from sim)</div>
             <div class="row">
               <label>ΔX <input type="number" data-f="offsetX" step="0.1" value="${a.offsetX}"/></label>
@@ -558,6 +853,7 @@
       card.innerHTML = `
         <div class="card-title">
           <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type}</span>
+          ${a.forwards === false && a.type !== "custom" ? '<span class="badge reverse">REV</span>' : ""}
           <span class="hint-inline">${a.label ? escapeHtml(a.label) : ""}</span>
           <div style="margin-left:auto;display:flex;gap:2px">
             <button class="icon" data-act="up" title="Move up">↑</button>
@@ -578,11 +874,14 @@
         el.addEventListener("change", () => {
           const f = el.dataset.f;
           let v;
-          if (el.type === "checkbox") v = el.checked;
-          else if (el.type === "number") v = Number(el.value);
+          if (el.type === "checkbox") {
+            // data-invert: checked means the logical opposite (Drive in reverse → forwards=false)
+            v = el.dataset.invert ? !el.checked : el.checked;
+          } else if (el.type === "number") v = Number(el.value);
           else v = el.value;
           a[f] = v;
           markDirty();
+          renderFlow();
           draw();
         });
         el.addEventListener("input", () => {
@@ -630,62 +929,111 @@
     return Number(Number(v).toFixed(2));
   }
 
+  function sanitizeIdent(name) {
+    let s = String(name || "routine").replace(/[^a-zA-Z0-9_]/g, "_");
+    if (/^[0-9]/.test(s)) s = "r_" + s;
+    return s || "routine";
+  }
+
+  function emitRoutineBody(pose0, acts, indent) {
+    const ind = indent || "  ";
+    let code = "";
+    code += `${ind}chassis.setPose(${num(pose0.x)}, ${num(pose0.y)}, ${num(pose0.theta)});\n`;
+    for (const a of acts) {
+      if (a.label) code += `${ind}// ${a.label}\n`;
+      if (a.type === "custom") {
+        const lines = (a.customCode || "").split("\n");
+        for (const line of lines) code += `${ind}${line}\n`;
+        continue;
+      }
+      const px = a.x + (a.offsetX || 0);
+      const py = a.y + (a.offsetY || 0);
+      const pt = a.theta + (a.offsetTheta || 0);
+      const params = [];
+      if (!a.forwards) params.push(".forwards = false");
+      const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+      const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+      if (a.maxSpeed != null && Number(a.maxSpeed) !== Number(defMax)) {
+        params.push(`.maxSpeed = ${Number(a.maxSpeed)}`);
+      }
+      if (a.minSpeed != null && Number(a.minSpeed) !== Number(defMin)) {
+        params.push(`.minSpeed = ${Number(a.minSpeed)}`);
+      }
+      if (a.earlyExitRange) params.push(`.earlyExitRange = ${a.earlyExitRange}`);
+      const paramStr = params.length ? `, {${params.join(", ")}}` : "";
+      const asyncArg = a.async ? ", true" : "";
+
+      switch (a.type) {
+        case "moveToPoint":
+          code += `${ind}chassis.moveToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          break;
+        case "moveToPose":
+          code += `${ind}chassis.moveToPose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          break;
+        case "turnToPoint":
+          code += `${ind}chassis.turnToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          break;
+        case "turnToHeading":
+          code += `${ind}chassis.turnToHeading(${num(pt)}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          break;
+        case "swingToPoint":
+          code += `${ind}chassis.swingToPoint(${num(px)}, ${num(py)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          break;
+        case "swingToHeading":
+          code += `${ind}chassis.swingToHeading(${num(pt)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});\n`;
+          break;
+        default:
+          code += `${ind}// unknown action ${a.type}\n`;
+      }
+    }
+    return code;
+  }
+
   function generateCode() {
+    bindActive();
+    activePath().pose = { ...pose };
+    activePath().actions = actions;
+
+    const modeEl = document.querySelector('input[name="codeMode"]:checked');
+    const mode = modeEl ? modeEl.value : "current";
+
     let code = `// Auto-generated by VEX LemLib Path Planner\n`;
     code += `// Push Back 2025-26 · inches · heading 0° = +Y, increases clockwise\n`;
     code += `// Bot: trackWidth=${bot.trackWidth}" robot=${bot.robotW}x${bot.robotL}" wheels=${bot.wheelDiam}" @ ${bot.driveRpm}rpm\n`;
     code += `// Default speeds: max=${bot.defaultMaxSpeed} min=${bot.defaultMinSpeed} (per-move overrides in params)\n`;
     code += `// (Configure lemlib::Drivetrain with track width ${bot.trackWidth} in)\n\n`;
-    code += `chassis.setPose(${num(pose.x)}, ${num(pose.y)}, ${num(pose.theta)});\n\n`;
 
-    for (const a of actions) {
-      if (a.label) code += `// ${a.label}\n`;
+    if (mode === "all") {
+      code += `// Autonomous selector — call runAuton(slot) from autonomous()\n`;
+      code += `// slot: `;
+      code += paths.map((p, i) => `${i}=${p.name}`).join(", ") + `\n\n`;
 
-      if (a.type === "custom") {
-        if (a.customCode.trim()) code += a.customCode.trim() + "\n\n";
-        continue;
-      }
+      paths.forEach((p, i) => {
+        const fn = "auton_" + sanitizeIdent(p.name);
+        code += `void ${fn}() {\n`;
+        code += emitRoutineBody(p.pose, p.actions, "  ");
+        code += `}\n\n`;
+      });
 
-      const px = (a.x ?? 0) + (a.offsetX || 0);
-      const py = (a.y ?? 0) + (a.offsetY || 0);
-      const pt = (a.theta ?? 0) + (a.offsetTheta || 0);
-
-      const params = [];
-      if (!a.forwards) params.push(".forwards = false");
-      if (a.maxSpeed !== 127) params.push(`.maxSpeed = ${a.maxSpeed}`);
-      if (a.minSpeed !== 0) params.push(`.minSpeed = ${a.minSpeed}`);
-      if (a.earlyExitRange) params.push(`.earlyExitRange = ${a.earlyExitRange}`);
-      const paramStr = params.length ? `, {${params.join(", ")}}` : "";
-      const asyncArg = a.async ? "" : ", false";
-
-      switch (a.type) {
-        case "moveToPoint":
-          code += `chassis.moveToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});\n`;
-          break;
-        case "moveToPose":
-          code += `chassis.moveToPose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.timeout}${paramStr}${asyncArg});\n`;
-          break;
-        case "turnToPoint":
-          code += `chassis.turnToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});\n`;
-          break;
-        case "turnToHeading":
-          code += `chassis.turnToHeading(${num(pt)}, ${a.timeout}${paramStr}${asyncArg});\n`;
-          break;
-        case "swingToPoint":
-          code += `chassis.swingToPoint(${num(px)}, ${num(py)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});\n`;
-          break;
-        case "swingToHeading":
-          code += `chassis.swingToHeading(${num(pt)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});\n`;
-          break;
-      }
-      if (!a.async) code += `chassis.waitUntilDone();\n`;
-      code += "\n";
+      code += `void runAuton(int slot) {\n`;
+      code += `  switch (slot) {\n`;
+      paths.forEach((p, i) => {
+        const fn = "auton_" + sanitizeIdent(p.name);
+        code += `    case ${i}: ${fn}(); break; // ${p.name}\n`;
+      });
+      code += `    default: auton_${sanitizeIdent(paths[0].name)}(); break;\n`;
+      code += `  }\n`;
+      code += `}\n\n`;
+      code += `// Example:\n// void autonomous() {\n//   runAuton(0); // ${paths[0].name}\n// }\n`;
+    } else {
+      const p = activePath();
+      code += `// Routine: ${p.name}\n\n`;
+      code += emitRoutineBody(pose, actions, "");
     }
 
     codeOut.value = code;
   }
 
-  // -- Simulation ---------------------------------------------------
   function estimateActionTime(a, fromPose) {
     // Returns estimated seconds for one action (physical estimate, capped by timeout)
     const timeoutS = Math.max(0.1, (a.timeout || 2000) / 1000);
@@ -817,8 +1165,7 @@
       const n = Math.max(12, Math.round(duration * stepsPerSec));
 
       if (isMove(a.type)) {
-        // LemLib moveToPoint: face target continuously; lateral = dist * cos(angularError)
-        // When |angularError| > 90°, lateral contribution ~ 0 (don't drive into reverse awkwardly)
+        // Differential drive: follow cubic Bezier (no sideways strafe)
         const start = { ...cur };
         const endX = a.x;
         const endY = a.y;
@@ -832,30 +1179,28 @@
           if (backwards) endTheta = normalizeAngle(endTheta + 180);
         }
 
+        const bc = bezierControls(
+          start.x, start.y, start.theta,
+          endX, endY, endTheta,
+          !backwards
+        );
+
         for (let i = 1; i <= n; i++) {
           const u = i / n;
-          const e = u * u * (3 - 2 * u); // smoothstep position
-
-          // position along straight chord (LemLib curves via continuous heading correction)
-          cur.x = start.x + (endX - start.x) * e;
-          cur.y = start.y + (endY - start.y) * e;
-
-          if (a.type === "moveToPoint") {
-            // Keep facing the target point (or opposite if backwards) — LemLib behaviour
-            let face = angleToPoint(cur.x, cur.y, endX, endY);
-            if (backwards) face = normalizeAngle(face + 180);
-            // near the end, settle
-            if (u > 0.92) {
-              const dth = angleError(cur.theta, endTheta);
-              cur.theta = normalizeAngle(cur.theta + dth * ((u - 0.92) / 0.08));
-            } else {
-              cur.theta = face;
-            }
-          } else {
-            // moveToPose: blend toward target heading (simplified boomerang)
-            const dth = angleError(start.theta, endTheta);
-            cur.theta = normalizeAngle(start.theta + dth * e);
+          // ease slightly for nicer motion
+          const e = u * u * (3 - 2 * u);
+          const pt = cubicBezier(e, bc.p0, bc.p1, bc.p2, bc.p3);
+          cur.x = pt.x;
+          cur.y = pt.y;
+          // chassis faces along path tangent (omni helps turn; no mecanum strafe)
+          let th = bezierHeading(e, bc.p0, bc.p1, bc.p2, bc.p3, !backwards);
+          if (a.type === "moveToPose" && u > 0.7) {
+            // settle to commanded pose heading near the end
+            const blend = (u - 0.7) / 0.3;
+            const dth = angleError(th, endTheta);
+            th = normalizeAngle(th + dth * blend);
           }
+          cur.theta = th;
 
           t += duration / n;
           simPath.push({ x: cur.x, y: cur.y, theta: cur.theta, t });
@@ -976,6 +1321,8 @@
     const { cx, cy } = canvasCoords(e);
     const hit = hitTest(cx, cy);
     if (hit) {
+      // snapshot before drag so undo restores pre-drag pose/waypoint
+      historyDragBaseline = cloneState();
       drag = hit;
       selectedId = hit.kind === "start" ? "start" : hit.id;
       renderFlow();
@@ -1010,7 +1357,35 @@
     }
   });
 
+
+  window.addEventListener("keydown", (e) => {
+    const tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+      // allow undo in inputs only with extra care — skip when typing
+      return;
+    }
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod) return;
+    const key = e.key.toLowerCase();
+    if (key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+    } else if (key === "z" && e.shiftKey) {
+      e.preventDefault();
+      redo();
+    } else if (key === "y" && !e.metaKey) {
+      // Ctrl+Y redo (Windows)
+      e.preventDefault();
+      redo();
+    }
+  });
+
   window.addEventListener("mouseup", () => {
+    if (drag && historyDragBaseline) {
+      // commit post-drag state; baseline already discarded from stack tip if needed
+      pushHistory("drag");
+      historyDragBaseline = null;
+    }
     drag = null;
   });
 
@@ -1031,10 +1406,15 @@
   document.querySelectorAll("[data-preset]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const p = btn.dataset.preset;
-      if (p === "redL") pose = { x: -60, y: -60, theta: 0 };
-      if (p === "redR") pose = { x: 60, y: -60, theta: 0 };
-      if (p === "blueL") pose = { x: -60, y: 60, theta: 180 };
-      if (p === "blueR") pose = { x: 60, y: 60, theta: 180 };
+      let next = { ...pose };
+      if (p === "redL") next = { x: -60, y: -60, theta: 0 };
+      if (p === "redR") next = { x: 60, y: -60, theta: 0 };
+      if (p === "blueL") next = { x: -60, y: 60, theta: 180 };
+      if (p === "blueR") next = { x: 60, y: 60, theta: 180 };
+      pose.x = next.x;
+      pose.y = next.y;
+      pose.theta = next.theta;
+      activePath().pose = pose;
       syncStartInputs();
       markDirty();
       draw();
@@ -1134,10 +1514,13 @@
   }
 
   function pathPayload() {
+    bindActive();
+    activePath().pose = pose;
+    activePath().actions = actions;
     return {
-      version: 1,
-      pose,
-      actions,
+      version: 2,
+      paths,
+      activePathId,
       bot,
       updatedAt: new Date().toISOString(),
     };
@@ -1147,10 +1530,22 @@
     if (!data) return;
     cloudApplying = true;
     try {
-      if (data.pose) pose = data.pose;
-      if (Array.isArray(data.actions)) actions = data.actions;
       if (data.bot) bot = { ...bot, ...data.bot };
+      if (Array.isArray(data.paths) && data.paths.length) {
+        paths = data.paths;
+        activePathId = data.activePathId || paths[0].id;
+      } else if (data.pose || data.actions) {
+        paths = [{
+          id: uidPath(),
+          name: "Cloud",
+          pose: data.pose || { x: -60, y: -60, theta: 0 },
+          actions: data.actions || [],
+        }];
+        activePathId = paths[0].id;
+      }
+      bindActive();
       selectedId = null;
+      syncPathSelect();
       syncBotInputs();
       syncStartInputs();
       renderFlow();
@@ -1350,7 +1745,66 @@
 
 // -- Init ---------------------------------------------------------
   wireBotSettings();
+  
+  // -- Build number + soft check ----------------------------------
+  function showBuildNumber() {
+    const el = document.getElementById("buildNumber");
+    if (!el) return;
+    const b = window.APP_BUILD || "local";
+    el.textContent = b;
+  }
+
+  async function checkForUpdates(manual) {
+    try {
+      const r = await fetch("version.js?_=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return;
+      const text = await r.text();
+      const m = text.match(/APP_BUILD\s*=\s*["']([^"']+)["']/);
+      if (!m) return;
+      const remote = m[1];
+      const local = window.APP_BUILD || "";
+      if (remote && local && remote !== local) {
+        if (confirm("A newer build is available (" + remote + ").\\nReload now?")) {
+          location.reload(true);
+        }
+      } else if (manual) {
+        alert("You are on the latest build (" + (local || remote) + ").");
+      }
+    } catch (e) {
+      if (manual) alert("Could not check for updates.");
+    }
+  }
+
+
+  showBuildNumber();
+  const btnUp = document.getElementById("btnCheckUpdate");
+  if (btnUp) btnUp.onclick = () => checkForUpdates(true);
+  // Soft check a few seconds after load (no prompt unless newer)
+  setTimeout(() => checkForUpdates(false), 2500);
   wireClearModal();
+  syncPathSelect();
+  // initial history checkpoint
+  history = [];
+  historyIndex = -1;
+  pushHistory("init");
+  const pathSel = document.getElementById("pathSelect");
+  if (pathSel) pathSel.onchange = () => switchPath(pathSel.value);
+  const bAdd = document.getElementById("btnPathAdd");
+  if (bAdd) bAdd.onclick = () => {
+    const n = prompt("New routine name:", `Routine ${paths.length + 1}`);
+    if (n === null) return;
+    addPath(n.trim() || `Routine ${paths.length + 1}`);
+  };
+  const bRen = document.getElementById("btnPathRename");
+  if (bRen) bRen.onclick = renameActivePath;
+  const bDup = document.getElementById("btnPathDup");
+  if (bDup) bDup.onclick = duplicateActivePath;
+  const bDel = document.getElementById("btnPathDel");
+  if (bDel) bDel.onclick = deleteActivePath;
+  document.querySelectorAll('input[name="codeMode"]').forEach((el) => {
+    el.addEventListener("change", () => generateCode());
+  });
+
   initFirebaseAuth();
   loadLocal();
   syncBotInputs();
