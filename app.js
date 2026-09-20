@@ -2168,27 +2168,143 @@
     cloudSaveTimer = setTimeout(() => cloudSave(false), 800);
   }
 
-  function updateAuthUI() {
+  const AUTH_STORAGE_KEY = "lemlib_saved_google_user";
+  const AUTH_EMAIL_KEY = "lemlib_saved_google_email";
+  const AUTH_EXPLICIT_SIGNOUT_KEY = "lemlib_signed_out";
+
+  function getSavedGoogleUser() {
+    try {
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  }
+
+  function saveGoogleUserProfile(user) {
+    if (!user) return;
+    try {
+      const profile = {
+        uid: user.uid,
+        email: user.email || "",
+        displayName: user.displayName || user.email || "Google User",
+        photoURL: user.photoURL || "",
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(profile));
+      if (user.email) {
+        localStorage.setItem(AUTH_EMAIL_KEY, user.email);
+      }
+      localStorage.removeItem(AUTH_EXPLICIT_SIGNOUT_KEY);
+    } catch (_) {}
+  }
+
+  function clearSavedGoogleUser() {
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.setItem(AUTH_EXPLICIT_SIGNOUT_KEY, "true");
+    } catch (_) {}
+  }
+
+  function updateAuthUI(previewUser, isPendingReconnect) {
     const btnIn = document.getElementById("btnGoogleSignIn");
     const btnOut = document.getElementById("btnSignOut");
+    const btnSwitch = document.getElementById("btnSwitchAccount");
     const userEl = document.getElementById("authUser");
     if (!btnIn) return;
-    if (cloudUser) {
+
+    const activeUser = cloudUser || previewUser;
+    if (activeUser) {
       btnIn.hidden = true;
       if (btnOut) btnOut.hidden = false;
+      if (btnSwitch) btnSwitch.hidden = false;
       if (userEl) {
         userEl.hidden = false;
-        userEl.textContent = cloudUser.displayName || cloudUser.email || "Signed in";
-        userEl.title = cloudUser.email || "";
+        const name = activeUser.displayName || activeUser.email || "Signed in";
+        const email = activeUser.email || "";
+
+        if (isPendingReconnect) {
+          userEl.innerHTML = `
+            <span class="auth-saved-tag" title="Saved account: ${escapeHtml(email)} · Click Reconnect to refresh session">👤 ${escapeHtml(name)}</span>
+            <button type="button" class="auth-reconnect-btn" id="btnAuthReconnect" title="Click to refresh session">⚡ Reconnect</button>
+          `;
+          const reconBtn = document.getElementById("btnAuthReconnect");
+          if (reconBtn) {
+            reconBtn.onclick = (e) => {
+              e.stopPropagation();
+              triggerGoogleSignIn(false);
+            };
+          }
+        } else {
+          userEl.innerHTML = `
+            <span class="auth-saved-tag" title="${escapeHtml(email)} · Account saved across sessions on this device">👤 ${escapeHtml(name)}</span>
+          `;
+        }
       }
     } else {
       btnIn.hidden = false;
+      const lastEmail = localStorage.getItem(AUTH_EMAIL_KEY);
+      if (lastEmail && localStorage.getItem(AUTH_EXPLICIT_SIGNOUT_KEY) !== "true") {
+        btnIn.title = `Sign in as ${lastEmail} (saved session)`;
+        btnIn.textContent = `Sign in (${lastEmail.split("@")[0]})`;
+      } else {
+        btnIn.title = "Sign in with Google to sync paths across devices";
+        btnIn.textContent = "Sign in with Google";
+      }
       if (btnOut) btnOut.hidden = true;
+      if (btnSwitch) btnSwitch.hidden = true;
       if (userEl) {
         userEl.hidden = true;
         userEl.textContent = "";
       }
       setCloudStatus("");
+    }
+  }
+
+  async function triggerGoogleSignIn(forceAccountPicker = false) {
+    if (typeof firebase === "undefined" || !firebase.auth) {
+      alert("Firebase library is not ready. Please check your internet connection.");
+      return;
+    }
+
+    try {
+      // Ensure persistence is set to LOCAL so login survives browser restarts & reloads
+      await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const lastEmail = localStorage.getItem(AUTH_EMAIL_KEY);
+
+      if (forceAccountPicker) {
+        // User requested to switch accounts: show account chooser
+        provider.setCustomParameters({ prompt: "select_account" });
+      } else if (lastEmail) {
+        // Automatically pre-fill and select saved account without re-prompting
+        provider.setCustomParameters({ login_hint: lastEmail });
+      }
+
+      setCloudStatus("Connecting…", "busy");
+      const cred = await firebase.auth().signInWithPopup(provider);
+      if (cred && cred.user) {
+        cloudUser = cred.user;
+        saveGoogleUserProfile(cred.user);
+        updateAuthUI();
+        await cloudLoad();
+      }
+    } catch (e) {
+      console.error("Google sign-in error:", e);
+      if (e && (e.code === "auth/popup-blocked" || e.message?.includes("popup"))) {
+        const openTab = confirm(
+          "Google Sign-In popup was blocked by the browser or preview iframe.\n\nOpen this app in a new browser tab to complete sign in and keep your account saved?"
+        );
+        if (openTab) {
+          window.open(window.location.href, "_blank");
+        }
+      } else if (e && e.code === "auth/popup-closed-by-user") {
+        // User closed popup without completing; restore saved UI if present
+        const saved = getSavedGoogleUser();
+        if (saved && !cloudUser) updateAuthUI(saved, true);
+      } else {
+        alert("Sign-in failed: " + ((e && e.message) || e));
+      }
     }
   }
 
@@ -2202,11 +2318,11 @@
         btnIn.title = "Set firebase-config.js to enable Google sign-in";
         btnIn.onclick = () => {
           alert(
-            "Google sign-in is not configured yet.\\n\\n" +
-              "1. Create a Firebase project\\n" +
-              "2. Enable Google sign-in\\n" +
-              "3. Paste web config into firebase-config.js\\n" +
-              "4. Set FIREBASE_ENABLED = true\\n\\n" +
+            "Google sign-in is not configured yet.\n\n" +
+              "1. Create a Firebase project\n" +
+              "2. Enable Google sign-in\n" +
+              "3. Paste web config into firebase-config.js\n" +
+              "4. Set FIREBASE_ENABLED = true\n\n" +
               "See README for full steps."
           );
         };
@@ -2222,42 +2338,44 @@
         firebase.initializeApp(cfg);
       }
       cloudReady = true;
+
+      // Ensure auth state persists across browser restarts and tab closures
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((err) => {
+        console.warn("Could not set auth persistence to LOCAL:", err);
+      });
     } catch (e) {
       console.error(e);
       setCloudStatus("Init failed", "err");
       return;
     }
 
+    // Immediately restore cached user from localStorage so there is zero UI flicker on reload
+    const isExplicitSignOut = localStorage.getItem(AUTH_EXPLICIT_SIGNOUT_KEY) === "true";
+    const saved = getSavedGoogleUser();
+    if (saved && !isExplicitSignOut) {
+      updateAuthUI(saved, false);
+      setCloudStatus("Connecting…", "busy");
+    }
+
     const btnIn = document.getElementById("btnGoogleSignIn");
     if (btnIn) {
-      btnIn.onclick = async () => {
-        try {
-          const provider = new firebase.auth.GoogleAuthProvider();
-          provider.setCustomParameters({ prompt: "select_account" });
-          await firebase.auth().signInWithPopup(provider);
-        } catch (e) {
-          console.error("Google sign-in error:", e);
-          if (e && (e.code === "auth/popup-blocked" || e.message?.includes("popup"))) {
-            const openTab = confirm(
-              "Google Sign-In popup was blocked by the browser or preview iframe.\n\nOpen this app in a new browser tab to complete sign in?"
-            );
-            if (openTab) {
-              window.open(window.location.href, "_blank");
-            }
-          } else if (e && e.code === "auth/popup-closed-by-user") {
-            // Popup closed by user, no error prompt needed
-          } else {
-            alert("Sign-in failed: " + ((e && e.message) || e));
-          }
-        }
-      };
+      btnIn.onclick = () => triggerGoogleSignIn(false);
+    }
+
+    const btnSwitch = document.getElementById("btnSwitchAccount");
+    if (btnSwitch) {
+      btnSwitch.onclick = () => triggerGoogleSignIn(true);
     }
 
     const btnOut = document.getElementById("btnSignOut");
     if (btnOut) {
       btnOut.onclick = async () => {
         try {
+          clearSavedGoogleUser();
+          cloudUser = null;
           await firebase.auth().signOut();
+          updateAuthUI();
+          setCloudStatus("");
         } catch (e) {
           console.error(e);
         }
@@ -2266,9 +2384,36 @@
 
     firebase.auth().onAuthStateChanged(async (user) => {
       cloudUser = user;
-      updateAuthUI();
       if (user) {
+        saveGoogleUserProfile(user);
+        updateAuthUI();
         await cloudLoad();
+      } else {
+        const signedOut = localStorage.getItem(AUTH_EXPLICIT_SIGNOUT_KEY) === "true";
+        if (signedOut) {
+          updateAuthUI();
+        } else {
+          const cached = getSavedGoogleUser();
+          if (cached) {
+            // Keep saved account visible so user knows they are remembered and can re-sync with 1 click
+            updateAuthUI(cached, true);
+            setCloudStatus("Offline · Reconnect", "busy");
+          } else {
+            updateAuthUI();
+          }
+        }
+      }
+    });
+
+    // Save on tab close or navigation
+    window.addEventListener("beforeunload", () => {
+      if (cloudReady && cloudUser && !cloudApplying) {
+        cloudSave(true);
+      }
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden" && cloudReady && cloudUser && !cloudApplying) {
+        cloudSave(true);
       }
     });
   }

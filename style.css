@@ -529,17 +529,59 @@ button.full { width: 100%; }
 .auth-area {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-right: 6px;
   flex-wrap: wrap;
 }
 .auth-user {
-  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
   color: #93c5fd;
-  max-width: 160px;
+  max-width: 220px;
+  padding: 3px 8px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid #334155;
+  border-radius: 6px;
+}
+.auth-saved-tag {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
+}
+.auth-reconnect-btn {
+  background: #7c2d12;
+  color: #fed7aa;
+  border: 1px solid #ea580c;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.auth-reconnect-btn:hover {
+  background: #9a3412;
+  color: #fff;
+  border-color: #f97316;
+}
+.switch-account-btn {
+  font-size: 0.72rem;
+  padding: 3px 7px;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.switch-account-btn:hover {
+  color: #e2e8f0;
+  border-color: #64748b;
+  background: #1e293b;
 }
 .cloud-status {
   font-size: 0.72rem;
