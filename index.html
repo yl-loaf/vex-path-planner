@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VEX V5 LemLib Path Planner – Push Back</title>
-  <link rel="stylesheet" href="style.css?v=20260920d" />
+  <link rel="stylesheet" href="style.css?v=20260920i" />
 </head>
 <body>
   <div id="app">
@@ -14,6 +14,12 @@
         <p class="subtitle">Push Back 2025-26 · inches · center (0,0) · heading 0° = +Y, CW+</p>
       </div>
       <div class="header-actions">
+        <div id="authArea" class="auth-area">
+          <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
+          <span id="authUser" class="auth-user" hidden></span>
+          <button id="btnSignOut" type="button" hidden>Sign out</button>
+          <span id="cloudStatus" class="cloud-status" title="Cloud sync status"></span>
+        </div>
         <button id="btnImport" title="Import .vpath">Import</button>
         <button id="btnExport" title="Export .vpath">Export .vpath</button>
         <button id="btnClear" class="danger">Clear</button>
@@ -71,7 +77,7 @@
 
         <section class="bot-settings" id="botSettings">
           <h2>Bot Settings</h2>
-          <p class="hint" style="margin-bottom:6px">Used for swing sim, speed estimates, code comments</p>
+          <p class="hint" style="margin-bottom:6px">Used for swing sim + generated chassis comments</p>
           <div class="row">
             <label>Track width (in)
               <input type="number" id="trackWidth" step="0.1" value="12" min="1"/>
@@ -91,6 +97,15 @@
               <input type="number" id="driveRpm" step="1" value="600" min="1"/>
             </label>
           </div>
+          <div class="row" style="margin-top:6px">
+            <label>Default max speed
+              <input type="number" id="defaultMaxSpeed" min="0" max="127" step="1" value="127"/>
+            </label>
+            <label>Default min speed
+              <input type="number" id="defaultMinSpeed" min="0" max="127" step="1" value="0"/>
+            </label>
+          </div>
+          <p class="hint" style="margin-top:4px;font-size:0.72rem;color:#8b9bb4">New moves use these defaults; edit any card to override per action.</p>
         </section>
 
         <section class="code-section">
@@ -120,6 +135,23 @@
   </div>
 
   <input type="file" id="fileInput" accept=".vpath,application/json" hidden />
-  <script src="app.js?v=20260920d"></script>
+
+  <div id="clearModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3>Clear entire path?</h3>
+      <p>This cannot be undone (cloud copy will also clear after save).</p>
+      <p>Type <strong id="clearChallengeText">CLEAR</strong> to confirm:</p>
+      <input type="text" id="clearChallengeInput" autocomplete="off" placeholder="Type the word above" />
+      <div class="modal-actions">
+        <button type="button" id="clearModalCancel">Cancel</button>
+        <button type="button" id="clearModalConfirm" class="danger" disabled>Clear path</button>
+      </div>
+    </div>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=20260920i"></script>
+  <script src="app.js?v=20260920i"></script>
 </body>
 </html>
