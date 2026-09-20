@@ -334,6 +334,16 @@ button.full { width: 100%; }
   pointer-events: none;
 }
 
+.bot-settings h2 {
+  font-size: 0.9rem;
+  color: #93c5fd;
+  margin-bottom: 4px;
+}
+.bot-settings {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
 @media (max-width: 980px) {
   .main { flex-direction: column; }
   .panel { width: 100%; max-height: none; }
