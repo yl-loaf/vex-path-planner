@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VEX V5 LemLib Path Planner – Push Back</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=20260920c" />
 </head>
 <body>
   <div id="app">
@@ -28,7 +28,6 @@
     </header>
 
     <div class="main">
-      <!-- Flowchart / Action Editor -->
       <aside class="panel flowchart-panel">
         <div class="panel-header">
           <h2>Path Flowchart</h2>
@@ -55,9 +54,7 @@
 
         <div class="connector">▼</div>
 
-        <div id="actionFlow" class="action-flow">
-          <!-- action cards injected here -->
-        </div>
+        <div id="actionFlow" class="action-flow"></div>
 
         <div class="add-bar">
           <select id="newType">
@@ -72,6 +69,30 @@
           <button id="btnAddAction" class="primary">+ Add</button>
         </div>
 
+        <section class="bot-settings" id="botSettings">
+          <h2>Bot Settings</h2>
+          <p class="hint" style="margin-bottom:6px">Used for swing sim + generated chassis comments</p>
+          <div class="row">
+            <label>Track width (in)
+              <input type="number" id="trackWidth" step="0.1" value="12" min="1"/>
+            </label>
+            <label>Robot width (in)
+              <input type="number" id="robotW" step="0.1" value="14" min="1"/>
+            </label>
+            <label>Robot length (in)
+              <input type="number" id="robotL" step="0.1" value="14" min="1"/>
+            </label>
+          </div>
+          <div class="row">
+            <label>Wheel diam (in)
+              <input type="number" id="wheelDiam" step="0.05" value="3.25" min="0.5"/>
+            </label>
+            <label>Drivetrain RPM
+              <input type="number" id="driveRpm" step="1" value="600" min="1"/>
+            </label>
+          </div>
+        </section>
+
         <section class="code-section">
           <h2>Generated LemLib Code</h2>
           <button id="btnGenerate" class="primary full">Generate / Refresh Code</button>
@@ -80,7 +101,6 @@
         </section>
       </aside>
 
-      <!-- Canvas -->
       <div class="canvas-wrap">
         <canvas id="field" width="900" height="900"></canvas>
         <div id="coords">X: 0.0  Y: 0.0</div>
@@ -92,13 +112,13 @@
           <span class="leg selected"></span> Selected
         </div>
         <div id="helpTip">
-          Drag start robot · Drag waypoints · Click empty field to place new action · Select card to edit
+          Drag start robot or selected waypoint · Use + Add to create moves · Select card to edit
         </div>
       </div>
     </div>
   </div>
 
   <input type="file" id="fileInput" accept=".vpath,application/json" hidden />
-  <script src="app.js"></script>
+  <script src="app.js?v=20260920c"></script>
 </body>
 </html>
