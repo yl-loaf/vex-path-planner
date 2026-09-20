@@ -168,6 +168,7 @@
 
   let simRunning = false;
   let simPath = [];
+  let simSegments = [];
   let simIdx = 0;
   let animId = null;
   let simSpeed = 1;
