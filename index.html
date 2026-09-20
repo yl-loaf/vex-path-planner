@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260920.k12" />
+  <link rel="stylesheet" href="style.css?v=20260920.k15" />
 </head>
 <body>
   <div id="app">
@@ -28,7 +28,7 @@
           <span id="cloudStatus" class="cloud-status" title="Cloud sync status"></span>
           <a id="btnNewTab" href="#" target="_blank" class="new-tab-link" title="Open in new window (unrestricted popups & Google login)" style="display:none;">↗ New tab</a>
         </div>
-        <button id="btnCppTranslator" type="button" class="btn-cpp-translate" title="Translate raw C++ LemLib auton code into visual blocks & map">📥 C++ Translator</button>
+        <a id="btnCppTranslator" href="translator.html" class="btn-cpp-translate" style="text-decoration:none;" title="Translate raw C++ LemLib auton code into visual blocks & map on a dedicated page">📥 C++ Translator</a>
         <button id="btnImport" title="Import .vpath">Import</button>
         <button id="btnExport" title="Export .vpath">Export .vpath</button>
         <button id="btnClear" class="danger">Clear</button>
@@ -250,7 +250,7 @@
           </div>
           <div style="display:flex;gap:6px;margin-bottom:6px;">
             <button id="btnGenerate" class="primary" style="flex:1;">Generate Code</button>
-            <button id="btnCppTranslatorSide" type="button" class="btn-cpp-translate-side" style="flex:1;" title="Import & translate raw C++ auton code into blocks">📥 C++ → Blocks</button>
+            <a id="btnCppTranslatorSide" href="translator.html" class="btn-cpp-translate-side" style="flex:1;text-decoration:none;display:flex;align-items:center;justify-content:center;" title="Open C++ Autonomous to Blocks Translator page">📥 C++ → Blocks</a>
           </div>
           <textarea id="codeOut" readonly spellcheck="false"></textarea>
           <button id="btnCopy">Copy to Clipboard</button>
@@ -705,12 +705,13 @@ void autonomous() {
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.k12"></script>
+  <script src="version.js?v=20260920.k16"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.k12"></script>
-  <script src="app.js?v=20260920.k12"></script>
+  <script src="firebase-config.js?v=20260920.k16"></script>
+  <script src="cpp-parser.js?v=20260920.k16"></script>
+  <script src="app.js?v=20260920.k16"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

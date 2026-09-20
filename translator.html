@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>C++ Auton to Blocks Translator · VEX V5 LemLib Path Planner</title>
+  <meta name="description" content="Translate raw C++ autonomous routines into visual blocks, multitask concurrency flows, and field trajectories for VEX V5 LemLib." />
+  <meta property="og:title" content="C++ Auton to Blocks Translator · VEX V5 LemLib" />
+  <meta property="og:description" content="Parse raw C++ autonomous code into visual blocks, synchronized with the user profile and auton slots." />
+  <link rel="stylesheet" href="style.css?v=20260920.k16" />
+</head>
+<body class="translator-page-body">
+  <div id="app" class="translator-app-container">
+    <header class="translator-nav-header">
+      <div class="header-left">
+        <div class="translator-breadcrumb">
+          <a href="index.html" class="translator-back-link" title="Return to Visual Path Planner">← Back to Visual Planner</a>
+          <span class="breadcrumb-sep">/</span>
+          <span class="breadcrumb-current">C++ Code Translator</span>
+        </div>
+        <h1 class="translator-title">📥 Raw C++ Auton → Blocks Translator</h1>
+        <p class="subtitle">Two-way LemLib v0.5+ parser with multitask concurrency detection · Synchronized with your active profile &amp; slots</p>
+      </div>
+      <div class="header-actions">
+        <div id="authArea" class="auth-area">
+          <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google (saved across sessions)">Sign in with Google</button>
+          <span id="authUser" class="auth-user" hidden></span>
+          <button id="btnSwitchAccount" type="button" class="switch-account-btn" hidden title="Switch Google account">Switch</button>
+          <button id="btnSignOut" type="button" hidden title="Sign out of Google account">Sign out</button>
+          <span id="cloudStatus" class="cloud-status" title="Cloud sync status"></span>
+        </div>
+        <a href="index.html" class="btn-return-planner" title="Open Visual Path Planner">🗺️ Open Visual Planner</a>
+      </div>
+    </header>
+
+    <!-- Main Translator Workspace (Split Column Layout) -->
+    <main class="translator-grid-layout">
+      <!-- Left Column: Code Input & Sample Presets -->
+      <section class="translator-col translator-input-pane">
+        <div class="translator-pane-header">
+          <div class="pane-title-wrap">
+            <span class="pane-step-badge">Step 1</span>
+            <h2>Paste Raw C++ Autonomous Code</h2>
+          </div>
+          <span class="pane-tag">LemLib &amp; PROS C++</span>
+        </div>
+
+        <div class="cpp-presets-bar">
+          <span class="cpp-presets-label">Sample Routines:</span>
+          <button type="button" class="btn-cpp-sample" data-sample="preload_rush">⚡ Preload &amp; Mogo Rush</button>
+          <button type="button" class="btn-cpp-sample" data-sample="multitask_subsystems">⚡ Concurrent Intake &amp; Subsystems</button>
+          <button type="button" class="btn-cpp-sample" data-sample="boomerang_swings">⚡ Boomerang &amp; Swings</button>
+          <button type="button" class="btn-cpp-sample" data-sample="clear">🧹 Clear</button>
+        </div>
+
+        <div class="translator-code-box">
+          <label for="cppCodeInput" class="translator-editor-label">
+            <span>C++ Source Code:</span>
+            <span class="translator-char-counter" id="cppCharCounter">0 chars</span>
+          </label>
+          <textarea id="cppCodeInput" class="translator-code-area" spellcheck="false" placeholder="// Paste any VEX V5 LemLib C++ routine here...
+void autonomous() {
+    chassis.setPose(-60, -60, 0);
+    intake.move(127); // spin intake
+    chassis.moveToPoint(-24, -24, 2000, {.forwards = true, .maxSpeed = 110, .earlyExitRange = 2});
+    chassis.moveToPose(0, 48, 90, 2500, {.lead = 0.5, .forwards = false}); // clamp mogo
+    clamp.set_value(true);
+    chassis.turnToHeading(180, 1500);
+}"></textarea>
+        </div>
+
+        <!-- Syntax & Parsing Capabilities Banner -->
+        <div class="translator-features-box">
+          <h3>Supported C++ Constructs &amp; Inferences:</h3>
+          <ul class="translator-features-list">
+            <li><strong>🏁 Starting Pose:</strong> <code>chassis.setPose(x, y, theta)</code></li>
+            <li><strong>🎯 LemLib Movements:</strong> <code>moveToPoint</code>, <code>moveToPose</code>, <code>turnToHeading</code>, <code>turnToPoint</code>, <code>swingToHeading</code>, <code>swingToPoint</code></li>
+            <li><strong>⚙️ Struct Parameters:</strong> <code>{.forwards, .maxSpeed, .minSpeed, .earlyExitRange, .lead, .async}</code></li>
+            <li><strong>⚡ Multitask &amp; Concurrency:</strong> Detects <code>pros::Task</code>, non-blocking subsystem calls, and trailing <code>async = true</code> flags</li>
+            <li><strong>💬 Comments &amp; Notes:</strong> Preserves inline comments and preceding documentation blocks</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Right Column: Live Analysis, Actions Sequence, Target Slot & Apply -->
+      <section class="translator-col translator-output-pane">
+        <div class="translator-pane-header">
+          <div class="pane-title-wrap">
+            <span class="pane-step-badge">Step 2</span>
+            <h2>Parsed Action Blocks &amp; Target Slot</h2>
+          </div>
+          <span id="cppLiveBadge" class="pane-status-pill ok">Live Parsed</span>
+        </div>
+
+        <!-- Metric Statistics Bar -->
+        <div class="cpp-analysis-card">
+          <div class="cpp-analysis-header">
+            <span id="cppAnalysisStatus" class="cpp-analysis-status">Ready to parse</span>
+            <span id="cppAnalysisCount" class="cpp-analysis-count">0 items detected</span>
+          </div>
+          <div class="cpp-analysis-grid">
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatPose">—</div>
+              <div class="cpp-stat-lbl">Start Pose (X, Y, θ)</div>
+            </div>
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatMotions">0</div>
+              <div class="cpp-stat-lbl">Motion Steps</div>
+            </div>
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatCustom">0</div>
+              <div class="cpp-stat-lbl">Custom Code Blocks</div>
+            </div>
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatAsync">0</div>
+              <div class="cpp-stat-lbl">Inferred Multitask</div>
+            </div>
+            <div class="cpp-stat-box">
+              <div class="cpp-stat-val" id="cppStatComments">0</div>
+              <div class="cpp-stat-lbl">Parsed Comments</div>
+            </div>
+          </div>
+
+          <!-- Action Sequence Breakdown -->
+          <div class="translator-sequence-header">
+            <span class="sequence-title">Action Blocks Breakdown:</span>
+            <span class="sequence-hint">Visual block sequence that will load onto field &amp; flowchart</span>
+          </div>
+          <div id="cppParsedPreviewList" class="translator-parsed-scroll-list">
+            <!-- Dynamic parsed blocks will appear here -->
+          </div>
+        </div>
+
+        <!-- Target Destination Slot Selection -->
+        <div class="translator-destination-card">
+          <div class="dest-card-title">
+            <span>💾 Save Destination (User Profile / Auton Slots)</span>
+          </div>
+          <div class="dest-options-list">
+            <label class="dest-option-row">
+              <input type="radio" name="cppImportTarget" value="active" checked />
+              <div class="dest-text-col">
+                <span class="dest-main-text">Replace Active Slot (<strong id="cppActiveRoutineName">Routine 1</strong>)</span>
+                <span class="dest-sub-text">Overwrites the currently selected routine slot with the parsed actions</span>
+              </div>
+            </label>
+
+            <label class="dest-option-row">
+              <input type="radio" name="cppImportTarget" value="new" />
+              <div class="dest-text-col">
+                <span class="dest-main-text">Create as New Auton Slot:</span>
+                <span class="dest-sub-text">Adds a new autonomous routine to your profile list</span>
+              </div>
+              <input type="text" id="cppNewRoutineName" class="cpp-routine-name-input" value="Imported Auton" placeholder="Routine Name" />
+            </label>
+
+            <label class="dest-option-row" id="existingSlotRow">
+              <input type="radio" name="cppImportTarget" value="specific" />
+              <div class="dest-text-col">
+                <span class="dest-main-text">Choose Existing Slot:</span>
+                <span class="dest-sub-text">Target an existing routine in your profile</span>
+              </div>
+              <select id="cppTargetSlotSelect" class="cpp-slot-select" disabled></select>
+            </label>
+          </div>
+        </div>
+
+        <!-- Error Banner -->
+        <div id="cppErrorMsg" class="cpp-error-msg" hidden></div>
+
+        <!-- Translation & Commit Action Bar -->
+        <div class="translator-commit-bar">
+          <a href="index.html" class="btn-cancel-return">Cancel &amp; Return</a>
+          <button type="button" id="btnTranslateAndOpen" class="primary btn-apply-translation">
+            🚀 Apply to Routine &amp; Open Visual Planner
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="build-footer">
+      <span>VEX V5 LemLib Autonomous Translator · Build <span id="buildNumber">…</span></span>
+      <span class="cloud-sync-footer-indicator" id="footerSyncStatus">Profile: Local Storage / Cloud Sync</span>
+    </footer>
+  </div>
+
+  <div id="toastNotification" class="toast-notify"></div>
+
+  <!-- Scripts -->
+  <script src="version.js?v=20260920.k16"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=20260920.k16"></script>
+  <script src="cpp-parser.js?v=20260920.k16"></script>
+  <script src="translator-page.js?v=20260920.k16"></script>
+</body>
+</html>

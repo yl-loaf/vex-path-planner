@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "lint": "node -c app.js server.js update-version.js",
+    "lint": "node -c app.js cpp-parser.js translator-page.js server.js update-version.js",
     "build": "node update-version.js",
     "start": "node server.js"
   },
