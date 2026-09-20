@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VEX V5 LemLib Path Planner – Push Back</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>VEX V5 LemLib Path Planner</h1>
+      <p class="subtitle">Push Back 2025-26 · Field coordinates in inches · Center = (0, 0)</p>
+    </header>
+
+    <div class="main">
+      <!-- Controls Panel -->
+      <aside class="panel">
+        <section>
+          <h2>1. Starting Pose</h2>
+          <p class="hint">Must touch a field wall (VEX rules). Click near a wall or use presets.</p>
+          <div class="row">
+            <label>X <input type="number" id="startX" step="0.1" value="-60" /></label>
+            <label>Y <input type="number" id="startY" step="0.1" value="-60" /></label>
+            <label>θ° <input type="number" id="startTheta" step="1" value="0" /></label>
+          </div>
+          <div class="btn-row">
+            <button id="btnRedLeft" class="preset">Red Left</button>
+            <button id="btnRedRight" class="preset">Red Right</button>
+            <button id="btnBlueLeft" class="preset">Blue Left</button>
+            <button id="btnBlueRight" class="preset">Blue Right</button>
+          </div>
+          <button id="btnSetStart" class="primary">Set / Update Start</button>
+        </section>
+
+        <section>
+          <h2>2. Add Movement</h2>
+          <label>Type
+            <select id="moveType">
+              <option value="moveToPoint">moveToPoint</option>
+              <option value="moveToPose">moveToPose</option>
+              <option value="turnToPoint">turnToPoint</option>
+              <option value="turnToHeading">turnToHeading</option>
+              <option value="swingToPoint">swingToPoint</option>
+              <option value="swingToHeading">swingToHeading</option>
+            </select>
+          </label>
+          <div class="row" id="pointInputs">
+            <label>X <input type="number" id="targetX" step="0.1" value="0" /></label>
+            <label>Y <input type="number" id="targetY" step="0.1" value="0" /></label>
+          </div>
+          <div class="row" id="headingInput" style="display:none">
+            <label>θ° <input type="number" id="targetTheta" step="1" value="0" /></label>
+          </div>
+          <div class="row">
+            <label>Timeout (ms) <input type="number" id="timeout" value="2000" min="100" step="100" /></label>
+          </div>
+          <div class="row options">
+            <label><input type="checkbox" id="forwards" checked /> Forwards</label>
+            <label id="lockedSideWrap" style="display:none">
+              Locked side
+              <select id="lockedSide">
+                <option value="LEFT">LEFT</option>
+                <option value="RIGHT">RIGHT</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label>Max Speed <input type="number" id="maxSpeed" value="127" min="0" max="127" /></label>
+            <label>Min Speed <input type="number" id="minSpeed" value="0" min="0" max="127" /></label>
+          </div>
+          <p class="hint">Click the field to set target X/Y, or type values then click Add.</p>
+          <button id="btnAdd" class="primary">Add Movement</button>
+        </section>
+
+        <section>
+          <h2>3. Path Actions</h2>
+          <ul id="actionList"></ul>
+          <div class="btn-row">
+            <button id="btnClear">Clear All</button>
+            <button id="btnUndo">Undo Last</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>4. Simulation & Code</h2>
+          <div class="btn-row">
+            <button id="btnSim" class="primary">▶ Simulate</button>
+            <button id="btnStop">Stop</button>
+          </div>
+          <label>Playback speed
+            <input type="range" id="simSpeed" min="0.25" max="3" step="0.25" value="1" />
+            <span id="speedLabel">1×</span>
+          </label>
+          <button id="btnGenerate" class="primary full">Generate LemLib Code</button>
+          <textarea id="codeOut" readonly placeholder="Generated C++ will appear here…"></textarea>
+          <button id="btnCopy">Copy Code</button>
+        </section>
+
+        <section class="info">
+          <h3>Coordinate System</h3>
+          <ul>
+            <li>Origin (0,0) = field center</li>
+            <li>+X = right, +Y = up (toward red alliance side in image)</li>
+            <li>Heading 0° = +Y (up), increases <strong>clockwise</strong></li>
+            <li>Field ≈ ±72 in (12 ft tiles)</li>
+          </ul>
+        </section>
+      </aside>
+
+      <!-- Canvas Area -->
+      <div class="canvas-wrap">
+        <canvas id="field" width="900" height="900"></canvas>
+        <div id="coords">X: 0.0  Y: 0.0</div>
+        <div id="legend">
+          <span class="leg start"></span> Start
+          <span class="leg path"></span> Path
+          <span class="leg end"></span> End pose + direction
+          <span class="leg robot"></span> Robot
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
