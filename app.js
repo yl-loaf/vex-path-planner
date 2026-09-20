@@ -1019,6 +1019,26 @@
     }
     ctx.stroke();
 
+    // Visual feedback for multitasking (async) motions along path
+    for (const seg of simSegments) {
+      if (!seg.action || seg.action.type === "custom" || !seg.action.async) continue;
+      if (!seg.points || seg.points.length < 2) continue;
+      ctx.save();
+      ctx.strokeStyle = "#c084fc";
+      ctx.lineWidth = 4;
+      ctx.globalAlpha = 0.65;
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      let segPen = false;
+      for (const pt of seg.points) {
+        const c = fieldToCanvas(pt.x, pt.y);
+        if (!segPen) { ctx.moveTo(c.cx, c.cy); segPen = true; }
+        else ctx.lineTo(c.cx, c.cy);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // LemLib Boomerang visual feedback for selected action
     if (selectedId) {
       const si = actions.findIndex((x) => x.id === selectedId);
@@ -1060,13 +1080,28 @@
       const p = fieldToCanvas(poses[i].x, poses[i].y);
       const sel = a.id === selectedId;
       const isRev = a.forwards === false;
-      ctx.fillStyle = sel ? "#60a5fa" : isRev ? "#f97316" : "#3b82f6";
+      const isAsync = a.async === true;
+
+      // Multitask halo ring
+      if (isAsync) {
+        ctx.save();
+        ctx.strokeStyle = "#c084fc";
+        ctx.lineWidth = 2;
+        ctx.shadowColor = "#a855f7";
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(p.cx, p.cy, (sel ? 7 : 5) + 3.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.fillStyle = sel ? "#60a5fa" : isAsync ? "#a855f7" : isRev ? "#f97316" : "#3b82f6";
       ctx.beginPath();
       ctx.arc(p.cx, p.cy, sel ? 7 : 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#fff";
       ctx.font = "11px sans-serif";
-      ctx.fillText(String(i) + (isRev ? "R" : ""), p.cx + 8, p.cy - 6);
+      ctx.fillText(String(i) + (isRev ? "R" : "") + (isAsync ? "⚡" : ""), p.cx + 8, p.cy - 6);
 
       // Target aim visualization for swingToPoint and turnToPoint
       if (a.type === "swingToPoint" || a.type === "turnToPoint") {
@@ -1203,26 +1238,56 @@
       const block = document.createElement("div");
       block.className = "action-block";
 
-      const conn = document.createElement("div");
-      conn.className = "connector";
-      conn.textContent = "▼";
-      block.appendChild(conn);
+      if (idx > 0) {
+        const prev = actions[idx - 1];
+        const conn = document.createElement("div");
+        if (prev && prev.async) {
+          conn.className = "connector multitask-connector";
+          conn.innerHTML = `
+            <div class="multitask-connector-bar"></div>
+            <div class="multitask-connector-pill" title="Step ${idx} and Step ${idx + 1} run concurrently (Multitasking)">
+              <span>⚡</span> MULTITASKING (RUNS CONCURRENTLY) <span>⚡</span>
+            </div>
+            <div class="multitask-connector-bar"></div>`;
+        } else {
+          conn.className = "connector";
+          conn.textContent = "▼";
+        }
+        block.appendChild(conn);
+      }
 
       const card = document.createElement("div");
       card.className =
         "action-card" +
         (a.id === selectedId ? " selected" : "") +
-        (a.type === "custom" ? " custom-type" : "");
+        (a.type === "custom" ? " custom-type" : "") +
+        (a.async ? " multitask-active" : "");
       card.dataset.id = a.id;
 
       let body = "";
       if (a.type === "custom") {
         body = `
           <label class="wide">Custom C++ (injected as-is)
-            <textarea data-f="customCode" rows="3">${escapeHtml(a.customCode)}</textarea>
+            <textarea data-f="customCode" rows="3" placeholder="// e.g. intake.move(127); or chassis.waitUntil(12);">${escapeHtml(a.customCode)}</textarea>
           </label>
-          <div class="check-row">
-            <label><input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/> async (non-blocking)</label>
+          <div class="multitask-presets-row">
+            <span style="font-size:0.68rem;color:#94a3b8;align-self:center;">Snippets:</span>
+            <button type="button" class="snippet-chip" data-snip="intake.move(127);">⚡ Intake On</button>
+            <button type="button" class="snippet-chip" data-snip="intake.move(0);">🛑 Intake Off</button>
+            <button type="button" class="snippet-chip" data-snip="clamp.set_value(true);">🦾 Clamp</button>
+            <button type="button" class="snippet-chip" data-snip="chassis.waitUntil(12);">⏱️ Wait 12"</button>
+            <button type="button" class="snippet-chip" data-snip="chassis.waitUntilDone();">⏳ Wait Done</button>
+          </div>
+          <div class="multitask-panel ${a.async ? "on" : ""}">
+            <label class="multitask-toggle-label">
+              <input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/>
+              <span class="multitask-indicator">⚡</span>
+              <span class="multitask-text-col">
+                <span class="multitask-title">Multitask / Async (Non-blocking)</span>
+                <span class="multitask-sub">Runs concurrently in the background</span>
+              </span>
+              <span class="multitask-pill ${a.async ? "active" : ""}">${a.async ? "PARALLEL" : "BLOCKING"}</span>
+            </label>
           </div>`;
       } else {
         const pointFields = needsPoint(a.type)
@@ -1276,9 +1341,19 @@
               Drive in reverse
               <span class="rev-hint">(forwards = false)</span>
             </label>
-            <label><input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/> async</label>
           </div>
-                    <div class="offset-row">
+          <div class="multitask-panel ${a.async ? "on" : ""}">
+            <label class="multitask-toggle-label">
+              <input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/>
+              <span class="multitask-indicator">⚡</span>
+              <span class="multitask-text-col">
+                <span class="multitask-title">Multitask (Async / Non-blocking)</span>
+                <span class="multitask-sub">Runs next action concurrently while this chassis motion executes</span>
+              </span>
+              <span class="multitask-pill ${a.async ? "active" : ""}">${a.async ? "PARALLEL" : "SEQUENTIAL"}</span>
+            </label>
+          </div>
+          <div class="offset-row">
             <div class="label">Code-only offsets (hidden from sim)</div>
             <div class="row">
               <label>ΔX <input type="number" data-f="offsetX" step="0.1" value="${a.offsetX}"/></label>
@@ -1294,6 +1369,7 @@
       card.innerHTML = `
         <div class="card-title">
           <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type}</span>
+          ${a.async ? '<span class="badge multitask-badge" title="Multitasking / Async: Non-blocking action running concurrently with the next step">⚡ MULTITASK</span>' : ""}
           ${a.forwards === false && a.type !== "custom" ? '<span class="badge reverse">REV</span>' : ""}
           <span class="hint-inline">${a.label ? escapeHtml(a.label) : ""}</span>
           <div style="margin-left:auto;display:flex;gap:2px">
@@ -1309,6 +1385,21 @@
         selectedId = a.id;
         renderFlow();
         draw();
+      });
+
+      card.querySelectorAll(".snippet-chip").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const snip = btn.dataset.snip;
+          const ta = card.querySelector('textarea[data-f="customCode"]');
+          if (ta && snip) {
+            const cur = ta.value;
+            ta.value = cur ? cur.replace(/\n*$/, "") + "\n" + snip : snip;
+            a.customCode = ta.value;
+            markDirty();
+            generateCode();
+          }
+        });
       });
 
       card.querySelectorAll("[data-f]").forEach((el) => {
@@ -1376,15 +1467,33 @@
     return s || "routine";
   }
 
+  function getIndentString() {
+    const sel = document.getElementById("codeIndentSelect");
+    if (!sel) return "  ";
+    const val = sel.value;
+    if (val === "tab") return "\t";
+    if (val === "0") return "";
+    if (val === "custom") {
+      const customInput = document.getElementById("codeIndentCustom");
+      const numVal = parseInt(customInput?.value, 10);
+      return " ".repeat(isNaN(numVal) ? 2 : Math.max(0, Math.min(16, numVal)));
+    }
+    const numVal = parseInt(val, 10);
+    return " ".repeat(isNaN(numVal) ? 2 : numVal);
+  }
+
   function emitRoutineBody(pose0, acts, indent) {
-    const ind = indent || "  ";
+    const ind = indent != null ? indent : "  ";
     let code = "";
     code += `${ind}chassis.setPose(${num(pose0.x)}, ${num(pose0.y)}, ${num(pose0.theta)});\n`;
     for (const a of acts) {
       if (a.label) code += `${ind}// ${a.label}\n`;
       if (a.type === "custom") {
         const lines = (a.customCode || "").split("\n");
-        for (const line of lines) code += `${ind}${line}\n`;
+        for (const line of lines) {
+          if (line.trim().length === 0) code += "\n";
+          else code += `${ind}${line}\n`;
+        }
         continue;
       }
       const px = a.x + (a.offsetX || 0);
@@ -1440,39 +1549,33 @@
 
     const modeEl = document.querySelector('input[name="codeMode"]:checked');
     const mode = modeEl ? modeEl.value : "current";
+    const indent = getIndentString();
 
     let code = `// Auto-generated by VEX LemLib Path Planner\n`;
-    code += `// Override 2026-27 · inches · heading 0° = +Y, increases clockwise\n`;
-    code += `// Bot: trackWidth=${bot.trackWidth}" robot=${bot.robotW}x${bot.robotL}" wheels=${bot.wheelDiam}" @ ${bot.driveRpm}rpm\n`;
-    code += `// Default speeds: max=${bot.defaultMaxSpeed} min=${bot.defaultMinSpeed} (per-move overrides in params)\n`;
-    code += `// (Configure lemlib::Drivetrain with track width ${bot.trackWidth} in)\n\n`;
 
     if (mode === "all") {
-      code += `// Autonomous selector — call runAuton(slot) from autonomous()\n`;
-      code += `// slot: `;
-      code += paths.map((p, i) => `${i}=${p.name}`).join(", ") + `\n\n`;
+      code += `// Autonomous selector — call runAuton(slot) from autonomous()\n\n`;
 
       paths.forEach((p, i) => {
         const fn = "auton_" + sanitizeIdent(p.name);
         code += `void ${fn}() {\n`;
-        code += emitRoutineBody(p.pose, p.actions, "  ");
+        code += emitRoutineBody(p.pose, p.actions, indent);
         code += `}\n\n`;
       });
 
       code += `void runAuton(int slot) {\n`;
-      code += `  switch (slot) {\n`;
+      code += `${indent}switch (slot) {\n`;
       paths.forEach((p, i) => {
         const fn = "auton_" + sanitizeIdent(p.name);
-        code += `    case ${i}: ${fn}(); break; // ${p.name}\n`;
+        code += `${indent}${indent}case ${i}: ${fn}(); break; // ${p.name}\n`;
       });
-      code += `    default: auton_${sanitizeIdent(paths[0].name)}(); break;\n`;
-      code += `  }\n`;
-      code += `}\n\n`;
-      code += `// Example:\n// void autonomous() {\n//   runAuton(0); // ${paths[0].name}\n// }\n`;
+      code += `${indent}${indent}default: auton_${sanitizeIdent(paths[0].name)}(); break;\n`;
+      code += `${indent}}\n`;
+      code += `}\n`;
     } else {
       const p = activePath();
       code += `// Routine: ${p.name}\n\n`;
-      code += emitRoutineBody(pose, actions, "");
+      code += emitRoutineBody(pose, actions, indent);
     }
 
     codeOut.value = code;
@@ -1500,15 +1603,17 @@
   function updateTimeDisplay(elapsed, totalEst, currentVLin, currentOmegaDeg) {
     const el = document.getElementById("timeEst");
     if (!el) return;
+    const asyncCount = actions.filter((a) => a.async).length;
+    const asyncTag = asyncCount > 0 ? ` · ⚡ ${asyncCount} Multitask` : "";
     if (elapsed != null && totalEst != null) {
       let speedText = "";
       if (currentVLin != null && currentOmegaDeg != null) {
         speedText = ` · ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`;
       }
-      el.textContent = `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s${speedText}`;
+      el.textContent = `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s${asyncTag}${speedText}`;
     } else {
       const t = estimateTotalTime();
-      el.textContent = actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)` : `Est. time: —`;
+      el.textContent = actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)${asyncTag}` : `Est. time: —`;
     }
   }
 
@@ -1863,10 +1968,61 @@
   };
 
   document.getElementById("btnGenerate").onclick = generateCode;
-  document.getElementById("btnCopy").onclick = () => {
-    codeOut.select();
-    navigator.clipboard.writeText(codeOut.value);
-  };
+
+  const btnCopy = document.getElementById("btnCopy");
+  if (btnCopy) {
+    btnCopy.onclick = async () => {
+      codeOut.select();
+      try {
+        await navigator.clipboard.writeText(codeOut.value);
+      } catch (_) {
+        document.execCommand("copy");
+      }
+      const orig = btnCopy.textContent;
+      btnCopy.textContent = "✓ Copied to Clipboard!";
+      btnCopy.classList.add("copied");
+      setTimeout(() => {
+        btnCopy.textContent = orig;
+        btnCopy.classList.remove("copied");
+      }, 1800);
+    };
+  }
+
+  const indentSel = document.getElementById("codeIndentSelect");
+  const indentCustom = document.getElementById("codeIndentCustom");
+  if (indentSel) {
+    const savedIndent = localStorage.getItem("lemlib_code_indent");
+    if (savedIndent) {
+      if (["0", "2", "4", "tab"].includes(savedIndent)) {
+        indentSel.value = savedIndent;
+      } else {
+        indentSel.value = "custom";
+        if (indentCustom) {
+          indentCustom.value = savedIndent;
+          indentCustom.style.display = "inline-block";
+        }
+      }
+    }
+    indentSel.addEventListener("change", () => {
+      if (indentSel.value === "custom") {
+        if (indentCustom) indentCustom.style.display = "inline-block";
+      } else {
+        if (indentCustom) indentCustom.style.display = "none";
+        localStorage.setItem("lemlib_code_indent", indentSel.value);
+      }
+      generateCode();
+    });
+  }
+  if (indentCustom) {
+    indentCustom.addEventListener("input", () => {
+      localStorage.setItem("lemlib_code_indent", indentCustom.value);
+      generateCode();
+    });
+  }
+
+  document.querySelectorAll('input[name="codeMode"]').forEach((radio) => {
+    radio.addEventListener("change", generateCode);
+  });
 
   document.getElementById("btnExport").onclick = exportVPath;
   document.getElementById("btnImport").onclick = () => fileInput.click();

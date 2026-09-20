@@ -119,6 +119,16 @@ header h1 { font-size: 1.35rem; font-weight: 700; }
 .badge.turn { background: #713f12; color: #fde68a; }
 .badge.swing { background: #4c1d95; color: #e9d5ff; }
 .badge.custom { background: #0e7490; color: #a5f3fc; }
+.badge.multitask-badge {
+  background: linear-gradient(135deg, #6b21a8, #9333ea);
+  color: #f3e8ff;
+  border: 1px solid #c084fc;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+}
+.action-card.multitask-active {
+  border-left: 3px solid #a855f7 !important;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, #161f2e 100%);
+}
 
 .hint-inline { font-size: 0.72rem; color: var(--muted); }
 
@@ -199,6 +209,34 @@ button.full { width: 100%; }
   font-size: 0.9rem;
   line-height: 1;
   user-select: none;
+  padding: 2px 0;
+}
+.connector.multitask-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 0;
+  margin: 3px 0;
+}
+.multitask-connector-bar {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.7), transparent);
+}
+.multitask-connector-pill {
+  background: #3b0764;
+  border: 1px solid #c084fc;
+  color: #f3e8ff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.05em;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .action-flow {
@@ -225,10 +263,138 @@ button.full { width: 100%; }
   color: #93c5fd;
   margin-bottom: 6px;
 }
+.code-mode-row {
+  display: flex;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+}
+.code-indent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 8px;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+}
+.code-indent-row label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.code-indent-row select {
+  width: auto;
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
 #codeOut {
   width: 100%;
   height: 160px;
   margin: 8px 0 6px;
+}
+
+#btnCopy.copied {
+  background: #166534 !important;
+  border-color: #22c55e !important;
+  color: #dcfce7 !important;
+}
+
+.multitask-panel {
+  background: #0e1522;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 6px 0;
+  transition: all 0.2s ease;
+}
+.multitask-panel.on {
+  background: rgba(147, 51, 234, 0.12);
+  border-color: #a855f7;
+  box-shadow: inset 0 0 10px rgba(168, 85, 247, 0.15);
+}
+.multitask-toggle-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  width: 100%;
+}
+.multitask-toggle-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #a855f7;
+  flex: none;
+}
+.multitask-indicator {
+  font-size: 1rem;
+  color: #a855f7;
+  flex: none;
+}
+.multitask-panel.on .multitask-indicator {
+  filter: drop-shadow(0 0 5px #c084fc);
+}
+.multitask-text-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+.multitask-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+.multitask-panel.on .multitask-title {
+  color: #e9d5ff;
+}
+.multitask-sub {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+.multitask-pill {
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #64748b;
+  border: 1px solid #334155;
+  text-transform: uppercase;
+  flex: none;
+  letter-spacing: 0.04em;
+}
+.multitask-pill.active {
+  background: #581c87;
+  color: #f3e8ff;
+  border-color: #c084fc;
+}
+
+.multitask-presets-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+.snippet-chip {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  padding: 3px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+  transition: all 0.15s;
+}
+.snippet-chip:hover {
+  background: #334155;
+  color: #a5f3fc;
+  border-color: #38bdf8;
 }
 
 .check-row {
@@ -317,6 +483,7 @@ button.full { width: 100%; }
 }
 .leg.start { background: var(--green); }
 .leg.path { background: var(--accent); }
+.leg.multitask { background: #a855f7; box-shadow: 0 0 6px #c084fc; }
 .leg.end { background: var(--amber); }
 .leg.robot { background: var(--purple); }
 .leg.selected { background: #60a5fa; }

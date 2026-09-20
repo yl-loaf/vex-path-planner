@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260920.k4" />
+  <link rel="stylesheet" href="style.css?v=20260920.k6" />
 </head>
 <body>
   <div id="app">
@@ -138,6 +138,17 @@
             <label><input type="radio" name="codeMode" value="current" checked /> Current routine</label>
             <label><input type="radio" name="codeMode" value="all" /> All routines (switch)</label>
           </div>
+          <div class="code-indent-row">
+            <label for="codeIndentSelect">Code Indentation:</label>
+            <select id="codeIndentSelect" title="Select indentation level for the autonomous code">
+              <option value="2" selected>2 spaces (standard)</option>
+              <option value="4">4 spaces (PROS default)</option>
+              <option value="0">0 spaces (no indent)</option>
+              <option value="tab">1 tab (\t)</option>
+              <option value="custom">Custom spaces...</option>
+            </select>
+            <input type="number" id="codeIndentCustom" min="0" max="16" value="2" style="display:none; width:60px;" title="Custom space count" />
+          </div>
           <button id="btnGenerate" class="primary full">Generate / Refresh Code</button>
           <textarea id="codeOut" readonly spellcheck="false"></textarea>
           <button id="btnCopy">Copy to Clipboard</button>
@@ -152,6 +163,7 @@
         <div id="legend">
           <span class="leg start"></span> Start
           <span class="leg path"></span> Path
+          <span class="leg multitask"></span> ⚡ Multitask
           <span class="leg end"></span> End + dir
           <span class="leg robot"></span> Live
           <span class="leg selected"></span> Selected
@@ -391,10 +403,12 @@ void autonomous() {
           </div>
 
           <div class="help-card" style="margin-top:12px;">
-            <h4>Export Modes</h4>
+            <h4>Export Modes & Options</h4>
             <ul>
-              <li><strong>Current routine:</strong> Generates clean code for just the currently active autonomous tab.</li>
+              <li><strong>Current routine:</strong> Generates clean code for just the currently active autonomous tab, beginning with the routine header and chassis starting pose.</li>
               <li><strong>All routines (switch):</strong> Generates a complete <code>switch (autonSelector)</code> block containing all routines in your project.</li>
+              <li><strong>Indentation:</strong> Choose 2 spaces (standard), 4 spaces (PROS default), 0 spaces, 1 tab, or a custom number of spaces to match your team's code style.</li>
+              <li><strong>Multitasking (Async):</strong> When enabled, appends <code>, true</code> as LemLib's async parameter so motions run non-blocking in the background while custom subsystem code (intake, lift, clamp) executes concurrently.</li>
             </ul>
           </div>
         </div>
@@ -453,12 +467,12 @@ void autonomous() {
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.k4"></script>
+  <script src="version.js?v=20260920.k6"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.k4"></script>
-  <script src="app.js?v=20260920.k4"></script>
+  <script src="firebase-config.js?v=20260920.k6"></script>
+  <script src="app.js?v=20260920.k6"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
