@@ -37,6 +37,7 @@
     </header>
 
     <div class="main">
+      <!-- Flowchart / Action Editor -->
       <aside class="panel flowchart-panel">
         <div class="panel-header">
           <h2>Path Flowchart</h2>
@@ -75,7 +76,9 @@
 
         <div class="connector">▼</div>
 
-        <div id="actionFlow" class="action-flow"></div>
+        <div id="actionFlow" class="action-flow">
+          <!-- action cards injected here -->
+        </div>
 
         <div class="add-bar">
           <select id="newType">
@@ -89,6 +92,7 @@
           </select>
           <button id="btnAddAction" class="primary">+ Add</button>
         </div>
+
 
         <section class="bot-settings" id="botSettings">
           <h2>Bot Settings</h2>
@@ -135,6 +139,7 @@
         </section>
       </aside>
 
+      <!-- Canvas -->
       <div class="canvas-wrap">
         <canvas id="field" width="900" height="900"></canvas>
         <div id="coords">X: 0.0  Y: 0.0</div>
