@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260920.k2" />
+  <link rel="stylesheet" href="style.css?v=20260920.k4" />
 </head>
 <body>
   <div id="app">
@@ -30,6 +30,7 @@
         <button id="btnImport" title="Import .vpath">Import</button>
         <button id="btnExport" title="Export .vpath">Export .vpath</button>
         <button id="btnClear" class="danger">Clear</button>
+        <button id="btnHelp" type="button" class="help-nav-btn" title="Help, motion guides & keyboard shortcuts">❓ Help</button>
         <button id="btnSim" class="primary">▶ Simulate</button>
         <button id="btnStop">Stop</button>
         <label class="speed">
@@ -156,7 +157,7 @@
           <span class="leg selected"></span> Selected
         </div>
         <div id="helpTip">
-          Drag start robot or selected waypoint · Use + Add to create moves · Select card to edit
+          Drag start robot or selected waypoint · Use + Add to create moves · <button type="button" id="linkHelpDocs" class="linkish" style="color:#93c5fd;text-decoration:underline;background:none;border:none;cursor:pointer;padding:0 2px;">View Help & Docs</button>
         </div>
       </div>
     </div>
@@ -181,12 +182,283 @@
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.k1"></script>
+
+  <!-- Comprehensive Help & Documentation Modal -->
+  <div id="helpModal" class="modal help-modal" hidden>
+    <div class="modal-card help-modal-card">
+      <div class="help-modal-header">
+        <div class="help-title-wrap">
+          <span class="help-badge">LemLib v0.5+ · Override 2026-27</span>
+          <h2>Path Planner Help & Documentation</h2>
+        </div>
+        <button type="button" id="helpModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <nav class="help-tabs">
+        <button type="button" class="help-tab active" data-tab="overview">🚀 Overview</button>
+        <button type="button" class="help-tab" data-tab="motions">🧭 Motion Commands</button>
+        <button type="button" class="help-tab" data-tab="canvas">🎯 Canvas & Gestures</button>
+        <button type="button" class="help-tab" data-tab="kinematics">⚙️ Robot Kinematics</button>
+        <button type="button" class="help-tab" data-tab="cpp">💻 LemLib C++ Export</button>
+        <button type="button" class="help-tab" data-tab="shortcuts">⌨️ Shortcuts</button>
+      </nav>
+
+      <div class="help-content-scroll">
+        <!-- Overview Pane -->
+        <div class="help-pane active" data-pane="overview">
+          <h3>Welcome to the VEX V5 LemLib Path Planner</h3>
+          <p>
+            An interactive path planning tool and discrete kinematics simulator designed for competitive VEX V5 robotics teams running <strong>LemLib</strong> on the <strong>Override 2026-27</strong> field.
+          </p>
+
+          <div class="help-grid-2">
+            <div class="help-card">
+              <h4>🎯 Field Coordinates & Conventions</h4>
+              <ul>
+                <li><strong>Field Dimensions:</strong> 144" × 144" (-72" to +72" in X and Y).</li>
+                <li><strong>Field Center:</strong> (0, 0) is the exact center intersection.</li>
+                <li><strong>Heading System:</strong> 0° is facing +Y (North / upward), 90° is facing +X (East / right), Clockwise positive (CW+).</li>
+                <li><strong>Tile Grid:</strong> 6 × 6 foam tiles, each 24" × 24".</li>
+              </ul>
+            </div>
+            <div class="help-card">
+              <h4>⚡ 3-Step Quick Start</h4>
+              <ol>
+                <li><strong>Position Start:</strong> Drag the green <span class="badge start">START</span> robot along the perimeter wall to match your legal starting tile.</li>
+                <li><strong>Add Moves:</strong> Use the <code>+ Add</code> dropdown to add actions like <code>moveToPose</code> or <code>swingToPoint</code>.</li>
+                <li><strong>Simulate & Export:</strong> Press <strong>▶ Simulate</strong> to preview authentic differential-drive execution, then copy the auto-generated C++ code.</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="help-callout">
+            <strong>💡 Pro Tip:</strong> Cloud synchronization is enabled with Google Sign-In! You can plan routines on your laptop, save them to the cloud, and open them directly in the pit area.
+          </div>
+        </div>
+
+        <!-- Motions Pane -->
+        <div class="help-pane" data-pane="motions">
+          <h3>LemLib Motion Commands Reference</h3>
+          <p>Each movement in your autonomous routine corresponds directly to an official LemLib chassis method:</p>
+
+          <div class="help-motion-list">
+            <div class="help-motion-item">
+              <div class="help-motion-head">
+                <span class="badge move">moveToPoint</span>
+                <code>chassis.moveToPoint(x, y, timeout, options);</code>
+              </div>
+              <p>Drives the chassis straight to target coordinate <code>(x, y)</code> using coupled lateral and angular PID controllers. Automatically turns toward the target while driving.</p>
+            </div>
+
+            <div class="help-motion-item">
+              <div class="help-motion-head">
+                <span class="badge move">moveToPose</span>
+                <code>chassis.moveToPose(x, y, theta, timeout, options);</code>
+              </div>
+              <p><strong>Boomerang pursuit algorithm!</strong> Dynamically guides the robot toward a moving "Carrot" pursuit point determined by the <code>lead</code> parameter (default 0.6). Produces smooth, arc-based trajectories ensuring the robot arrives at <code>(x, y)</code> pointing in direction <code>theta</code>.</p>
+            </div>
+
+            <div class="help-motion-item">
+              <div class="help-motion-head">
+                <span class="badge turn">turnToPoint</span>
+                <code>chassis.turnToPoint(x, y, timeout, options);</code>
+              </div>
+              <p>Turns the robot on the spot so the front (or rear if reversed) points directly at <code>(x, y)</code>. Displays an aim reticle with dashed sightline on the field.</p>
+            </div>
+
+            <div class="help-motion-item">
+              <div class="help-motion-head">
+                <span class="badge turn">turnToHeading</span>
+                <code>chassis.turnToHeading(theta, timeout, options);</code>
+              </div>
+              <p>Turns in place to an absolute field heading <code>theta</code> [0°–359°] using LemLib angular PID.</p>
+            </div>
+
+            <div class="help-motion-item">
+              <div class="help-motion-head">
+                <span class="badge swing">swingToPoint</span>
+                <code>chassis.swingToPoint(x, y, lockedSide, timeout, options);</code>
+              </div>
+              <p>Locks one wheel side (<strong>LEFT</strong> or <strong>RIGHT</strong>) and powers the other wheel to swing until facing <code>(x, y)</code>. Features <strong>22.5° snapping</strong> and rotation radius axis dragging.</p>
+            </div>
+
+            <div class="help-motion-item">
+              <div class="help-motion-head">
+                <span class="badge swing">swingToHeading</span>
+                <code>chassis.swingToHeading(theta, lockedSide, timeout, options);</code>
+              </div>
+              <p>Swings about the locked wheel until the robot's heading reaches the target angle <code>theta</code>.</p>
+            </div>
+
+            <div class="help-motion-item">
+              <div class="help-motion-head">
+                <span class="badge custom">Custom Code</span>
+                <code>// C++ code snippet</code>
+              </div>
+              <p>Injects subsystem commands directly into the autonomous sequence, such as <code>intake.move(127);</code>, <code>clamp.set_value(true);</code>, or <code>pros::delay(250);</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Canvas Pane -->
+        <div class="help-pane" data-pane="canvas">
+          <h3>Interactive Canvas & Gestures</h3>
+          
+          <div class="help-grid-2">
+            <div class="help-card">
+              <h4>🖐️ Mouse & Touch Dragging</h4>
+              <ul>
+                <li><strong>Start Robot:</strong> Click and drag the green robot icon. It automatically snaps to the perimeter wall per VRC rules.</li>
+                <li><strong>Waypoints:</strong> Click and drag any numbered waypoint on the field to reposition it.</li>
+                <li><strong>Aim Reticle:</strong> For <code>swingToPoint</code> and <code>turnToPoint</code>, drag the target crosshair directly on the field.</li>
+                <li><strong>Selecting:</strong> Click any card in the flowchart or click its point on the canvas to select and highlight it.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>🎯 Swing Radius Dragging & 22.5° Snapping</h4>
+              <ul>
+                <li><strong>Rotation Radius Axis:</strong> When dragging a <code>swingToPoint</code> target reticle, movement is projected along the forward radial ray from the chassis.</li>
+                <li><strong>22.5° Angle Snapping:</strong> The swing angle automatically snaps to standard 22.5° increments (0°, 22.5°, 45°, 67.5°, 90°, etc.).</li>
+                <li><strong>Free-Angle Dragging:</strong> Hold the <kbd>Shift</kbd> key while dragging to bypass snapping for arbitrary angles.</li>
+                <li><strong>Locked Pivot Marker:</strong> Displays a golden dot at the locked wheel pivot coordinate.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="help-card" style="margin-top:12px;">
+            <h4>🎨 Canvas Legend & Visual Indicators</h4>
+            <div class="help-legend-demo">
+              <p><span class="leg start"></span> <strong>Green:</strong> Starting position & heading indicator.</p>
+              <p><span class="leg path"></span> <strong>Blue Line:</strong> Forward path simulated by LemLib differential kinematics.</p>
+              <p><span class="leg" style="background:#f97316"></span> <strong>Orange Line:</strong> Reverse motion path (when <code>forwards: false</code>).</p>
+              <p><span class="leg" style="background:rgba(249,115,22,0.8)"></span> <strong>Carrot Marker:</strong> Dynamic Boomerang pursuit point for <code>moveToPose</code>.</p>
+              <p><span class="leg" style="background:#38bdf8"></span> <strong>Cyan Crosshair:</strong> Aim target and dashed sightline for swing/turn to point.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kinematics Pane -->
+        <div class="help-pane" data-pane="kinematics">
+          <h3>Robot Kinematics & Simulation</h3>
+          <p>
+            The simulator implements an authentic 10ms discrete integration loop modeling real differential-drive physics:
+          </p>
+
+          <div class="help-grid-2">
+            <div class="help-card">
+              <h4>⚙️ Drivetrain Parameters</h4>
+              <ul>
+                <li><strong>Track Width:</strong> Center-to-center distance between left and right drive wheels in inches (typically 10"–13"). Used for angular velocity calculations $\omega = (v_R - v_L) / \text{trackWidth}$.</li>
+                <li><strong>Robot Width & Length:</strong> Physical robot bounding box in inches. Drawn to scale on the field to check game element clearance.</li>
+                <li><strong>Wheel Diameter & RPM:</strong> Used to compute max theoretical forward speed $v_{\max} = \pi \times d \times (\text{RPM}/60)$.</li>
+              </ul>
+            </div>
+
+            <div class="help-card">
+              <h4>📈 Dynamics & Controller Emulation</h4>
+              <ul>
+                <li><strong>Motor Slew Rate:</strong> Simulated acceleration limit with first-order filter time constant ($\tau = 0.07\text{s}$) to avoid unrealistic instantaneous velocity jumps.</li>
+                <li><strong>PID Controllers:</strong> Emulates LemLib's lateral and angular PID controllers with proportional scaling and integral error tracking.</li>
+                <li><strong>Early Exit Range:</strong> Set <code>earlyExitRange</code> in inches to blend sequential movements without stopping to a complete standstill.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- C++ Pane -->
+        <div class="help-pane" data-pane="cpp">
+          <h3>LemLib C++ Code Integration</h3>
+          <p>Export your autonomous routines directly into your PROS project:</p>
+
+          <div class="help-code-block">
+            <pre><code>// In src/main.cpp
+void autonomous() {
+    // 1. Set starting pose on the field
+    chassis.setPose(-60.0, -60.0, 0);
+
+    // 2. Execute planned movements
+    chassis.moveToPoint(-36.0, -36.0, 2000);
+    chassis.waitUntilDone();
+
+    chassis.swingToPoint(20.0, -30.0, lemlib::DriveSide::LEFT, 2000);
+    chassis.waitUntilDone();
+
+    // 3. Custom subsystem actions
+    intake.move(127);
+    pros::delay(300);
+}</code></pre>
+          </div>
+
+          <div class="help-card" style="margin-top:12px;">
+            <h4>Export Modes</h4>
+            <ul>
+              <li><strong>Current routine:</strong> Generates clean code for just the currently active autonomous tab.</li>
+              <li><strong>All routines (switch):</strong> Generates a complete <code>switch (autonSelector)</code> block containing all routines in your project.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Shortcuts Pane -->
+        <div class="help-pane" data-pane="shortcuts">
+          <h3>Keyboard Shortcuts & Fast Controls</h3>
+          
+          <table class="help-table">
+            <thead>
+              <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></td>
+                <td>Undo</td>
+                <td>Reverts the last action creation, deletion, or coordinate drag.</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd> + <kbd>Y</kbd> / <kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></td>
+                <td>Redo</td>
+                <td>Re-applies previously undone changes.</td>
+              </tr>
+              <tr>
+                <td><kbd>Space</kbd></td>
+                <td>Toggle Simulation</td>
+                <td>Starts or stops the live path simulator.</td>
+              </tr>
+              <tr>
+                <td><kbd>Shift</kbd> (hold while dragging)</td>
+                <td>Free Angle Drag</td>
+                <td>Bypasses the 22.5° angle snap for <code>swingToPoint</code>.</td>
+              </tr>
+              <tr>
+                <td><kbd>?</kbd> or <kbd>H</kbd></td>
+                <td>Open Help</td>
+                <td>Opens this documentation window.</td>
+              </tr>
+              <tr>
+                <td><kbd>Esc</kbd></td>
+                <td>Close Modal</td>
+                <td>Closes Help or Clear confirmation modals.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="help-modal-footer">
+        <span class="help-footer-brand">VEX V5 LemLib Path Planner · Override 2026-27</span>
+        <button type="button" id="helpModalDoneBtn" class="primary">Close Help</button>
+      </div>
+    </div>
+  </div>
+  <script src="version.js?v=20260920.k4"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.k1"></script>
-  <script src="app.js?v=20260920.k1"></script>
+  <script src="firebase-config.js?v=20260920.k4"></script>
+  <script src="app.js?v=20260920.k4"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

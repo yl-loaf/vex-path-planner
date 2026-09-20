@@ -13,6 +13,17 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Explicitly serve version.js with no-cache headers so update checks are instant
+app.get('/version.js', (req, res) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Content-Type': 'application/javascript; charset=utf-8'
+  });
+  res.sendFile(path.join(__dirname, 'version.js'));
+});
+
 // Serve static assets from root
 app.use(express.static(__dirname));
 

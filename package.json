@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "lint": "node -c app.js server.js",
-    "build": "echo 'Static site ready'",
+    "lint": "node -c app.js server.js update-version.js",
+    "build": "node update-version.js",
     "start": "node server.js"
   },
   "dependencies": {

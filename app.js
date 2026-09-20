@@ -1693,12 +1693,39 @@
   });
 
 
+  let openHelp = () => {};
+  let closeHelp = () => {};
+
   window.addEventListener("keydown", (e) => {
     const tag = (e.target && e.target.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
       // allow undo in inputs only with extra care — skip when typing
       return;
     }
+
+    if (e.key === "Escape") {
+      const help = document.getElementById("helpModal");
+      if (help && !help.hidden) {
+        closeHelp();
+        return;
+      }
+      closeClearModal();
+      return;
+    }
+
+    if ((e.key === "?" || e.key === "h" || e.key === "H") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      openHelp();
+      return;
+    }
+
+    if (e.key === " ") {
+      e.preventDefault();
+      if (simRunning) stopSim();
+      else startSim();
+      return;
+    }
+
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
     const key = e.key.toLowerCase();
@@ -2149,6 +2176,45 @@
     });
   }
 
+  function wireHelpModal() {
+    const modal = document.getElementById("helpModal");
+    const btnOpen = document.getElementById("btnHelp");
+    const linkDocs = document.getElementById("linkHelpDocs");
+    const btnClose = document.getElementById("helpModalClose");
+    const btnDone = document.getElementById("helpModalDoneBtn");
+    const tabs = document.querySelectorAll(".help-tab");
+    const panes = document.querySelectorAll(".help-pane");
+
+    function selectTab(tabId) {
+      tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === tabId));
+      panes.forEach((p) => p.classList.toggle("active", p.dataset.pane === tabId));
+    }
+
+    openHelp = function (tabId) {
+      if (tabId) selectTab(tabId);
+      if (modal) modal.hidden = false;
+    };
+
+    closeHelp = function () {
+      if (modal) modal.hidden = true;
+    };
+
+    if (btnOpen) btnOpen.onclick = () => openHelp("overview");
+    if (linkDocs) linkDocs.onclick = () => openHelp("overview");
+    if (btnClose) btnClose.onclick = closeHelp;
+    if (btnDone) btnDone.onclick = closeHelp;
+
+    tabs.forEach((t) => {
+      t.onclick = () => selectTab(t.dataset.tab);
+    });
+
+    if (modal) {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeHelp();
+      });
+    }
+  }
+
 
 // -- Init ---------------------------------------------------------
   wireBotSettings();
@@ -2189,6 +2255,7 @@
   // Soft check a few seconds after load (no prompt unless newer)
   setTimeout(() => checkForUpdates(false), 2500);
   wireClearModal();
+  wireHelpModal();
   loadLocal();
   syncPathSelect();
   syncStartInputs();
