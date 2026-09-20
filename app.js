@@ -252,6 +252,15 @@
     return e;
   }
 
+  /**
+   * Snaps an angle in degrees to the nearest 22.5° increment [0, 360).
+   */
+  function snapAngle22_5(deg) {
+    const step = 22.5;
+    const snapped = Math.round(deg / step) * step;
+    return normalizeAngle(snapped);
+  }
+
   function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
   }
@@ -1072,7 +1081,45 @@
         ctx.stroke();
         ctx.setLineDash([]);
 
+        if (a.type === "swingToPoint" && (sel || (typeof drag !== "undefined" && drag && drag.id === a.id))) {
+          // Draw locked wheel pivot
+          const fromPose = (i - 1 === 0 ? pose : (simSegments[i - 2]?.endPose || poses[i - 1])) || pose;
+          const lockLeft = (a.lockedSide || "LEFT") === "LEFT";
+          const h = (bot.trackWidth || 12) / 2;
+          const rad0 = (fromPose.theta * Math.PI) / 180;
+          const pivX = lockLeft ? fromPose.x - h * Math.cos(rad0) : fromPose.x + h * Math.cos(rad0);
+          const pivY = lockLeft ? fromPose.y + h * Math.sin(rad0) : fromPose.y - h * Math.sin(rad0);
+          const cpiv = fieldToCanvas(pivX, pivY);
+
+          // Pivot marker
+          ctx.strokeStyle = "#f59e0b";
+          ctx.fillStyle = "#fbbf24";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(cpiv.cx, cpiv.cy, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#f59e0b";
+          ctx.font = "bold 9px sans-serif";
+          ctx.fillText("Pivot", cpiv.cx + 5, cpiv.cy + 3);
+
+          // Extended rotation radius axis ray
+          const radHeading = (poses[i].theta * Math.PI) / 180;
+          const rayFarX = poses[i].x + Math.sin(radHeading) * 120;
+          const rayFarY = poses[i].y + Math.cos(radHeading) * 120;
+          const cRay = fieldToCanvas(rayFarX, rayFarY);
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath();
+          ctx.moveTo(p.cx, p.cy);
+          ctx.lineTo(cRay.cx, cRay.cy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
         // Target reticle
+        const dist = Math.hypot(a.x - poses[i].x, a.y - poses[i].y);
         ctx.strokeStyle = sel ? "#38bdf8" : "rgba(56, 189, 248, 0.7)";
         ctx.lineWidth = sel ? 2 : 1.2;
         ctx.beginPath();
@@ -1085,7 +1132,10 @@
         if (sel) {
           ctx.fillStyle = "#38bdf8";
           ctx.font = "bold 10px sans-serif";
-          ctx.fillText(`Aim ${i}`, tp.cx + 8, tp.cy - 6);
+          const snapTxt = a.type === "swingToPoint"
+            ? `Aim ${i} (${poses[i].theta.toFixed(1)}° | R:${dist.toFixed(0)}")`
+            : `Aim ${i}`;
+          ctx.fillText(snapTxt, tp.cx + 8, tp.cy - 6);
         }
         ctx.restore();
       }
@@ -1543,11 +1593,11 @@
       const a = actions[i];
       if (!needsPoint(a.type) && !isMove(a.type)) continue;
       const p = fieldToCanvas(a.x, a.y);
-      if (Math.hypot(cx - p.cx, cy - p.cy) < HIT_R) return { kind: "action", id: a.id };
+      if (Math.hypot(cx - p.cx, cy - p.cy) < HIT_R) return { kind: "action", id: a.id, handle: "target" };
       // Also allow clicking on the robot settled pose for turn/swing
       if (poses[i + 1]) {
         const rp = fieldToCanvas(poses[i + 1].x, poses[i + 1].y);
-        if (Math.hypot(cx - rp.cx, cy - rp.cy) < HIT_R) return { kind: "action", id: a.id };
+        if (Math.hypot(cx - rp.cx, cy - rp.cy) < HIT_R) return { kind: "action", id: a.id, handle: "robot" };
       }
     }
     return null;
@@ -1593,8 +1643,46 @@
       markDirty();
       draw();
     } else if (drag.kind === "action") {
-      const a = actions.find((z) => z.id === drag.id);
-      if (a) {
+      const si = actions.findIndex((z) => z.id === drag.id);
+      if (si < 0) return;
+      const a = actions[si];
+
+      if (a.type === "swingToPoint") {
+        const poses = computePoses();
+        const fromPose = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+
+        // Raw angle from start pose of this swing to mouse cursor
+        const rawAngle = angleToPoint(fromPose.x, fromPose.y, x, y);
+        // Snap to 22.5° increment (shift key allows free continuous angle dragging)
+        const snappedTheta = e.shiftKey ? rawAngle : snapAngle22_5(rawAngle);
+
+        // Robot center position after swinging to snappedTheta
+        const endC = applySwing(fromPose.x, fromPose.y, fromPose.theta, snappedTheta, a.lockedSide);
+
+        // Heading unit vector (reverse if backwards)
+        const dirRad = (snappedTheta * Math.PI) / 180;
+        const fwdX = a.forwards === false ? -Math.sin(dirRad) : Math.sin(dirRad);
+        const fwdY = a.forwards === false ? -Math.cos(dirRad) : Math.cos(dirRad);
+
+        // Radial distance along the rotation radius axis:
+        let dist = 18;
+        if (drag.handle === "robot") {
+          dist = Math.max(10, Math.hypot(a.x - endC.x, a.y - endC.y) || 18);
+        } else {
+          const dx = x - endC.x;
+          const dy = y - endC.y;
+          const projDist = dx * fwdX + dy * fwdY;
+          dist = Math.max(10, projDist);
+        }
+
+        a.x = Number((endC.x + fwdX * dist).toFixed(1));
+        a.y = Number((endC.y + fwdY * dist).toFixed(1));
+
+        coordsEl.textContent = `X: ${a.x.toFixed(1)}  Y: ${a.y.toFixed(1)} | θ: ${snappedTheta.toFixed(1)}° (22.5° snap) | Radius: ${dist.toFixed(1)}"`;
+        markDirty();
+        renderFlow();
+        draw();
+      } else {
         a.x = Number(x.toFixed(1));
         a.y = Number(y.toFixed(1));
         markDirty();
