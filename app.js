@@ -1,8 +1,13 @@
-(() => {
-  "use strict";
-
-  // SEE LOCAL: open artifacts/vex-path-planner/index.html for the complete latest planner.
-  // Full app.js (~31KB) with bot settings + swing track-width sim is in the project folder.
-  // Cache-bust: index loads app.js?v=20260920c — after uploading local app.js, hard-refresh.
-  console.warn("[vex-path-planner] Replace this app.js with the local full file from artifacts/vex-path-planner/app.js");
-})();
+(async () => {
+  const n = 6;
+  let b64 = "";
+  for (let i = 0; i < n; i++) {
+    const r = await fetch("app-chunk-" + i + ".txt?v=20260920c");
+    b64 += await r.text();
+  }
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const code = new TextDecoder().decode(bytes);
+  (0, eval)(code);
+})().catch(e => console.error("Failed to load app:", e));
