@@ -31,7 +31,94 @@
     driveRpm: 600,
     defaultMaxSpeed: 127,
     defaultMinSpeed: 0,
+    botImage: null,
+    botImageOrientation: 0, // 0: UP, 90: RIGHT, 180: DOWN, 270: LEFT
+    botImageOpacity: 1.0,
+    botImageShowOutline: true,
+    botImageEnabled: true,
+    botImageNaturalRatio: 1.0,
+    botLockRatio: false,
   };
+
+  const SAMPLE_BOT_VEX_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="chassisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="wheelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+    <linearGradient id="flexGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <rect x="22" y="20" width="156" height="160" rx="6" fill="#0b111e" stroke="#334155" stroke-width="2"/>
+  <rect x="24" y="22" width="18" height="156" rx="2" fill="url(#chassisGrad)" stroke="#64748b" stroke-width="1"/>
+  <rect x="46" y="24" width="14" height="152" rx="2" fill="url(#chassisGrad)" stroke="#475569" stroke-width="1"/>
+  <rect x="140" y="24" width="14" height="152" rx="2" fill="url(#chassisGrad)" stroke="#475569" stroke-width="1"/>
+  <rect x="158" y="22" width="18" height="156" rx="2" fill="url(#chassisGrad)" stroke="#64748b" stroke-width="1"/>
+  <g fill="#0f172a">
+    <circle cx="33" cy="35" r="2.5"/><circle cx="33" cy="55" r="2.5"/><circle cx="33" cy="75" r="2.5"/>
+    <circle cx="33" cy="95" r="2.5"/><circle cx="33" cy="115" r="2.5"/><circle cx="33" cy="135" r="2.5"/><circle cx="33" cy="155" r="2.5"/>
+    <circle cx="167" cy="35" r="2.5"/><circle cx="167" cy="55" r="2.5"/><circle cx="167" cy="75" r="2.5"/>
+    <circle cx="167" cy="95" r="2.5"/><circle cx="167" cy="115" r="2.5"/><circle cx="167" cy="135" r="2.5"/><circle cx="167" cy="155" r="2.5"/>
+  </g>
+  <rect x="60" y="32" width="80" height="14" rx="2" fill="url(#chassisGrad)" stroke="#475569" stroke-width="1"/>
+  <rect x="60" y="154" width="80" height="14" rx="2" fill="url(#chassisGrad)" stroke="#475569" stroke-width="1"/>
+  <!-- Left Wheels -->
+  <rect x="6" y="28" width="16" height="38" rx="4" fill="url(#wheelGrad)" stroke="#64748b" stroke-width="1"/>
+  <rect x="9" y="32" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="9" y="44" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="9" y="56" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="6" y="81" width="16" height="38" rx="4" fill="url(#wheelGrad)" stroke="#64748b" stroke-width="1"/>
+  <rect x="9" y="85" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="9" y="97" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="9" y="109" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="6" y="134" width="16" height="38" rx="4" fill="url(#wheelGrad)" stroke="#64748b" stroke-width="1"/>
+  <rect x="9" y="138" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="9" y="150" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="9" y="162" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <!-- Right Wheels -->
+  <rect x="178" y="28" width="16" height="38" rx="4" fill="url(#wheelGrad)" stroke="#64748b" stroke-width="1"/>
+  <rect x="181" y="32" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="181" y="44" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="181" y="56" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="178" y="81" width="16" height="38" rx="4" fill="url(#wheelGrad)" stroke="#64748b" stroke-width="1"/>
+  <rect x="181" y="85" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="181" y="97" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="181" y="109" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="178" y="134" width="16" height="38" rx="4" fill="url(#wheelGrad)" stroke="#64748b" stroke-width="1"/>
+  <rect x="181" y="138" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="181" y="150" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <rect x="181" y="162" width="10" height="6" rx="1" fill="#38bdf8"/>
+  <!-- Front Intake Rollers -->
+  <rect x="62" y="14" width="76" height="12" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+  <rect x="70" y="10" width="18" height="20" rx="3" fill="url(#flexGrad)" stroke="#34d399" stroke-width="1"/>
+  <rect x="112" y="10" width="18" height="20" rx="3" fill="url(#flexGrad)" stroke="#34d399" stroke-width="1"/>
+  <line x1="62" y1="20" x2="138" y2="20" stroke="#cbd5e1" stroke-width="2"/>
+  <!-- V5 Brain -->
+  <rect x="66" y="60" width="68" height="46" rx="4" fill="#18181b" stroke="#3f3f46" stroke-width="1.5"/>
+  <rect x="72" y="66" width="46" height="34" rx="2" fill="#09090b" stroke="#22c55e" stroke-width="1"/>
+  <text x="76" y="80" font-family="monospace" font-size="7" fill="#22c55e" font-weight="bold">V5 LEMLIB</text>
+  <text x="76" y="92" font-family="monospace" font-size="6" fill="#38bdf8">14.0x14.0&quot;</text>
+  <circle cx="125" cy="83" r="4" fill="#22c55e"/>
+  <!-- V5 Battery -->
+  <rect x="66" y="116" width="68" height="26" rx="3" fill="#27272a" stroke="#52525b" stroke-width="1"/>
+  <text x="82" y="132" font-family="sans-serif" font-size="8" font-weight="bold" fill="#a1a1aa">V5 BATTERY</text>
+  <!-- Tanks -->
+  <rect x="48" y="56" width="10" height="50" rx="4" fill="#94a3b8" stroke="#475569" stroke-width="1"/>
+  <rect x="142" y="56" width="10" height="50" rx="4" fill="#94a3b8" stroke="#475569" stroke-width="1"/>
+  <!-- Front Marker -->
+  <polygon points="100,26 88,42 112,42" fill="#f59e0b" stroke="#d97706" stroke-width="1"/>
+  <text x="100" y="52" font-family="sans-serif" font-size="8" font-weight="bold" fill="#f59e0b" text-anchor="middle">FRONT ↑</text>
+</svg>`;
+
+  let botImgElement = new Image();
+  let botImgReady = false;
 
   // -- DOM ----------------------------------------------------------
   const canvas = document.getElementById("field");
@@ -221,6 +308,11 @@
   function headingRad(deg) {
     // Convert LemLib heading (0°=+Y, CW+) to canvas math angle for drawing
     return ((90 - deg) * Math.PI) / 180;
+  }
+
+  function screenHeadingRad(deg) {
+    // Canvas context rotation: 0° heading (North) aligns local +X to point UP (screen -Y)
+    return ((deg - 90) * Math.PI) / 180;
   }
 
   /** Normalize degrees to [0, 360) */
@@ -905,39 +997,79 @@
   function drawRobot(x, y, thetaDeg, color, alpha = 1, selected = false) {
     const { cx, cy } = fieldToCanvas(x, y);
     const scale = canvas.width / FIELD_IN;
-    const w = bot.robotW * scale;
-    const l = bot.robotL * scale;
-    const rad = headingRad(thetaDeg);
+    const w = bot.robotW * scale; // Lateral width (in canvas px)
+    const l = bot.robotL * scale; // Longitudinal length (in canvas px)
+    const rad = screenHeadingRad(thetaDeg);
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(cx, cy);
     ctx.rotate(rad);
 
-    if (selected) {
-      ctx.strokeStyle = "#60a5fa";
-      ctx.lineWidth = 3;
+    const hasImg = bot.botImage && bot.botImageEnabled !== false && botImgReady && botImgElement.complete && (botImgElement.naturalWidth > 0 || botImgElement.width > 0);
+
+    if (hasImg) {
+      const photoRot = Number(bot.botImageOrientation) || 0;
+      const rotRad = ((90 - photoRot) * Math.PI) / 180;
+      const isUpDown = (photoRot === 0 || photoRot === 180);
+      const drawW = isUpDown ? w : l;
+      const drawH = isUpDown ? l : w;
+      const imgOpacity = (bot.botImageOpacity != null ? bot.botImageOpacity : 1.0);
+
+      ctx.save();
+      ctx.globalAlpha = alpha * imgOpacity;
+      ctx.rotate(rotRad);
+      try {
+        ctx.drawImage(botImgElement, -drawW / 2, -drawH / 2, drawW, drawH);
+      } catch (_) {}
+      ctx.restore();
+
+      if (bot.botImageShowOutline !== false) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = selected ? 2.5 : 1.5;
+        ctx.beginPath();
+        drawRoundedRect(ctx, -l / 2, -w / 2, l, w, 4);
+        ctx.stroke();
+
+        // Front bumper indicator chevron
+        ctx.fillStyle = "#fbbf24";
+        ctx.beginPath();
+        ctx.moveTo(l * 0.48, 0);
+        ctx.lineTo(l * 0.32, -w * 0.22);
+        ctx.lineTo(l * 0.36, 0);
+        ctx.lineTo(l * 0.32, w * 0.22);
+        ctx.closePath();
+        ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = color;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      drawRoundedRect(ctx, -w / 2 - 3, -l / 2 - 3, w + 6, l + 6, 6);
+      drawRoundedRect(ctx, -l / 2, -w / 2, l, w, 4);
+      ctx.fill();
       ctx.stroke();
+
+      ctx.fillStyle = "#fbbf24";
+      ctx.beginPath();
+      ctx.moveTo(l * 0.45, 0);
+      ctx.lineTo(l * 0.15, -w * 0.28);
+      ctx.lineTo(l * 0.15, w * 0.28);
+      ctx.closePath();
+      ctx.fill();
     }
 
-    ctx.fillStyle = color;
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    drawRoundedRect(ctx, -w / 2, -l / 2, w, l, 4);
-    ctx.fill();
-    ctx.stroke();
+    if (selected) {
+      ctx.strokeStyle = "#60a5fa";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      drawRoundedRect(ctx, -l / 2 - 4, -w / 2 - 4, l + 8, w + 8, 6);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
-    ctx.fillStyle = "#fbbf24";
-    ctx.beginPath();
-    ctx.moveTo(l * 0.42, 0);
-    ctx.lineTo(l * 0.12, -w * 0.26);
-    ctx.lineTo(l * 0.12, w * 0.26);
-    ctx.closePath();
-    ctx.fill();
-
+    // Tracking origin center
     ctx.fillStyle = "#fff";
     ctx.beginPath();
     ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
@@ -947,7 +1079,7 @@
 
   function drawEndArrow(x, y, thetaDeg) {
     const { cx, cy } = fieldToCanvas(x, y);
-    const rad = headingRad(thetaDeg);
+    const rad = screenHeadingRad(thetaDeg);
     const len = 26;
     ctx.save();
     ctx.translate(cx, cy);
@@ -1202,14 +1334,14 @@
       // Real-time speed vector
       if (Math.abs(p.vLin || 0) > 1) {
         const cp = fieldToCanvas(p.x, p.y);
-        const rad = headingRad(p.theta);
+        const sRad = screenHeadingRad(p.theta);
         const dir = p.vLin >= 0 ? 1 : -1;
         const arrowLen = Math.min(32, Math.abs(p.vLin) * 0.35);
         ctx.strokeStyle = "#38bdf8";
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(cp.cx, cp.cy);
-        ctx.lineTo(cp.cx + Math.cos(rad) * arrowLen * dir, cp.cy - Math.sin(rad) * arrowLen * dir);
+        ctx.lineTo(cp.cx + Math.cos(sRad) * arrowLen * dir, cp.cy + Math.sin(sRad) * arrowLen * dir);
         ctx.stroke();
       }
     }
@@ -1241,149 +1373,297 @@
       .replace(/'/g, "&apos;");
   }
 
+  function getActionDetails(act, i) {
+    if (!act) return { title: "End of Routine", sub: "chassis.waitUntilDone()", type: "end" };
+    const stepNum = i + 1;
+    if (act.type === "custom") {
+      let codeSnip = "";
+      if (act.customCode) {
+        const lines = act.customCode.split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0 && !l.startsWith("//"));
+        if (lines.length > 0) codeSnip = lines[0];
+      }
+      return {
+        title: `${stepNum}. Custom Code`,
+        sub: codeSnip ? codeSnip.slice(0, 22) : (act.label || "Subsystem task"),
+        type: "custom",
+        async: !!act.async
+      };
+    }
+    const coords = (act.x != null && act.y != null) ? `(${act.x}", ${act.y}")` : "";
+    return {
+      title: `${stepNum}. ${act.type}`,
+      sub: act.label ? act.label.slice(0, 20) : coords,
+      type: act.type,
+      async: !!act.async
+    };
+  }
+
   function generateMultitaskFlowchartSvg(a, idx, isModal = false) {
     const uid = (a.id || ("act_" + idx)) + (isModal ? "_m" : "");
     const prevAct = idx > 0 ? actions[idx - 1] : null;
     const nextAct = idx < actions.length - 1 ? actions[idx + 1] : null;
+    const afterNextAct = idx < actions.length - 2 ? actions[idx + 2] : null;
 
-    const startLabel = prevAct
-      ? `Step ${idx}: ${prevAct.type}`
-      : "Step 0: Routine Start";
+    // We build the seamless branching flow:
+    // Left Track: Step N (e.g. Move to point or Previous action)
+    // Fork into parallel execution:
+    //   Left: Custom Code (Subsystem / Sub-task)
+    //   Right: Move to point (Concurrent chassis movement)
+    // Merging into sequential step:
+    //   Unified convergence -> Swing to point / Subsequent step
 
-    let customSnippet = "Custom C++ Snippet";
+    let stepA, stepB, stepC, stepD;
     if (a.type === "custom") {
-      const lines = (a.customCode || "")
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0 && !l.startsWith("//"));
-      if (lines.length > 0) {
-        customSnippet = lines[0];
-      } else if (a.customCode && a.customCode.trim()) {
-        customSnippet = a.customCode.trim().split("\n")[0];
-      }
+      stepA = prevAct ? getActionDetails(prevAct, idx - 1) : { title: "Step 0. Start", sub: "Autonomous Entry", type: "start" };
+      stepB = getActionDetails(a, idx); // Custom code
+      stepC = nextAct ? getActionDetails(nextAct, idx + 1) : { title: `Step ${idx + 2}. Parallel Motion`, sub: "Chassis Drive Thread", type: "moveToPoint" };
+      stepD = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: "Next Sequential Step", sub: "chassis.waitUntilDone();", type: "swingToPoint" };
     } else {
-      customSnippet = "pros::Task Subsystem";
-    }
-    if (customSnippet.length > 22) {
-      customSnippet = customSnippet.slice(0, 20) + "…";
-    }
-
-    let chassisMotionLabel = "Drive Motion Thread";
-    if (a.type === "custom") {
-      if (nextAct && isMove(nextAct.type)) {
-        chassisMotionLabel = `Step ${idx + 2}: ${nextAct.type}`;
+      stepA = getActionDetails(a, idx); // e.g. move to point
+      if (nextAct && nextAct.type === "custom") {
+        stepB = getActionDetails(nextAct, idx + 1);
+        stepC = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: `Step ${idx + 3}. Parallel Motion`, sub: "Chassis Drive Thread", type: "moveToPoint" };
+        const stepAfter = idx < actions.length - 3 ? actions[idx + 3] : null;
+        stepD = stepAfter ? getActionDetails(stepAfter, idx + 3) : { title: "Next Sequential Step", sub: "chassis.waitUntilDone();", type: "swingToPoint" };
       } else {
-        chassisMotionLabel = "Parallel Chassis Move";
+        stepB = { title: `${idx + 2}. Custom Code`, sub: nextAct ? (nextAct.label || "Subsystem task") : "subsystem.action()", type: "custom" };
+        stepC = nextAct ? getActionDetails(nextAct, idx + 1) : { title: `${idx + 2}. moveToPoint`, sub: "Chassis Motion Track", type: "moveToPoint" };
+        stepD = afterNextAct ? getActionDetails(afterNextAct, idx + 2) : { title: `${idx + 3}. swingToPoint`, sub: "chassis.waitUntilDone()", type: "swingToPoint" };
       }
-    } else {
-      chassisMotionLabel = `Step ${idx + 1}: ${a.type}`;
-    }
-    if (chassisMotionLabel.length > 22) {
-      chassisMotionLabel = chassisMotionLabel.slice(0, 20) + "…";
     }
 
-    const nextStepLabel = nextAct
-      ? `Step ${idx + 2}: ${nextAct.type}`
-      : "Routine Completed";
+    const w = 340;
+    const h = 420;
 
     return `
-      <svg class="flowchart-svg" viewBox="0 0 340 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Multitask Concurrency Flowchart">
+      <svg class="flowchart-svg" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Seamless Multitask Concurrency Flowchart">
         <defs>
-          <marker id="fc-arr-neutral-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 1 L 9 5 L 0 9 z" fill="#94a3b8"/>
+          <marker id="fc-arr-cyan-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#38bdf8"/>
           </marker>
-          <marker id="fc-arr-async-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <marker id="fc-arr-purple-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M 0 1 L 9 5 L 0 9 z" fill="#c084fc"/>
           </marker>
-          <marker id="fc-arr-main-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <marker id="fc-arr-blue-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M 0 1 L 9 5 L 0 9 z" fill="#60a5fa"/>
           </marker>
-          <marker id="fc-arr-join-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <marker id="fc-arr-emerald-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399"/>
+          </marker>
+          <linearGradient id="fc-grad-left-${uid}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#38bdf8" />
+            <stop offset="100%" stop-color="#c084fc" />
+          </linearGradient>
+          <linearGradient id="fc-grad-right-${uid}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#38bdf8" />
+            <stop offset="100%" stop-color="#60a5fa" />
+          </linearGradient>
+        </defs>
+
+        <!-- SUBTLE GRID BACKGROUND ACCENT -->
+        <rect x="0" y="0" width="${w}" height="${h}" fill="none" rx="8" />
+
+        <!-- 1. TOP ANCHOR NODE: STEP A (e.g. Move to point) -->
+        <g id="fc-node-a-${uid}">
+          <rect x="25" y="16" width="135" height="42" rx="8" fill="#172554" stroke="#38bdf8" stroke-width="1.8" />
+          <text x="92" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#f0f9ff">${escapeXml(stepA.title)}</text>
+          <text x="92" y="48" text-anchor="middle" font-size="8" fill="#7dd3fc">${escapeXml(stepA.sub || "chassis motion")}</text>
+        </g>
+
+        <!-- STREAMLINED SEAMLESS BRANCH CONNECTOR: Top Step A -> Left (Custom Code) & Right (Move To Point) -->
+        <!-- Direct vertical drop from step A to step B (custom code) -->
+        <path d="M 92 58 L 92 128" stroke="#c084fc" stroke-width="2" fill="none" marker-end="url(#fc-arr-purple-${uid})" />
+        <text x="86" y="94" text-anchor="end" font-size="7.5" font-weight="700" fill="#c084fc">ASYNC FORK ↓</text>
+
+        <!-- Smooth S-curve branch from step A across to step C (Right, Move to point) -->
+        <path d="M 125 58 C 125 90, 245 88, 245 128" stroke="#60a5fa" stroke-width="2" stroke-dasharray="3,3" fill="none" marker-end="url(#fc-arr-blue-${uid})" />
+        <text x="180" y="86" text-anchor="middle" font-size="7.5" font-weight="700" fill="#93c5fd">CONCURRENT ↓</text>
+
+        <!-- 2. PARALLEL BRANCHES (LEFT: CUSTOM CODE | RIGHT: MOVE TO POINT) -->
+        <!-- LEFT: Custom Code (Subsystem Thread) -->
+        <g id="fc-node-b-${uid}">
+          <rect x="25" y="132" width="135" height="44" rx="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="2" />
+          <rect x="25" y="132" width="135" height="15" rx="8" fill="rgba(168,85,247,0.2)" />
+          <text x="32" y="143" font-size="7.5" font-weight="800" fill="#d8b4fe">⚡ THREAD 1 · SUBSYSTEM</text>
+          <text x="92" y="159" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fae8ff">${escapeXml(stepB.title)}</text>
+          <text x="92" y="170" class="fc-custom-snip" text-anchor="middle" font-size="7.5" font-family="monospace" fill="#c084fc">${escapeXml(stepB.sub)}</text>
+        </g>
+
+        <!-- RIGHT: Move to point (Chassis Thread) -->
+        <g id="fc-node-c-${uid}">
+          <rect x="180" y="132" width="135" height="44" rx="8" fill="#0f172a" stroke="#3b82f6" stroke-width="2" />
+          <rect x="180" y="132" width="135" height="15" rx="8" fill="rgba(59,130,246,0.2)" />
+          <text x="187" y="143" font-size="7.5" font-weight="800" fill="#93c5fd">🤖 THREAD 2 · CHASSIS</text>
+          <text x="247" y="159" text-anchor="middle" font-size="9.5" font-weight="700" fill="#eff6ff">${escapeXml(stepC.title)}</text>
+          <text x="247" y="170" text-anchor="middle" font-size="7.5" fill="#60a5fa">${escapeXml(stepC.sub || "chassis.moveToPoint()")}</text>
+        </g>
+
+        <!-- SUB-STEP CONNECTIONS IN PARALLEL -->
+        <!-- Left: downward continuation to completion of task -->
+        <path d="M 92 176 L 92 232" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-purple-${uid})" />
+        <!-- Right: downward continuation representing drive execution -->
+        <path d="M 247 176 L 247 232" stroke="#60a5fa" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-blue-${uid})" />
+
+        <!-- SYNCHRONIZATION BAR / WAITING POINT -->
+        <!-- Left Sub-badge -->
+        <rect x="35" y="235" width="115" height="24" rx="6" fill="#2e1065" stroke="#7e22ce" stroke-width="1.2" />
+        <text x="92" y="250" text-anchor="middle" font-size="7.5" font-weight="600" fill="#e9d5ff">Subsystem Ready</text>
+
+        <!-- Right Sub-badge -->
+        <rect x="190" y="235" width="115" height="24" rx="6" fill="#1e3a8a" stroke="#2563eb" stroke-width="1.2" />
+        <text x="247" y="250" text-anchor="middle" font-size="7.5" font-weight="600" fill="#bfdbfe">Chassis At Target</text>
+
+        <!-- 3. SEAMLESS RE-JOIN CONVERGENCE (CHASSIS.WAITUNTILDONE) -->
+        <!-- Left track curve inward to center sync -->
+        <path d="M 92 260 C 92 284, 150 286, 160 298" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
+        <!-- Right track curve inward to center sync -->
+        <path d="M 247 260 C 247 284, 190 286, 180 298" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
+
+        <!-- Unified Convergence Sync Node -->
+        <g id="fc-node-sync-${uid}">
+          <rect x="55" y="302" width="230" height="34" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.8" />
+          <text x="170" y="317" text-anchor="middle" font-size="9" font-weight="800" fill="#d1fae5">⚡ SYNC &amp; RE-JOIN POINT</text>
+          <text x="170" y="329" text-anchor="middle" font-size="7.5" font-family="monospace" fill="#a7f3d0">chassis.waitUntilDone();</text>
+        </g>
+
+        <!-- Straight arrow down to next sequential step (e.g. Swing to point) -->
+        <path d="M 170 336 L 170 366" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-emerald-${uid})" />
+
+        <!-- 4. STEP D (e.g. Swing to point) -->
+        <g id="fc-node-d-${uid}">
+          <rect x="25" y="368" width="290" height="38" rx="8" fill="#3b0764" stroke="#a855f7" stroke-width="1.8" />
+          <text x="170" y="385" text-anchor="middle" font-size="10" font-weight="700" fill="#fdf4ff">${escapeXml(stepD.title)}</text>
+          <text x="170" y="398" text-anchor="middle" font-size="8" fill="#d8b4fe">${escapeXml(stepD.sub || "sequential execution")}</text>
+        </g>
+      </svg>
+    `;
+  }
+
+  function generateRoutineFlowchartSvg() {
+    if (!actions || actions.length === 0) {
+      return `
+        <div style="padding:40px 20px;text-align:center;color:#94a3b8;">
+          <p style="margin-bottom:8px;font-size:0.9rem;">No actions in this routine yet.</p>
+          <span style="font-size:0.75rem;">Click <strong>+ Add</strong> in the sidebar to build your path.</span>
+        </div>`;
+    }
+
+    const items = [];
+    let i = 0;
+    while (i < actions.length) {
+      const cur = actions[i];
+      if (cur.async && i < actions.length - 1) {
+        // Parallel pair
+        items.push({
+          type: "parallel",
+          actA: cur,
+          idxA: i,
+          actB: actions[i + 1],
+          idxB: i + 1
+        });
+        i += 2;
+      } else {
+        items.push({
+          type: "single",
+          act: cur,
+          idx: i
+        });
+        i++;
+      }
+    }
+
+    const rowH = 76;
+    const totalH = 60 + items.length * rowH + 60;
+    const w = 420;
+
+    let svgRows = "";
+    let curY = 60;
+
+    // Start node
+    svgRows += `
+      <g>
+        <rect x="145" y="12" width="130" height="30" rx="8" fill="#166534" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="210" y="27" text-anchor="middle" font-size="9.5" font-weight="800" fill="#dcfce7">ROUTINE START</text>
+        <text x="210" y="37" text-anchor="middle" font-size="7.5" fill="#86efac">Init Chassis &amp; Sensors</text>
+        <path d="M 210 42 L 210 60" stroke="#86efac" stroke-width="1.5" fill="none" marker-end="url(#fc-arr-emerald-all)"/>
+      </g>
+    `;
+
+    items.forEach((item, itemIdx) => {
+      const isLast = itemIdx === items.length - 1;
+      const nextY = curY + rowH;
+
+      if (item.type === "single") {
+        const details = getActionDetails(item.act, item.idx);
+        const strokeColor = item.act.type === "custom" ? "#06b6d4" : item.act.type.startsWith("swing") ? "#a855f7" : "#3b82f6";
+        const bgColor = item.act.type === "custom" ? "#083344" : item.act.type.startsWith("swing") ? "#3b0764" : "#172554";
+        svgRows += `
+          <g>
+            <rect x="85" y="${curY}" width="250" height="42" rx="8" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.8"/>
+            <text x="210" y="${curY + 18}" text-anchor="middle" font-size="10" font-weight="700" fill="#f8fafc">${escapeXml(details.title)}</text>
+            <text x="210" y="${curY + 32}" text-anchor="middle" font-size="8" fill="#94a3b8">${escapeXml(details.sub)}</text>
+            ${!isLast ? `<path d="M 210 ${curY + 42} L 210 ${nextY}" stroke="#94a3b8" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-neutral-all)"/>` : ""}
+          </g>
+        `;
+      } else {
+        // Parallel pair (multitask)
+        const detA = getActionDetails(item.actA, item.idxA);
+        const detB = getActionDetails(item.actB, item.idxB);
+        svgRows += `
+          <g>
+            <!-- Parallel bracket / fork indicator -->
+            <path d="M 210 ${curY - 14} C 210 ${curY - 4}, 110 ${curY - 4}, 110 ${curY}" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-purple-all)"/>
+            <path d="M 210 ${curY - 14} C 210 ${curY - 4}, 310 ${curY - 4}, 310 ${curY}" stroke="#60a5fa" stroke-width="1.8" stroke-dasharray="3,3" fill="none" marker-end="url(#fc-arr-blue-all)"/>
+            <text x="210" y="${curY - 6}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#c084fc">⚡ PARALLEL MULTITASK ⚡</text>
+
+            <!-- Left track card (Custom/Subsystem) -->
+            <rect x="25" y="${curY}" width="170" height="44" rx="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="1.8"/>
+            <text x="110" y="${curY + 18}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fae8ff">${escapeXml(detA.title)}</text>
+            <text x="110" y="${curY + 32}" text-anchor="middle" font-size="7.5" fill="#d8b4fe">${escapeXml(detA.sub)}</text>
+
+            <!-- Right track card (Chassis drive) -->
+            <rect x="225" y="${curY}" width="170" height="44" rx="8" fill="#0f172a" stroke="#3b82f6" stroke-width="1.8"/>
+            <text x="310" y="${curY + 18}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#eff6ff">${escapeXml(detB.title)}</text>
+            <text x="310" y="${curY + 32}" text-anchor="middle" font-size="7.5" fill="#93c5fd">${escapeXml(detB.sub)}</text>
+
+            <!-- Re-join convergence -->
+            <path d="M 110 ${curY + 44} C 110 ${curY + 56}, 210 ${curY + 56}, 210 ${nextY}" stroke="#34d399" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-emerald-all)"/>
+            <path d="M 310 ${curY + 44} C 310 ${curY + 56}, 210 ${curY + 56}, 210 ${nextY}" stroke="#34d399" stroke-width="1.8" fill="none"/>
+          </g>
+        `;
+      }
+
+      curY = nextY;
+    });
+
+    // End node
+    svgRows += `
+      <g>
+        <rect x="145" y="${curY}" width="130" height="30" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+        <text x="210" y="${curY + 16}" text-anchor="middle" font-size="9.5" font-weight="800" fill="#f1f5f9">ROUTINE COMPLETE</text>
+        <text x="210" y="${curY + 26}" text-anchor="middle" font-size="7.5" fill="#94a3b8">Chassis Stopped &amp; Stable</text>
+      </g>
+    `;
+
+    return `
+      <svg class="flowchart-svg" viewBox="0 0 ${w} ${totalH}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Entire Routine Flowchart">
+        <defs>
+          <marker id="fc-arr-neutral-all" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#94a3b8"/>
+          </marker>
+          <marker id="fc-arr-purple-all" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#c084fc"/>
+          </marker>
+          <marker id="fc-arr-blue-all" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#60a5fa"/>
+          </marker>
+          <marker id="fc-arr-emerald-all" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399"/>
           </marker>
         </defs>
-
-        <!-- 1. START NODE (Capsule / Rounded Rect matching image) -->
-        <rect x="95" y="10" width="150" height="32" rx="9" fill="#1e293b" stroke="#64748b" stroke-width="1.8"/>
-        <text x="170" y="24" text-anchor="middle" font-size="10.5" font-weight="800" fill="#f8fafc">START</text>
-        <text x="170" y="36" text-anchor="middle" font-size="8" fill="#94a3b8">${escapeXml(startLabel)}</text>
-
-        <!-- Downward connector to decision point -->
-        <path d="M 170 42 L 170 76" stroke="#94a3b8" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-neutral-${uid})"/>
-        <text x="170" y="60" text-anchor="middle" font-size="8" font-weight="700" fill="#94a3b8" letter-spacing="0.5">DECISION POINT</text>
-
-        <!-- 2. DECISION DIAMOND (Condition Met? / Task Fork) -->
-        <polygon points="170,76 240,102 170,128 100,102" fill="#3b0764" stroke="#c084fc" stroke-width="2"/>
-        <text x="170" y="98" text-anchor="middle" font-size="9.5" font-weight="800" fill="#f5d0fe">ASYNC FORK?</text>
-        <text x="170" y="112" text-anchor="middle" font-size="8" fill="#d8b4fe">Multitask / Task</text>
-
-        <!-- 3. BRANCH CURVES (YES & NO) -->
-        <!-- Branch YES (Left, Async Subsystem Task) -->
-        <text x="75" y="114" text-anchor="middle" font-size="9" font-weight="800" fill="#c084fc">YES (ASYNC)</text>
-        <path d="M 100 102 C 60 102, 75 124, 75 146" stroke="#c084fc" stroke-width="2" fill="none" marker-end="url(#fc-arr-async-${uid})"/>
-
-        <!-- Branch NO (Right, Main Chassis Motion) -->
-        <text x="265" y="114" text-anchor="middle" font-size="9" font-weight="800" fill="#60a5fa">NO (MAIN)</text>
-        <path d="M 240 102 C 280 102, 265 124, 265 146" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#fc-arr-main-${uid})"/>
-
-        <!-- 4. LEFT BRANCH: PROCESS A & SUB-TASKS -->
-        <rect x="10" y="148" width="130" height="32" rx="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="1.8"/>
-        <text x="75" y="163" text-anchor="middle" font-size="9.5" font-weight="700" fill="#e9d5ff">PROCESS A</text>
-        <text x="75" y="174" text-anchor="middle" font-size="8" fill="#c084fc">Subsystem Task</text>
-
-        <path d="M 75 180 L 75 202" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-async-${uid})"/>
-
-        <!-- Sub-task 1 (Oval) -->
-        <ellipse cx="75" cy="222" rx="63" ry="18" fill="#2e1065" stroke="#c084fc" stroke-width="1.8"/>
-        <text x="75" y="217" text-anchor="middle" font-size="9" font-weight="700" fill="#fae8ff">SUB-TASK 1</text>
-        <text x="75" y="229" class="fc-custom-snip" text-anchor="middle" font-size="8" font-family="monospace" fill="#d8b4fe">${escapeXml(customSnippet)}</text>
-
-        <path d="M 75 240 L 75 262" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-async-${uid})"/>
-
-        <!-- Sub-task 2 (Oval) -->
-        <ellipse cx="75" cy="282" rx="63" ry="18" fill="#2e1065" stroke="#c084fc" stroke-width="1.8"/>
-        <text x="75" y="277" text-anchor="middle" font-size="9" font-weight="700" fill="#fae8ff">SUB-TASK 2</text>
-        <text x="75" y="289" text-anchor="middle" font-size="8" fill="#c084fc">Async Execution / Delay</text>
-
-        <!-- 5. RIGHT BRANCH: PROCESS B & SUB-TASKS -->
-        <rect x="200" y="148" width="130" height="32" rx="8" fill="#172554" stroke="#3b82f6" stroke-width="1.8"/>
-        <text x="265" y="163" text-anchor="middle" font-size="9.5" font-weight="700" fill="#dbeafe">PROCESS B</text>
-        <text x="265" y="174" text-anchor="middle" font-size="8" fill="#93c5fd">Chassis Motion</text>
-
-        <path d="M 265 180 L 265 202" stroke="#60a5fa" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-main-${uid})"/>
-
-        <!-- Sub-task 3 (Oval) -->
-        <ellipse cx="265" cy="222" rx="63" ry="18" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.8"/>
-        <text x="265" y="217" text-anchor="middle" font-size="9" font-weight="700" fill="#eff6ff">SUB-TASK 3</text>
-        <text x="265" y="229" text-anchor="middle" font-size="8" fill="#93c5fd">${escapeXml(chassisMotionLabel)}</text>
-
-        <path d="M 265 240 L 265 262" stroke="#60a5fa" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-main-${uid})"/>
-
-        <!-- Sub-task 4 (Oval) -->
-        <ellipse cx="265" cy="282" rx="63" ry="18" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.8"/>
-        <text x="265" y="277" text-anchor="middle" font-size="9" font-weight="700" fill="#eff6ff">SUB-TASK 4</text>
-        <text x="265" y="289" text-anchor="middle" font-size="8" fill="#93c5fd">Odometry Tracking</text>
-
-        <!-- 6. LINKS BACK INTO 1 TASK (THE RE-JOIN CONVERGENCE) -->
-        <!-- Left curve inward into unified task -->
-        <path d="M 75 300 C 75 334, 120 338, 136 352" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-join-${uid})"/>
-
-        <!-- Right curve inward into unified task -->
-        <path d="M 265 300 C 265 334, 220 338, 204 352" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-join-${uid})"/>
-
-        <!-- UNIFIED JOIN NODE -->
-        <rect x="65" y="354" width="210" height="40" rx="10" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
-        <text x="170" y="371" text-anchor="middle" font-size="10" font-weight="800" fill="#d1fae5">UNIFIED TASK (RE-JOIN)</text>
-        <text x="170" y="386" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#a7f3d0">chassis.waitUntilDone();</text>
-
-        <!-- Arrow down to next routine step -->
-        <path d="M 170 394 L 170 420" stroke="#94a3b8" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-neutral-${uid})"/>
-        <text x="170" y="411" text-anchor="middle" font-size="7.5" fill="#94a3b8">SYNCHRONIZED</text>
-
-        <!-- 7. NEXT ACTION CAPSULE -->
-        <rect x="85" y="422" width="170" height="30" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.8"/>
-        <text x="170" y="437" text-anchor="middle" font-size="9.5" font-weight="700" fill="#f1f5f9">NEXT ACTION</text>
-        <text x="170" y="447" text-anchor="middle" font-size="8" fill="#94a3b8">${escapeXml(nextStepLabel)}</text>
+        ${svgRows}
       </svg>
     `;
   }
@@ -1393,9 +1673,9 @@
       <div class="flowchart-panel">
         <div class="flowchart-header">
           <span class="flowchart-title">
-            <span>⚡</span> Multitask Flowchart (Fork &amp; Re-join)
+            <span>⚡</span> Seamless Multitask Flowchart
           </span>
-          <button type="button" class="btn-flowchart-expand" data-act="enlarge-flowchart" data-idx="${idx}" title="Enlarge diagram in dialog">
+          <button type="button" class="btn-flowchart-expand" data-act="enlarge-flowchart" data-idx="${idx}" title="Enlarge seamless diagram in dialog">
             🔍 Enlarge
           </button>
         </div>
@@ -1547,9 +1827,15 @@
               <label>Δθ <input type="number" data-f="offsetTheta" step="1" value="${a.offsetTheta}"/></label>
             </div>
           </div>
-          <label class="wide" style="margin-top:4px">Label (optional)
-            <input type="text" data-f="label" value="${escapeHtml(a.label)}" placeholder="e.g. intake stack"/>
-          </label>`;
+          <div class="move-comment-row">
+            <label class="move-comment-label">
+              <span class="move-comment-header">
+                <span class="move-comment-tag">💬 Move Comment (C++ code)</span>
+                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(a.label)}` : "e.g. // rush goal"}</span>
+              </span>
+              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label)}" placeholder="e.g. intake stack or rush mogo"/>
+            </label>
+          </div>`;
       }
 
       card.innerHTML = `
@@ -1557,7 +1843,7 @@
           <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type}</span>
           ${a.async ? '<span class="badge multitask-badge" title="Multitasking / Async: Non-blocking action running concurrently with the next step">⚡ MULTITASK</span>' : ""}
           ${a.forwards === false && a.type !== "custom" ? '<span class="badge reverse">REV</span>' : ""}
-          <span class="hint-inline">${a.label ? escapeHtml(a.label) : ""}</span>
+          <span class="hint-inline ${a.label ? "has-comment" : ""}">${a.label ? `// ${escapeHtml(a.label)}` : ""}</span>
           <div style="margin-left:auto;display:flex;gap:2px">
             <button class="icon" data-act="up" title="Move up">↑</button>
             <button class="icon" data-act="down" title="Move down">↓</button>
@@ -1902,7 +2188,9 @@
   // -- Hit testing / drag -------------------------------------------
   function hitTest(cx, cy) {
     const s = fieldToCanvas(pose.x, pose.y);
-    if (Math.hypot(cx - s.cx, cy - s.cy) < HIT_R + 4) return { kind: "start" };
+    const scale = canvas.width / FIELD_IN;
+    const botHitR = Math.max(HIT_R + 4, Math.min(bot.robotW, bot.robotL) * scale * 0.48);
+    if (Math.hypot(cx - s.cx, cy - s.cy) < botHitR) return { kind: "start" };
 
     const poses = computePoses();
     for (let i = actions.length - 1; i >= 0; i--) {
@@ -2242,6 +2530,337 @@
     fileInput.value = "";
   };
 
+  function initBotImageElement() {
+    if (bot.botImage) {
+      if (!botImgElement) botImgElement = new Image();
+      botImgElement.onload = () => {
+        botImgReady = true;
+        syncBotVisualUI();
+        draw();
+      };
+      botImgElement.onerror = () => {
+        botImgReady = false;
+        draw();
+      };
+      botImgElement.src = bot.botImage;
+    } else {
+      botImgReady = false;
+    }
+  }
+
+  function setBotImage(dataUrl, autoAdjustDims = true) {
+    if (!dataUrl) {
+      bot.botImage = null;
+      botImgReady = false;
+      syncBotVisualUI();
+      markDirty();
+      draw();
+      return;
+    }
+    const temp = new Image();
+    temp.onload = () => {
+      let finalData = dataUrl;
+      const maxDim = 900;
+      let dw = temp.naturalWidth;
+      let dh = temp.naturalHeight;
+      if (dw > maxDim || dh > maxDim) {
+        if (dw > dh) {
+          dh = Math.round((dh * maxDim) / dw);
+          dw = maxDim;
+        } else {
+          dw = Math.round((dw * maxDim) / dh);
+          dh = maxDim;
+        }
+        try {
+          const off = document.createElement("canvas");
+          off.width = dw;
+          off.height = dh;
+          const offCtx = off.getContext("2d");
+          offCtx.drawImage(temp, 0, 0, dw, dh);
+          finalData = off.toDataURL("image/png");
+        } catch (_) {}
+      }
+      bot.botImage = finalData;
+      bot.botImageNaturalRatio = temp.naturalWidth / Math.max(1, temp.naturalHeight);
+      bot.botImageEnabled = true;
+
+      if (autoAdjustDims && Math.abs(bot.botImageNaturalRatio - 1.0) > 0.05) {
+        const isUpDown = (bot.botImageOrientation === 0 || bot.botImageOrientation === 180);
+        const newL = isUpDown 
+          ? bot.robotW / bot.botImageNaturalRatio 
+          : bot.robotW * bot.botImageNaturalRatio;
+        bot.robotL = Number(Math.max(1, newL).toFixed(1));
+        const elL = document.getElementById("robotL");
+        if (elL) elL.value = bot.robotL;
+      }
+
+      if (!botImgElement) botImgElement = new Image();
+      botImgElement.onload = () => {
+        botImgReady = true;
+        syncBotVisualUI();
+        markDirty();
+        draw();
+      };
+      botImgElement.onerror = () => {
+        botImgReady = false;
+        draw();
+      };
+      botImgElement.src = finalData;
+    };
+    temp.onerror = () => {
+      alert("Could not load image. Please provide a valid image file (PNG, JPG, SVG, WebP).");
+    };
+    temp.src = dataUrl;
+  }
+
+  function syncBotVisualUI() {
+    const el = (id) => document.getElementById(id);
+    const hasImg = !!bot.botImage;
+
+    const btnToggle = el("btnToggleBotImg");
+    if (btnToggle) {
+      const isEnabled = bot.botImageEnabled !== false;
+      btnToggle.textContent = isEnabled ? "👁️ Picture: ON" : "👁️ Picture: OFF";
+      btnToggle.className = "btn-bot-img-toggle" + (isEnabled ? " active" : "");
+    }
+
+    const previewWrap = el("botImgPreviewWrap");
+    const uploadContent = el("botImgUploadContent");
+    const controls = el("botImgControls");
+    const thumb = el("botImgThumb");
+    const thumbTag = el("botThumbFrontTag");
+    const thumbSize = el("botThumbSize");
+    const thumbScale = el("botThumbScale");
+    const dimLabel = el("botDimLabel");
+    const lockRatio = el("botLockRatio");
+    const orient = el("botImgOrientation");
+    const opacityInput = el("botImgOpacity");
+    const opacityVal = el("botOpacityVal");
+    const showOutline = el("botShowOutline");
+
+    const scale = canvas ? canvas.width / FIELD_IN : 5;
+    const wPx = (bot.robotW * scale).toFixed(0);
+    const lPx = (bot.robotL * scale).toFixed(0);
+    const pctField = ((bot.robotW / FIELD_IN) * 100).toFixed(1);
+
+    if (hasImg) {
+      if (previewWrap) previewWrap.style.display = "flex";
+      if (uploadContent) uploadContent.style.display = "none";
+      if (controls) controls.style.display = "flex";
+      if (thumb) {
+        thumb.src = bot.botImage;
+        const o = Number(bot.botImageOrientation) || 0;
+        thumb.style.transform = `rotate(${o}deg)`;
+      }
+      if (thumbTag) {
+        const o = Number(bot.botImageOrientation) || 0;
+        const arrows = { 0: "FRONT ↑", 90: "FRONT →", 180: "FRONT ↓", 270: "FRONT ←" };
+        thumbTag.textContent = arrows[o] || "FRONT ↑";
+      }
+      if (thumbSize) thumbSize.textContent = `${bot.robotW.toFixed(1)}" × ${bot.robotL.toFixed(1)}"`;
+      if (thumbScale) thumbScale.textContent = `Field scale: ${wPx}×${lPx}px (${pctField}% of field)`;
+      if (dimLabel) dimLabel.textContent = `${bot.robotW.toFixed(1)}" × ${bot.robotL.toFixed(1)}" (${wPx}×${lPx}px)`;
+      if (lockRatio) lockRatio.checked = !!bot.botLockRatio;
+      if (orient) orient.value = String(bot.botImageOrientation || 0);
+      const op = Math.round((bot.botImageOpacity != null ? bot.botImageOpacity : 1) * 100);
+      if (opacityInput) opacityInput.value = op;
+      if (opacityVal) opacityVal.textContent = op + "%";
+      if (showOutline) showOutline.checked = bot.botImageShowOutline !== false;
+    } else {
+      if (previewWrap) previewWrap.style.display = "none";
+      if (uploadContent) uploadContent.style.display = "flex";
+      if (controls) controls.style.display = "none";
+      if (dimLabel) dimLabel.textContent = `${bot.robotW.toFixed(1)}" × ${bot.robotL.toFixed(1)}" (${wPx}×${lPx}px)`;
+    }
+  }
+
+  function wireBotVisualCard() {
+    const fileInput = document.getElementById("botImgFileInput");
+    const btnUpload = document.getElementById("btnUploadBotImg");
+    const btnChange = document.getElementById("btnChangeBotImg");
+    const btnPreset = document.getElementById("btnPresetBotImg");
+    const btnClear = document.getElementById("btnClearBotImg");
+    const btnToggle = document.getElementById("btnToggleBotImg");
+    const dropZone = document.getElementById("botImgDropZone");
+    const orientSelect = document.getElementById("botImgOrientation");
+    const rotCW = document.getElementById("btnBotRotCW");
+    const rotCCW = document.getElementById("btnBotRotCCW");
+    const opacityInput = document.getElementById("botImgOpacity");
+    const showOutline = document.getElementById("botShowOutline");
+    const lockRatio = document.getElementById("botLockRatio");
+
+    const handleFile = (file) => {
+      if (!file || !file.type.startsWith("image/")) {
+        alert("Please provide an image file (PNG, JPG, SVG, WebP).");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setBotImage(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    };
+
+    if (btnUpload && fileInput) btnUpload.addEventListener("click", () => fileInput.click());
+    if (btnChange && fileInput) btnChange.addEventListener("click", () => fileInput.click());
+    if (fileInput) {
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+        fileInput.value = "";
+      });
+    }
+
+    if (btnPreset) {
+      btnPreset.addEventListener("click", () => {
+        const svgUrl = "data:image/svg+xml;utf8," + encodeURIComponent(SAMPLE_BOT_VEX_SVG);
+        setBotImage(svgUrl, false);
+      });
+    }
+
+    if (btnClear) {
+      btnClear.addEventListener("click", () => {
+        setBotImage(null);
+      });
+    }
+
+    if (btnToggle) {
+      btnToggle.addEventListener("click", () => {
+        bot.botImageEnabled = !(bot.botImageEnabled !== false);
+        syncBotVisualUI();
+        markDirty();
+        draw();
+      });
+    }
+
+    if (dropZone) {
+      dropZone.addEventListener("click", (e) => {
+        if (e.target.closest("button") || e.target.closest("select") || e.target.closest("input")) return;
+        if (!bot.botImage && fileInput) fileInput.click();
+      });
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag-over");
+      });
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("drag-over");
+      });
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag-over");
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleFile(e.dataTransfer.files[0]);
+        }
+      });
+    }
+
+    // Canvas drag-and-drop: dropping a bot picture on the field
+    const canvasWrap = canvas ? canvas.closest(".canvas-wrap") : null;
+    if (canvasWrap) {
+      canvasWrap.addEventListener("dragover", (e) => {
+        if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          canvasWrap.classList.add("field-drag-over");
+        }
+      });
+      canvasWrap.addEventListener("dragleave", (e) => {
+        if (!canvasWrap.contains(e.relatedTarget)) {
+          canvasWrap.classList.remove("field-drag-over");
+        }
+      });
+      canvasWrap.addEventListener("drop", (e) => {
+        canvasWrap.classList.remove("field-drag-over");
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+          const f = e.dataTransfer.files[0];
+          if (f.type.startsWith("image/")) {
+            e.preventDefault();
+            handleFile(f);
+          }
+        }
+      });
+    }
+
+    // Clipboard paste support for bot image
+    window.addEventListener("paste", (e) => {
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+      if (activeTag === "input" || activeTag === "textarea") return;
+      if (e.clipboardData && e.clipboardData.items) {
+        for (let item of e.clipboardData.items) {
+          if (item.type.startsWith("image/")) {
+            const blob = item.getAsFile();
+            if (blob) {
+              handleFile(blob);
+              break;
+            }
+          }
+        }
+      }
+    });
+
+    if (orientSelect) {
+      orientSelect.addEventListener("change", () => {
+        bot.botImageOrientation = Number(orientSelect.value) || 0;
+        syncBotVisualUI();
+        markDirty();
+        draw();
+      });
+    }
+
+    if (rotCW) {
+      rotCW.addEventListener("click", () => {
+        bot.botImageOrientation = (((Number(bot.botImageOrientation) || 0) + 90) % 360);
+        syncBotVisualUI();
+        markDirty();
+        draw();
+      });
+    }
+
+    if (rotCCW) {
+      rotCCW.addEventListener("click", () => {
+        bot.botImageOrientation = ((((Number(bot.botImageOrientation) || 0) - 90) % 360 + 360) % 360);
+        syncBotVisualUI();
+        markDirty();
+        draw();
+      });
+    }
+
+    if (opacityInput) {
+      opacityInput.addEventListener("input", () => {
+        bot.botImageOpacity = Number(opacityInput.value) / 100;
+        syncBotVisualUI();
+        draw();
+      });
+      opacityInput.addEventListener("change", () => {
+        markDirty();
+      });
+    }
+
+    if (showOutline) {
+      showOutline.addEventListener("change", () => {
+        bot.botImageShowOutline = showOutline.checked;
+        markDirty();
+        draw();
+      });
+    }
+
+    if (lockRatio) {
+      lockRatio.addEventListener("change", () => {
+        bot.botLockRatio = lockRatio.checked;
+        if (bot.botLockRatio && bot.botImageNaturalRatio) {
+          const isUpDown = (bot.botImageOrientation === 0 || bot.botImageOrientation === 180);
+          const newL = isUpDown 
+            ? bot.robotW / bot.botImageNaturalRatio 
+            : bot.robotW * bot.botImageNaturalRatio;
+          bot.robotL = Number(Math.max(1, newL).toFixed(1));
+          const elL = document.getElementById("robotL");
+          if (elL) elL.value = bot.robotL;
+        }
+        syncBotVisualUI();
+        markDirty();
+        draw();
+      });
+    }
+  }
+
   function syncBotInputs() {
     const el = (id) => document.getElementById(id);
     if (el("trackWidth")) el("trackWidth").value = bot.trackWidth;
@@ -2251,6 +2870,8 @@
     if (el("driveRpm")) el("driveRpm").value = bot.driveRpm;
     if (el("defaultMaxSpeed")) el("defaultMaxSpeed").value = bot.defaultMaxSpeed;
     if (el("defaultMinSpeed")) el("defaultMinSpeed").value = bot.defaultMinSpeed;
+    initBotImageElement();
+    syncBotVisualUI();
   }
 
   function wireBotSettings() {
@@ -2273,6 +2894,27 @@
           el.value = v;
         }
         bot[key] = isNaN(v) ? bot[key] : v;
+
+        // Aspect ratio locking between robotW and robotL based on photo ratio
+        if (key === "robotW" && bot.botLockRatio && bot.botImageNaturalRatio) {
+          const isUpDown = (bot.botImageOrientation === 0 || bot.botImageOrientation === 180);
+          const newL = isUpDown 
+            ? bot.robotW / bot.botImageNaturalRatio 
+            : bot.robotW * bot.botImageNaturalRatio;
+          bot.robotL = Number(Math.max(1, newL).toFixed(1));
+          const elL = document.getElementById("robotL");
+          if (elL) elL.value = bot.robotL;
+        } else if (key === "robotL" && bot.botLockRatio && bot.botImageNaturalRatio) {
+          const isUpDown = (bot.botImageOrientation === 0 || bot.botImageOrientation === 180);
+          const newW = isUpDown 
+            ? bot.robotL * bot.botImageNaturalRatio 
+            : bot.robotL / bot.botImageNaturalRatio;
+          bot.robotW = Number(Math.max(1, newW).toFixed(1));
+          const elW = document.getElementById("robotW");
+          if (elW) elW.value = bot.robotW;
+        }
+
+        syncBotVisualUI();
         markDirty();
         draw();
       });
@@ -2740,6 +3382,20 @@
     modal.hidden = false;
   }
 
+  function openRoutineFlowchartModal() {
+    const modal = document.getElementById("flowchartModal");
+    const titleEl = document.getElementById("flowchartModalTitle");
+    const bodyEl = document.getElementById("flowchartModalBody");
+    if (!modal || !bodyEl) return;
+    const curPath = paths[activePathIndex];
+    const pathName = curPath ? curPath.name : "Active Routine";
+    if (titleEl) {
+      titleEl.textContent = `⚡ Seamless Flowchart · ${pathName}`;
+    }
+    bodyEl.innerHTML = generateRoutineFlowchartSvg();
+    modal.hidden = false;
+  }
+
   function closeFlowchartModal() {
     const modal = document.getElementById("flowchartModal");
     if (modal) modal.hidden = true;
@@ -2749,9 +3405,11 @@
     const modal = document.getElementById("flowchartModal");
     const btnClose = document.getElementById("flowchartModalClose");
     const btnDone = document.getElementById("flowchartModalDoneBtn");
+    const btnOpenRoutine = document.getElementById("btnOpenRoutineFlowchart");
     if (!modal) return;
     if (btnClose) btnClose.onclick = closeFlowchartModal;
     if (btnDone) btnDone.onclick = closeFlowchartModal;
+    if (btnOpenRoutine) btnOpenRoutine.onclick = openRoutineFlowchartModal;
     modal.addEventListener("click", (e) => {
       if (e.target === modal) closeFlowchartModal();
     });
@@ -2763,6 +3421,7 @@
 
 // -- Init ---------------------------------------------------------
   wireBotSettings();
+  wireBotVisualCard();
   
   // -- Build number + soft check ----------------------------------
   function showBuildNumber() {

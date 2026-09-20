@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260920.k9" />
+  <link rel="stylesheet" href="style.css?v=20260920.k13" />
 </head>
 <body>
   <div id="app">
@@ -47,7 +47,10 @@
       <aside class="panel flowchart-panel">
         <div class="panel-header">
           <h2>Path Flowchart</h2>
-          <span id="saveStatus" class="save-status">Saved</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" id="btnOpenRoutineFlowchart" class="btn-flowchart-routine" title="View interactive seamless multitask flowchart for full routine">⚡ Flowchart</button>
+            <span id="saveStatus" class="save-status">Saved</span>
+          </div>
         </div>
 
         <div class="path-selector" id="pathSelector">
@@ -101,17 +104,17 @@
 
 
         <section class="bot-settings" id="botSettings">
-          <h2>Bot Settings</h2>
-          <p class="hint" style="margin-bottom:6px">Used for swing sim + generated chassis comments</p>
+          <h2>Bot Settings &amp; Dimensions</h2>
+          <p class="hint" style="margin-bottom:6px">Actual robot dimensions in inches scale accurately onto the 144&quot; field</p>
           <div class="row">
             <label>Track width (in)
               <input type="number" id="trackWidth" step="0.1" value="12" min="1"/>
             </label>
             <label>Robot width (in)
-              <input type="number" id="robotW" step="0.1" value="14" min="1"/>
+              <input type="number" id="robotW" step="0.1" value="14" min="1" title="Lateral width in actual inches (left-to-right)"/>
             </label>
             <label>Robot length (in)
-              <input type="number" id="robotL" step="0.1" value="14" min="1"/>
+              <input type="number" id="robotL" step="0.1" value="14" min="1" title="Longitudinal length in actual inches (front-to-back)"/>
             </label>
           </div>
           <div class="row">
@@ -131,6 +134,92 @@
             </label>
           </div>
           <p class="hint" style="margin-top:4px;font-size:0.72rem;color:#8b9bb4">New moves use these defaults; edit any card to override per action.</p>
+
+          <!-- Top-Down Robot Visual & Dimensions in Actual Inches -->
+          <div class="bot-visual-card" id="botVisualCard">
+            <div class="bot-visual-header">
+              <div class="bot-visual-title-wrap">
+                <span class="bot-visual-badge">Field Scaled</span>
+                <h3 class="bot-visual-title">📷 Top-Down Bot Picture</h3>
+              </div>
+              <button type="button" class="btn-bot-img-toggle active" id="btnToggleBotImg" title="Toggle robot picture visibility on field">
+                👁️ Picture: ON
+              </button>
+            </div>
+
+            <p class="bot-visual-desc">
+              Provide a top-down photo or CAD render of your bot. Enter dimensions in actual inches above; your bot is automatically scaled to match the 144&quot;&times;144&quot; field.
+            </p>
+
+            <div class="bot-img-drop-zone" id="botImgDropZone" title="Click or drag an image here to load your top-down bot">
+              <input type="file" id="botImgFileInput" accept="image/*" style="display:none;" />
+              
+              <div class="bot-img-preview-wrap" id="botImgPreviewWrap" style="display:none;">
+                <div class="bot-img-thumb-frame">
+                  <img id="botImgThumb" alt="Top-down Bot Preview" />
+                  <span class="bot-thumb-front-tag" id="botThumbFrontTag">FRONT ↑</span>
+                </div>
+                <div class="bot-thumb-info">
+                  <div class="bot-thumb-size" id="botThumbSize">14.0&quot; &times; 14.0&quot;</div>
+                  <div class="bot-thumb-scale" id="botThumbScale">Scaled to field</div>
+                </div>
+              </div>
+
+              <div class="bot-img-upload-content" id="botImgUploadContent">
+                <div class="bot-img-upload-icon">📷</div>
+                <div class="bot-img-upload-text">
+                  <strong>Click or Drag &amp; Drop</strong> top-down photo
+                  <span class="bot-img-upload-sub">PNG (transparent), JPG, SVG, or WebP</span>
+                </div>
+                <div class="bot-img-upload-btns">
+                  <button type="button" class="btn-img-action primary" id="btnUploadBotImg">Choose Image...</button>
+                  <button type="button" class="btn-img-action" id="btnPresetBotImg" title="Load sample VEX competition robot graphic">Sample Bot</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Image controls when active -->
+            <div class="bot-img-controls" id="botImgControls" style="display:none;">
+              <div class="bot-img-dimension-callout">
+                <span class="dim-icon">📐</span>
+                <span class="dim-text">Field Scale: <strong id="botDimLabel">14.0&quot; &times; 14.0&quot;</strong></span>
+                <label class="bot-ratio-lock-label" title="Keep proportional dimensions based on photo aspect ratio">
+                  <input type="checkbox" id="botLockRatio" />
+                  <span>Lock Ratio</span>
+                </label>
+              </div>
+
+              <div class="bot-img-row">
+                <label class="bot-img-field">Photo Front Direction:
+                  <select id="botImgOrientation" title="Which way does the front of your bot face in the original picture?">
+                    <option value="0">Front points UP (Top)</option>
+                    <option value="90">Front points RIGHT</option>
+                    <option value="180">Front points DOWN (Bottom)</option>
+                    <option value="270">Front points LEFT</option>
+                  </select>
+                </label>
+                <div class="btn-group-rot">
+                  <button type="button" class="btn-icon-rot" id="btnBotRotCCW" title="Rotate front 90° counter-clockwise">↺ 90°</button>
+                  <button type="button" class="btn-icon-rot" id="btnBotRotCW" title="Rotate front 90° clockwise">↻ 90°</button>
+                </div>
+              </div>
+
+              <div class="bot-img-row sliders-row">
+                <label class="bot-slider-label">Opacity: <span id="botOpacityVal">100%</span>
+                  <input type="range" id="botImgOpacity" min="20" max="100" step="5" value="100" />
+                </label>
+                <label class="bot-checkbox-label" title="Draw bounding border and front heading marker on field">
+                  <input type="checkbox" id="botShowOutline" checked />
+                  <span>Heading &amp; Border</span>
+                </label>
+              </div>
+
+              <div class="bot-img-footer-row">
+                <button type="button" class="btn-sm-danger" id="btnClearBotImg" title="Clear image and revert to schematic box">Clear Picture</button>
+                <button type="button" class="btn-sm-subtle" id="btnChangeBotImg" title="Choose a different image file">Change Photo</button>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="code-section">
@@ -149,6 +238,13 @@
               <option value="custom">Custom spaces...</option>
             </select>
             <input type="number" id="codeIndentCustom" min="0" max="16" value="2" style="display:none; width:60px;" title="Custom space count" />
+          </div>
+          <div class="code-indent-row" style="margin-top:2px; margin-bottom:10px;">
+            <label for="codeCommentStyleSelect">Comment Style:</label>
+            <select id="codeCommentStyleSelect" title="Choose how move block comments appear in the output code">
+              <option value="inline" selected>Inline (// comment at end of line)</option>
+              <option value="above">Above (// comment on preceding line)</option>
+            </select>
           </div>
           <button id="btnGenerate" class="primary full">Generate / Refresh Code</button>
           <textarea id="codeOut" readonly spellcheck="false"></textarea>
@@ -211,7 +307,7 @@
       </div>
       <div class="flowchart-modal-footer">
         <p class="flowchart-explainer">
-          <strong>Fork &amp; Re-join Architecture:</strong> When multitasking is enabled for custom code or motions, the subsystem task runs asynchronously in parallel on a background thread while the chassis drives. Both branches link back into 1 unified task via <code>chassis.waitUntilDone()</code> before subsequent actions execute.
+          <strong>Seamless Concurrency Architecture:</strong> Actions flagged as <strong>Multitask (Async)</strong> fork seamlessly into parallel execution tracks (e.g. <code>custom code</code> subsystem tasks while chassis drives <code>moveToPoint</code>) and cleanly converge into subsequent sequential steps (e.g. <code>swingToPoint</code>) via <code>chassis.waitUntilDone()</code>.
         </p>
         <button type="button" id="flowchartModalDoneBtn" class="primary">Close Diagram</button>
       </div>
@@ -398,6 +494,19 @@
                 <li><strong>Early Exit Range:</strong> Set <code>earlyExitRange</code> in inches to blend sequential movements without stopping to a complete standstill.</li>
               </ul>
             </div>
+
+            <div class="help-card" style="grid-column: 1 / -1; margin-top: 8px;">
+              <h4>📸 Top-Down Robot Photo & Dimension Scaling</h4>
+              <p style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;">
+                Upload a real top-down photograph, CAD render, or blueprint of your robot with actual dimensions in inches (Width &amp; Length). The planner scales the image down with exact 1:1 mathematical fidelity relative to the 144" × 144" field tiles:
+              </p>
+              <ul>
+                <li><strong>Exact Field Scaling:</strong> <code>scale = canvas.width / 144.0</code>. A 14" × 14" robot is scaled to exactly $(14 / 144) \times \text{canvas width}$ pixels.</li>
+                <li><strong>Front Orientation &amp; Rotation:</strong> Align your robot's intake/front using the orientation selector or 90° quick-rotate buttons.</li>
+                <li><strong>Collision &amp; Clearance Check:</strong> Move your robot along the simulated path to inspect real bumper clearances against goal stakes, ladders, and field walls.</li>
+                <li><strong>Aspect Ratio Lock:</strong> Automatically matches physical Length and Width inputs to the natural aspect ratio of your robot photo.</li>
+              </ul>
+            </div>
           </div>
         </div>
 
@@ -490,12 +599,12 @@ void autonomous() {
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.k9"></script>
+  <script src="version.js?v=20260920.k13"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.k9"></script>
-  <script src="app.js?v=20260920.k9"></script>
+  <script src="firebase-config.js?v=20260920.k13"></script>
+  <script src="app.js?v=20260920.k13"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
