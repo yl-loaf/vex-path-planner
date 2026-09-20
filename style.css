@@ -382,6 +382,23 @@ button.full { width: 100%; }
 .cloud-status.busy { color: var(--amber); }
 .cloud-status.err { color: var(--red); }
 
+.new-tab-link {
+  font-size: 0.75rem;
+  color: #79a6d2;
+  text-decoration: none;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.new-tab-link:hover {
+  background: var(--panel-header);
+  color: #93c5fd;
+  border-color: #3b82f6;
+}
+
 .modal {
   position: fixed;
   inset: 0;

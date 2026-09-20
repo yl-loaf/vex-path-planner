@@ -1,6 +1,22 @@
 (() => {
   "use strict";
 
+  // Canvas roundRect polyfill for maximum browser compatibility
+  if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, radii) {
+      const r = typeof radii === "number" ? radii : (Array.isArray(radii) ? radii[0] : 0);
+      const rad = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      this.beginPath();
+      this.moveTo(x + rad, y);
+      this.arcTo(x + w, y, x + w, y + h, rad);
+      this.arcTo(x + w, y + h, x, y + h, rad);
+      this.arcTo(x, y + h, x, y, rad);
+      this.arcTo(x, y, x + w, y, rad);
+      this.closePath();
+      return this;
+    };
+  }
+
   // -- Constants ----------------------------------------------------
   const FIELD_IN = 144;
   const HALF = 70.5;
@@ -369,6 +385,94 @@
     return t === "swingToPoint" || t === "swingToHeading";
   }
 
+  // -- History / Undo / Redo -----------------------------------------
+  let undoStack = [];
+  let redoStack = [];
+  let isHistoryApplying = false;
+  let historyDragBaseline = null;
+  let historyPushTimer = null;
+
+  function cloneState() {
+    return JSON.stringify({
+      paths: paths.map((p) => ({
+        id: p.id,
+        name: p.name,
+        pose: { ...p.pose },
+        actions: p.actions.map((a) => ({ ...a })),
+      })),
+      activePathId,
+      bot: { ...bot },
+    });
+  }
+
+  function restoreState(snapshotStr) {
+    if (!snapshotStr) return;
+    isHistoryApplying = true;
+    try {
+      const data = JSON.parse(snapshotStr);
+      if (data.bot) bot = { ...bot, ...data.bot };
+      if (Array.isArray(data.paths) && data.paths.length) {
+        paths = data.paths.map((p) => ({
+          id: p.id || uidPath(),
+          name: p.name || "Routine",
+          pose: p.pose || { x: -60, y: -60, theta: 0 },
+          actions: Array.isArray(p.actions) ? p.actions : [],
+        }));
+        activePathId = data.activePathId || paths[0].id;
+        if (!paths.some((p) => p.id === activePathId)) activePathId = paths[0].id;
+      }
+      bindActive();
+      selectedId = null;
+      syncPathSelect();
+      syncStartInputs();
+      syncBotInputs();
+      renderFlow();
+      draw();
+      generateCode();
+      try { updateTimeDisplay(); } catch (_) {}
+    } catch (err) {
+      console.error("Error restoring history state:", err);
+    } finally {
+      isHistoryApplying = false;
+    }
+  }
+
+  function pushHistory(label) {
+    if (isHistoryApplying) return;
+    const snap = cloneState();
+    if (undoStack.length > 0 && undoStack[undoStack.length - 1] === snap) {
+      return;
+    }
+    undoStack.push(snap);
+    if (undoStack.length > 50) undoStack.shift();
+    redoStack = [];
+  }
+
+  function undo() {
+    if (undoStack.length <= 1) return;
+    const current = undoStack.pop();
+    redoStack.push(current);
+    const prev = undoStack[undoStack.length - 1];
+    restoreState(prev);
+    saveLocal();
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+    const next = redoStack.pop();
+    undoStack.push(next);
+    restoreState(next);
+    saveLocal();
+  }
+
+  function scheduleHistoryPush() {
+    if (isHistoryApplying) return;
+    clearTimeout(historyPushTimer);
+    historyPushTimer = setTimeout(() => {
+      pushHistory("auto");
+    }, 300);
+  }
+
   // -- Persistence --------------------------------------------------
   function markDirty() {
     const ap = activePath();
@@ -514,6 +618,20 @@
     reader.readAsText(file);
   }
 
+  function drawRoundedRect(c, x, y, w, h, r) {
+    if (typeof c.roundRect === "function") {
+      c.roundRect(x, y, w, h, r);
+    } else {
+      const rad = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      c.moveTo(x + rad, y);
+      c.arcTo(x + w, y, x + w, y + h, rad);
+      c.arcTo(x + w, y + h, x, y + h, rad);
+      c.arcTo(x, y + h, x, y, rad);
+      c.arcTo(x, y, x + w, y, rad);
+      c.closePath();
+    }
+  }
+
   // -- Drawing ------------------------------------------------------
   function drawRobot(x, y, thetaDeg, color, alpha = 1, selected = false) {
     const { cx, cy } = fieldToCanvas(x, y);
@@ -531,7 +649,7 @@
       ctx.strokeStyle = "#60a5fa";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(-w / 2 - 3, -l / 2 - 3, w + 6, l + 6, 6);
+      drawRoundedRect(ctx, -w / 2 - 3, -l / 2 - 3, w + 6, l + 6, 6);
       ctx.stroke();
     }
 
@@ -539,7 +657,7 @@
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(-w / 2, -l / 2, w, l, 4);
+    drawRoundedRect(ctx, -w / 2, -l / 2, w, l, 4);
     ctx.fill();
     ctx.stroke();
 
@@ -1389,6 +1507,57 @@
     drag = null;
   });
 
+  // Touch support for dragging points on mobile / touch displays
+  canvas.addEventListener("touchstart", (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const { cx, cy } = canvasCoords(t);
+    const hit = hitTest(cx, cy);
+    if (hit) {
+      historyDragBaseline = cloneState();
+      drag = hit;
+      selectedId = hit.kind === "start" ? "start" : hit.id;
+      renderFlow();
+      draw();
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  window.addEventListener("touchmove", (e) => {
+    if (!drag || !e.touches || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const { cx, cy } = canvasCoords(t);
+    const { x, y } = canvasToField(cx, cy);
+    coordsEl.textContent = `X: ${x.toFixed(1)}  Y: ${y.toFixed(1)}`;
+
+    if (drag.kind === "start") {
+      const snapped = snapToWall(x, y);
+      pose.x = snapped.x;
+      pose.y = snapped.y;
+      syncStartInputs();
+      markDirty();
+      draw();
+    } else if (drag.kind === "action") {
+      const a = actions.find((z) => z.id === drag.id);
+      if (a) {
+        a.x = Number(x.toFixed(1));
+        a.y = Number(y.toFixed(1));
+        markDirty();
+        renderFlow();
+        draw();
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener("touchend", () => {
+    if (drag && historyDragBaseline) {
+      pushHistory("drag");
+      historyDragBaseline = null;
+    }
+    drag = null;
+  });
+
   [startX, startY, startTheta].forEach((el) => {
     el.addEventListener("change", () => {
       let x = Number(startX.value);
@@ -1649,7 +1818,9 @@
       return;
     }
     try {
-      firebase.initializeApp(cfg);
+      if (!firebase.apps || !firebase.apps.length) {
+        firebase.initializeApp(cfg);
+      }
       cloudReady = true;
     } catch (e) {
       console.error(e);
@@ -1657,22 +1828,41 @@
       return;
     }
 
-    document.getElementById("btnGoogleSignIn").onclick = async () => {
-      try {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        await firebase.auth().signInWithPopup(provider);
-      } catch (e) {
-        console.error(e);
-        alert("Sign-in failed: " + (e.message || e));
-      }
-    };
-    document.getElementById("btnSignOut").onclick = async () => {
-      try {
-        await firebase.auth().signOut();
-      } catch (e) {
-        console.error(e);
-      }
-    };
+    const btnIn = document.getElementById("btnGoogleSignIn");
+    if (btnIn) {
+      btnIn.onclick = async () => {
+        try {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: "select_account" });
+          await firebase.auth().signInWithPopup(provider);
+        } catch (e) {
+          console.error("Google sign-in error:", e);
+          if (e && (e.code === "auth/popup-blocked" || e.message?.includes("popup"))) {
+            const openTab = confirm(
+              "Google Sign-In popup was blocked by the browser or preview iframe.\n\nOpen this app in a new browser tab to complete sign in?"
+            );
+            if (openTab) {
+              window.open(window.location.href, "_blank");
+            }
+          } else if (e && e.code === "auth/popup-closed-by-user") {
+            // Popup closed by user, no error prompt needed
+          } else {
+            alert("Sign-in failed: " + ((e && e.message) || e));
+          }
+        }
+      };
+    }
+
+    const btnOut = document.getElementById("btnSignOut");
+    if (btnOut) {
+      btnOut.onclick = async () => {
+        try {
+          await firebase.auth().signOut();
+        } catch (e) {
+          console.error(e);
+        }
+      };
+    }
 
     firebase.auth().onAuthStateChanged(async (user) => {
       cloudUser = user;
@@ -1782,11 +1972,20 @@
   // Soft check a few seconds after load (no prompt unless newer)
   setTimeout(() => checkForUpdates(false), 2500);
   wireClearModal();
+  loadLocal();
   syncPathSelect();
+  syncStartInputs();
+  syncBotInputs();
+  renderFlow();
+  draw();
+  generateCode();
+  try { updateTimeDisplay(); } catch (_) {}
+
   // initial history checkpoint
-  history = [];
-  historyIndex = -1;
+  undoStack = [];
+  redoStack = [];
   pushHistory("init");
+
   const pathSel = document.getElementById("pathSelect");
   if (pathSel) pathSel.onchange = () => switchPath(pathSel.value);
   const bAdd = document.getElementById("btnPathAdd");
@@ -1805,18 +2004,11 @@
     el.addEventListener("change", () => generateCode());
   });
 
-  initFirebaseAuth();
-  loadLocal();
-  syncBotInputs();
-  if (!actions.length) {
-    syncStartInputs();
-    renderFlow();
-    draw();
-  } else {
-    syncStartInputs();
-    renderFlow();
-    draw();
+  const btnNewTab = document.getElementById("btnNewTab");
+  if (btnNewTab && window.self !== window.top) {
+    btnNewTab.href = window.location.href;
+    btnNewTab.style.display = "inline-flex";
   }
-  generateCode();
-  try { updateTimeDisplay(); } catch (_) {}
+
+  initFirebaseAuth();
 })();
