@@ -1,6 +1,6 @@
 {
   "name": "VEX V5 LemLib Path Planner",
-  "description": "Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Push Back field.",
+  "description": "Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,6 +1,6 @@
-# VEX V5 LemLib Path Planner – Push Back
+# VEX V5 LemLib Path Planner – Override
 
-Interactive path planner for **VEX V5 Robotics Competition Push Back (2025-26)** that generates **LemLib** chassis code.
+Interactive path planner for **VEX V5 Robotics Competition Override (2026-27)** that generates **LemLib** chassis code.
 
 ## Features
 
