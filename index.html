@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260920.k8" />
+  <link rel="stylesheet" href="style.css?v=20260920.k9" />
 </head>
 <body>
   <div id="app">
@@ -192,6 +192,28 @@
       <div class="modal-actions">
         <button type="button" id="clearModalCancel">Cancel</button>
         <button type="button" id="clearModalConfirm" class="danger" disabled>Clear path</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multitask Concurrency Flowchart Modal -->
+  <div id="flowchartModal" class="modal flowchart-modal" hidden>
+    <div class="modal-card flowchart-modal-card">
+      <div class="flowchart-modal-header">
+        <div class="flowchart-modal-title-wrap">
+          <span class="flowchart-badge">LemLib &amp; PROS Concurrency</span>
+          <h3 id="flowchartModalTitle">⚡ Multitask Flowchart</h3>
+        </div>
+        <button type="button" id="flowchartModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+      <div class="flowchart-modal-body" id="flowchartModalBody">
+        <!-- Enlarged SVG Flowchart inserted here -->
+      </div>
+      <div class="flowchart-modal-footer">
+        <p class="flowchart-explainer">
+          <strong>Fork &amp; Re-join Architecture:</strong> When multitasking is enabled for custom code or motions, the subsystem task runs asynchronously in parallel on a background thread while the chassis drives. Both branches link back into 1 unified task via <code>chassis.waitUntilDone()</code> before subsequent actions execute.
+        </p>
+        <button type="button" id="flowchartModalDoneBtn" class="primary">Close Diagram</button>
       </div>
     </div>
   </div>
@@ -468,12 +490,12 @@ void autonomous() {
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.k8"></script>
+  <script src="version.js?v=20260920.k9"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.k8"></script>
-  <script src="app.js?v=20260920.k8"></script>
+  <script src="firebase-config.js?v=20260920.k9"></script>
+  <script src="app.js?v=20260920.k9"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

@@ -1232,6 +1232,180 @@
       .replace(/"/g, "&quot;");
   }
 
+  function escapeXml(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  function generateMultitaskFlowchartSvg(a, idx, isModal = false) {
+    const uid = (a.id || ("act_" + idx)) + (isModal ? "_m" : "");
+    const prevAct = idx > 0 ? actions[idx - 1] : null;
+    const nextAct = idx < actions.length - 1 ? actions[idx + 1] : null;
+
+    const startLabel = prevAct
+      ? `Step ${idx}: ${prevAct.type}`
+      : "Step 0: Routine Start";
+
+    let customSnippet = "Custom C++ Snippet";
+    if (a.type === "custom") {
+      const lines = (a.customCode || "")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !l.startsWith("//"));
+      if (lines.length > 0) {
+        customSnippet = lines[0];
+      } else if (a.customCode && a.customCode.trim()) {
+        customSnippet = a.customCode.trim().split("\n")[0];
+      }
+    } else {
+      customSnippet = "pros::Task Subsystem";
+    }
+    if (customSnippet.length > 22) {
+      customSnippet = customSnippet.slice(0, 20) + "…";
+    }
+
+    let chassisMotionLabel = "Drive Motion Thread";
+    if (a.type === "custom") {
+      if (nextAct && isMove(nextAct.type)) {
+        chassisMotionLabel = `Step ${idx + 2}: ${nextAct.type}`;
+      } else {
+        chassisMotionLabel = "Parallel Chassis Move";
+      }
+    } else {
+      chassisMotionLabel = `Step ${idx + 1}: ${a.type}`;
+    }
+    if (chassisMotionLabel.length > 22) {
+      chassisMotionLabel = chassisMotionLabel.slice(0, 20) + "…";
+    }
+
+    const nextStepLabel = nextAct
+      ? `Step ${idx + 2}: ${nextAct.type}`
+      : "Routine Completed";
+
+    return `
+      <svg class="flowchart-svg" viewBox="0 0 340 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Multitask Concurrency Flowchart">
+        <defs>
+          <marker id="fc-arr-neutral-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#94a3b8"/>
+          </marker>
+          <marker id="fc-arr-async-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#c084fc"/>
+          </marker>
+          <marker id="fc-arr-main-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#60a5fa"/>
+          </marker>
+          <marker id="fc-arr-join-${uid}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399"/>
+          </marker>
+        </defs>
+
+        <!-- 1. START NODE (Capsule / Rounded Rect matching image) -->
+        <rect x="95" y="10" width="150" height="32" rx="9" fill="#1e293b" stroke="#64748b" stroke-width="1.8"/>
+        <text x="170" y="24" text-anchor="middle" font-size="10.5" font-weight="800" fill="#f8fafc">START</text>
+        <text x="170" y="36" text-anchor="middle" font-size="8" fill="#94a3b8">${escapeXml(startLabel)}</text>
+
+        <!-- Downward connector to decision point -->
+        <path d="M 170 42 L 170 76" stroke="#94a3b8" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-neutral-${uid})"/>
+        <text x="170" y="60" text-anchor="middle" font-size="8" font-weight="700" fill="#94a3b8" letter-spacing="0.5">DECISION POINT</text>
+
+        <!-- 2. DECISION DIAMOND (Condition Met? / Task Fork) -->
+        <polygon points="170,76 240,102 170,128 100,102" fill="#3b0764" stroke="#c084fc" stroke-width="2"/>
+        <text x="170" y="98" text-anchor="middle" font-size="9.5" font-weight="800" fill="#f5d0fe">ASYNC FORK?</text>
+        <text x="170" y="112" text-anchor="middle" font-size="8" fill="#d8b4fe">Multitask / Task</text>
+
+        <!-- 3. BRANCH CURVES (YES & NO) -->
+        <!-- Branch YES (Left, Async Subsystem Task) -->
+        <text x="75" y="114" text-anchor="middle" font-size="9" font-weight="800" fill="#c084fc">YES (ASYNC)</text>
+        <path d="M 100 102 C 60 102, 75 124, 75 146" stroke="#c084fc" stroke-width="2" fill="none" marker-end="url(#fc-arr-async-${uid})"/>
+
+        <!-- Branch NO (Right, Main Chassis Motion) -->
+        <text x="265" y="114" text-anchor="middle" font-size="9" font-weight="800" fill="#60a5fa">NO (MAIN)</text>
+        <path d="M 240 102 C 280 102, 265 124, 265 146" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#fc-arr-main-${uid})"/>
+
+        <!-- 4. LEFT BRANCH: PROCESS A & SUB-TASKS -->
+        <rect x="10" y="148" width="130" height="32" rx="8" fill="#1e1b4b" stroke="#a855f7" stroke-width="1.8"/>
+        <text x="75" y="163" text-anchor="middle" font-size="9.5" font-weight="700" fill="#e9d5ff">PROCESS A</text>
+        <text x="75" y="174" text-anchor="middle" font-size="8" fill="#c084fc">Subsystem Task</text>
+
+        <path d="M 75 180 L 75 202" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-async-${uid})"/>
+
+        <!-- Sub-task 1 (Oval) -->
+        <ellipse cx="75" cy="222" rx="63" ry="18" fill="#2e1065" stroke="#c084fc" stroke-width="1.8"/>
+        <text x="75" y="217" text-anchor="middle" font-size="9" font-weight="700" fill="#fae8ff">SUB-TASK 1</text>
+        <text x="75" y="229" class="fc-custom-snip" text-anchor="middle" font-size="8" font-family="monospace" fill="#d8b4fe">${escapeXml(customSnippet)}</text>
+
+        <path d="M 75 240 L 75 262" stroke="#c084fc" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-async-${uid})"/>
+
+        <!-- Sub-task 2 (Oval) -->
+        <ellipse cx="75" cy="282" rx="63" ry="18" fill="#2e1065" stroke="#c084fc" stroke-width="1.8"/>
+        <text x="75" y="277" text-anchor="middle" font-size="9" font-weight="700" fill="#fae8ff">SUB-TASK 2</text>
+        <text x="75" y="289" text-anchor="middle" font-size="8" fill="#c084fc">Async Execution / Delay</text>
+
+        <!-- 5. RIGHT BRANCH: PROCESS B & SUB-TASKS -->
+        <rect x="200" y="148" width="130" height="32" rx="8" fill="#172554" stroke="#3b82f6" stroke-width="1.8"/>
+        <text x="265" y="163" text-anchor="middle" font-size="9.5" font-weight="700" fill="#dbeafe">PROCESS B</text>
+        <text x="265" y="174" text-anchor="middle" font-size="8" fill="#93c5fd">Chassis Motion</text>
+
+        <path d="M 265 180 L 265 202" stroke="#60a5fa" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-main-${uid})"/>
+
+        <!-- Sub-task 3 (Oval) -->
+        <ellipse cx="265" cy="222" rx="63" ry="18" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.8"/>
+        <text x="265" y="217" text-anchor="middle" font-size="9" font-weight="700" fill="#eff6ff">SUB-TASK 3</text>
+        <text x="265" y="229" text-anchor="middle" font-size="8" fill="#93c5fd">${escapeXml(chassisMotionLabel)}</text>
+
+        <path d="M 265 240 L 265 262" stroke="#60a5fa" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-main-${uid})"/>
+
+        <!-- Sub-task 4 (Oval) -->
+        <ellipse cx="265" cy="282" rx="63" ry="18" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.8"/>
+        <text x="265" y="277" text-anchor="middle" font-size="9" font-weight="700" fill="#eff6ff">SUB-TASK 4</text>
+        <text x="265" y="289" text-anchor="middle" font-size="8" fill="#93c5fd">Odometry Tracking</text>
+
+        <!-- 6. LINKS BACK INTO 1 TASK (THE RE-JOIN CONVERGENCE) -->
+        <!-- Left curve inward into unified task -->
+        <path d="M 75 300 C 75 334, 120 338, 136 352" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-join-${uid})"/>
+
+        <!-- Right curve inward into unified task -->
+        <path d="M 265 300 C 265 334, 220 338, 204 352" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#fc-arr-join-${uid})"/>
+
+        <!-- UNIFIED JOIN NODE -->
+        <rect x="65" y="354" width="210" height="40" rx="10" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+        <text x="170" y="371" text-anchor="middle" font-size="10" font-weight="800" fill="#d1fae5">UNIFIED TASK (RE-JOIN)</text>
+        <text x="170" y="386" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#a7f3d0">chassis.waitUntilDone();</text>
+
+        <!-- Arrow down to next routine step -->
+        <path d="M 170 394 L 170 420" stroke="#94a3b8" stroke-width="1.8" fill="none" marker-end="url(#fc-arr-neutral-${uid})"/>
+        <text x="170" y="411" text-anchor="middle" font-size="7.5" fill="#94a3b8">SYNCHRONIZED</text>
+
+        <!-- 7. NEXT ACTION CAPSULE -->
+        <rect x="85" y="422" width="170" height="30" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.8"/>
+        <text x="170" y="437" text-anchor="middle" font-size="9.5" font-weight="700" fill="#f1f5f9">NEXT ACTION</text>
+        <text x="170" y="447" text-anchor="middle" font-size="8" fill="#94a3b8">${escapeXml(nextStepLabel)}</text>
+      </svg>
+    `;
+  }
+
+  function renderFlowchartHtml(a, idx) {
+    return `
+      <div class="flowchart-panel">
+        <div class="flowchart-header">
+          <span class="flowchart-title">
+            <span>⚡</span> Multitask Flowchart (Fork &amp; Re-join)
+          </span>
+          <button type="button" class="btn-flowchart-expand" data-act="enlarge-flowchart" data-idx="${idx}" title="Enlarge diagram in dialog">
+            🔍 Enlarge
+          </button>
+        </div>
+        <div class="flowchart-svg-wrap">
+          ${generateMultitaskFlowchartSvg(a, idx, false)}
+        </div>
+      </div>
+    `;
+  }
+
   function renderFlow() {
     actionFlow.innerHTML = "";
     actions.forEach((a, idx) => {
@@ -1279,15 +1453,21 @@
             <button type="button" class="snippet-chip" data-snip="chassis.waitUntilDone();">⏳ Wait Done</button>
           </div>
           <div class="multitask-panel ${a.async ? "on" : ""}">
-            <label class="multitask-toggle-label">
-              <input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/>
-              <span class="multitask-indicator">⚡</span>
-              <span class="multitask-text-col">
-                <span class="multitask-title">Multitask / Async (Non-blocking)</span>
-                <span class="multitask-sub">Runs concurrently in the background</span>
-              </span>
-              <span class="multitask-pill ${a.async ? "active" : ""}">${a.async ? "PARALLEL" : "BLOCKING"}</span>
-            </label>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+              <label class="multitask-toggle-label">
+                <input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/>
+                <span class="multitask-indicator">⚡</span>
+                <span class="multitask-text-col">
+                  <span class="multitask-title">Multitask / Async (Non-blocking)</span>
+                  <span class="multitask-sub">Runs concurrently in the background</span>
+                </span>
+                <span class="multitask-pill ${a.async ? "active" : ""}">${a.async ? "PARALLEL" : "BLOCKING"}</span>
+              </label>
+              <button type="button" class="btn-flowchart-toggle ${(a.async || a.showFlowchart) ? "active" : ""}" data-act="toggle-flowchart" data-idx="${idx}" title="Toggle flowchart diagram">
+                📊 Flowchart
+              </button>
+            </div>
+            ${(a.async || a.showFlowchart) ? renderFlowchartHtml(a, idx) : ""}
           </div>`;
       } else {
         const pointFields = needsPoint(a.type)
@@ -1343,15 +1523,21 @@
             </label>
           </div>
           <div class="multitask-panel ${a.async ? "on" : ""}">
-            <label class="multitask-toggle-label">
-              <input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/>
-              <span class="multitask-indicator">⚡</span>
-              <span class="multitask-text-col">
-                <span class="multitask-title">Multitask (Async / Non-blocking)</span>
-                <span class="multitask-sub">Runs next action concurrently while this chassis motion executes</span>
-              </span>
-              <span class="multitask-pill ${a.async ? "active" : ""}">${a.async ? "PARALLEL" : "SEQUENTIAL"}</span>
-            </label>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+              <label class="multitask-toggle-label">
+                <input type="checkbox" data-f="async" ${a.async ? "checked" : ""}/>
+                <span class="multitask-indicator">⚡</span>
+                <span class="multitask-text-col">
+                  <span class="multitask-title">Multitask (Async / Non-blocking)</span>
+                  <span class="multitask-sub">Runs next action concurrently while this chassis motion executes</span>
+                </span>
+                <span class="multitask-pill ${a.async ? "active" : ""}">${a.async ? "PARALLEL" : "SEQUENTIAL"}</span>
+              </label>
+              <button type="button" class="btn-flowchart-toggle ${(a.async || a.showFlowchart) ? "active" : ""}" data-act="toggle-flowchart" data-idx="${idx}" title="Toggle flowchart diagram">
+                📊 Flowchart
+              </button>
+            </div>
+            ${(a.async || a.showFlowchart) ? renderFlowchartHtml(a, idx) : ""}
           </div>
           <div class="offset-row">
             <div class="label">Code-only offsets (hidden from sim)</div>
@@ -1412,6 +1598,9 @@
           } else if (el.type === "number") v = Number(el.value);
           else v = el.value;
           a[f] = v;
+          if (f === "async") {
+            a.showFlowchart = !!v;
+          }
           markDirty();
           renderFlow();
           draw();
@@ -1422,6 +1611,19 @@
             a[f] = el.type === "number" ? Number(el.value) : el.value;
             markDirty();
             if (["x", "y", "theta"].includes(f)) draw();
+            if (f === "customCode") {
+              const snipText =
+                (el.value || "")
+                  .trim()
+                  .split("\n")
+                  .map((l) => l.trim())
+                  .filter((l) => l && !l.startsWith("//"))[0] || "Custom C++ Snippet";
+              const subTaskEl = card.querySelector(".fc-custom-snip");
+              if (subTaskEl) {
+                subTaskEl.textContent =
+                  snipText.length > 22 ? snipText.slice(0, 20) + "…" : snipText;
+              }
+            }
           }
         });
       });
@@ -1430,6 +1632,15 @@
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           const act = btn.dataset.act;
+          if (act === "toggle-flowchart") {
+            a.showFlowchart = !a.showFlowchart;
+            renderFlow();
+            return;
+          }
+          if (act === "enlarge-flowchart") {
+            openFlowchartModal(a, idx);
+            return;
+          }
           const i = actions.findIndex((x) => x.id === a.id);
           if (act === "del") {
             actions.splice(i, 1);
@@ -2516,6 +2727,39 @@
     }
   }
 
+  // -- Multitask Concurrency Flowchart Modal ----------------------
+  function openFlowchartModal(action, idx) {
+    const modal = document.getElementById("flowchartModal");
+    const titleEl = document.getElementById("flowchartModalTitle");
+    const bodyEl = document.getElementById("flowchartModalBody");
+    if (!modal || !bodyEl) return;
+    if (titleEl) {
+      titleEl.textContent = `⚡ Multitask Flowchart · Step ${idx + 1} (${action.type})`;
+    }
+    bodyEl.innerHTML = generateMultitaskFlowchartSvg(action, idx, true);
+    modal.hidden = false;
+  }
+
+  function closeFlowchartModal() {
+    const modal = document.getElementById("flowchartModal");
+    if (modal) modal.hidden = true;
+  }
+
+  function wireFlowchartModal() {
+    const modal = document.getElementById("flowchartModal");
+    const btnClose = document.getElementById("flowchartModalClose");
+    const btnDone = document.getElementById("flowchartModalDoneBtn");
+    if (!modal) return;
+    if (btnClose) btnClose.onclick = closeFlowchartModal;
+    if (btnDone) btnDone.onclick = closeFlowchartModal;
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeFlowchartModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeFlowchartModal();
+    });
+  }
+
 
 // -- Init ---------------------------------------------------------
   wireBotSettings();
@@ -2557,6 +2801,7 @@
   setTimeout(() => checkForUpdates(false), 2500);
   wireClearModal();
   wireHelpModal();
+  wireFlowchartModal();
   loadLocal();
   syncPathSelect();
   syncStartInputs();
