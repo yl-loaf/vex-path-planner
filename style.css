@@ -344,6 +344,76 @@ button.full { width: 100%; }
   padding-top: 8px;
 }
 
+#timeEst {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: ui-monospace, monospace;
+  color: #fbbf24;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.auth-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 6px;
+  flex-wrap: wrap;
+}
+.auth-user {
+  font-size: 0.78rem;
+  color: #93c5fd;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cloud-status {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.cloud-status.ok { color: var(--green); }
+.cloud-status.busy { color: var(--amber); }
+.cloud-status.err { color: var(--red); }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal[hidden] { display: none !important; }
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  width: min(400px, 92vw);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+}
+.modal-card h3 { margin-bottom: 8px; }
+.modal-card p { color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; }
+.modal-card input[type="text"] {
+  width: 100%;
+  margin: 8px 0 14px;
+  padding: 8px 10px;
+  font-size: 1rem;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 980px) {
   .main { flex-direction: column; }
   .panel { width: 100%; max-height: none; }
