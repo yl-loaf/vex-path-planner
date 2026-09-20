@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VEX V5 LemLib Path Planner – Push Back</title>
-  <link rel="stylesheet" href="style.css?v=20260920c" />
+  <link rel="stylesheet" href="style.css?v=20260920d" />
 </head>
 <body>
   <div id="app">
@@ -71,7 +71,7 @@
 
         <section class="bot-settings" id="botSettings">
           <h2>Bot Settings</h2>
-          <p class="hint" style="margin-bottom:6px">Used for swing sim + generated chassis comments</p>
+          <p class="hint" style="margin-bottom:6px">Used for swing sim, speed estimates, code comments</p>
           <div class="row">
             <label>Track width (in)
               <input type="number" id="trackWidth" step="0.1" value="12" min="1"/>
@@ -104,6 +104,7 @@
       <div class="canvas-wrap">
         <canvas id="field" width="900" height="900"></canvas>
         <div id="coords">X: 0.0  Y: 0.0</div>
+        <div id="timeEst">Est. time: —</div>
         <div id="legend">
           <span class="leg start"></span> Start
           <span class="leg path"></span> Path
@@ -119,6 +120,6 @@
   </div>
 
   <input type="file" id="fileInput" accept=".vpath,application/json" hidden />
-  <script src="app.js?v=20260920c"></script>
+  <script src="app.js?v=20260920d"></script>
 </body>
 </html>
