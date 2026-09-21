@@ -71,8 +71,10 @@
       renderSymbols();
       if (activeFile && elCodeEditor) {
         const latest = ProjectManager.getFile(activeFile);
-        if (latest !== elCodeEditor.value && document.activeElement !== elCodeEditor) {
-          loadFile(activeFile);
+        if (latest !== elCodeEditor.value) {
+          if (window.isSyncingFromPlanner || document.activeElement !== elCodeEditor) {
+            loadFile(activeFile);
+          }
         }
       }
     });
@@ -310,52 +312,93 @@
     if (elDirtyBadge) elDirtyBadge.hidden = !ProjectManager.isDirty;
   }
 
+  const collapsedFolders = new Set();
+
   function renderFileTree() {
     if (!elFileTree) return;
     elFileTree.innerHTML = "";
 
-    const files = Object.keys(ProjectManager.project?.files || {});
-    const groups = {
-      "src/": [],
-      "include/": [],
-      "root": []
-    };
+    const files = Object.keys(ProjectManager.project?.files || {}).sort();
+    
+    const groups = {};
+    const rootFiles = [];
 
     files.forEach(f => {
-      if (f.startsWith("src/")) groups["src/"].push(f);
-      else if (f.startsWith("include/")) groups["include/"].push(f);
-      else groups["root"].push(f);
+      const parts = f.split("/");
+      if (parts.length > 1) {
+        const topDir = parts[0];
+        if (!groups[topDir]) groups[topDir] = [];
+        groups[topDir].push(f);
+      } else {
+        rootFiles.push(f);
+      }
     });
 
-    const createFolder = (title, fileList) => {
+    const createFolder = (title, fileList, folderKey) => {
       const folderDiv = document.createElement("div");
       folderDiv.className = "ide-folder-group";
 
+      const isCollapsed = collapsedFolders.has(folderKey);
+
       const header = document.createElement("div");
       header.className = "ide-folder-header";
-      header.innerHTML = `<span>📁 ${title}</span>`;
+      header.style.cursor = "pointer";
+      header.style.userSelect = "none";
+      header.style.display = "flex";
+      header.style.alignItems = "center";
+      header.style.justifyContent = "space-between";
+      header.title = "Click to expand/collapse folder";
+      header.innerHTML = `
+        <span>${isCollapsed ? "📁" : "📂"} <strong>${title}</strong></span>
+        <span style="font-size:10px; opacity:0.6; margin-left:8px;">${isCollapsed ? "►" : "▼"}</span>
+      `;
+
+      header.onclick = (e) => {
+        e.stopPropagation();
+        if (collapsedFolders.has(folderKey)) {
+          collapsedFolders.delete(folderKey);
+        } else {
+          collapsedFolders.add(folderKey);
+        }
+        renderFileTree();
+      };
+
       folderDiv.appendChild(header);
 
-      const listDiv = document.createElement("div");
-      listDiv.className = "ide-folder-files";
+      if (!isCollapsed) {
+        const listDiv = document.createElement("div");
+        listDiv.className = "ide-folder-files";
 
-      fileList.sort().forEach(f => {
-        const item = document.createElement("div");
-        item.className = `ide-file-item ${f === activeFile ? "active" : ""}`;
-        const baseName = f.includes("/") ? f.split("/").pop() : f;
-        const icon = f.endsWith(".cpp") ? "📄" : f.endsWith(".h") || f.endsWith(".hpp") ? "📑" : "⚙️";
-        item.innerHTML = `<span class="ide-file-icon">${icon}</span> <span class="ide-file-name">${baseName}</span>`;
-        item.onclick = () => switchToFile(f);
-        listDiv.appendChild(item);
-      });
+        fileList.forEach(f => {
+          const item = document.createElement("div");
+          item.className = `ide-file-item ${f === activeFile ? "active" : ""}`;
+          const subPath = f.includes("/") ? f.substring(f.indexOf("/") + 1) : f;
+          const icon = f.endsWith(".cpp") ? "📄" : f.endsWith(".h") || f.endsWith(".hpp") ? "📑" : "⚙️";
+          item.innerHTML = `<span class="ide-file-icon">${icon}</span> <span class="ide-file-name" title="${f}">${subPath}</span>`;
+          item.onclick = (e) => {
+            e.stopPropagation();
+            switchToFile(f);
+          };
+          listDiv.appendChild(item);
+        });
 
-      folderDiv.appendChild(listDiv);
+        folderDiv.appendChild(listDiv);
+      }
+
       return folderDiv;
     };
 
-    if (groups["src/"].length > 0) elFileTree.appendChild(createFolder("src", groups["src/"]));
-    if (groups["include/"].length > 0) elFileTree.appendChild(createFolder("include", groups["include/"]));
-    if (groups["root"].length > 0) elFileTree.appendChild(createFolder("Config & Build", groups["root"]));
+    const knownKeys = Object.keys(groups);
+    const order = ["src", "include"].filter(k => knownKeys.includes(k));
+    knownKeys.forEach(k => { if (!order.includes(k)) order.push(k); });
+
+    order.forEach(k => {
+      elFileTree.appendChild(createFolder(k, groups[k], k));
+    });
+
+    if (rootFiles.length > 0) {
+      elFileTree.appendChild(createFolder("Config & Build", rootFiles, "_root"));
+    }
   }
 
   function renderTabs() {
@@ -385,8 +428,29 @@
     });
   }
 
+  function refreshIdeEditorIfActive(filename) {
+    if (activeFile === filename && elCodeEditor && window.ProjectManager) {
+      const freshContent = window.ProjectManager.getFile(filename);
+      if (elCodeEditor.value !== freshContent) {
+        elCodeEditor.value = freshContent;
+        if (typeof updateEditorLineNumbers === "function") updateEditorLineNumbers();
+        if (typeof updateEditorStageHeader === "function") updateEditorStageHeader();
+        if (typeof runLiveAnalysis === "function") runLiveAnalysis();
+      }
+    }
+  }
+  window.refreshIdeEditorIfActive = refreshIdeEditorIfActive;
+
   function saveCurrentEditorState() {
     if (activeFile && elCodeEditor && window.ProjectManager) {
+      if (window.isSyncingFromPlanner) {
+        // Planner is actively updating ProjectManager, refresh textarea from ProjectManager instead
+        const latest = window.ProjectManager.getFile(activeFile);
+        if (latest && latest !== elCodeEditor.value) {
+          elCodeEditor.value = latest;
+        }
+        return;
+      }
       window.ProjectManager.setFile(activeFile, elCodeEditor.value);
     }
   }
@@ -909,7 +973,7 @@
     const lineIndex = lines.length - 1;
     const colIndex = lines[lineIndex].length;
 
-    const lineHeight = 22; // Matches line-height 22px
+    const lineHeight = 20; // Matches line-height 20px
     const charWidth = 8.1;  // Consolas 13.5px font width
 
     let top = (lineIndex + 1) * lineHeight - elCodeEditor.scrollTop + 8;
@@ -1216,6 +1280,20 @@
     }
 
     function applyNewImportedProject(projName, filesMap) {
+      // Clean up common root prefix if files are double-nested like "MyProject/src/main.cpp"
+      const paths = Object.keys(filesMap);
+      if (paths.length > 0) {
+        const firstSegment = paths[0].split("/")[0];
+        if (firstSegment && paths.length > 1 && paths.every(p => p.startsWith(firstSegment + "/"))) {
+          const cleanedMap = {};
+          const prefix = firstSegment + "/";
+          for (const [k, v] of Object.entries(filesMap)) {
+            cleanedMap[k.substring(prefix.length)] = v;
+          }
+          filesMap = cleanedMap;
+        }
+      }
+
       const fileCount = Object.keys(filesMap).length;
       if (fileCount === 0) {
         alert("No valid source files found in selected project folder.");
@@ -1339,6 +1417,45 @@
       }
     }
 
+    async function selectDirectoryWithNativePicker() {
+      if (typeof window.showDirectoryPicker === "function") {
+        try {
+          const dirHandle = await window.showDirectoryPicker({ mode: "read" });
+          const filesMap = {};
+
+          async function scanHandle(handle, currentPath = "") {
+            for await (const entry of handle.values()) {
+              if (entry.kind === "file") {
+                if (isIgnoredFile(entry.name)) continue;
+                const file = await entry.getFile();
+                const text = await file.text();
+                const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                filesMap[relPath] = text;
+              } else if (entry.kind === "directory") {
+                if (entry.name === ".git" || entry.name === "bin" || entry.name === "build" || entry.name === ".vscode" || entry.name === "node_modules" || entry.name === "__MACOSX") continue;
+                const childPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                await scanHandle(entry, childPath);
+              }
+            }
+          }
+
+          await scanHandle(dirHandle);
+          if (Object.keys(filesMap).length > 0) {
+            applyNewImportedProject(dirHandle.name, filesMap);
+            return true;
+          } else {
+            alert("No valid source files found in selected folder.");
+            return true;
+          }
+        } catch (err) {
+          if (err.name === "AbortError") return true;
+          console.warn("Native showDirectoryPicker failed, falling back to input file:", err);
+          return false;
+        }
+      }
+      return false;
+    }
+
     async function scanDirectoryEntry(entry, currentPath = "") {
       const map = {};
       if (entry.isFile) {
@@ -1372,14 +1489,17 @@
     const ideZipFileInput = document.getElementById("ideZipFileInput");
 
     if (btnIdeImportProject) {
-      btnIdeImportProject.onclick = () => {
+      btnIdeImportProject.onclick = async () => {
         const choice = prompt(
           "Import PROS Multi-File Project Folder:\n\nSelect import method:\n1 = Select Complete Folder (Directory)\n2 = Select ZIP Archive (.zip)\n3 = Cancel",
           "1"
         );
-        if (choice === "1" && ideFolderFileInput) {
-          ideFolderFileInput.value = "";
-          ideFolderFileInput.click();
+        if (choice === "1") {
+          const handled = await selectDirectoryWithNativePicker();
+          if (!handled && ideFolderFileInput) {
+            ideFolderFileInput.value = "";
+            ideFolderFileInput.click();
+          }
         } else if (choice === "2" && ideZipFileInput) {
           ideZipFileInput.value = "";
           ideZipFileInput.click();
@@ -1433,13 +1553,29 @@
 
         const items = e.dataTransfer.items;
         if (items && items.length > 0) {
-          const entry = items[0].webkitGetAsEntry ? items[0].webkitGetAsEntry() : null;
-          if (entry && entry.isDirectory) {
-            const filesMap = await scanDirectoryEntry(entry);
-            if (Object.keys(filesMap).length > 0) {
-              applyNewImportedProject(entry.name, filesMap);
-              return;
+          const filesMap = {};
+          let folderName = "";
+
+          for (let i = 0; i < items.length; i++) {
+            const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+            if (entry) {
+              if (entry.isDirectory) {
+                if (!folderName) folderName = entry.name;
+                const subMap = await scanDirectoryEntry(entry);
+                Object.assign(filesMap, subMap);
+              } else if (entry.isFile) {
+                const file = await new Promise(res => entry.file(res));
+                if (!isIgnoredFile(file.name)) {
+                  const text = await file.text();
+                  filesMap[file.name] = text;
+                }
+              }
             }
+          }
+
+          if (Object.keys(filesMap).length > 0) {
+            applyNewImportedProject(folderName || "Imported_Folder", filesMap);
+            return;
           }
         }
 

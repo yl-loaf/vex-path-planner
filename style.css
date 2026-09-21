@@ -4471,9 +4471,9 @@ kbd {
   background: #070d18;
   border-right: 1px solid #1e293b;
   color: #475569;
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13.5px;
-  line-height: 22px;
+  line-height: 20px;
   padding: 8px 0;
   text-align: right;
   padding-right: 8px;
@@ -4483,8 +4483,8 @@ kbd {
 }
 
 .ide-line-numbers > div {
-  height: 22px;
-  line-height: 22px;
+  height: 20px;
+  line-height: 20px;
 }
 
 .ide-editor-stage {
@@ -4503,9 +4503,9 @@ kbd {
   bottom: 0;
   margin: 0;
   padding: 8px 12px;
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13.5px;
-  line-height: 22px;
+  line-height: 20px;
   tab-size: 4;
   white-space: pre;
   word-break: normal;
@@ -4531,9 +4531,9 @@ kbd {
   border: none;
   outline: none;
   resize: none;
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13.5px;
-  line-height: 22px;
+  line-height: 20px;
   tab-size: 4;
   white-space: pre;
   word-break: normal;

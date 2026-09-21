@@ -5816,21 +5816,31 @@ lemlib::ControllerSettings ${currentMode}_controller(
   }
 
   let isSyncingFromPlanner = false;
+  window.isSyncingFromPlanner = false;
 
   function syncPlannerIntoProjectManager(options = { ask: false }) {
     if (!window.ProjectManager) return;
     try {
       isSyncingFromPlanner = true;
+      window.isSyncingFromPlanner = true;
+
       if (options.ask) {
         promptMergeAutonCpp();
       } else {
         window.ProjectManager.updateAutonCppFromPlanner(paths, getIndentString());
         updateProjectBanner();
       }
+
+      if (typeof window.refreshIdeEditorIfActive === "function") {
+        window.refreshIdeEditorIfActive("src/autons.cpp");
+      }
     } catch (e) {
       console.warn("Failed to sync planner into ProjectManager:", e);
     } finally {
-      setTimeout(() => { isSyncingFromPlanner = false; }, 300);
+      setTimeout(() => {
+        isSyncingFromPlanner = false;
+        window.isSyncingFromPlanner = false;
+      }, 600);
     }
   }
 
