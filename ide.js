@@ -1271,7 +1271,7 @@
     // -------------------------------------------------------------
     function isIgnoredFile(path) {
       if (!path) return true;
-      const lower = path.toLowerCase();
+      const lower = path.toLowerCase().replace(/\\/g, "/");
       const base = path.split(/[\/\\]/).pop();
       if (base.startsWith(".") && base !== ".gitignore" && base !== ".editorconfig") return true;
       if (lower.includes("/.git/") || lower.includes("/.vscode/") || lower.includes("/bin/") || lower.includes("/build/") || lower.includes("/node_modules/") || lower.includes("/__macosx/")) return true;
@@ -1489,9 +1489,9 @@
     const ideZipFileInput = document.getElementById("ideZipFileInput");
 
     if (btnIdeImportProject) {
-      btnIdeImportProject.onclick = async () => {
-        const handled = await selectDirectoryWithNativePicker();
-        if (!handled && ideFolderFileInput) {
+      btnIdeImportProject.onclick = (e) => {
+        e.preventDefault();
+        if (ideFolderFileInput) {
           ideFolderFileInput.value = "";
           ideFolderFileInput.click();
         }
