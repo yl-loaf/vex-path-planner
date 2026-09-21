@@ -165,7 +165,7 @@
   const startY = document.getElementById("startY");
   const startTheta = document.getElementById("startTheta");
   const newType = document.getElementById("newType");
-  const speedLabel = document.getElementById("speedLabel");
+  const speedLabel = document.getElementById("speedLabel") || document.getElementById("speedLabelField");
 
   // -- State --------------------------------------------------------
   let fieldImg = new Image();
@@ -3196,6 +3196,8 @@
   function setSimSpeedValue(val) {
     simSpeed = Number(val);
     if (speedLabel) speedLabel.textContent = simSpeed + "×";
+    const speedLabelField = document.getElementById("speedLabelField");
+    if (speedLabelField) speedLabelField.textContent = simSpeed + "×";
     if (simSpeedInput) simSpeedInput.value = simSpeed;
     if (simSpeedFieldInput) simSpeedFieldInput.value = simSpeed;
     if (hudSpeedValEl) hudSpeedValEl.textContent = simSpeed + "×";
