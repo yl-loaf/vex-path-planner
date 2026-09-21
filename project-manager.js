@@ -845,17 +845,73 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     // -------------------------------------------------------------
     getAutonRoutines() {
       const code = this.getFile("src/autons.cpp") || this.getFile("autons.cpp");
+      if (!code || !code.trim()) return [{ name: "autonomous", body: "" }];
+
       const routines = [];
-      const regex = /void\s+([a-zA-Z0-9_]+)\s*\(\s*\)\s*\{([^}]*)\}/gs;
+      const fnHeaderRegex = /void\s+([a-zA-Z0-9_]+)\s*\([^)]*\)\s*\{/g;
       let match;
-      while ((match = regex.exec(code)) !== null) {
+
+      while ((match = fnHeaderRegex.exec(code)) !== null) {
         const name = match[1];
-        const body = match[2];
-        routines.push({
-          name,
-          body,
-        });
+        const startBodyIdx = fnHeaderRegex.lastIndex;
+        
+        let depth = 1;
+        let endBodyIdx = startBodyIdx;
+        let inString = false;
+        let strQuote = "";
+        let inSingleLineComment = false;
+        let inMultiLineComment = false;
+
+        for (let i = startBodyIdx; i < code.length; i++) {
+          const char = code[i];
+          const prevChar = i > startBodyIdx ? code[i - 1] : "";
+          const nextChar = i < code.length - 1 ? code[i + 1] : "";
+
+          if (inSingleLineComment) {
+            if (char === "\n") inSingleLineComment = false;
+            continue;
+          }
+          if (inMultiLineComment) {
+            if (char === "/" && prevChar === "*") inMultiLineComment = false;
+            continue;
+          }
+          if (inString) {
+            if (char === strQuote && prevChar !== "\\") inString = false;
+            continue;
+          }
+
+          if (char === "/" && nextChar === "/") {
+            inSingleLineComment = true;
+            i++;
+            continue;
+          }
+          if (char === "/" && nextChar === "*") {
+            inMultiLineComment = true;
+            i++;
+            continue;
+          }
+          if (char === '"' || char === "'") {
+            inString = true;
+            strQuote = char;
+            continue;
+          }
+
+          if (char === "{") {
+            depth++;
+          } else if (char === "}") {
+            depth--;
+            if (depth === 0) {
+              endBodyIdx = i;
+              fnHeaderRegex.lastIndex = i + 1;
+              break;
+            }
+          }
+        }
+
+        const body = code.substring(startBodyIdx, endBodyIdx);
+        routines.push({ name, body });
       }
+
       if (routines.length === 0) {
         routines.push({
           name: "autonomous",
@@ -1235,6 +1291,15 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
   // Singleton Instance
   global.ProjectManager = new ProjectManager();
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (e) => {
+      if (e.key === STORAGE_KEY_PROJECT && global.ProjectManager) {
+        global.ProjectManager.loadProject();
+        global.ProjectManager.notifyListeners();
+      }
+    });
+  }
 
   // Helper for Security Challenge Modal before project wiping
   global.promptWipeChallenge = function(targetName, onConfirmed) {

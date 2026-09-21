@@ -673,9 +673,6 @@
       }
 
       if (isSettled) {
-        pose.x = target.x;
-        pose.y = target.y;
-        pose.theta = target.theta;
         if (points.length) {
           points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
         }
@@ -743,8 +740,6 @@
       }
 
       if (isSettled) {
-        pose.x = target.x;
-        pose.y = target.y;
         if (points.length) {
           points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
         }
@@ -791,7 +786,6 @@
       }
 
       if (isSettled) {
-        pose.theta = targetHeading;
         if (points.length) {
           points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
         }
@@ -858,17 +852,6 @@
       }
 
       if (isSettled) {
-        let finalHeading = pose.theta;
-        if (action.type === "swingToHeading") {
-          finalHeading = action.theta;
-        } else {
-          finalHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
-          if (action.forwards === false) finalHeading = normalizeAngle(finalHeading + 180);
-        }
-        pose.theta = finalHeading;
-        const finalC = getCenter(finalHeading);
-        pose.x = finalC.x;
-        pose.y = finalC.y;
         if (points.length) {
           points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
         }
@@ -880,24 +863,7 @@
     return { endPose: pose, path: points, duration: 0.1, carrot: null };
   }
 
-  /**
-   * Intelligently calculates the recommended timeout for an action with 100ms of clearance
-   * to guard against battery voltage drops and real-world friction variations.
-   * Simulates the exact physical kinematics motion profile.
-   */
-  function calculateIntelligentTimeout(action, fromPose, customBot) {
-    if (!action) return 1000;
-    if (action.type === "custom") {
-      const dur = action.customDuration != null ? Math.max(0, Number(action.customDuration)) : 0;
-      return dur === 0 ? 0 : Math.max(100, Math.round(dur * 1000 + 100));
-    }
-    const b = customBot || bot;
-    const virtualAct = { ...action, timeout: 60000 };
-    const sim = simulateAction(virtualAct, fromPose || { x: 0, y: 0, theta: 0 }, b);
-    const simMs = Math.round(sim.duration * 1000);
-    const batteryClearanceMs = 250; // 250ms clearance for battery voltage sag and settling buffer
-    return Math.max(300, simMs + batteryClearanceMs);
-  }
+
 
 
 
@@ -2309,7 +2275,6 @@
           </div>`;
       } else {
         const simDur = estimateActionTime(a, fromPose);
-        const intelligentTimeout = calculateIntelligentTimeout(a, fromPose, bot);
 
         const pointFields = needsPoint(a.type)
           ? `<label>X <input type="number" data-f="x" step="0.1" value="${a.x}"/></label>
@@ -2357,12 +2322,8 @@
               <label>Min speed
                 <input type="number" data-f="minSpeed" min="0" max="127" step="1" value="${a.minSpeed}"/>
               </label>
-              <label class="timeout-label">
-                <span class="timeout-label-text">Timeout (ms) <span class="calc-sub-hint">+100ms batt</span></span>
-                <div class="timeout-input-group">
-                  <input type="number" data-f="timeout" min="0" step="50" value="${a.timeout}"/>
-                  <button type="button" class="btn-calc-timeout" data-act="apply-intelligent-timeout" data-idx="${idx}" title="Set intelligent timeout (~${intelligentTimeout}ms = physical motion sim + 100ms clearance for battery voltage sag)">⚡ ~${intelligentTimeout}ms</button>
-                </div>
+              <label>Timeout (ms)
+                <input type="number" data-f="timeout" min="0" step="50" value="${a.timeout}"/>
               </label>
               <label>Early exit (in)
                 <input type="number" data-f="earlyExitRange" step="0.1" value="${a.earlyExitRange}"/>
@@ -2541,16 +2502,7 @@
             openFlowchartModal(a, idx);
             return;
           }
-          if (act === "apply-intelligent-timeout") {
-            const fromP = poses[idx] || { x: pose.x, y: pose.y, theta: pose.theta };
-            const calcT = calculateIntelligentTimeout(a, fromP, bot);
-            a.timeout = calcT;
-            markDirty();
-            renderFlow();
-            generateCode();
-            showToast(`⚡ Set timeout to ${calcT}ms (+100ms clearance for battery sag)`);
-            return;
-          }
+
           if (act === "set-wait-mode") {
             a.waitType = btn.dataset.mode;
             markDirty();
@@ -5708,28 +5660,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
     el.addEventListener("change", () => generateCode());
   });
 
-  const btnAutoAll = document.getElementById("btnAutoAllTimeouts");
-  if (btnAutoAll) {
-    btnAutoAll.onclick = () => {
-      if (!actions || !actions.length) {
-        showToast("No actions in routine to calculate.");
-        return;
-      }
-      const poses = computePoses();
-      let updatedCount = 0;
-      actions.forEach((a, i) => {
-        if (a.type !== "custom") {
-          const fromPose = poses[i] || { x: pose.x, y: pose.y, theta: pose.theta };
-          a.timeout = calculateIntelligentTimeout(a, fromPose, bot);
-          updatedCount++;
-        }
-      });
-      markDirty();
-      renderFlow();
-      generateCode();
-      showToast(`⚡ Calculated intelligent timeouts (+100ms clearance) for ${updatedCount} movement${updatedCount === 1 ? '' : 's'}`);
-    };
-  }
+
 
   const codeCommentStyleSelect = document.getElementById("codeCommentStyleSelect");
   if (codeCommentStyleSelect) {
@@ -5874,9 +5805,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
     });
   }
 
+  let isSyncingFromPlanner = false;
+
   function syncPlannerIntoProjectManager(options = { ask: false }) {
     if (!window.ProjectManager) return;
     try {
+      isSyncingFromPlanner = true;
       if (options.ask) {
         promptMergeAutonCpp();
       } else {
@@ -5885,10 +5819,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
       }
     } catch (e) {
       console.warn("Failed to sync planner into ProjectManager:", e);
+    } finally {
+      setTimeout(() => { isSyncingFromPlanner = false; }, 100);
     }
   }
 
-  function loadProjectAutonsIntoPlanner() {
+  function loadProjectAutonsIntoPlanner(showNotification = false) {
     if (!window.ProjectManager) return;
     const autonRoutines = window.ProjectManager.getAutonRoutines();
     if (!autonRoutines || autonRoutines.length === 0) return;
@@ -5897,46 +5833,56 @@ lemlib::ControllerSettings ${currentMode}_controller(
     const newPaths = [];
     autonRoutines.forEach((r, idx) => {
       let parsed = null;
-      if (window.CppParser && typeof window.CppParser.parse === "function") {
+      if (window.CppTranslator && typeof window.CppTranslator.parseCppAuton === "function") {
         try {
-          parsed = window.CppParser.parse(r.body, { defaultTimeout: 2000 });
-        } catch (_) {}
+          const fullCode = `void ${r.name}() {\n${r.body}\n}`;
+          parsed = window.CppTranslator.parseCppAuton(fullCode, { defaultTimeout: 2000 });
+        } catch (e) {
+          console.warn("Failed parsing routine in CppTranslator:", e);
+        }
       }
 
       const pName = r.name.replace(/^auton_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) || `Routine ${idx + 1}`;
+      const startPose = parsed?.startPose || parsed?.pose || { x: -60, y: -60, theta: 0 };
+      const actions = parsed?.actions && parsed.actions.length > 0 ? parsed.actions : [
+        {
+          id: "act_" + Date.now() + "_" + idx + "_0",
+          type: "moveToPoint",
+          x: -24,
+          y: -24,
+          theta: 0,
+          timeout: 2000,
+          maxSpeed: 127,
+          minSpeed: 0,
+          earlyExitRange: 0,
+          forwards: true,
+          label: "Rush goal",
+          async: false
+        }
+      ];
+
       newPaths.push({
         id: "path_" + Date.now() + "_" + idx,
         name: pName,
-        pose: parsed?.pose ? { ...parsed.pose } : { x: -60, y: -60, theta: 0 },
-        actions: parsed?.actions && parsed.actions.length > 0 ? parsed.actions : [
-          {
-            id: "act_" + Date.now() + "_0",
-            type: "moveToPoint",
-            x: -24,
-            y: -24,
-            theta: 0,
-            timeout: 2000,
-            maxSpeed: 127,
-            minSpeed: 0,
-            earlyExitRange: 0,
-            forwards: true,
-            label: "Rush goal",
-            async: false
-          }
-        ]
+        pose: { ...startPose },
+        actions: actions
       });
     });
 
     if (newPaths.length > 0) {
       paths = newPaths;
-      activePathId = paths[0].id;
+      const existingIdx = paths.findIndex(p => p.id === activePathId);
+      activePathId = existingIdx >= 0 ? paths[existingIdx].id : paths[0].id;
+
       bindActive();
       syncPathSelect();
       syncStartInputs();
       renderFlow();
       draw();
       generateCode();
-      showToast(`📁 Loaded ${newPaths.length} autonomous routine${newPaths.length === 1 ? '' : 's'} from src/autons.cpp`);
+      if (showNotification) {
+        showToast(`📁 Synchronized ${newPaths.length} autonomous routine${newPaths.length === 1 ? '' : 's'} from src/autons.cpp`);
+      }
     }
   }
 
@@ -6907,6 +6853,33 @@ lemlib::ControllerSettings ${currentMode}_controller(
     wireProjectWorkspace();
     wireLoadProjectModal();
     wireDebugPanel();
+
+    window.ProjectManager.addListener(() => {
+      if (!isSyncingFromPlanner) {
+        loadProjectAutonsIntoPlanner();
+        updateProjectBanner();
+      }
+    });
+
+    window.addEventListener("focus", () => {
+      if (window.ProjectManager) {
+        window.ProjectManager.loadProject();
+        if (!isSyncingFromPlanner) {
+          loadProjectAutonsIntoPlanner();
+          updateProjectBanner();
+        }
+      }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && window.ProjectManager) {
+        window.ProjectManager.loadProject();
+        if (!isSyncingFromPlanner) {
+          loadProjectAutonsIntoPlanner();
+          updateProjectBanner();
+        }
+      }
+    });
   }
   if (window.V5BrainSerial) {
     wireV5BrainUI();

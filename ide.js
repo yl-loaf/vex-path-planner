@@ -9,6 +9,14 @@
   // DOM Elements
   const elProjectName = document.getElementById("ideProjectName");
   const elDirtyBadge = document.getElementById("ideDirtyBadge");
+  const elAutosaveBadge = document.getElementById("ideAutosaveBadge");
+  const elAutosaveDot = document.getElementById("ideAutosaveDot");
+  const elAutosaveText = document.getElementById("ideAutosaveText");
+  const btnToggleAutosave = document.getElementById("btnToggleAutosave");
+  const elAutosaveToggleLabel = document.getElementById("ideAutosaveToggleLabel");
+  const elAutosaveIcon = document.getElementById("ideAutosaveIcon");
+  const elAutosaveTimestamp = document.getElementById("ideAutosaveTimestamp");
+
   const elFileTree = document.getElementById("ideFileTree");
   const elSymbolsTree = document.getElementById("ideSymbolsTree");
   const elSymbolsCount = document.getElementById("ideSymbolsCount");
@@ -39,8 +47,15 @@
   // Firebase auth state
   let cloudUser = null;
 
+  // IDE Autosave Engine State
+  let autosaveEnabled = localStorage.getItem("lemlib_ide_autosave_enabled") !== "false";
+  let autosaveTimer = null;
+  let isAutosaving = false;
+  let lastSaveTimestamp = null;
+
   function init() {
     initAuth();
+    initAutosave();
     renderProjectHeader();
     renderFileTree();
     renderTabs();
@@ -129,6 +144,155 @@
       if (btnSwitch) btnSwitch.hidden = true;
       if (userEl) userEl.hidden = true;
       if (cloudStatus) cloudStatus.textContent = "";
+    }
+  }
+
+  // -------------------------------------------------------------
+  // IDE Autosave Engine
+  // -------------------------------------------------------------
+  function initAutosave() {
+    updateAutosaveUI(autosaveEnabled ? "ready" : "disabled");
+
+    if (btnToggleAutosave) {
+      btnToggleAutosave.addEventListener("click", toggleAutosave);
+    }
+
+    // Periodic backup check every 10 seconds
+    setInterval(() => {
+      if (autosaveEnabled && window.ProjectManager && window.ProjectManager.isDirty) {
+        triggerAutosave(true);
+      }
+    }, 10000);
+
+    // Immediate save when user switches browser tabs or window loses focus
+    window.addEventListener("blur", () => {
+      if (autosaveEnabled && window.ProjectManager && window.ProjectManager.isDirty) {
+        triggerAutosave(true);
+      }
+    });
+
+    // Save on beforeunload
+    window.addEventListener("beforeunload", () => {
+      saveCurrentEditorState();
+      if (window.ProjectManager && window.ProjectManager.isDirty) {
+        window.ProjectManager.saveLocal();
+      }
+    });
+
+    // Global keyboard shortcut Ctrl+S / Cmd+S
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        saveCurrentEditorState();
+        triggerAutosave(true);
+      }
+    });
+  }
+
+  function updateAutosaveUI(status, customMsg) {
+    if (!autosaveEnabled) {
+      if (elAutosaveBadge) {
+        elAutosaveBadge.className = "ide-autosave-badge disabled";
+        elAutosaveBadge.title = "Autosave paused by user";
+      }
+      if (elAutosaveDot) elAutosaveDot.className = "autosave-dot off";
+      if (elAutosaveText) elAutosaveText.textContent = "Autosave: Paused";
+      if (btnToggleAutosave) btnToggleAutosave.className = "ide-autosave-toggle off";
+      if (elAutosaveToggleLabel) elAutosaveToggleLabel.textContent = "Autosave: OFF";
+      if (elAutosaveIcon) elAutosaveIcon.textContent = "⏸️";
+      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = "Autosave Paused";
+      return;
+    }
+
+    if (btnToggleAutosave) btnToggleAutosave.className = "ide-autosave-toggle";
+    if (elAutosaveToggleLabel) elAutosaveToggleLabel.textContent = "Autosave: ON";
+    if (elAutosaveIcon) elAutosaveIcon.textContent = "⚡";
+
+    const timeStr = lastSaveTimestamp || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+    if (status === "saving") {
+      if (elAutosaveBadge) {
+        elAutosaveBadge.className = "ide-autosave-badge saving";
+        elAutosaveBadge.title = "Autosaving code changes in background...";
+      }
+      if (elAutosaveDot) elAutosaveDot.className = "autosave-dot saving";
+      if (elAutosaveText) elAutosaveText.textContent = "● Saving...";
+      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = "Saving changes...";
+    } else if (status === "synced") {
+      if (elAutosaveBadge) {
+        elAutosaveBadge.className = "ide-autosave-badge synced";
+        elAutosaveBadge.title = `Cloud synchronized at ${timeStr}`;
+      }
+      if (elAutosaveDot) elAutosaveDot.className = "autosave-dot synced";
+      if (elAutosaveText) elAutosaveText.textContent = `☁️ Synced ${timeStr}`;
+      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = `Cloud synced ${timeStr}`;
+    } else {
+      // ready / saved
+      if (elAutosaveBadge) {
+        elAutosaveBadge.className = "ide-autosave-badge";
+        elAutosaveBadge.title = `Autosaved locally at ${timeStr}`;
+      }
+      if (elAutosaveDot) elAutosaveDot.className = "autosave-dot";
+      if (elAutosaveText) elAutosaveText.textContent = customMsg || `✓ Saved ${timeStr}`;
+      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = `Saved ${timeStr}`;
+    }
+  }
+
+  function triggerAutosave(immediate = false) {
+    if (!autosaveEnabled) return;
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+
+    updateAutosaveUI("saving");
+
+    if (immediate) {
+      performAutosave();
+    } else {
+      autosaveTimer = setTimeout(performAutosave, 1200);
+    }
+  }
+
+  async function performAutosave() {
+    if (isAutosaving) return;
+    isAutosaving = true;
+
+    try {
+      saveCurrentEditorState();
+      if (window.ProjectManager) {
+        window.ProjectManager.saveLocal();
+      }
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      lastSaveTimestamp = timeStr;
+
+      if (cloudUser && window.ProjectManager) {
+        try {
+          await window.ProjectManager.saveToCloud();
+          window.ProjectManager.markDirty(false);
+          updateAutosaveUI("synced");
+        } catch (err) {
+          window.ProjectManager.markDirty(false);
+          updateAutosaveUI("ready", `✓ Saved ${timeStr}`);
+        }
+      } else {
+        if (window.ProjectManager) {
+          window.ProjectManager.markDirty(false);
+        }
+        updateAutosaveUI("ready", `✓ Saved ${timeStr}`);
+      }
+      renderProjectHeader();
+    } catch (e) {
+      console.warn("IDE Autosave error:", e);
+    } finally {
+      isAutosaving = false;
+    }
+  }
+
+  function toggleAutosave() {
+    autosaveEnabled = !autosaveEnabled;
+    localStorage.setItem("lemlib_ide_autosave_enabled", autosaveEnabled ? "true" : "false");
+    updateAutosaveUI(autosaveEnabled ? "ready" : "disabled");
+    if (autosaveEnabled && window.ProjectManager && window.ProjectManager.isDirty) {
+      triggerAutosave(true);
     }
   }
 
@@ -223,6 +387,9 @@
 
   function switchToFile(filename) {
     saveCurrentEditorState();
+    if (autosaveEnabled && window.ProjectManager && window.ProjectManager.isDirty) {
+      triggerAutosave(true);
+    }
     if (!openTabs.includes(filename)) {
       openTabs.push(filename);
     }
@@ -234,6 +401,9 @@
 
   function closeTab(filename) {
     saveCurrentEditorState();
+    if (autosaveEnabled && window.ProjectManager && window.ProjectManager.isDirty) {
+      triggerAutosave(true);
+    }
     openTabs = openTabs.filter(t => t !== filename);
     if (activeFile === filename) {
       activeFile = openTabs[openTabs.length - 1] || "src/autons.cpp";
@@ -249,6 +419,7 @@
     if (elCurrentFile) elCurrentFile.textContent = filename;
     updateLineNumbers();
     updateCursorAndCharCount();
+    renderSyntaxHighlight();
   }
 
   function renderSymbols() {
@@ -297,6 +468,532 @@
     if (s4) elSymbolsTree.appendChild(s4);
   }
 
+  // -------------------------------------------------------------
+  // Syntax Highlighting Engine
+  // -------------------------------------------------------------
+  const elCodeHighlightInner = document.getElementById("ideCodeHighlightInner");
+  const elCodeHighlight = document.getElementById("ideCodeHighlight");
+
+  function escapeHtml(str) {
+    return (str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function highlightCppCode(code) {
+    if (!code) return "";
+
+    const tokenRegex = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|#\s*(?:include|define|pragma|ifdef|ifndef|endif|else|elif|undef)[^\n]*|\b(?:0x[0-9a-fA-F]+|\d+(?:\.\d+)?)\b|\b(?:void|int|float|double|bool|char|const|return|if|else|while|for|struct|class|public|private|protected|auto|namespace|using|true|false|nullptr|enum|virtual|override|static|sizeof|typedef|switch|case|default|break|continue|extern)\b|\b(?:lemlib|pros|chassis|ControllerSettings|Drivetrain|OdomSensors|TrackingWheel|Controller|Motor|MotorGroup|ADIPiston|Imu|Optical|Distance|Rotation|AngularDirection|DriveSide)\b|\b(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|waitUntilDone|waitUntil|setPose|getPose|calibrate|setSensors|set_value|move|move_velocity|brake|delay|autonomous|initialize|opcontrol|disabled)\b|\b(?:x|y|theta|timeout|maxSpeed|minSpeed|earlyExitRange|lead|forwards|async|driveLeft|driveRight|intake|clamp|arm|imu)\b|[{}()\[\]]|::|->|\.|=|==|!=|<=|>=|&&|\|\||[+\-*\/%<>&|^!;,]/g;
+
+    let result = "";
+    let lastIndex = 0;
+    let match;
+
+    while ((match = tokenRegex.exec(code)) !== null) {
+      if (match.index > lastIndex) {
+        result += escapeHtml(code.substring(lastIndex, match.index));
+      }
+
+      const token = match[0];
+      const escaped = escapeHtml(token);
+
+      if (token.startsWith("/*") || token.startsWith("//")) {
+        result += `<span class="cpp-comment">${escaped}</span>`;
+      } else if (token.startsWith('"') || token.startsWith("'")) {
+        result += `<span class="cpp-string">${escaped}</span>`;
+      } else if (token.startsWith("#")) {
+        result += `<span class="cpp-preproc">${escaped}</span>`;
+      } else if (/^\d/.test(token) || token.startsWith("0x")) {
+        result += `<span class="cpp-number">${escaped}</span>`;
+      } else if (/^(void|int|float|double|bool|char|const|return|if|else|while|for|struct|class|public|private|protected|auto|namespace|using|true|false|nullptr|enum|virtual|override|static|sizeof|typedef|switch|case|default|break|continue|extern)$/.test(token)) {
+        result += `<span class="cpp-keyword">${escaped}</span>`;
+      } else if (/^(lemlib|pros|chassis|ControllerSettings|Drivetrain|OdomSensors|TrackingWheel|Controller|Motor|MotorGroup|ADIPiston|Imu|Optical|Distance|Rotation|AngularDirection|DriveSide)$/.test(token)) {
+        result += `<span class="cpp-type">${escaped}</span>`;
+      } else if (/^(moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|waitUntilDone|waitUntil|setPose|getPose|calibrate|setSensors|set_value|move|move_velocity|brake|delay|autonomous|initialize|opcontrol|disabled)$/.test(token)) {
+        result += `<span class="cpp-fn">${escaped}</span>`;
+      } else if (/^(x|y|theta|timeout|maxSpeed|minSpeed|earlyExitRange|lead|forwards|async|driveLeft|driveRight|intake|clamp|arm|imu)$/.test(token)) {
+        result += `<span class="cpp-member">${escaped}</span>`;
+      } else if (/^[{}()\[\]]$/.test(token)) {
+        result += `<span class="cpp-bracket">${escaped}</span>`;
+      } else if (/^[+\-*\/%<>&|^!;,=]|::|->|\.$/.test(token)) {
+        result += `<span class="cpp-operator">${escaped}</span>`;
+      } else {
+        result += `<span class="cpp-ident">${escaped}</span>`;
+      }
+
+      lastIndex = tokenRegex.lastIndex;
+    }
+
+    if (lastIndex < code.length) {
+      result += escapeHtml(code.substring(lastIndex));
+    }
+
+    if (code.endsWith("\n")) {
+      result += "\n";
+    }
+
+    return result;
+  }
+
+  function renderSyntaxHighlight() {
+    if (!elCodeEditor || !elCodeHighlightInner) return;
+    const code = elCodeEditor.value || "";
+    elCodeHighlightInner.innerHTML = highlightCppCode(code);
+  }
+
+  // -------------------------------------------------------------
+  // VS Code IntelliSense Engine & Catalog
+  // -------------------------------------------------------------
+  const elIntelliSense = document.getElementById("ideIntelliSense");
+  const elIntelList = document.getElementById("ideIntelList");
+  const elIntelDocDetail = document.getElementById("ideIntelDocDetail");
+  const elIntelDocText = document.getElementById("ideIntelDocText");
+  const elParamHint = document.getElementById("ideParamHint");
+  const elParamSig = document.getElementById("ideParamSig");
+  const elParamDoc = document.getElementById("ideParamDoc");
+
+  let intelItems = [];
+  let intelSelectedIndex = 0;
+  let currentWord = "";
+  let currentWordStart = 0;
+
+  const BUILTIN_INTELLISENSE = [
+    // Chassis Methods
+    {
+      name: "moveToPoint",
+      kind: "method",
+      icon: "⚡",
+      label: "moveToPoint(x, y, timeout, params, async)",
+      insertSnippet: "moveToPoint(${x}, ${y}, ${timeout});",
+      detail: "void chassis.moveToPoint(float x, float y, int timeout, MoveToPointParams params = {}, bool async = true)",
+      doc: "Moves the robot chassis to target field coordinates (x, y) in inches using LemLib PID controllers.",
+      scope: "chassis"
+    },
+    {
+      name: "moveToPose",
+      kind: "method",
+      icon: "⚡",
+      label: "moveToPose(x, y, theta, timeout, params, async)",
+      insertSnippet: "moveToPose(${x}, ${y}, ${theta}, ${timeout});",
+      detail: "void chassis.moveToPose(float x, float y, float theta, int timeout, MoveToPoseParams params = {}, bool async = true)",
+      doc: "Moves chassis to target (X, Y) coordinate and aligns heading theta (degrees) using Boomerang curve generator.",
+      scope: "chassis"
+    },
+    {
+      name: "turnToHeading",
+      kind: "method",
+      icon: "⚡",
+      label: "turnToHeading(theta, timeout, params, async)",
+      insertSnippet: "turnToHeading(${theta}, ${timeout});",
+      detail: "void chassis.turnToHeading(float theta, int timeout, TurnToHeadingParams params = {}, bool async = true)",
+      doc: "Turns chassis to face absolute field heading angle in degrees (0° = North/up).",
+      scope: "chassis"
+    },
+    {
+      name: "turnToPoint",
+      kind: "method",
+      icon: "⚡",
+      label: "turnToPoint(x, y, timeout, params, async)",
+      insertSnippet: "turnToPoint(${x}, ${y}, ${timeout});",
+      detail: "void chassis.turnToPoint(float x, float y, int timeout, TurnToPointParams params = {}, bool async = true)",
+      doc: "Turns chassis to face field coordinate (x, y).",
+      scope: "chassis"
+    },
+    {
+      name: "swingToHeading",
+      kind: "method",
+      icon: "⚡",
+      label: "swingToHeading(theta, side, timeout, params, async)",
+      insertSnippet: "swingToHeading(${theta}, lemlib::DriveSide::LEFT, ${timeout});",
+      detail: "void chassis.swingToHeading(float theta, lemlib::DriveSide side, int timeout, SwingToHeadingParams params = {}, bool async = true)",
+      doc: "Swings chassis to target heading while locking one side of the drivetrain.",
+      scope: "chassis"
+    },
+    {
+      name: "swingToPoint",
+      kind: "method",
+      icon: "⚡",
+      label: "swingToPoint(x, y, side, timeout, params, async)",
+      insertSnippet: "swingToPoint(${x}, ${y}, lemlib::DriveSide::LEFT, ${timeout});",
+      detail: "void chassis.swingToPoint(float x, float y, lemlib::DriveSide side, int timeout)",
+      doc: "Swings chassis to face coordinate (x, y) while locking one side of drivetrain.",
+      scope: "chassis"
+    },
+    {
+      name: "waitUntilDone",
+      kind: "method",
+      icon: "⚡",
+      label: "waitUntilDone()",
+      insertSnippet: "waitUntilDone();",
+      detail: "void chassis.waitUntilDone()",
+      doc: "Blocks task execution thread until current asynchronous chassis motion finishes.",
+      scope: "chassis"
+    },
+    {
+      name: "waitUntil",
+      kind: "method",
+      icon: "⚡",
+      label: "waitUntil(dist)",
+      insertSnippet: "waitUntil(${dist});",
+      detail: "void chassis.waitUntil(float dist)",
+      doc: "Blocks task execution until chassis is within dist inches of movement destination.",
+      scope: "chassis"
+    },
+    {
+      name: "setPose",
+      kind: "method",
+      icon: "⚡",
+      label: "setPose(x, y, theta)",
+      insertSnippet: "setPose(${x}, ${y}, ${theta});",
+      detail: "void chassis.setPose(float x, float y, float theta)",
+      doc: "Sets starting robot position (x, y) and heading angle (theta) for odometry tracking.",
+      scope: "chassis"
+    },
+    {
+      name: "getPose",
+      kind: "method",
+      icon: "⚡",
+      label: "getPose()",
+      insertSnippet: "getPose()",
+      detail: "lemlib::Pose chassis.getPose()",
+      doc: "Returns current robot odometer pose struct (x, y, theta).",
+      scope: "chassis"
+    },
+    {
+      name: "calibrate",
+      kind: "method",
+      icon: "⚡",
+      label: "calibrate()",
+      insertSnippet: "calibrate();",
+      detail: "void chassis.calibrate()",
+      doc: "Calibrates IMU inertial sensors and odometry encoders.",
+      scope: "chassis"
+    },
+
+    // Actuator & Motor Methods
+    {
+      name: "set_value",
+      kind: "method",
+      icon: "⚡",
+      label: "set_value(state)",
+      insertSnippet: "set_value(${true});",
+      detail: "void pros::ADIPiston::set_value(bool state)",
+      doc: "Toggles pneumatic ADI solenoid output (true = extend, false = retract)."
+    },
+    {
+      name: "move",
+      kind: "method",
+      icon: "⚡",
+      label: "move(voltage)",
+      insertSnippet: "move(${127});",
+      detail: "void pros::Motor::move(int32_t voltage)",
+      doc: "Powers motor with raw voltage input (-127 to 127)."
+    },
+    {
+      name: "move_velocity",
+      kind: "method",
+      icon: "⚡",
+      label: "move_velocity(rpm)",
+      insertSnippet: "move_velocity(${600});",
+      detail: "void pros::Motor::move_velocity(int32_t velocity)",
+      doc: "Runs internal motor PID velocity controller at target RPM."
+    },
+    {
+      name: "brake",
+      kind: "method",
+      icon: "⚡",
+      label: "brake()",
+      insertSnippet: "brake();",
+      detail: "void pros::Motor::brake()",
+      doc: "Brakes motor according to active brake mode (coast, hold, brake)."
+    },
+    {
+      name: "delay",
+      kind: "method",
+      icon: "⚡",
+      label: "pros::delay(ms)",
+      insertSnippet: "pros::delay(${500});",
+      detail: "void pros::delay(uint32_t milliseconds)",
+      doc: "Pauses active task thread for specified milliseconds."
+    },
+
+    // Struct Properties
+    { name: "forwards", kind: "property", icon: "📦", label: "forwards = true", insertSnippet: "forwards = true", detail: "bool forwards", doc: "Drive forward (true) or backward (false)." },
+    { name: "maxSpeed", kind: "property", icon: "📦", label: "maxSpeed = 127", insertSnippet: "maxSpeed = 127", detail: "float maxSpeed", doc: "Maximum motor voltage cap (0-127)." },
+    { name: "minSpeed", kind: "property", icon: "📦", label: "minSpeed = 0", insertSnippet: "minSpeed = 0", detail: "float minSpeed", doc: "Minimum motor voltage threshold." },
+    { name: "earlyExitRange", kind: "property", icon: "📦", label: "earlyExitRange = 2", insertSnippet: "earlyExitRange = 2", detail: "float earlyExitRange", doc: "Distance or angle range to trigger early exit." },
+
+    // Core C++ Keywords & Types
+    { name: "chassis", kind: "variable", icon: "📦", label: "chassis", insertSnippet: "chassis.", detail: "lemlib::Chassis chassis", doc: "Main LemLib chassis controller object." },
+    { name: "lemlib", kind: "type", icon: "🧱", label: "lemlib", insertSnippet: "lemlib::", detail: "namespace lemlib", doc: "LemLib autonomous motion profiling namespace." },
+    { name: "pros", kind: "type", icon: "🧱", label: "pros", insertSnippet: "pros::", detail: "namespace pros", doc: "PROS Kernel C++ API namespace." },
+    { name: "void", kind: "keyword", icon: "🔤", label: "void", insertSnippet: "void ", detail: "C++ Type", doc: "Specifies function returns no value." },
+    { name: "int", kind: "keyword", icon: "🔤", label: "int", insertSnippet: "int ", detail: "C++ Type", doc: "32-bit signed integer." },
+    { name: "float", kind: "keyword", icon: "🔤", label: "float", insertSnippet: "float ", detail: "C++ Type", doc: "Single-precision floating point number." },
+
+    // Snippets
+    { name: "for", kind: "snippet", icon: "💬", label: "for loop", insertSnippet: "for (int i = 0; i < 10; i++) {\n    \n}", detail: "C++ For Loop", doc: "Standard counted iteration loop." },
+    { name: "while", kind: "snippet", icon: "💬", label: "while loop", insertSnippet: "while (true) {\n    \n    pros::delay(10);\n}", detail: "C++ While Loop", doc: "Condition-checked task loop." },
+    { name: "auton", kind: "snippet", icon: "💬", label: "autonomous routine", insertSnippet: "void auton_new_routine() {\n    chassis.setPose(-60, -60, 0);\n    chassis.moveToPoint(-24, -24, 2000);\n}", detail: "LemLib Autonomous Function", doc: "Creates a new autonomous routine." }
+  ];
+
+  function getDynamicProjectItems() {
+    if (!window.ProjectManager) return [];
+    const sym = window.ProjectManager.indexVariables();
+    const items = [];
+
+    sym.motors.forEach(m => {
+      items.push({
+        name: m.name,
+        kind: "variable",
+        icon: "⚙️",
+        label: `${m.name} (Motor)`,
+        insertSnippet: `${m.name}.`,
+        detail: `pros::Motor ${m.name}`,
+        doc: `V5 Smart Motor declared in ${m.file}`
+      });
+    });
+
+    sym.pistons.forEach(p => {
+      items.push({
+        name: p.name,
+        kind: "variable",
+        icon: "📍",
+        label: `${p.name} (ADI Piston)`,
+        insertSnippet: `${p.name}.`,
+        detail: `pros::ADIPiston ${p.name}`,
+        doc: `Pneumatic ADI Solenoid declared in ${p.file}`
+      });
+    });
+
+    sym.sensors.forEach(s => {
+      items.push({
+        name: s.name,
+        kind: "variable",
+        icon: "🧭",
+        label: `${s.name} (Sensor)`,
+        insertSnippet: `${s.name}.`,
+        detail: `${s.type || "Sensor"} ${s.name}`,
+        doc: `Hardware sensor declared in ${s.file}`
+      });
+    });
+
+    sym.functions.forEach(f => {
+      items.push({
+        name: f.name,
+        kind: "method",
+        icon: "⚡",
+        label: `${f.name}()`,
+        insertSnippet: `${f.name}();`,
+        detail: `void ${f.name}()`,
+        doc: `Project autonomous function declared in ${f.file}`
+      });
+    });
+
+    return items;
+  }
+
+  function updateIntelliSense(forceShow = false) {
+    if (!elCodeEditor || !elIntelliSense) return;
+
+    const text = elCodeEditor.value;
+    const pos = elCodeEditor.selectionStart;
+    const lineUpToPos = text.substring(0, pos);
+
+    // Check if user is inside function signature parentheses e.g. chassis.moveToPose(
+    if (checkParameterSignatureHelp(lineUpToPos)) {
+      hideIntelliSense();
+      return;
+    } else {
+      hideParamHint();
+    }
+
+    // Match word prefix preceding cursor
+    const match = /[a-zA-Z0-9_]*$/.exec(lineUpToPos);
+    currentWord = match ? match[0] : "";
+    currentWordStart = pos - currentWord.length;
+
+    // Check preceding operator (e.g. `chassis.`, `pros::`, `piston.`)
+    const lineBeforeWord = lineUpToPos.substring(0, currentWordStart);
+    let targetScope = "";
+    if (/chassis\.\s*$/.test(lineBeforeWord)) {
+      targetScope = "chassis";
+    } else if (/\.\s*$/.test(lineBeforeWord) || /->\s*$/.test(lineBeforeWord)) {
+      targetScope = "member";
+    }
+
+    if (!forceShow && currentWord.length < 1 && !targetScope) {
+      hideIntelliSense();
+      return;
+    }
+
+    const allItems = [...BUILTIN_INTELLISENSE, ...getDynamicProjectItems()];
+    const query = currentWord.toLowerCase();
+
+    intelItems = allItems.filter(item => {
+      if (targetScope === "chassis") {
+        if (item.scope !== "chassis") return false;
+      }
+      if (query) {
+        return item.name.toLowerCase().includes(query) || item.label.toLowerCase().includes(query);
+      }
+      return true;
+    });
+
+    if (intelItems.length === 0) {
+      hideIntelliSense();
+      return;
+    }
+
+    intelSelectedIndex = 0;
+    renderIntelliSenseList();
+    positionPopupAtCursor();
+    elIntelliSense.hidden = false;
+  }
+
+  function renderIntelliSenseList() {
+    if (!elIntelList) return;
+    elIntelList.innerHTML = "";
+
+    intelItems.forEach((item, idx) => {
+      const div = document.createElement("div");
+      div.className = `ide-intel-item ${idx === intelSelectedIndex ? "selected" : ""}`;
+      div.innerHTML = `
+        <span class="ide-intel-icon">${item.icon}</span>
+        <span class="ide-intel-label">${item.name}</span>
+        <span class="ide-intel-kind-tag">${item.kind}</span>
+      `;
+      div.onclick = (e) => {
+        e.stopPropagation();
+        intelSelectedIndex = idx;
+        acceptSelectedIntelliSense();
+      };
+      div.onmouseenter = () => {
+        intelSelectedIndex = idx;
+        renderIntelliSenseList();
+        updateDocPane();
+      };
+      elIntelList.appendChild(div);
+    });
+
+    // Ensure selected item scrolls into view
+    const selectedEl = elIntelList.children[intelSelectedIndex];
+    if (selectedEl) {
+      selectedEl.scrollIntoView({ block: "nearest" });
+    }
+
+    updateDocPane();
+  }
+
+  function updateDocPane() {
+    const item = intelItems[intelSelectedIndex];
+    if (!item) return;
+
+    if (elIntelDocDetail) elIntelDocDetail.textContent = item.detail || item.name;
+    if (elIntelDocText) elIntelDocText.textContent = item.doc || "No documentation available.";
+  }
+
+  function positionPopupAtCursor() {
+    if (!elCodeEditor || !elIntelliSense) return;
+
+    const text = elCodeEditor.value.substring(0, currentWordStart);
+    const lines = text.split("\n");
+    const lineIndex = lines.length - 1;
+    const colIndex = lines[lineIndex].length;
+
+    const lineHeight = 21; // ~1.5 * 14px font
+    const charWidth = 8.1;  // Consolas 13.5px width
+
+    let top = (lineIndex + 1) * lineHeight - elCodeEditor.scrollTop + 10;
+    let left = colIndex * charWidth - elCodeEditor.scrollLeft + 12;
+
+    // Boundary constraints
+    const maxTop = elCodeEditor.clientHeight - 220;
+    if (top > maxTop) top = Math.max(10, top - 250);
+
+    const maxLeft = elCodeEditor.clientWidth - 400;
+    if (left > maxLeft) left = Math.max(10, maxLeft);
+
+    elIntelliSense.style.top = `${top}px`;
+    elIntelliSense.style.left = `${left}px`;
+  }
+
+  function hideIntelliSense() {
+    if (elIntelliSense) elIntelliSense.hidden = true;
+  }
+
+  function acceptSelectedIntelliSense() {
+    const item = intelItems[intelSelectedIndex];
+    if (!item || !elCodeEditor) return;
+
+    const val = elCodeEditor.value;
+    const endPos = elCodeEditor.selectionStart;
+
+    const snippet = item.insertSnippet || item.name;
+    // Strip placeholder numbers like ${1:x} -> x or default placeholder
+    const cleanSnippet = snippet.replace(/\$\{\d*?:?(.*?)\}/g, "$1").replace(/\$\{(.*?)\}/g, "$1");
+
+    elCodeEditor.value = val.substring(0, currentWordStart) + cleanSnippet + val.substring(endPos);
+    
+    // Position cursor at sensible position (inside parens if present)
+    const parenIdx = cleanSnippet.indexOf("(");
+    let newCursorPos = currentWordStart + cleanSnippet.length;
+    if (parenIdx !== -1) {
+      newCursorPos = currentWordStart + parenIdx + 1;
+    }
+
+    elCodeEditor.selectionStart = elCodeEditor.selectionEnd = newCursorPos;
+    elCodeEditor.focus();
+
+    hideIntelliSense();
+    onEditorChange();
+  }
+
+  // Parameter Signature Hint Engine
+  function checkParameterSignatureHelp(lineUpToPos) {
+    if (!elParamHint || !elParamSig || !elParamDoc) return false;
+
+    // Search for active function call e.g. chassis.moveToPose(10, 20,
+    const match = /(chassis|pros|lemlib|[a-zA-Z0-9_]+)\.(moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|waitUntil|setPose|set_value|move)\s*\(([^)]*)$/.exec(lineUpToPos);
+    if (!match) return false;
+
+    const fnName = match[2];
+    const argsStr = match[3];
+    const paramCount = argsStr.split(",").length - 1;
+
+    const builtin = BUILTIN_INTELLISENSE.find(b => b.name === fnName);
+    if (!builtin) return false;
+
+    const detailParts = builtin.detail.match(/\((.*?)\)/);
+    if (!detailParts) return false;
+
+    const params = detailParts[1].split(",").map(p => p.trim());
+    if (params.length === 0) return false;
+
+    let sigHtml = `${builtin.name}(`;
+    params.forEach((p, i) => {
+      if (i === paramCount) {
+        sigHtml += `<span class="active-param">${escapeHtml(p)}</span>`;
+      } else {
+        sigHtml += escapeHtml(p);
+      }
+      if (i < params.length - 1) sigHtml += ", ";
+    });
+    sigHtml += ")";
+
+    elParamSig.innerHTML = sigHtml;
+    elParamDoc.textContent = builtin.doc;
+
+    positionPopupAtCursor();
+    elParamHint.hidden = false;
+    return true;
+  }
+
+  function hideParamHint() {
+    if (elParamHint) elParamHint.hidden = true;
+  }
+
   function insertSnippet(snippet) {
     if (!elCodeEditor) return;
     const start = elCodeEditor.selectionStart;
@@ -340,21 +1037,74 @@
     ProjectManager.markDirty(true);
     updateLineNumbers();
     updateCursorAndCharCount();
+    renderSyntaxHighlight();
+    triggerAutosave(false);
   }
 
   function wireEditor() {
     if (!elCodeEditor) return;
 
-    elCodeEditor.addEventListener("input", onEditorChange);
-    elCodeEditor.addEventListener("keyup", updateCursorAndCharCount);
-    elCodeEditor.addEventListener("click", updateCursorAndCharCount);
+    elCodeEditor.addEventListener("input", () => {
+      onEditorChange();
+      updateIntelliSense();
+    });
+
+    elCodeEditor.addEventListener("keyup", (e) => {
+      updateCursorAndCharCount();
+      if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
+        updateIntelliSense();
+      }
+    });
+
+    elCodeEditor.addEventListener("click", () => {
+      updateCursorAndCharCount();
+      hideIntelliSense();
+    });
 
     elCodeEditor.addEventListener("scroll", () => {
       if (elLineNumbers) elLineNumbers.scrollTop = elCodeEditor.scrollTop;
+      if (elCodeHighlight) {
+        elCodeHighlight.scrollTop = elCodeEditor.scrollTop;
+        elCodeHighlight.scrollLeft = elCodeEditor.scrollLeft;
+      }
     });
 
-    // Tab key support in textarea
+    // Keyboard shortcuts & IntelliSense navigation
     elCodeEditor.addEventListener("keydown", (e) => {
+      // Ctrl + Space to trigger IntelliSense
+      if ((e.ctrlKey || e.metaKey) && e.code === "Space") {
+        e.preventDefault();
+        updateIntelliSense(true);
+        return;
+      }
+
+      // If IntelliSense is open
+      if (elIntelliSense && !elIntelliSense.hidden) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          intelSelectedIndex = (intelSelectedIndex + 1) % intelItems.length;
+          renderIntelliSenseList();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          intelSelectedIndex = (intelSelectedIndex - 1 + intelItems.length) % intelItems.length;
+          renderIntelliSenseList();
+          return;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          acceptSelectedIntelliSense();
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          hideIntelliSense();
+          return;
+        }
+      }
+
+      // Tab key support in textarea
       if (e.key === "Tab") {
         e.preventDefault();
         const start = elCodeEditor.selectionStart;

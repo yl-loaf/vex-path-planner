@@ -19,6 +19,10 @@
           <span class="ide-project-tag">📁 Project</span>
           <span class="ide-project-name" id="ideProjectName">Override_LemLib_Bot</span>
           <span class="ide-dirty-badge" id="ideDirtyBadge" hidden>● Unsaved Changes</span>
+          <span class="ide-autosave-badge" id="ideAutosaveBadge" title="Autosave status: Automatically saving changes in background">
+            <span class="autosave-dot active" id="ideAutosaveDot"></span>
+            <span id="ideAutosaveText">Autosave: Ready</span>
+          </span>
         </div>
       </div>
 
@@ -101,15 +105,38 @@
         <div class="ide-editor-toolbar">
           <span class="ide-breadcrumb-file" id="ideCurrentFile">src/autons.cpp</span>
           <div class="ide-editor-meta">
+            <button type="button" id="btnToggleAutosave" class="ide-autosave-toggle" title="Click to toggle IDE autosave mode">
+              <span class="autosave-icon" id="ideAutosaveIcon">⚡</span>
+              <span id="ideAutosaveToggleLabel">Autosave: ON</span>
+            </button>
+            <span id="ideAutosaveTimestamp" class="ide-autosave-time" title="Last background save timestamp">Saved</span>
             <span id="ideCursorPos">Ln 1, Col 1</span>
             <span id="ideCharCount">0 chars</span>
           </div>
         </div>
 
         <!-- Main Code Editor Area -->
-        <div class="ide-editor-wrapper">
+        <div class="ide-editor-wrapper" id="ideEditorWrapper">
           <div class="ide-line-numbers" id="ideLineNumbers"></div>
-          <textarea id="ideCodeEditor" class="ide-code-textarea" spellcheck="false" placeholder="// Write or edit PROS C++ code here..."></textarea>
+          <div class="ide-editor-stage" id="ideEditorStage">
+            <pre class="ide-code-highlight" id="ideCodeHighlight" aria-hidden="true"><code id="ideCodeHighlightInner"></code></pre>
+            <textarea id="ideCodeEditor" class="ide-code-textarea" spellcheck="false" placeholder="// Write or edit PROS C++ code here..."></textarea>
+            
+            <!-- VS Code Like IntelliSense Autocomplete Popup -->
+            <div id="ideIntelliSense" class="ide-intellisense-popup" hidden>
+              <div class="ide-intel-list" id="ideIntelList"></div>
+              <div class="ide-intel-doc-pane" id="ideIntelDocPane">
+                <div class="ide-intel-doc-detail" id="ideIntelDocDetail"></div>
+                <div class="ide-intel-doc-text" id="ideIntelDocText"></div>
+              </div>
+            </div>
+
+            <!-- VS Code Signature / Parameter Hint Popup -->
+            <div id="ideParamHint" class="ide-param-hint-popup" hidden>
+              <div class="ide-param-sig" id="ideParamSig"></div>
+              <div class="ide-param-doc" id="ideParamDoc"></div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -338,9 +365,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k18"></script>
-  <script src="v5-brain-serial.js?v=20260921.k18"></script>
-  <script src="project-manager.js?v=20260921.k18"></script>
-  <script src="ide.js?v=20260921.k18"></script>
+  <script src="firebase-config.js?v=20260921.k22"></script>
+  <script src="v5-brain-serial.js?v=20260921.k22"></script>
+  <script src="project-manager.js?v=20260921.k22"></script>
+  <script src="ide.js?v=20260921.k22"></script>
 </body>
 </html>

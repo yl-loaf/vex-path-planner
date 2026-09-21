@@ -4358,7 +4358,95 @@ kbd {
 }
 .ide-editor-meta {
   display: flex;
+  align-items: center;
   gap: 12px;
+}
+
+/* IDE Autosave UI Elements */
+.ide-autosave-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #091322;
+  border: 1px solid #1e293b;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #a7f3d0;
+  transition: all 0.2s ease;
+}
+.ide-autosave-badge.saving {
+  border-color: #f59e0b;
+  color: #fde68a;
+  background: #1c1303;
+}
+.ide-autosave-badge.synced {
+  border-color: #0284c7;
+  color: #7dd3fc;
+  background: #031e33;
+}
+.ide-autosave-badge.disabled {
+  border-color: #334155;
+  color: #64748b;
+  background: #090f1a;
+}
+
+.autosave-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
+  display: inline-block;
+}
+.autosave-dot.saving {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
+  animation: pulseSave 0.8s infinite alternate;
+}
+.autosave-dot.synced {
+  background: #38bdf8;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
+}
+.autosave-dot.off {
+  background: #64748b;
+  box-shadow: none;
+}
+
+@keyframes pulseSave {
+  from { opacity: 0.3; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1.1); }
+}
+
+.ide-autosave-toggle {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  color: #38bdf8;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.70rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+.ide-autosave-toggle:hover {
+  background: #1e293b;
+  border-color: #38bdf8;
+}
+.ide-autosave-toggle.off {
+  color: #64748b;
+  border-color: #334155;
+  background: #0b1120;
+}
+
+.ide-autosave-time {
+  font-size: 0.70rem;
+  color: #64748b;
+  font-family: monospace;
 }
 
 .ide-editor-wrapper {
@@ -4381,19 +4469,212 @@ kbd {
   user-select: none;
   overflow: hidden;
 }
-.ide-code-textarea {
+
+.ide-editor-stage {
+  position: relative;
   flex: 1;
+  height: 100%;
+  overflow: hidden;
   background: #050a14;
-  color: #e2e8f0;
-  border: none;
-  outline: none;
-  resize: none;
+}
+
+.ide-code-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
   padding: 8px 12px;
   font-family: "Consolas", "Courier New", monospace;
   font-size: 0.85rem;
   line-height: 1.5;
-  white-space: pre;
   tab-size: 4;
+  white-space: pre;
+  word-break: normal;
+  overflow: hidden;
+  pointer-events: none;
+  box-sizing: border-box;
+  color: #e2e8f0;
+  background: transparent;
+  border: none;
+}
+
+.ide-code-textarea {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  background: transparent !important;
+  color: transparent !important;
+  caret-color: #38bdf8;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  tab-size: 4;
+  white-space: pre;
+  word-break: normal;
+  overflow: auto;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+/* VS Code Syntax Highlighting Token Colors */
+.cpp-comment { color: #6a9955; font-style: italic; }
+.cpp-string { color: #ce9178; }
+.cpp-preproc { color: #c586c0; font-weight: 600; }
+.cpp-number { color: #b5cea8; }
+.cpp-keyword { color: #569cd6; font-weight: 600; }
+.cpp-type { color: #4ec9b0; font-weight: 600; }
+.cpp-fn { color: #dcdcaa; font-weight: 600; }
+.cpp-member { color: #9cdcfe; }
+.cpp-bracket { color: #ffd700; }
+.cpp-operator { color: #d4d4d4; }
+.cpp-ident { color: #e2e8f0; }
+
+/* VS Code Style IntelliSense Autocomplete Popup */
+.ide-intellisense-popup {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  background: #1e1e1e;
+  border: 1px solid #454545;
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.75);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+  max-height: 240px;
+  min-width: 380px;
+  max-width: 620px;
+  animation: intelFadeIn 0.1s ease-out;
+}
+
+@keyframes intelFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ide-intel-list {
+  flex: 1;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #252526;
+  border-right: 1px solid #333333;
+  padding: 4px 0;
+}
+
+.ide-intel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  color: #cccccc;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.05s ease;
+}
+
+.ide-intel-item:hover {
+  background: #2a2d2e;
+}
+
+.ide-intel-item.selected {
+  background: #04395e !important;
+  color: #ffffff !important;
+}
+
+.ide-intel-icon {
+  font-size: 0.85rem;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ide-intel-label {
+  font-family: "Consolas", "Courier New", monospace;
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.ide-intel-kind-tag {
+  font-size: 0.65rem;
+  color: #858585;
+  background: #1e1e1e;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+
+.ide-intel-doc-pane {
+  width: 220px;
+  padding: 10px 12px;
+  background: #1e1e1e;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #cccccc;
+  overflow-y: auto;
+}
+
+.ide-intel-doc-detail {
+  font-family: "Consolas", "Courier New", monospace;
+  color: #4ec9b0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  word-break: break-all;
+  background: #252526;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border-left: 2px solid #007acc;
+}
+
+.ide-intel-doc-text {
+  line-height: 1.4;
+  color: #aaaaaa;
+}
+
+/* VS Code Parameter Signature Hint */
+.ide-param-hint-popup {
+  position: absolute;
+  z-index: 999;
+  background: #252526;
+  border: 1px solid #007acc;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  padding: 6px 10px;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.78rem;
+  color: #cccccc;
+  max-width: 480px;
+}
+
+.ide-param-sig {
+  color: #dcdcaa;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.ide-param-sig span.active-param {
+  color: #f59e0b;
+  background: #3b2d12;
+  padding: 1px 3px;
+  border-radius: 3px;
+  text-decoration: underline;
+}
+
+.ide-param-doc {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.72rem;
+  color: #9cdcfe;
 }
 
 /* Output Console Pane */
