@@ -88,6 +88,45 @@
   // -------------------------------------------------------------
   // Firebase Auth
   // -------------------------------------------------------------
+  let cloudIdeUnsub = null;
+
+  function subscribeToIdeCloud(uid) {
+    if (cloudIdeUnsub) {
+      try { cloudIdeUnsub(); } catch (_) {}
+      cloudIdeUnsub = null;
+    }
+    if (!uid || typeof firebase === "undefined" || !firebase.firestore) return;
+    try {
+      const db = firebase.firestore();
+      const projRef = db.collection("users").doc(uid).collection("data").doc("active_project");
+      cloudIdeUnsub = projRef.onSnapshot((snap) => {
+        if (!snap.exists || snap.metadata?.hasPendingWrites) return;
+        const data = snap.data();
+        const cloudTime = Number(data.updatedAt) || 0;
+        const isLocalDefault = ProjectManager.isDefaultProject ? ProjectManager.isDefaultProject() : false;
+        const localTime = isLocalDefault ? 0 : (ProjectManager.project?.updatedAt || 0);
+
+        if ((cloudTime > localTime || isLocalDefault) && !ProjectManager.isDirty) {
+          console.log("[IDE CloudSync] Live project update from server detected, reloading...");
+          ProjectManager.loadFromCloud(true).then((proj) => {
+            if (proj) {
+              renderProjectHeader();
+              renderFileTree();
+              renderTabs();
+              loadFile(activeFile || "src/main.cpp");
+              renderSymbols();
+              showToast(`☁️ Workspace updated from server ("${proj.name}")`, 3500);
+            }
+          });
+        }
+      }, (err) => {
+        console.warn("IDE live cloud subscription warning:", err);
+      });
+    } catch (e) {
+      console.warn("IDE live cloud subscription error:", e);
+    }
+  }
+
   function initAuth() {
     try {
       if (typeof firebase === "undefined" || !firebase.apps || !firebase.apps.length || !firebase.auth) return;
@@ -96,6 +135,26 @@
         cloudUser = user;
         updateAuthUI();
         if (user) {
+          ProjectManager.loadFromCloud(false).then((proj) => {
+            if (proj) {
+              renderProjectHeader();
+              renderFileTree();
+              renderTabs();
+              loadFile(activeFile);
+              renderSymbols();
+            }
+          }).catch(console.error);
+          subscribeToIdeCloud(user.uid);
+        } else {
+          if (cloudIdeUnsub) {
+            try { cloudIdeUnsub(); } catch (_) {}
+            cloudIdeUnsub = null;
+          }
+        }
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && cloudUser && !ProjectManager.isDirty) {
           ProjectManager.loadFromCloud(false).then((proj) => {
             if (proj) {
               renderProjectHeader();
@@ -1487,7 +1546,8 @@
           updatedAt: Date.now(),
           files: filesMap,
           activeAuton: "red_rush_auton",
-          cloudSynced: false
+          cloudSynced: false,
+          isDefault: false
         };
 
         if (window.ImportProgressModal) {
@@ -1562,7 +1622,19 @@
           });
         }
 
-        showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}).`);
+        if (cloudUser) {
+          try {
+            updateAutosaveUI("saving", null, "☁️ Syncing to server...");
+            await ProjectManager.saveToCloud(null, false);
+            updateAutosaveUI("synced", null, finalStr);
+            showToast(`💥 Workspace imported & synced to server! "${projName}" (${fileCount} files).`);
+          } catch (cloudErr) {
+            console.error("Cloud sync on import failed:", cloudErr);
+            showToast(`💥 Workspace imported locally (${fileCount} files). Cloud sync warning: ${cloudErr.message}`);
+          }
+        } else {
+          showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}).`);
+        }
       });
     }
 

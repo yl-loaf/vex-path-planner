@@ -493,14 +493,48 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         target: "v5",
         kernel: "4.1.0",
         lemlibVersion: "0.5.4",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        createdAt: 0,
+        updatedAt: 0,
         files: { ...DEFAULT_TEMPLATES },
         activeAuton: "red_rush_auton",
-        cloudSynced: true,
+        cloudSynced: false,
+        isDefault: true,
       };
       this.saveLocal();
       this.recordSavedBaseline();
+    }
+
+    isDefaultProject() {
+      if (!this.project) return true;
+      if (this.project.isDefault === true) return true;
+      if ((Number(this.project.updatedAt) || 0) === 0) return true;
+      const files = this.project.files || {};
+      const keys = Object.keys(files);
+      if (this.project.name === "Override_LemLib_Bot" && keys.length <= 6 && !this.isDirty && this.project.cloudSynced === false) {
+        const isExactTemplates = keys.every(k => DEFAULT_TEMPLATES[k] && files[k] === DEFAULT_TEMPLATES[k]);
+        if (isExactTemplates) return true;
+      }
+      return false;
+    }
+
+    cleanFilesForFirestore(files) {
+      if (!files || typeof files !== "object") return {};
+      const clean = {};
+      for (const [path, content] of Object.entries(files)) {
+        if (!path || typeof content !== "string") continue;
+        // Skip huge files (> 400KB) to prevent Firestore 1MB document limit breach
+        if (content.length > 400 * 1024) {
+          console.warn(`[ProjectManager] Skipping oversized file for cloud sync: ${path} (${content.length} bytes)`);
+          continue;
+        }
+        // Skip binary content if present
+        if (content.indexOf("\0") !== -1) {
+          console.warn(`[ProjectManager] Skipping binary file for cloud sync: ${path}`);
+          continue;
+        }
+        clean[path] = content;
+      }
+      return clean;
     }
 
     wipeProject() {
@@ -799,6 +833,8 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     setFile(filename, content, immediate = false) {
       if (!this.project) this.initDefaultProject();
       if (!this.project.files) this.project.files = {};
+      this.project.isDefault = false;
+      this.project.updatedAt = Date.now();
       
       const baseline = this.lastSavedFileHashes.get(filename);
       this.project.files[filename] = content;
@@ -2194,16 +2230,17 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         throw new Error("You must be signed in with Google to sync project to cloud");
       }
 
-      // If only changes requested and no changes exist, return early!
+      // Check if full sync is required (e.g. newly imported or forced)
+      const needsFullSync = !this.project.cloudSynced || !onlyChanges;
       const hasChanges = this.isDirty || (this.changedFiles && this.changedFiles.size > 0);
-      if (onlyChanges && !hasChanges) {
+      if (!needsFullSync && !hasChanges) {
         if (typeof onProgress === "function") {
           onProgress(0, 0, this.formatSavingProgress(0, 0));
         }
         return true;
       }
 
-      const isDelta = onlyChanges && this.changedFiles && this.changedFiles.size > 0;
+      const isDelta = !needsFullSync && this.changedFiles && this.changedFiles.size > 0;
       const totalBytes = isDelta ? this.getChangedSizeBytes() : this.getProjectSizeBytes();
       const emit = (curr) => {
         const clamped = Math.min(curr, totalBytes);
@@ -2223,29 +2260,45 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       emit(Math.round(totalBytes * 0.55));
 
+      const now = Date.now();
+      this.project.updatedAt = now;
+      this.project.isDefault = false;
+
       if (isDelta) {
         // Delta upload: only send the modified files
         const changedFilesMap = {};
         for (const f of this.changedFiles) {
-          changedFilesMap[f] = this.project.files[f];
+          if (this.project.files && this.project.files[f] !== undefined) {
+            changedFilesMap[f] = this.project.files[f];
+          }
         }
         await projectRef.set({
           name: this.project.name,
           version: this.project.version,
+          target: this.project.target || "v5",
+          kernel: this.project.kernel || "4.1.0",
+          lemlibVersion: this.project.lemlibVersion || "0.5.4",
           files: changedFilesMap,
           activeAuton: this.project.activeAuton || "red_rush_auton",
-          updatedAt: Date.now(),
+          updatedAt: now,
           authorEmail: user.email || "",
+          isDefault: false
         }, { merge: true });
       } else {
+        // Clean files map to exclude oversized or binary files
+        const cleanFiles = this.cleanFilesForFirestore(this.project.files);
         await projectRef.set({
-          name: this.project.name,
-          version: this.project.version,
-          files: this.project.files,
+          name: this.project.name || "Override_LemLib_Bot",
+          version: this.project.version || "1.0.0",
+          target: this.project.target || "v5",
+          kernel: this.project.kernel || "4.1.0",
+          lemlibVersion: this.project.lemlibVersion || "0.5.4",
+          files: cleanFiles,
           activeAuton: this.project.activeAuton || "red_rush_auton",
-          updatedAt: Date.now(),
+          updatedAt: now,
           authorEmail: user.email || "",
-        }, { merge: true });
+          isDefault: false
+        });
       }
 
       emit(Math.round(totalBytes * 0.85));
@@ -2254,7 +2307,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       this.markDirty(false);
       this.recordSavedBaseline();
       this.project.cloudSynced = true;
-      await this.saveWithProgress(null, true);
+      await this.saveLocal(false);
       emit(totalBytes);
       return true;
     }
@@ -2276,23 +2329,35 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         const data = snap.data();
         const cloudTime = Number(data.updatedAt) || 0;
         const localTime = Number(this.project?.updatedAt) || 0;
+        const isLocalDefault = this.isDefaultProject();
 
-        // Guard against stale cloud snapshots overwriting newer local work
-        if (!force && localTime > cloudTime) {
+        // Guard against stale cloud snapshots overwriting newer local work,
+        // UNLESS force is true OR local is just an untouched default template!
+        if (!force && !isLocalDefault && localTime > cloudTime) {
           console.log(`[ProjectManager] Retaining newer local project workspace (local: ${localTime} vs cloud: ${cloudTime})`);
           return null;
         }
 
+        const filesMap = (data.files && typeof data.files === "object") ? data.files : { ...DEFAULT_TEMPLATES };
+
         this.project = {
           name: data.name || "Override_LemLib_Bot",
           version: data.version || "1.0.0",
-          files: data.files || { ...DEFAULT_TEMPLATES },
+          target: data.target || "v5",
+          kernel: data.kernel || "4.1.0",
+          lemlibVersion: data.lemlibVersion || "0.5.4",
+          files: filesMap,
           activeAuton: data.activeAuton || "red_rush_auton",
           updatedAt: cloudTime || Date.now(),
           cloudSynced: true,
+          isDefault: false,
         };
         this.markDirty(false);
+        this.changedFiles.clear();
         await this.saveLocal(false);
+        this.indexVariables();
+        this.recordSavedBaseline();
+        this.notifyListeners("load");
         return this.project;
       }
       return null;

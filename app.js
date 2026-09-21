@@ -1140,6 +1140,10 @@
         draw();
         markDirty();
         saveLocal();
+        syncPlannerIntoProjectManager();
+        if (cloudReady && cloudUser) {
+          cloudSave(true);
+        }
       } catch (e) {
         alert("Could not import file: " + e.message);
       }
@@ -3993,7 +3997,44 @@
     }
   }
 
-  async function cloudLoad() {
+  let cloudProjectUnsub = null;
+
+  function subscribeToCloudProject(uid) {
+    if (cloudProjectUnsub) {
+      try { cloudProjectUnsub(); } catch (_) {}
+      cloudProjectUnsub = null;
+    }
+    if (!uid || typeof firebase === "undefined" || !firebase.firestore) return;
+    try {
+      const db = firebase.firestore();
+      const projRef = db.collection("users").doc(uid).collection("data").doc("active_project");
+
+      cloudProjectUnsub = projRef.onSnapshot((snap) => {
+        if (!snap.exists || snap.metadata?.hasPendingWrites) return;
+        const data = snap.data();
+        const cloudTime = Number(data.updatedAt) || 0;
+        const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+        const localTime = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
+
+        if ((cloudTime > localTime || isLocalDefault) && !window.ProjectManager?.isDirty && !cloudApplying) {
+          console.log("[CloudSync] Live server workspace update detected! Updating...");
+          window.ProjectManager.loadFromCloud(true).then((proj) => {
+            if (proj) {
+              loadProjectAutonsIntoPlanner(false, true);
+              updateProjectBanner();
+              showToast(`☁️ Workspace updated from server ("${proj.name || 'Project'}")`, 3500);
+            }
+          });
+        }
+      }, (err) => {
+        console.warn("Live project sync warning:", err);
+      });
+    } catch (e) {
+      console.warn("Failed to subscribe to cloud project:", e);
+    }
+  }
+
+  async function cloudLoad(force = false) {
     if (!cloudReady || !cloudUser) return;
     setCloudStatus("Loading…", "busy");
     try {
@@ -4004,11 +4045,13 @@
       const projSnap = await projRef.get();
       if (projSnap.exists) {
         const cloudProj = projSnap.data();
-        const cloudTimestamp = cloudProj.updatedAt || 0;
-        const localTimestamp = window.ProjectManager?.project?.updatedAt || 0;
-        // Only adopt cloud project if it is strictly newer than local workspace
-        if (cloudTimestamp > localTimestamp) {
-          await window.ProjectManager.loadFromCloud();
+        const cloudTimestamp = Number(cloudProj.updatedAt) || 0;
+        const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+        const localTimestamp = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
+
+        // Only adopt cloud project if force is true, cloud is newer, or local is untouched default
+        if (force || cloudTimestamp > localTimestamp || isLocalDefault) {
+          await window.ProjectManager.loadFromCloud(true);
           loadProjectAutonsIntoPlanner(false, true);
           updateProjectBanner();
         } else {
@@ -4023,15 +4066,19 @@
       if (snap.exists) {
         const pathData = snap.data();
         const pathTime = pathData.updatedAt ? new Date(pathData.updatedAt).getTime() : 0;
-        const localTime = window.ProjectManager?.project?.updatedAt || 0;
-        if (!window.ProjectManager?.project || pathTime > localTime) {
+        const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+        const localTime = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
+        if (force || isLocalDefault || !window.ProjectManager?.project || pathTime > localTime) {
           applyPathPayload(pathData);
           saveLocal();
         }
         setCloudStatus("Synced", "ok");
       } else {
-        // First login: upload current local path
-        await cloudSave(true);
+        // First login: upload current local path only if not untouched default
+        const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+        if (!isLocalDefault) {
+          await cloudSave(true);
+        }
         setCloudStatus("Synced", "ok");
       }
     } catch (e) {
@@ -4313,6 +4360,7 @@
         saveGoogleUserProfile(user);
         updateAuthUI();
         await cloudLoad();
+        subscribeToCloudProject(user.uid);
         try {
           const userTutDone = localStorage.getItem("lemlib_tutorial_user_" + user.uid) === "true";
           const globalTutDone = localStorage.getItem("lemlib_tutorial_completed_v1") === "true";
@@ -4321,6 +4369,10 @@
           }
         } catch (_) {}
       } else {
+        if (cloudProjectUnsub) {
+          try { cloudProjectUnsub(); } catch (_) {}
+          cloudProjectUnsub = null;
+        }
         const signedOut = localStorage.getItem(AUTH_EXPLICIT_SIGNOUT_KEY) === "true";
         if (signedOut) {
           updateAuthUI();
@@ -4337,15 +4389,32 @@
       }
     });
 
-    // Save on tab close or navigation
+    // Save on tab close or navigation, but never clobber server with untouched default template
     window.addEventListener("beforeunload", () => {
       if (cloudReady && cloudUser && !cloudApplying) {
-        cloudSave(true);
+        const isDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+        if (!isDefault || window.ProjectManager?.isDirty) {
+          cloudSave(true);
+        }
       }
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden" && cloudReady && cloudUser && !cloudApplying) {
-        cloudSave(true);
+      if (document.visibilityState === "hidden") {
+        if (cloudReady && cloudUser && !cloudApplying) {
+          const isDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+          if (!isDefault || window.ProjectManager?.isDirty) {
+            cloudSave(true);
+          }
+        }
+      } else if (document.visibilityState === "visible") {
+        if (cloudReady && cloudUser && !cloudApplying && !window.ProjectManager?.isDirty) {
+          cloudLoad(false);
+        }
+      }
+    });
+    window.addEventListener("focus", () => {
+      if (cloudReady && cloudUser && !cloudApplying && !window.ProjectManager?.isDirty) {
+        cloudLoad(false);
       }
     });
   }
@@ -6415,7 +6484,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
           await window.ProjectManager.saveToCloud((curr, total, progStr) => {
             btnSyncCloud.textContent = `⏳ ${progStr}`;
             finalStr = progStr;
-          });
+          }, false);
+          await cloudSave(true);
+          setCloudStatus("Synced", "ok");
           showToast(`☁️ Multi-file project synchronized to cloud (${finalStr || "100%"})!`);
         } catch (err) {
           showToast(`⚠️ Cloud sync failed: ${err.message}`);
@@ -6503,7 +6574,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
           try {
             btnFetchCloud.disabled = true;
             btnFetchCloud.textContent = "Fetching...";
-            const proj = await window.ProjectManager.loadFromCloud();
+            const proj = await window.ProjectManager.loadFromCloud(true);
             if (proj) {
               loadProjectAutonsIntoPlanner(false, true);
               updateProjectBanner();
@@ -6552,6 +6623,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
                   });
                 }
                 window.ProjectManager.wipeProject();
+                data.updatedAt = Date.now();
+                data.isDefault = false;
+                data.cloudSynced = false;
                 window.ProjectManager.project = data;
                 if (window.ImportProgressModal) {
                   window.ImportProgressModal.update({
@@ -6566,7 +6640,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
                 if (window.ImportProgressModal) {
                   window.ImportProgressModal.update({
                     phase: 4,
-                    pct: 95,
+                    pct: 85,
                     currentBytes: totalBytes,
                     totalBytes: totalBytes,
                     message: "Synchronizing autonomous routines into map..."
@@ -6575,6 +6649,29 @@ lemlib::ControllerSettings ${currentMode}_controller(
                 loadProjectAutonsIntoPlanner(false, true);
                 updateProjectBanner();
                 closeModal();
+
+                // Immediately sync imported workspace to Firebase Firestore
+                const currentUser = (typeof firebase !== "undefined" && firebase.auth) ? firebase.auth().currentUser : null;
+                if (currentUser) {
+                  try {
+                    if (window.ImportProgressModal) {
+                      window.ImportProgressModal.update({
+                        phase: 4,
+                        pct: 95,
+                        currentBytes: totalBytes,
+                        totalBytes: totalBytes,
+                        message: "Synchronizing project workspace to cloud server..."
+                      });
+                    }
+                    await window.ProjectManager.saveToCloud(null, false);
+                    await cloudSave(true);
+                    setCloudStatus("Synced", "ok");
+                  } catch (cloudErr) {
+                    console.error("Cloud sync on import failed:", cloudErr);
+                    showToast(`⚠️ Saved locally, but cloud sync warning: ${cloudErr.message}`, 4000);
+                  }
+                }
+
                 if (window.ImportProgressModal) {
                   window.ImportProgressModal.finish({
                     bytesSynced: totalBytes,
@@ -6582,7 +6679,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
                     message: `✓ Successfully synced ${fileCount} files (${window.ProjectManager.formatBytes ? window.ProjectManager.formatBytes(totalBytes) : totalBytes + ' B'})`
                   });
                 }
-                showToast(`💥 Current workspace wiped! Imported "${targetName}" successfully.`);
+                showToast(`💥 Current workspace wiped! Imported "${targetName}" and synced to server!`);
               });
             } else {
               showToast("Invalid project file: missing files map.");
