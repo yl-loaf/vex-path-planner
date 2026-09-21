@@ -3998,107 +3998,172 @@
   }
 
   let cloudProjectUnsub = null;
+  let cloudPollTimer = null;
 
   function subscribeToCloudProject(uid) {
     if (cloudProjectUnsub) {
       try { cloudProjectUnsub(); } catch (_) {}
       cloudProjectUnsub = null;
     }
-    if (!uid || typeof firebase === "undefined" || !firebase.firestore) return;
-    try {
-      const db = firebase.firestore();
-      const projRef = db.collection("users").doc(uid).collection("data").doc("active_project");
+    if (cloudPollTimer) {
+      clearInterval(cloudPollTimer);
+      cloudPollTimer = null;
+    }
+    if (!uid) return;
 
-      cloudProjectUnsub = projRef.onSnapshot((snap) => {
-        if (!snap.exists || snap.metadata?.hasPendingWrites) return;
-        const data = snap.data();
-        const cloudTime = Number(data.updatedAt) || 0;
-        const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
-        const localTime = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
-
-        if ((cloudTime > localTime || isLocalDefault) && !window.ProjectManager?.isDirty && !cloudApplying) {
-          console.log("[CloudSync] Live server workspace update detected! Updating...");
-          window.ProjectManager.loadFromCloud(true).then((proj) => {
-            if (proj) {
-              loadProjectAutonsIntoPlanner(false, true);
-              updateProjectBanner();
-              showToast(`☁️ Workspace updated from server ("${proj.name || 'Project'}")`, 3500);
+    // Periodic check on server cloud project status
+    cloudPollTimer = setInterval(async () => {
+      if (document.visibilityState !== "visible" || window.ProjectManager?.isDirty || cloudApplying) return;
+      try {
+        const email = cloudUser?.email || localStorage.getItem(AUTH_EMAIL_KEY) || "";
+        const params = new URLSearchParams();
+        if (uid) params.set("uid", uid);
+        if (email) params.set("email", email);
+        const res = await fetch(`/api/project/status?${params.toString()}`);
+        if (res.ok) {
+          const st = await res.json();
+          if (st.exists) {
+            const serverTime = Number(st.updatedAt) || 0;
+            const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+            const localTime = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
+            if (serverTime > localTime || isLocalDefault) {
+              console.log("[CloudSync] Periodic server check detected newer project. Reloading...");
+              await cloudLoad(true);
             }
-          });
+          }
         }
-      }, (err) => {
-        console.warn("Live project sync warning:", err);
-      });
-    } catch (e) {
-      console.warn("Failed to subscribe to cloud project:", e);
+      } catch (_) {}
+    }, 15000);
+
+    // Realtime Firestore onSnapshot listener
+    if (typeof firebase !== "undefined" && firebase.firestore) {
+      try {
+        const db = firebase.firestore();
+        const projRef = db.collection("users").doc(uid).collection("data").doc("active_project");
+
+        cloudProjectUnsub = projRef.onSnapshot((snap) => {
+          if (!snap.exists || snap.metadata?.hasPendingWrites) return;
+          const data = snap.data();
+          const cloudTime = Number(data.updatedAt) || 0;
+          const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+          const localTime = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
+
+          if ((cloudTime > localTime || isLocalDefault) && !window.ProjectManager?.isDirty && !cloudApplying) {
+            console.log("[CloudSync] Live server workspace update detected! Updating...");
+            window.ProjectManager.loadFromCloud(true).then((proj) => {
+              if (proj) {
+                loadProjectAutonsIntoPlanner(false, true);
+                updateProjectBanner();
+                showToast(`☁️ Workspace updated from server ("${proj.name || 'Project'}")`, 3500);
+              }
+            });
+          }
+        }, (err) => {
+          console.warn("Live project sync warning:", err);
+        });
+      } catch (e) {
+        console.warn("Failed to subscribe to cloud project:", e);
+      }
     }
   }
 
   async function cloudLoad(force = false) {
-    if (!cloudReady || !cloudUser) return;
+    const activeUser = cloudUser || getSavedGoogleUser();
+    if (!activeUser) return;
     setCloudStatus("Loading…", "busy");
     try {
-      const db = firebase.firestore();
-
-      // Check if user has an active full-project workspace in Firestore
-      const projRef = db.collection("users").doc(cloudUser.uid).collection("data").doc("active_project");
-      const projSnap = await projRef.get();
-      if (projSnap.exists) {
-        const cloudProj = projSnap.data();
-        const cloudTimestamp = Number(cloudProj.updatedAt) || 0;
-        const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
-        const localTimestamp = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
-
-        // Only adopt cloud project if force is true, cloud is newer, or local is untouched default
-        if (force || cloudTimestamp > localTimestamp || isLocalDefault) {
-          await window.ProjectManager.loadFromCloud(true);
+      // 1. Load active project workspace using ProjectManager.loadFromCloud (checks both server and Firestore)
+      if (window.ProjectManager) {
+        const loadedProj = await window.ProjectManager.loadFromCloud(force);
+        if (loadedProj) {
           loadProjectAutonsIntoPlanner(false, true);
           updateProjectBanner();
-        } else {
-          console.log("Local project workspace is newer than cloud. Retaining local save.");
         }
-        setCloudStatus("Synced", "ok");
-        return;
       }
 
-      const ref = db.collection("users").doc(cloudUser.uid).collection("data").doc("path");
-      const snap = await ref.get();
-      if (snap.exists) {
-        const pathData = snap.data();
-        const pathTime = pathData.updatedAt ? new Date(pathData.updatedAt).getTime() : 0;
-        const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
-        const localTime = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
-        if (force || isLocalDefault || !window.ProjectManager?.project || pathTime > localTime) {
-          applyPathPayload(pathData);
-          saveLocal();
+      // 2. Load path payload if available from server or Firestore
+      let pathLoaded = false;
+      const uid = activeUser.uid;
+      const email = activeUser.email || "";
+
+      try {
+        const params = new URLSearchParams();
+        if (uid) params.set("uid", uid);
+        if (email) params.set("email", email);
+        const srvRes = await fetch(`/api/project?${params.toString()}`);
+        if (srvRes.ok) {
+          const srvData = await srvRes.json();
+          if (srvData.exists && srvData.pathPayload) {
+            applyPathPayload(srvData.pathPayload);
+            saveLocal();
+            pathLoaded = true;
+          }
         }
-        setCloudStatus("Synced", "ok");
-      } else {
-        // First login: upload current local path only if not untouched default
-        const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
-        if (!isLocalDefault) {
-          await cloudSave(true);
-        }
-        setCloudStatus("Synced", "ok");
+      } catch (err) {
+        console.warn("Server path check warning:", err);
       }
+
+      if (!pathLoaded && typeof firebase !== "undefined" && firebase.firestore && cloudUser) {
+        try {
+          const db = firebase.firestore();
+          const ref = db.collection("users").doc(cloudUser.uid).collection("data").doc("path");
+          const snap = await ref.get();
+          if (snap.exists) {
+            const pathData = snap.data();
+            applyPathPayload(pathData);
+            saveLocal();
+          }
+        } catch (fsErr) {
+          console.warn("Firestore path check warning:", fsErr);
+        }
+      }
+
+      setCloudStatus("Synced", "ok");
     } catch (e) {
-      console.error(e);
+      console.error("Cloud load failed:", e);
       setCloudStatus("Load failed", "err");
     }
   }
 
   async function cloudSave(force) {
-    if (!cloudReady || !cloudUser || cloudApplying) return;
+    const activeUser = cloudUser || getSavedGoogleUser();
+    if (!activeUser || cloudApplying) return;
     setCloudStatus("Saving…", "busy");
     try {
-      const db = firebase.firestore();
-      const ref = db.collection("users").doc(cloudUser.uid).collection("data").doc("path");
-      await ref.set(pathPayload(), { merge: true });
+      const payload = pathPayload();
 
-      // Also ensure ProjectManager active_project is saved to cloud
+      // 1. Ensure ProjectManager active_project is saved to cloud (server + Firestore)
       if (window.ProjectManager && window.ProjectManager.project) {
-        await window.ProjectManager.saveToCloud(null, true);
+        await window.ProjectManager.saveToCloud(null, !force);
       }
+
+      // 2. Save path to server cloud store
+      try {
+        await fetch("/api/project", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: activeUser.uid,
+            email: activeUser.email || "",
+            project: window.ProjectManager?.project || null,
+            pathPayload: payload
+          })
+        });
+      } catch (srvErr) {
+        console.warn("Server cloud path save warning:", srvErr);
+      }
+
+      // 3. Save path to Firestore if signed in
+      if (typeof firebase !== "undefined" && firebase.firestore && cloudUser) {
+        try {
+          const db = firebase.firestore();
+          const ref = db.collection("users").doc(cloudUser.uid).collection("data").doc("path");
+          await ref.set(payload, { merge: true });
+        } catch (fsErr) {
+          console.warn("Firestore path save warning:", fsErr);
+        }
+      }
+
       setCloudStatus("Synced", "ok");
     } catch (e) {
       console.error(e);
@@ -4322,6 +4387,7 @@
     if (saved && !isExplicitSignOut) {
       updateAuthUI(saved, false);
       setCloudStatus("Connecting…", "busy");
+      cloudLoad(false);
     }
 
     const btnIn = document.getElementById("btnGoogleSignIn");
@@ -4381,7 +4447,7 @@
           if (cached) {
             // Keep saved account visible so user knows they are remembered and can re-sync with 1 click
             updateAuthUI(cached, true);
-            setCloudStatus("Offline · Reconnect", "busy");
+            cloudLoad(false);
           } else {
             updateAuthUI();
           }
@@ -4391,7 +4457,8 @@
 
     // Save on tab close or navigation, but never clobber server with untouched default template
     window.addEventListener("beforeunload", () => {
-      if (cloudReady && cloudUser && !cloudApplying) {
+      const activeUser = cloudUser || getSavedGoogleUser();
+      if (cloudReady && activeUser && !cloudApplying) {
         const isDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
         if (!isDefault || window.ProjectManager?.isDirty) {
           cloudSave(true);
@@ -4399,21 +4466,23 @@
       }
     });
     document.addEventListener("visibilitychange", () => {
+      const activeUser = cloudUser || getSavedGoogleUser();
       if (document.visibilityState === "hidden") {
-        if (cloudReady && cloudUser && !cloudApplying) {
+        if (cloudReady && activeUser && !cloudApplying) {
           const isDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
           if (!isDefault || window.ProjectManager?.isDirty) {
             cloudSave(true);
           }
         }
       } else if (document.visibilityState === "visible") {
-        if (cloudReady && cloudUser && !cloudApplying && !window.ProjectManager?.isDirty) {
+        if (activeUser && !cloudApplying && !window.ProjectManager?.isDirty) {
           cloudLoad(false);
         }
       }
     });
     window.addEventListener("focus", () => {
-      if (cloudReady && cloudUser && !cloudApplying && !window.ProjectManager?.isDirty) {
+      const activeUser = cloudUser || getSavedGoogleUser();
+      if (activeUser && !cloudApplying && !window.ProjectManager?.isDirty) {
         cloudLoad(false);
       }
     });

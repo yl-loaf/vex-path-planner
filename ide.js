@@ -129,12 +129,41 @@
 
   function initAuth() {
     try {
+      // Check cached user immediately so IDE can sync and display state before network auth
+      try {
+        const cachedRaw = localStorage.getItem("lemlib_saved_google_user");
+        if (cachedRaw) {
+          const cachedUser = JSON.parse(cachedRaw);
+          if (cachedUser) {
+            updateAuthUI(cachedUser);
+            ProjectManager.loadFromCloud(false).then((proj) => {
+              if (proj) {
+                renderProjectHeader();
+                renderFileTree();
+                renderTabs();
+                loadFile(activeFile);
+                renderSymbols();
+              }
+            }).catch(console.error);
+          }
+        }
+      } catch (_) {}
+
       if (typeof firebase === "undefined" || !firebase.apps || !firebase.apps.length || !firebase.auth) return;
 
       firebase.auth().onAuthStateChanged((user) => {
         cloudUser = user;
         updateAuthUI();
         if (user) {
+          try {
+            localStorage.setItem("lemlib_saved_google_user", JSON.stringify({
+              uid: user.uid,
+              email: user.email || "",
+              displayName: user.displayName || user.email || "Google User"
+            }));
+            if (user.email) localStorage.setItem("lemlib_saved_google_email", user.email);
+          } catch (_) {}
+
           ProjectManager.loadFromCloud(false).then((proj) => {
             if (proj) {
               renderProjectHeader();
@@ -154,7 +183,8 @@
       });
 
       document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible" && cloudUser && !ProjectManager.isDirty) {
+        const hasUser = cloudUser || localStorage.getItem("lemlib_saved_google_user");
+        if (document.visibilityState === "visible" && hasUser && !ProjectManager.isDirty) {
           ProjectManager.loadFromCloud(false).then((proj) => {
             if (proj) {
               renderProjectHeader();
@@ -1622,7 +1652,8 @@
           });
         }
 
-        if (cloudUser) {
+        const currentUser = cloudUser || (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) || (localStorage.getItem("lemlib_saved_google_user") ? JSON.parse(localStorage.getItem("lemlib_saved_google_user")) : null);
+        if (currentUser) {
           try {
             updateAutosaveUI("saving", null, "☁️ Syncing to server...");
             await ProjectManager.saveToCloud(null, false);
@@ -1630,10 +1661,10 @@
             showToast(`💥 Workspace imported & synced to server! "${projName}" (${fileCount} files).`);
           } catch (cloudErr) {
             console.error("Cloud sync on import failed:", cloudErr);
-            showToast(`💥 Workspace imported locally (${fileCount} files). Cloud sync warning: ${cloudErr.message}`);
+            showToast(`💥 Workspace imported locally (${fileCount} files). Cloud sync notice: ${cloudErr.message}`);
           }
         } else {
-          showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}).`);
+          showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}). Log in with Google to sync across devices.`);
         }
       });
     }

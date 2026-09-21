@@ -9,8 +9,65 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+
+// Cloud Project Storage Store for cross-device sync
+const projectsDir = path.join(__dirname, 'data', 'projects');
+if (!fs.existsSync(projectsDir)) {
+  fs.mkdirSync(projectsDir, { recursive: true });
+}
+
+function getProjectFilePaths(uid, email) {
+  const paths = [];
+  if (email && typeof email === 'string') {
+    const cleanEmail = email.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '_');
+    if (cleanEmail) paths.push(path.join(projectsDir, `email_${cleanEmail}.json`));
+  }
+  if (uid && typeof uid === 'string') {
+    const cleanUid = uid.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (cleanUid) paths.push(path.join(projectsDir, `uid_${cleanUid}.json`));
+  }
+  return paths;
+}
+
+function saveUserProject(uid, email, project, pathPayload = null) {
+  try {
+    const filePaths = getProjectFilePaths(uid, email);
+    if (!filePaths.length) return false;
+    const payload = {
+      uid: uid || '',
+      email: email || '',
+      updatedAt: (project && project.updatedAt) || Date.now(),
+      savedAt: Date.now(),
+      project: project,
+      pathPayload: pathPayload
+    };
+    const jsonStr = JSON.stringify(payload, null, 2);
+    for (const fp of filePaths) {
+      fs.writeFileSync(fp, jsonStr, 'utf8');
+    }
+    return true;
+  } catch (err) {
+    console.error('Error saving user project on server:', err);
+    return false;
+  }
+}
+
+function getUserProject(uid, email) {
+  try {
+    const filePaths = getProjectFilePaths(uid, email);
+    for (const fp of filePaths) {
+      if (fs.existsSync(fp)) {
+        const raw = fs.readFileSync(fp, 'utf8');
+        return JSON.parse(raw);
+      }
+    }
+  } catch (err) {
+    console.error('Error reading user project from server:', err);
+  }
+  return null;
+}
 
 // Visitor Statistics Tracking Store
 const statsFilePath = path.join(__dirname, 'data', 'stats.json');
@@ -116,6 +173,75 @@ app.get('/api/stats', (req, res) => {
     uniqueVisitors: stats.uniqueVisitors || 0,
     pages: stats.pages || {},
     visitors: maskedVisitors
+  });
+});
+
+// Cloud Project Synchronization Endpoints (Cross-Device Cloud Sync)
+app.post('/api/project', (req, res) => {
+  const { uid, email, project, pathPayload } = req.body || {};
+  if (!uid && !email) {
+    return res.status(400).json({ error: 'Missing user identification (uid or email required)' });
+  }
+  if (!project || typeof project !== 'object') {
+    return res.status(400).json({ error: 'Missing or invalid project payload' });
+  }
+
+  const success = saveUserProject(uid, email, project, pathPayload);
+  if (!success) {
+    return res.status(500).json({ error: 'Failed to persist project on server' });
+  }
+
+  const fileCount = project.files && typeof project.files === 'object' ? Object.keys(project.files).length : 0;
+  console.log(`[CloudProjectServer] Saved project "${project.name}" (${fileCount} files) for user ${email || uid}`);
+  res.json({
+    success: true,
+    savedAt: Date.now(),
+    updatedAt: project.updatedAt || Date.now(),
+    name: project.name,
+    fileCount: fileCount
+  });
+});
+
+app.get('/api/project', (req, res) => {
+  const { uid, email } = req.query;
+  if (!uid && !email) {
+    return res.status(400).json({ error: 'Missing user identification (uid or email required)' });
+  }
+
+  const data = getUserProject(uid, email);
+  if (!data || !data.project) {
+    return res.json({ exists: false });
+  }
+
+  res.json({
+    exists: true,
+    savedAt: data.savedAt,
+    updatedAt: data.updatedAt,
+    email: data.email,
+    uid: data.uid,
+    project: data.project,
+    pathPayload: data.pathPayload || null
+  });
+});
+
+app.get('/api/project/status', (req, res) => {
+  const { uid, email } = req.query;
+  if (!uid && !email) {
+    return res.status(400).json({ error: 'Missing user identification (uid or email required)' });
+  }
+
+  const data = getUserProject(uid, email);
+  if (!data || !data.project) {
+    return res.json({ exists: false });
+  }
+
+  const files = data.project.files || {};
+  res.json({
+    exists: true,
+    savedAt: data.savedAt,
+    updatedAt: data.updatedAt || data.project.updatedAt,
+    name: data.project.name,
+    fileCount: Object.keys(files).length
   });
 });
 

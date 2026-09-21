@@ -510,9 +510,13 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       if ((Number(this.project.updatedAt) || 0) === 0) return true;
       const files = this.project.files || {};
       const keys = Object.keys(files);
-      if (this.project.name === "Override_LemLib_Bot" && keys.length <= 6 && !this.isDirty && this.project.cloudSynced === false) {
-        const isExactTemplates = keys.every(k => DEFAULT_TEMPLATES[k] && files[k] === DEFAULT_TEMPLATES[k]);
-        if (isExactTemplates) return true;
+      if (keys.length === 0) return true;
+      if (this.project.name === "Override_LemLib_Bot" || !this.project.name) {
+        const defaultKeys = Object.keys(DEFAULT_TEMPLATES);
+        if (keys.length <= defaultKeys.length) {
+          const isExactTemplates = keys.every(k => DEFAULT_TEMPLATES[k] && files[k] === DEFAULT_TEMPLATES[k]);
+          if (isExactTemplates) return true;
+        }
       }
       return false;
     }
@@ -2218,15 +2222,23 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     // -------------------------------------------------------------
-    // Cloud Sync (Firebase Firestore Integration)
+    // Cloud Sync (Server & Firebase Firestore Dual-Cloud Integration)
     // -------------------------------------------------------------
     async saveToCloud(onProgress = null, onlyChanges = true) {
       if (!this.project) return false;
-      if (typeof firebase === "undefined" || !firebase.auth || !firebase.firestore) {
-        throw new Error("Firebase is not initialized");
+      let user = null;
+      if (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) {
+        user = firebase.auth().currentUser;
       }
-      const user = firebase.auth().currentUser;
-      if (!user) {
+      let savedUser = null;
+      try {
+        const raw = localStorage.getItem("lemlib_saved_google_user");
+        if (raw) savedUser = JSON.parse(raw);
+      } catch (_) {}
+      const uid = (user && user.uid) || (savedUser && savedUser.uid) || "";
+      const email = (user && user.email) || (savedUser && savedUser.email) || localStorage.getItem("lemlib_saved_google_email") || "";
+
+      if (!uid && !email) {
         throw new Error("You must be signed in with Google to sync project to cloud");
       }
 
@@ -2255,50 +2267,75 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       emit(Math.max(1, Math.round(totalBytes * 0.25)));
 
-      const db = firebase.firestore();
-      const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
-
-      emit(Math.round(totalBytes * 0.55));
-
       const now = Date.now();
       this.project.updatedAt = now;
       this.project.isDefault = false;
 
-      if (isDelta) {
-        // Delta upload: only send the modified files
-        const changedFilesMap = {};
-        for (const f of this.changedFiles) {
-          if (this.project.files && this.project.files[f] !== undefined) {
-            changedFilesMap[f] = this.project.files[f];
-          }
-        }
-        await projectRef.set({
-          name: this.project.name,
-          version: this.project.version,
-          target: this.project.target || "v5",
-          kernel: this.project.kernel || "4.1.0",
-          lemlibVersion: this.project.lemlibVersion || "0.5.4",
-          files: changedFilesMap,
-          activeAuton: this.project.activeAuton || "red_rush_auton",
-          updatedAt: now,
-          authorEmail: user.email || "",
-          isDefault: false
-        }, { merge: true });
-      } else {
-        // Clean files map to exclude oversized or binary files
-        const cleanFiles = this.cleanFilesForFirestore(this.project.files);
-        await projectRef.set({
-          name: this.project.name || "Override_LemLib_Bot",
-          version: this.project.version || "1.0.0",
-          target: this.project.target || "v5",
-          kernel: this.project.kernel || "4.1.0",
-          lemlibVersion: this.project.lemlibVersion || "0.5.4",
-          files: cleanFiles,
-          activeAuton: this.project.activeAuton || "red_rush_auton",
-          updatedAt: now,
-          authorEmail: user.email || "",
-          isDefault: false
+      // 1. Primary Save: Persist to Server Cloud Store (No 1MB doc limits, works seamlessly across all devices)
+      try {
+        const resp = await fetch("/api/project", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: uid,
+            email: email,
+            project: this.project
+          })
         });
+        if (resp.ok) {
+          console.log(`[ProjectManager] Saved project to server cloud store: "${this.project.name}"`);
+        } else {
+          console.warn("[ProjectManager] Server cloud store returned status:", resp.status);
+        }
+      } catch (srvErr) {
+        console.warn("[ProjectManager] Server cloud store sync warning:", srvErr);
+      }
+
+      emit(Math.round(totalBytes * 0.55));
+
+      // 2. Secondary Save: Firebase Firestore (if available and client authenticated)
+      if (typeof firebase !== "undefined" && firebase.firestore && user) {
+        try {
+          const db = firebase.firestore();
+          const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
+
+          if (isDelta) {
+            const changedFilesMap = {};
+            for (const f of this.changedFiles) {
+              if (this.project.files && this.project.files[f] !== undefined) {
+                changedFilesMap[f] = this.project.files[f];
+              }
+            }
+            await projectRef.set({
+              name: this.project.name,
+              version: this.project.version,
+              target: this.project.target || "v5",
+              kernel: this.project.kernel || "4.1.0",
+              lemlibVersion: this.project.lemlibVersion || "0.5.4",
+              files: changedFilesMap,
+              activeAuton: this.project.activeAuton || "red_rush_auton",
+              updatedAt: now,
+              authorEmail: user.email || email,
+              isDefault: false
+            }, { merge: true });
+          } else {
+            const cleanFiles = this.cleanFilesForFirestore(this.project.files);
+            await projectRef.set({
+              name: this.project.name || "Override_LemLib_Bot",
+              version: this.project.version || "1.0.0",
+              target: this.project.target || "v5",
+              kernel: this.project.kernel || "4.1.0",
+              lemlibVersion: this.project.lemlibVersion || "0.5.4",
+              files: cleanFiles,
+              activeAuton: this.project.activeAuton || "red_rush_auton",
+              updatedAt: now,
+              authorEmail: user.email || email,
+              isDefault: false
+            });
+          }
+        } catch (fsErr) {
+          console.warn("[ProjectManager] Firestore save warning (server backup is active):", fsErr);
+        }
       }
 
       emit(Math.round(totalBytes * 0.85));
@@ -2313,54 +2350,101 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     async loadFromCloud(force = false) {
-      if (typeof firebase === "undefined" || !firebase.auth || !firebase.firestore) {
-        throw new Error("Firebase is not initialized");
+      let user = null;
+      if (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) {
+        user = firebase.auth().currentUser;
       }
-      const user = firebase.auth().currentUser;
-      if (!user) {
+      let savedUser = null;
+      try {
+        const raw = localStorage.getItem("lemlib_saved_google_user");
+        if (raw) savedUser = JSON.parse(raw);
+      } catch (_) {}
+      const uid = (user && user.uid) || (savedUser && savedUser.uid) || "";
+      const email = (user && user.email) || (savedUser && savedUser.email) || localStorage.getItem("lemlib_saved_google_email") || "";
+
+      if (!uid && !email) {
         throw new Error("You must be signed in with Google to load project from cloud");
       }
 
-      const db = firebase.firestore();
-      const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
-      const snap = await projectRef.get();
+      let candidateData = null;
+      let candidateSource = "";
 
-      if (snap.exists) {
-        const data = snap.data();
-        const cloudTime = Number(data.updatedAt) || 0;
-        const localTime = Number(this.project?.updatedAt) || 0;
-        const isLocalDefault = this.isDefaultProject();
-
-        // Guard against stale cloud snapshots overwriting newer local work,
-        // UNLESS force is true OR local is just an untouched default template!
-        if (!force && !isLocalDefault && localTime > cloudTime) {
-          console.log(`[ProjectManager] Retaining newer local project workspace (local: ${localTime} vs cloud: ${cloudTime})`);
-          return null;
+      // 1. Fetch from Server Cloud Store
+      try {
+        const params = new URLSearchParams();
+        if (uid) params.set("uid", uid);
+        if (email) params.set("email", email);
+        const resp = await fetch(`/api/project?${params.toString()}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json.exists && json.project) {
+            candidateData = json.project;
+            candidateSource = "server";
+          }
         }
-
-        const filesMap = (data.files && typeof data.files === "object") ? data.files : { ...DEFAULT_TEMPLATES };
-
-        this.project = {
-          name: data.name || "Override_LemLib_Bot",
-          version: data.version || "1.0.0",
-          target: data.target || "v5",
-          kernel: data.kernel || "4.1.0",
-          lemlibVersion: data.lemlibVersion || "0.5.4",
-          files: filesMap,
-          activeAuton: data.activeAuton || "red_rush_auton",
-          updatedAt: cloudTime || Date.now(),
-          cloudSynced: true,
-          isDefault: false,
-        };
-        this.markDirty(false);
-        this.changedFiles.clear();
-        await this.saveLocal(false);
-        this.indexVariables();
-        this.recordSavedBaseline();
-        this.notifyListeners("load");
-        return this.project;
+      } catch (err) {
+        console.warn("[ProjectManager] Server project load check warning:", err);
       }
-      return null;
+
+      // 2. Check Firebase Firestore if signed in
+      if (typeof firebase !== "undefined" && firebase.firestore && user) {
+        try {
+          const db = firebase.firestore();
+          const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
+          const snap = await projectRef.get();
+          if (snap.exists) {
+            const fsData = snap.data();
+            const fsTime = Number(fsData.updatedAt) || 0;
+            const candTime = candidateData ? (Number(candidateData.updatedAt) || 0) : 0;
+            if (!candidateData || fsTime > candTime) {
+              candidateData = fsData;
+              candidateSource = "firestore";
+            }
+          }
+        } catch (fsErr) {
+          console.warn("[ProjectManager] Firestore project load check warning:", fsErr);
+        }
+      }
+
+      if (!candidateData) {
+        return null;
+      }
+
+      const cloudTime = Number(candidateData.updatedAt) || 0;
+      const localTime = Number(this.project?.updatedAt) || 0;
+      const isLocalDefault = this.isDefaultProject();
+
+      // If local is default, ALWAYS adopt cloud project!
+      // Only keep local if local has real custom work AND local work is newer than cloud AND force is false
+      if (!force && !isLocalDefault && localTime > cloudTime) {
+        console.log(`[ProjectManager] Retaining newer local project workspace (local: ${localTime} vs cloud: ${cloudTime})`);
+        return null;
+      }
+
+      const filesMap = (candidateData.files && typeof candidateData.files === "object")
+        ? candidateData.files
+        : { ...DEFAULT_TEMPLATES };
+
+      this.project = {
+        name: candidateData.name || "Override_LemLib_Bot",
+        version: candidateData.version || "1.0.0",
+        target: candidateData.target || "v5",
+        kernel: candidateData.kernel || "4.1.0",
+        lemlibVersion: candidateData.lemlibVersion || "0.5.4",
+        files: filesMap,
+        activeAuton: candidateData.activeAuton || "red_rush_auton",
+        updatedAt: cloudTime || Date.now(),
+        cloudSynced: true,
+        isDefault: false,
+      };
+      this.markDirty(false);
+      this.changedFiles.clear();
+      await this.saveLocal(false);
+      this.indexVariables();
+      this.recordSavedBaseline();
+      this.notifyListeners("load");
+      console.log(`[ProjectManager] Loaded cloud project from ${candidateSource}: "${this.project.name}" (${Object.keys(filesMap).length} files)`);
+      return this.project;
     }
 
     downloadFile(filename) {
