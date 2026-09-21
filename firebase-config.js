@@ -13,6 +13,16 @@ window.FIREBASE_CONFIG = {
 // Set true so Google sign-in + cloud path sync are active
 window.FIREBASE_ENABLED = true;
 
+// Utility to resolve backend API URLs (supporting cross-origin static hosts like GitHub Pages)
+window.getApiUrl = function(path) {
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
+    return path;
+  }
+  const backendBase = "https://ais-dev-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
+  return backendBase + path;
+};
+
 // Auto-initialize default Firebase App if compat SDK is present
 if (typeof firebase !== "undefined" && firebase.initializeApp) {
   try {

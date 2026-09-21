@@ -9,6 +9,18 @@
   const IDB_STORE_NAME = "projects";
   const IDB_PROJECT_KEY = "active_project";
 
+  function getApiUrl(path) {
+    if (typeof window !== "undefined" && typeof window.getApiUrl === "function") {
+      return window.getApiUrl(path);
+    }
+    const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
+      return path;
+    }
+    const backendBase = "https://ais-dev-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
+    return backendBase + path;
+  }
+
   function openProjectDB() {
     return new Promise((resolve) => {
       if (typeof indexedDB === "undefined") return resolve(null);
@@ -2396,7 +2408,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       // 2. Persist to Server Cloud Store if available
       try {
-        const resp = await fetch("/api/project", {
+        const resp = await fetch(getApiUrl("/api/project"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2540,7 +2552,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         const params = new URLSearchParams();
         if (uid) params.set("uid", uid);
         if (email) params.set("email", email);
-        const resp = await fetch(`/api/project?${params.toString()}`);
+        const resp = await fetch(getApiUrl(`/api/project?${params.toString()}`));
         if (resp.ok) {
           const json = await resp.json();
           if (json.exists && json.project) {

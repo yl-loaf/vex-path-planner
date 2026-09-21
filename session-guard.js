@@ -10,6 +10,18 @@
   const LOCAL_STORAGE_ACTIVE_KEY_PREFIX = "lemlib_active_session_";
   const HEARTBEAT_INTERVAL_MS = 8000;
 
+  function getApiUrl(path) {
+    if (typeof window !== "undefined" && typeof window.getApiUrl === "function") {
+      return window.getApiUrl(path);
+    }
+    const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
+      return path;
+    }
+    const backendBase = "https://ais-dev-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
+    return backendBase + path;
+  }
+
   let currentUser = null; // { uid, email, displayName }
   let pageName = "App";
   let instanceStatus = "UNAUTHENTICATED"; // "UNAUTHENTICATED" | "ACTIVE" | "CONFLICT_PENDING" | "DEACTIVATED"
@@ -418,7 +430,7 @@
   async function registerWithServer(forceTakeover = false) {
     if (!currentUser) return { success: true };
     try {
-      const resp = await fetch("/api/session/register", {
+      const resp = await fetch(getApiUrl("/api/session/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -441,7 +453,7 @@
   async function sendHeartbeat() {
     if (!currentUser || instanceStatus !== "ACTIVE") return;
     try {
-      const resp = await fetch("/api/session/heartbeat", {
+      const resp = await fetch(getApiUrl("/api/session/heartbeat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -544,7 +556,7 @@
     // Release server registration if any
     if (currentUser) {
       try {
-        fetch("/api/session/release", {
+        fetch(getApiUrl("/api/session/release"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -623,7 +635,7 @@
   window.addEventListener("beforeunload", () => {
     if (currentUser && instanceStatus === "ACTIVE") {
       try {
-        fetch("/api/session/release", {
+        fetch(getApiUrl("/api/session/release"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

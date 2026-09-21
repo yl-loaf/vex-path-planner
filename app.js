@@ -3946,6 +3946,18 @@
   let cloudSaveTimer = null;
   let cloudApplying = false; // prevent save loop while loading remote
 
+  function getApiUrl(path) {
+    if (typeof window !== "undefined" && typeof window.getApiUrl === "function") {
+      return window.getApiUrl(path);
+    }
+    const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
+      return path;
+    }
+    const backendBase = "https://ais-dev-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
+    return backendBase + path;
+  }
+
   function setCloudStatus(text, cls) {
     const el = document.getElementById("cloudStatus");
     if (!el) return;
@@ -4019,7 +4031,7 @@
         const params = new URLSearchParams();
         if (uid) params.set("uid", uid);
         if (email) params.set("email", email);
-        const res = await fetch(`/api/project/status?${params.toString()}`);
+        const res = await fetch(getApiUrl(`/api/project/status?${params.toString()}`));
         if (res.ok) {
           const st = await res.json();
           if (st.exists) {
@@ -4102,7 +4114,7 @@
         const params = new URLSearchParams();
         if (uid) params.set("uid", uid);
         if (email) params.set("email", email);
-        const srvRes = await fetch(`/api/project?${params.toString()}`);
+        const srvRes = await fetch(getApiUrl(`/api/project?${params.toString()}`));
         if (srvRes.ok) {
           const srvData = await srvRes.json();
           if (srvData.exists && srvData.pathPayload) {
@@ -4181,7 +4193,7 @@
 
       // 2. Save path to server cloud store
       try {
-        await fetch("/api/project", {
+        await fetch(getApiUrl("/api/project"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

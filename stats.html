@@ -283,6 +283,18 @@ function doGet(e) {
     }
 
     async function fetchStats() {
+      function getApiUrl(path) {
+        if (typeof window !== "undefined" && typeof window.getApiUrl === "function") {
+          return window.getApiUrl(path);
+        }
+        const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+        if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
+          return path;
+        }
+        const backendBase = "https://ais-dev-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
+        return backendBase + path;
+      }
+
       let data = null;
       let clientId = localStorage.getItem('vex_client_id');
       if (!clientId) {
@@ -304,7 +316,7 @@ function doGet(e) {
 
       if (!data) {
         try {
-          const res = await fetch('/api/stats');
+          const res = await fetch(getApiUrl('/api/stats'));
           if (!res.ok) throw new Error('Backend not available');
           data = await res.json();
         } catch (e) {
