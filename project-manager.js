@@ -510,13 +510,11 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       if ((Number(this.project.updatedAt) || 0) === 0) return true;
       const files = this.project.files || {};
       const keys = Object.keys(files);
+      const defaultKeys = Object.keys(DEFAULT_TEMPLATES);
       if (keys.length === 0) return true;
-      if (this.project.name === "Override_LemLib_Bot" || !this.project.name) {
-        const defaultKeys = Object.keys(DEFAULT_TEMPLATES);
-        if (keys.length <= defaultKeys.length) {
-          const isExactTemplates = keys.every(k => DEFAULT_TEMPLATES[k] && files[k] === DEFAULT_TEMPLATES[k]);
-          if (isExactTemplates) return true;
-        }
+      if (keys.length === defaultKeys.length) {
+        const isExactTemplates = defaultKeys.every(k => files[k] !== undefined && files[k] === DEFAULT_TEMPLATES[k]);
+        if (isExactTemplates) return true;
       }
       return false;
     }
@@ -2528,13 +2526,11 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         if (cand.isDefault === true) return true;
         const files = cand.files || {};
         const keys = Object.keys(files);
+        const defaultKeys = Object.keys(DEFAULT_TEMPLATES);
         if (keys.length === 0) return true;
-        if (cand.name === "Override_LemLib_Bot" || !cand.name) {
-          const defaultKeys = Object.keys(DEFAULT_TEMPLATES);
-          if (keys.length <= defaultKeys.length) {
-            const isExactTemplates = keys.every(k => DEFAULT_TEMPLATES[k] && files[k] === DEFAULT_TEMPLATES[k]);
-            if (isExactTemplates) return true;
-          }
+        if (keys.length === defaultKeys.length) {
+          const isExactTemplates = defaultKeys.every(k => files[k] !== undefined && files[k] === DEFAULT_TEMPLATES[k]);
+          if (isExactTemplates) return true;
         }
         return false;
       };
