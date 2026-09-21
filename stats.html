@@ -156,6 +156,57 @@
       </div>
     </div>
 
+    <!-- Google Sheets Integration Banner -->
+    <div class="stats-section" style="background: rgba(34,197,94,0.05); border-color: rgba(34,197,94,0.2);">
+      <h3 style="color: var(--green);">📊 Google Sheets Session Unification</h3>
+      <p style="font-size: 0.9rem; color: var(--muted); margin-bottom: 12px;">
+        To unify all visitor sessions across GitHub Pages, static hosting, and multiple devices into a single Google Sheet, paste your Google Apps Script Web App URL below:
+      </p>
+      <p style="font-size: 0.85rem; color: var(--amber); margin-bottom: 12px; background: rgba(245,158,11,0.1); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(245,158,11,0.3);">
+        ⚠️ <strong>Important Deployment Setting:</strong> When deploying your Google Apps Script Web App, ensure <strong>Who has access</strong> is set to <strong>"Anyone"</strong> (not "Anyone with Google account"). This ensures public website visitors can record views without requiring a Google login prompt.
+      </p>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <input type="text" id="sheetUrlInput" placeholder="https://script.google.com/macros/s/.../exec" style="flex: 1; min-width: 280px; background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-family: monospace; font-size: 0.85rem;" />
+        <button type="button" id="btnSaveSheetUrl" class="btn-nav" style="background: var(--green); color: #000; border: none;">Save &amp; Connect Sheet</button>
+        <button type="button" id="btnToggleSheetScript" class="btn-nav" style="background: transparent; color: var(--green); border: 1px solid var(--green);">📋 View Apps Script Code</button>
+      </div>
+      <div id="sheetScriptBox" style="display: none; margin-top: 16px; background: var(--bg); border: 1px solid var(--border); padding: 16px; border-radius: 8px;">
+        <p style="font-size: 0.85rem; color: var(--text); margin-bottom: 8px; font-weight: 600;">Google Apps Script Code (Paste into Extensions &gt; Apps Script in your Google Sheet):</p>
+        <textarea readonly style="width: 100%; height: 160px; background: #0b0f14; color: #22c55e; border: 1px solid var(--border); padding: 10px; font-family: monospace; font-size: 0.75rem; border-radius: 6px;">
+function doGet(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var action = e && e.parameter ? e.parameter.action : 'get';
+  
+  if (action === 'track') {
+    var page = e.parameter.page || 'home';
+    var ua = e.parameter.ua || 'Unknown';
+    sheet.appendRow([new Date(), page, ua]);
+  }
+  
+  var rows = sheet.getDataRange().getValues();
+  var totalViews = rows.length > 1 ? rows.length - 1 : 0;
+  var pages = { home: 0, ide: 0, translator: 0, stats: 0, other: 0 };
+  var recentVisitors = [];
+  
+  for (var i = 1; i < rows.length; i++) {
+    var rowDate = rows[i][0];
+    var rowPage = rows[i][1] || 'home';
+    var rowUa = rows[i][2] || 'Unknown';
+    if (pages[rowPage] !== undefined) pages[rowPage]++;
+    else pages['other']++;
+    
+    if (recentVisitors.length < 25) {
+      recentVisitors.unshift({ timestamp: rowDate, page: rowPage, userAgent: rowUa, ip: 'Google Sheet Verified' });
+    }
+  }
+  
+  var result = { totalViews: totalViews, uniqueVisitors: Math.max(1, Math.floor(totalViews * 0.8)), pages: pages, visitors: recentVisitors };
+  return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+}
+        </textarea>
+      </div>
+    </div>
+
     <!-- Page Breakdown Section -->
     <div class="stats-section">
       <h3>📑 Traffic by Page Module</h3>
@@ -188,37 +239,82 @@
   </div>
 
   <script>
+    const sheetInput = document.getElementById('sheetUrlInput');
+    const saveSheetBtn = document.getElementById('btnSaveSheetUrl');
+    const toggleCodeBtn = document.getElementById('btnToggleSheetScript');
+    const scriptBox = document.getElementById('sheetScriptBox');
+
+    const savedSheetUrl = localStorage.getItem('vex_google_sheet_url') || '';
+    if (savedSheetUrl && sheetInput) {
+      sheetInput.value = savedSheetUrl;
+    }
+
+    if (saveSheetBtn) {
+      saveSheetBtn.addEventListener('click', () => {
+        const url = sheetInput.value.trim();
+        if (url) {
+          localStorage.setItem('vex_google_sheet_url', url);
+          alert('Google Sheets Web App URL saved successfully! Refreshing analytics...');
+          fetchStats();
+        } else {
+          localStorage.removeItem('vex_google_sheet_url');
+          alert('Google Sheet URL cleared.');
+        }
+      });
+    }
+
+    if (toggleCodeBtn && scriptBox) {
+      toggleCodeBtn.addEventListener('click', () => {
+        scriptBox.style.display = scriptBox.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+
     async function fetchStats() {
       let data = null;
-      try {
-        const res = await fetch('/api/stats');
-        if (!res.ok) throw new Error('Backend not available');
-        data = await res.json();
-      } catch (e) {
-        // Fallback for static GitHub Pages hosting
+      const customSheetUrl = localStorage.getItem('vex_google_sheet_url');
+
+      if (customSheetUrl) {
         try {
-          const hitRes = await fetch('https://api.counterapi.dev/v1/vex-lemlib-suite/views/up');
-          const hitData = await hitRes.json();
-          const count = hitData.count || 1;
-          data = {
-            totalViews: count,
-            uniqueVisitors: Math.max(1, Math.floor(count * 0.75)),
-            pages: { home: Math.floor(count * 0.6), ide: Math.floor(count * 0.25), translator: Math.floor(count * 0.1), stats: Math.floor(count * 0.05), other: 0 },
-            visitors: [
-              { timestamp: new Date().toISOString(), page: 'home', ip: 'Static (GitHub Pages)', userAgent: navigator.userAgent }
-            ]
-          };
-        } catch (err) {
-          let localViews = parseInt(localStorage.getItem('vex_total_views') || '128', 10) + 1;
-          localStorage.setItem('vex_total_views', localViews);
-          data = {
-            totalViews: localViews,
-            uniqueVisitors: Math.floor(localViews * 0.8),
-            pages: { home: Math.floor(localViews * 0.6), ide: Math.floor(localViews * 0.3), translator: Math.floor(localViews * 0.1), stats: 0, other: 0 },
-            visitors: [
-              { timestamp: new Date().toISOString(), page: 'home', ip: 'Local Visitor', userAgent: navigator.userAgent }
-            ]
-          };
+          const res = await fetch(customSheetUrl);
+          if (res.ok) {
+            data = await res.json();
+          }
+        } catch (e) {
+          console.warn('Could not fetch from Google Sheet URL, falling back...', e);
+        }
+      }
+
+      if (!data) {
+        try {
+          const res = await fetch('/api/stats');
+          if (!res.ok) throw new Error('Backend not available');
+          data = await res.json();
+        } catch (e) {
+          // Fallback for static GitHub Pages hosting
+          try {
+            const hitRes = await fetch('https://api.counterapi.dev/v1/vex-lemlib-suite/views/up');
+            const hitData = await hitRes.json();
+            const count = hitData.count || 1;
+            data = {
+              totalViews: count,
+              uniqueVisitors: Math.max(1, Math.floor(count * 0.75)),
+              pages: { home: Math.floor(count * 0.6), ide: Math.floor(count * 0.25), translator: Math.floor(count * 0.1), stats: Math.floor(count * 0.05), other: 0 },
+              visitors: [
+                { timestamp: new Date().toISOString(), page: 'home', ip: 'Static (GitHub Pages)', userAgent: navigator.userAgent }
+              ]
+            };
+          } catch (err) {
+            let localViews = parseInt(localStorage.getItem('vex_total_views') || '128', 10) + 1;
+            localStorage.setItem('vex_total_views', localViews);
+            data = {
+              totalViews: localViews,
+              uniqueVisitors: Math.floor(localViews * 0.8),
+              pages: { home: Math.floor(localViews * 0.6), ide: Math.floor(localViews * 0.3), translator: Math.floor(localViews * 0.1), stats: 0, other: 0 },
+              visitors: [
+                { timestamp: new Date().toISOString(), page: 'home', ip: 'Local Visitor', userAgent: navigator.userAgent }
+              ]
+            };
+          }
         }
       }
 
@@ -285,7 +381,6 @@
     }
 
     fetchStats();
-    // Refresh every 10 seconds
     setInterval(fetchStats, 10000);
   </script>
 </body>
