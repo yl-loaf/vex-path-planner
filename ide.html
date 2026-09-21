@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PROS & LemLib C++ IDE · VEX V5 Path Planner</title>
+  <meta name="description" content="Dedicated multi-file C++ coding IDE for VEX V5 robotics with LemLib, full project compiler, and cloud persistence." />
+  <link rel="stylesheet" href="style.css?v=20260921.ide1" />
+</head>
+<body class="ide-page-body">
+  <div id="app" class="ide-app-container">
+    <!-- Top IDE Navigation Bar -->
+    <header class="ide-nav-header">
+      <div class="header-left">
+        <button type="button" id="btnBackToPlanner" class="btn-ide-back" title="Return to Visual Path Planner (requires save &amp; sync)">
+          ← Back to Visual Planner
+        </button>
+        <div class="ide-title-wrap">
+          <span class="ide-project-tag">📁 Project</span>
+          <span class="ide-project-name" id="ideProjectName">Override_LemLib_Bot</span>
+          <span class="ide-dirty-badge" id="ideDirtyBadge" hidden>● Unsaved Changes</span>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <button type="button" id="btnConnectBrain" class="btn-brain-nav" title="Connect to VEX V5 Brain via USB Web Serial CDC or simulated link">
+          🔌 Connect Brain
+        </button>
+        <div id="ideBrainStatus" class="banner-brain-pill" title="Brain Status">
+          <span class="brain-status-dot disconnected" id="ideBrainDot"></span>
+          <span class="brain-status-text" id="ideBrainText">Brain: Disconnected</span>
+          <span class="brain-battery-pill" id="ideBrainBatt" hidden>⚡ 94%</span>
+        </div>
+        <button type="button" id="btnCompileProject" class="btn-ide-compile" title="Compile entire PROS LemLib project (pros make)">
+          ⚡ Compile (pros make)
+        </button>
+        <button type="button" id="btnUploadToBrain" class="btn-ide-upload" title="Upload compiled PROS binary to VEX V5 Brain slot">
+          🚀 Flash to Brain
+        </button>
+        <button type="button" id="btnSaveCloudProject" class="btn-ide-save-cloud" title="Save and synchronize complete project to cloud">
+          ☁️ Save &amp; Sync Project
+        </button>
+        <button type="button" id="btnOpenInPlanner" class="btn-ide-open-planner" title="Load active autons.cpp into the visual flowchart planner">
+          🗺️ Open autons.cpp in Visual Planner
+        </button>
+      </div>
+
+      <div class="header-actions">
+        <div id="authArea" class="auth-area">
+          <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
+          <span id="authUser" class="auth-user" hidden></span>
+          <button id="btnSwitchAccount" type="button" class="switch-account-btn" hidden title="Switch Google account">Switch</button>
+          <button id="btnSignOut" type="button" hidden title="Sign out">Sign out</button>
+          <span id="cloudStatus" class="cloud-status" title="Cloud sync status"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="ide-main-workspace">
+      <!-- Left Sidebar: File Tree & Symbols -->
+      <aside class="ide-sidebar">
+        <!-- Project Explorer Section -->
+        <div class="ide-sidebar-section">
+          <div class="ide-sidebar-header">
+            <h3>PROJECT EXPLORER</h3>
+            <div class="ide-sidebar-btns">
+              <button type="button" id="btnIdeNewFile" title="Add new C++ source or header file">+ File</button>
+            </div>
+          </div>
+          <div class="ide-file-tree" id="ideFileTree">
+            <!-- Dynamically populated files -->
+          </div>
+        </div>
+
+        <!-- Cross-Script Symbols & Variables Section -->
+        <div class="ide-sidebar-section ide-symbols-section">
+          <div class="ide-sidebar-header">
+            <h3>VARIABLES &amp; SUBSYSTEMS</h3>
+            <span class="ide-symbols-count" id="ideSymbolsCount">0 indexed</span>
+          </div>
+          <div class="ide-symbols-tree" id="ideSymbolsTree">
+            <!-- Dynamically indexed motors, pistons, sensors, chassis, functions -->
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center: Code Editor Pane -->
+      <section class="ide-editor-container">
+        <!-- Editor Tabs Bar -->
+        <div class="ide-tabs-bar" id="ideTabsBar">
+          <!-- Dynamically populated tabs -->
+        </div>
+
+        <!-- Editor Toolbar / Breadcrumb -->
+        <div class="ide-editor-toolbar">
+          <span class="ide-breadcrumb-file" id="ideCurrentFile">src/autons.cpp</span>
+          <div class="ide-editor-meta">
+            <span id="ideCursorPos">Ln 1, Col 1</span>
+            <span id="ideCharCount">0 chars</span>
+          </div>
+        </div>
+
+        <!-- Main Code Editor Area -->
+        <div class="ide-editor-wrapper">
+          <div class="ide-line-numbers" id="ideLineNumbers"></div>
+          <textarea id="ideCodeEditor" class="ide-code-textarea" spellcheck="false" placeholder="// Write or edit PROS C++ code here..."></textarea>
+        </div>
+      </section>
+
+      <!-- Bottom / Right: Compiler Output & Diagnostics -->
+      <aside class="ide-output-pane">
+        <div class="ide-output-header">
+          <div class="ide-output-tabs">
+            <button type="button" class="ide-out-tab active" data-tab="build">⚡ Build Output (pros make)</button>
+            <button type="button" class="ide-out-tab" data-tab="diagnostics">🔍 Diagnostics (<span id="ideDiagCount">0</span>)</button>
+            <button type="button" class="ide-out-tab" data-tab="memory">📊 Memory Map</button>
+          </div>
+          <button type="button" id="btnClearBuildLogs" class="btn-clear-logs" title="Clear console">🧹 Clear</button>
+        </div>
+
+        <!-- Build Console Tab -->
+        <div class="ide-tab-content active" id="tabContentBuild">
+          <pre class="ide-build-console" id="ideBuildConsole">Press 'Compile (pros make)' to compile the entire project workspace.</pre>
+        </div>
+
+        <!-- Diagnostics Tab -->
+        <div class="ide-tab-content" id="tabContentDiagnostics">
+          <div class="ide-diagnostics-list" id="ideDiagnosticsList">
+            <div class="ide-diag-empty">No errors or warnings found. Code is clean.</div>
+          </div>
+        </div>
+
+        <!-- Memory Map Tab -->
+        <div class="ide-tab-content" id="tabContentMemory">
+          <div class="ide-memory-view">
+            <div class="mem-metric-card">
+              <div class="mem-metric-title">Flash ROM (Program Space)</div>
+              <div class="mem-progress-bar"><div class="mem-fill" id="memFlashFill" style="width: 2.1%"></div></div>
+              <div class="mem-metric-desc" id="memFlashText">146.7 KB / 32.0 MB (0.45%)</div>
+            </div>
+            <div class="mem-metric-card">
+              <div class="mem-metric-title">RAM (BSS / Heap / Stack)</div>
+              <div class="mem-progress-bar"><div class="mem-fill mem-ram" id="memRamFill" style="width: 1.2%"></div></div>
+              <div class="mem-metric-desc" id="memRamText">32.5 KB / 32.0 MB (0.10%)</div>
+            </div>
+            <div class="mem-sections-list">
+              <div class="mem-section-row"><span>.text (Code instructions):</span><strong id="memTextVal">142.5 KB</strong></div>
+              <div class="mem-section-row"><span>.data (Initialized globals):</span><strong id="memDataVal">4.1 KB</strong></div>
+              <div class="mem-section-row"><span>.bss (Zero-initialized data):</span><strong id="memBssVal">28.4 KB</strong></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Navigation Guard Modal (Prevents Leaving Without Saving & Syncing) -->
+    <div id="navGuardModal" class="modal-overlay" hidden>
+      <div class="modal-box nav-guard-box">
+        <div class="modal-header">
+          <h3 style="color:#f59e0b;">⚠️ Unsaved Project Changes</h3>
+          <button type="button" class="modal-close" id="btnNavGuardCancel">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom:12px;font-size:0.95rem;line-height:1.5;color:#e2e8f0;">
+            You have unsaved changes in your C++ IDE workspace. To prevent losing code or desyncing your autonomous routines, please save and sync your project to the cloud before returning to the Visual Planner.
+          </p>
+          <div class="nav-guard-file-badge" id="navGuardFile">
+            📁 Active project has unsaved edits
+          </div>
+        </div>
+        <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
+          <button type="button" id="btnNavGuardStay" class="btn-subtle">Stay in IDE</button>
+          <button type="button" id="btnNavGuardDiscard" class="btn-danger-outline">Discard &amp; Return</button>
+          <button type="button" id="btnNavGuardSaveAndReturn" class="primary">💾 Save &amp; Sync (Then Return)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="v5-brain-serial.js"></script>
+  <script src="project-manager.js"></script>
+  <script src="ide.js"></script>
+</body>
+</html>

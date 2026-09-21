@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260920.k17" />
+  <link rel="stylesheet" href="style.css?v=20260921.k3" />
 </head>
 <body>
   <div id="app">
@@ -28,6 +28,10 @@
           <span id="cloudStatus" class="cloud-status" title="Cloud sync status"></span>
           <a id="btnNewTab" href="#" target="_blank" class="new-tab-link" title="Open in new window (unrestricted popups & Google login)" style="display:none;">↗ New tab</a>
         </div>
+        <button id="btnConnectBrain" type="button" class="btn-brain-nav" title="Connect to VEX V5 Brain via USB Web Serial CDC or simulated link">🔌 Connect Brain</button>
+        <button id="btnLoadProject" type="button" class="btn-project-nav" title="Load complete PROS LemLib project workspace (only autons.cpp will be visually edited)">📁 Load Project</button>
+        <a id="btnOpenIde" href="ide.html" class="btn-ide-nav" style="text-decoration:none;" title="Open full multi-file PROS C++ Coding IDE on dedicated page">💻 C++ IDE</a>
+        <button id="btnToggleDebug" type="button" class="btn-debug-nav" title="Toggle Cross-Script Variable Inspector, Compiler Diagnostics & Live Debugger">🐞 Debug</button>
         <a id="btnCppTranslator" href="translator.html" class="btn-cpp-translate" style="text-decoration:none;" title="Translate raw C++ LemLib auton code into visual blocks & map on a dedicated page">📥 C++ Translator</a>
         <button id="btnPidTuner" type="button" class="btn-pid-nav" title="PID Tuning Visualizer: preview and tune kP, kI, kD gains with real-time response curves">🎛️ PID Tuner</button>
         <button id="btnExportVideo" type="button" class="btn-video-nav" title="Export animated .mp4 video of your simulated autonomous routine">🎥 Export .mp4</button>
@@ -44,6 +48,26 @@
         </label>
       </div>
     </header>
+
+    <!-- Project Status Bar -->
+    <div class="project-banner" id="projectBanner">
+      <div class="project-banner-left">
+        <span class="project-badge">📁 PROS PROJECT</span>
+        <strong class="project-name-label" id="bannerProjectName">Override_LemLib_Bot</strong>
+        <span class="project-file-label">Workspace File: <code style="color:#38bdf8;background:rgba(56,189,248,0.12);padding:2px 6px;border-radius:4px;font-weight:600;">src/autons.cpp</code></span>
+        <span class="project-variable-pill" id="bannerVariableCount" title="Variables and devices indexed across robot-config.h and other project files">0 devices indexed</span>
+        <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view detailed VEX V5 Brain telemetry & upload manager">
+          <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
+          <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
+          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
+        </div>
+      </div>
+      <div class="project-banner-right">
+        <button type="button" id="btnSyncProjectToCloud" class="btn-xs-sync" title="Sync entire multi-file project to cloud">☁️ Sync Cloud</button>
+        <button type="button" id="btnCompileProjectBanner" class="btn-xs-compile" title="Compile entire project workspace (pros make)">⚡ Compile Project</button>
+        <a href="ide.html" class="btn-xs-ide" title="Open complete project files in dedicated C++ IDE">💻 Open Full C++ IDE ↗</a>
+      </div>
+    </div>
 
     <div class="main">
       <!-- Flowchart / Action Editor -->
@@ -299,6 +323,136 @@
           Drag start robot or selected waypoint · Use + Add to create moves · <button type="button" id="linkHelpDocs" class="linkish" style="color:#93c5fd;text-decoration:underline;background:none;border:none;cursor:pointer;padding:0 2px;">View Help & Docs</button>
         </div>
       </div>
+
+      <!-- Debug & Telemetry Side Panel (Collapsible) -->
+      <aside class="panel debug-panel" id="debugSidePanel" hidden>
+        <div class="panel-header debug-panel-header">
+          <div class="debug-title-wrap">
+            <span class="debug-badge">DEBUGGER</span>
+            <h2>🐞 Telemetry &amp; Inspector</h2>
+          </div>
+          <button type="button" id="btnDebugClose" class="debug-close-btn" title="Close Debug Panel">✕</button>
+        </div>
+
+        <nav class="debug-tabs">
+          <button type="button" class="debug-tab active" data-tab="devices">⚙️ Variables</button>
+          <button type="button" class="debug-tab" data-tab="brain">🧠 Brain</button>
+          <button type="button" class="debug-tab" data-tab="diagnostics">🔍 Diagnostics (<span id="debugDiagBadge">0</span>)</button>
+          <button type="button" class="debug-tab" data-tab="step">⏯️ Stepper</button>
+          <button type="button" class="debug-tab" data-tab="terminal">📟 Terminal</button>
+        </nav>
+
+        <div class="debug-content">
+          <!-- Variables & Subsystems Tab -->
+          <div class="debug-pane active" id="debugPaneDevices">
+            <div class="debug-sec-desc">Devices and variables indexed from <code>include/robot-config.h</code> &amp; project headers. Click any item to copy snippet:</div>
+            <div id="debugDevicesList" class="debug-devices-list">
+              <!-- Dynamically populated from ProjectManager -->
+            </div>
+          </div>
+
+          <!-- VEX V5 Brain Telemetry & Control Tab -->
+          <div class="debug-pane" id="debugPaneBrain">
+            <div class="debug-brain-header">
+              <div class="debug-brain-status-line">
+                <span class="brain-status-dot disconnected" id="debugBrainDot"></span>
+                <strong id="debugBrainStatusName">VEX V5 Brain: Disconnected</strong>
+              </div>
+              <button type="button" id="btnDebugConnectBrain" class="btn-xs-compile">🔌 Connect USB</button>
+            </div>
+
+            <!-- Brain Metrics Grid -->
+            <div class="debug-brain-grid" id="debugBrainMetricsGrid">
+              <div class="debug-brain-metric">
+                <div class="metric-label">Battery Level</div>
+                <div class="metric-val text-green" id="debugBrainBattVal">--% (-- V)</div>
+                <div class="brain-batt-bar"><div class="brain-batt-fill" id="debugBrainBattBar" style="width:0%;"></div></div>
+              </div>
+              <div class="debug-brain-metric">
+                <div class="metric-label">Brain Temp</div>
+                <div class="metric-val" id="debugBrainTempVal">-- °C</div>
+              </div>
+              <div class="debug-brain-metric">
+                <div class="metric-label">VEXos Kernel</div>
+                <div class="metric-val" id="debugBrainVexosVal">v1.1.4</div>
+              </div>
+              <div class="debug-brain-metric">
+                <div class="metric-label">Active Slot</div>
+                <div class="metric-val" id="debugBrainSlotVal">Slot 1</div>
+              </div>
+            </div>
+
+            <!-- Program Control & Flash actions -->
+            <div class="debug-brain-actions">
+              <div class="debug-slot-picker-row">
+                <label for="debugSlotSelect" style="font-size:0.75rem;color:#94a3b8;">Target Slot:</label>
+                <select id="debugSlotSelect" class="debug-slot-select">
+                  <option value="1">Slot 1 (Override_Auton)</option>
+                  <option value="2">Slot 2 (Skills_60s)</option>
+                  <option value="3">Slot 3 (Solo_AWP)</option>
+                  <option value="4">Slot 4 (Empty)</option>
+                  <option value="5">Slot 5 (Empty)</option>
+                  <option value="6">Slot 6 (Empty)</option>
+                  <option value="7">Slot 7 (Empty)</option>
+                  <option value="8">Slot 8 (Empty)</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:8px;">
+                <button type="button" id="btnDebugUploadAuton" class="primary" style="flex:1;padding:6px;font-size:0.75rem;">⚡ Flash Auton to Brain</button>
+                <button type="button" id="btnDebugRunProgram" style="background:#16a34a;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.75rem;cursor:pointer;">▶ Run</button>
+                <button type="button" id="btnDebugStopProgram" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.75rem;cursor:pointer;">⏹ Stop</button>
+              </div>
+            </div>
+
+            <!-- Smart Port Monitor List -->
+            <div style="margin-top:12px;">
+              <div style="font-size:0.72rem;font-weight:700;color:#cbd5e1;margin-bottom:6px;">Smart Port Device Live Status:</div>
+              <div class="debug-smartports-list" id="debugSmartportsList">
+                <!-- Dynamically populated from V5BrainSerial -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Cross-Script Diagnostics Tab -->
+          <div class="debug-pane" id="debugPaneDiagnostics">
+            <div class="debug-diag-summary" id="debugDiagSummary">
+              <span class="debug-diag-status-dot green"></span>
+              <strong>Project Syntax Check: Clean</strong>
+            </div>
+            <div id="debugDiagList" class="debug-diag-list">
+              <!-- Diagnostic errors and warnings -->
+            </div>
+          </div>
+
+          <!-- Step Debugger Tab -->
+          <div class="debug-pane" id="debugPaneStep">
+            <div class="debug-step-controls">
+              <button type="button" id="btnDebugStepReset" title="Reset to Start">⏮️ Reset</button>
+              <button type="button" id="btnDebugStepPrev" title="Previous Action">◀ Step Back</button>
+              <button type="button" id="btnDebugStepNext" class="primary" title="Execute Next Action">Step Next ▶</button>
+            </div>
+            <div class="debug-step-readout">
+              <div class="debug-step-row"><span>Active Step:</span><strong id="debugActiveStepLabel">Step 0 (Start)</strong></div>
+              <div class="debug-step-row"><span>Simulated Pose:</span><strong id="debugStepPose">(X: -60.0", Y: -60.0", θ: 0.0°)</strong></div>
+              <div class="debug-step-row"><span>Elapsed Sim Time:</span><strong id="debugStepTime">0.00 s</strong></div>
+            </div>
+            <div class="debug-step-log" id="debugStepLog">
+              <div class="step-log-entry info">[START] Autonomous routine initialized at origin tile.</div>
+            </div>
+          </div>
+
+          <!-- Terminal Output Tab -->
+          <div class="debug-pane" id="debugPaneTerminal">
+            <div class="debug-term-header">
+              <span>VEX V5 Live CDC Stream (115200 baud)</span>
+              <button type="button" id="btnClearDebugTerminal" class="btn-xs-clean">🧹 Clear</button>
+            </div>
+            <pre class="debug-terminal-console" id="debugTerminalConsole">[PROS Kernel 4.1.0 Initialized]
+[LemLib 0.5.4] Chassis calibrated. Inertial IMU zeroed.
+[AUTON] Starting 'red_rush_auton' routine...</pre>
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
 
@@ -473,7 +627,7 @@ void autonomous() {
               <span class="pid-graph-title" id="pidGraphTitle">Step Response: 24.0" Lateral Drive Step</span>
               <div class="pid-graph-legend">
                 <span class="legend-dot target-dot"></span> Setpoint
-                <span class="legend-dot response-dot"></span> Response $y(t)$
+                <span class="legend-dot response-dot"></span> Response y(t)
                 <span class="legend-dot band-dot"></span> Settling Band (±2%)
               </div>
             </div>
@@ -490,11 +644,11 @@ void autonomous() {
               </div>
               <div class="pid-kpi-card">
                 <span class="pid-kpi-val" id="pidKpiRise">0.38s</span>
-                <span class="pid-kpi-label">Rise Time ($T_r$)</span>
+                <span class="pid-kpi-label">Rise Time (Tr)</span>
               </div>
               <div class="pid-kpi-card">
                 <span class="pid-kpi-val" id="pidKpiSettle">0.76s</span>
-                <span class="pid-kpi-label">Settling Time ($T_s$)</span>
+                <span class="pid-kpi-label">Settling Time (Ts)</span>
               </div>
               <div class="pid-kpi-card">
                 <span class="pid-kpi-val" id="pidKpiError">0.00"</span>
@@ -524,7 +678,7 @@ void autonomous() {
               <!-- kP Gain -->
               <div class="pid-slider-group">
                 <div class="pid-slider-header">
-                  <label for="pidKpInput"><strong>$k_P$ (Proportional Gain):</strong></label>
+                  <label for="pidKpInput"><strong>kP (Proportional Gain):</strong></label>
                   <input type="number" id="pidKpInput" step="0.1" min="0" max="100" value="8.0" class="pid-num-input" />
                 </div>
                 <input type="range" id="pidKpSlider" min="0" max="40" step="0.1" value="8.0" class="pid-slider" />
@@ -534,7 +688,7 @@ void autonomous() {
               <!-- kI Gain -->
               <div class="pid-slider-group">
                 <div class="pid-slider-header">
-                  <label for="pidKiInput"><strong>$k_I$ (Integral Gain):</strong></label>
+                  <label for="pidKiInput"><strong>kI (Integral Gain):</strong></label>
                   <input type="number" id="pidKiInput" step="0.01" min="0" max="10" value="0.0" class="pid-num-input" />
                 </div>
                 <input type="range" id="pidKiSlider" min="0" max="2" step="0.01" value="0.0" class="pid-slider" />
@@ -544,7 +698,7 @@ void autonomous() {
               <!-- kD Gain -->
               <div class="pid-slider-group">
                 <div class="pid-slider-header">
-                  <label for="pidKdInput"><strong>$k_D$ (Derivative Gain):</strong></label>
+                  <label for="pidKdInput"><strong>kD (Derivative Gain):</strong></label>
                   <input type="number" id="pidKdInput" step="0.5" min="0" max="200" value="30.0" class="pid-num-input" />
                 </div>
                 <input type="range" id="pidKdSlider" min="0" max="100" step="0.5" value="30.0" class="pid-slider" />
@@ -558,7 +712,7 @@ void autonomous() {
                   <input type="number" id="pidWindupInput" step="0.5" min="0" max="50" value="3.0" />
                 </label>
                 <label>
-                  <span>Slew Rate ($mV/s$)</span>
+                  <span>Slew Rate (mV/s)</span>
                   <input type="number" id="pidSlewInput" step="1" min="0" max="100" value="0" />
                 </label>
                 <label>
@@ -850,16 +1004,16 @@ void autonomous() {
             <div class="help-card">
               <h4>⚙️ Drivetrain Parameters</h4>
               <ul>
-                <li><strong>Track Width:</strong> Center-to-center distance between left and right drive wheels in inches (typically 10"–13"). Used for angular velocity calculations $\omega = (v_R - v_L) / \text{trackWidth}$.</li>
+                <li><strong>Track Width:</strong> Center-to-center distance between left and right drive wheels in inches (typically 10"–13"). Used for angular velocity calculations <code>ω = (vR - vL) / trackWidth</code>.</li>
                 <li><strong>Robot Width & Length:</strong> Physical robot bounding box in inches. Drawn to scale on the field to check game element clearance.</li>
-                <li><strong>Wheel Diameter & RPM:</strong> Used to compute max theoretical forward speed $v_{\max} = \pi \times d \times (\text{RPM}/60)$.</li>
+                <li><strong>Wheel Diameter & RPM:</strong> Used to compute max theoretical forward speed <code>v_max = π × d × (RPM/60)</code>.</li>
               </ul>
             </div>
 
             <div class="help-card">
               <h4>📈 Dynamics & Controller Emulation</h4>
               <ul>
-                <li><strong>Motor Slew Rate:</strong> Simulated acceleration limit with first-order filter time constant ($\tau = 0.07\text{s}$) to avoid unrealistic instantaneous velocity jumps.</li>
+                <li><strong>Motor Slew Rate:</strong> Simulated acceleration limit with first-order filter time constant (τ = 0.07s) to avoid unrealistic instantaneous velocity jumps.</li>
                 <li><strong>PID Controllers:</strong> Emulates LemLib's lateral and angular PID controllers with proportional scaling and integral error tracking.</li>
                 <li><strong>Early Exit Range:</strong> Set <code>earlyExitRange</code> in inches to blend sequential movements without stopping to a complete standstill.</li>
               </ul>
@@ -970,13 +1124,192 @@ void autonomous() {
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.k17"></script>
+
+  <!-- Load Project Workspace Modal -->
+  <div id="loadProjectModal" class="modal project-modal" hidden>
+    <div class="modal-card project-modal-card">
+      <div class="modal-header">
+        <div class="project-modal-title-wrap">
+          <span class="badge" style="background:#0284c7;color:#fff;">PROS &amp; LemLib</span>
+          <h2>📁 Load Robot Project Workspace</h2>
+        </div>
+        <button type="button" id="loadProjectModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body project-modal-body">
+        <div class="project-scope-notice">
+          <strong>⚡ Visual Scope Rule:</strong> When you load a project, this visual planner <strong>only parses and edits <code>src/autons.cpp</code></strong>. All surrounding project files (<code>include/robot-config.h</code>, <code>include/subsystems.hpp</code>, <code>src/main.cpp</code>, <code>Makefile</code>) are preserved and cross-referenced for variables and compilation!
+        </div>
+
+        <div class="project-options-grid">
+          <!-- Option 1: Standard Competition Template -->
+          <div class="project-option-card">
+            <div class="proj-opt-icon">🚀</div>
+            <h4>Standard Competition Template</h4>
+            <p>Load official OverRide 2026-27 6-motor drivetrain, pneumatic clamp, intake, and LemLib controllers.</p>
+            <button type="button" id="btnLoadDefaultTemplate" class="primary" style="width:100%;margin-top:8px;">Load Template</button>
+          </div>
+
+          <!-- Option 2: Load from Cloud -->
+          <div class="project-option-card">
+            <div class="proj-opt-icon">☁️</div>
+            <h4>Load from Cloud Account</h4>
+            <p>Fetch your team's synchronized multi-file project workspace from Firebase Firestore.</p>
+            <button type="button" id="btnFetchCloudProject" class="btn-subtle" style="width:100%;margin-top:8px;">Fetch Cloud Project</button>
+          </div>
+
+          <!-- Option 3: Import JSON Bundle -->
+          <div class="project-option-card">
+            <div class="proj-opt-icon">📂</div>
+            <h4>Import Project JSON / Files</h4>
+            <p>Upload a saved <code>project.json</code> or PROS project bundle with all source files.</p>
+            <input type="file" id="projectFileInput" accept=".json,.vpath" hidden />
+            <button type="button" id="btnBrowseProjectFile" class="btn-subtle" style="width:100%;margin-top:8px;">Upload Project JSON</button>
+          </div>
+
+          <!-- Option 4: Export Current Project -->
+          <div class="project-option-card">
+            <div class="proj-opt-icon">💾</div>
+            <h4>Export Entire Project Bundle</h4>
+            <p>Download the complete multi-file project JSON bundle for backup or migration.</p>
+            <button type="button" id="btnExportProjectBundle" class="btn-subtle" style="width:100%;margin-top:8px;">Export Project .json</button>
+          </div>
+        </div>
+
+        <div class="project-files-preview-box">
+          <h4>Active Project Structure Preview:</h4>
+          <div class="proj-tree-view" id="modalProjectTree">
+            <div>📁 <strong>src/</strong></div>
+            <div class="proj-tree-sub">📄 <strong>autons.cpp</strong> <span class="proj-tree-tag active">Active Visual Flow</span></div>
+            <div class="proj-tree-sub">📄 main.cpp</div>
+            <div class="proj-tree-sub">📄 robot-config.cpp</div>
+            <div class="proj-tree-sub">📄 subsystems.cpp</div>
+            <div>📁 <strong>include/</strong></div>
+            <div class="proj-tree-sub">📑 main.h</div>
+            <div class="proj-tree-sub">📑 robot-config.h <span class="proj-tree-tag">Variable Indexer</span></div>
+            <div class="proj-tree-sub">📑 subsystems.hpp</div>
+            <div>⚙️ Makefile &amp; project.pros</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:0.8rem;color:#94a3b8;">Want full multi-file C++ editing? Use the C++ IDE.</span>
+        <div style="display:flex;gap:8px;">
+          <a href="ide.html" class="btn-xs-ide" style="text-decoration:none;padding:8px 14px;font-size:0.85rem;">💻 Open Full C++ IDE ↗</a>
+          <button type="button" id="btnLoadProjectDone" class="primary">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VEX V5 Brain Telemetry & Upload Modal -->
+  <div id="brainModal" class="modal brain-modal" hidden>
+    <div class="modal-card brain-modal-card">
+      <div class="modal-header">
+        <div class="brain-modal-title-wrap">
+          <span class="brain-badge">VEX V5 HARDWARE</span>
+          <h2>🧠 VEX V5 Brain Dashboard &amp; Flash Manager</h2>
+        </div>
+        <button type="button" id="brainModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body brain-modal-body">
+        <!-- Top Status Banner inside modal -->
+        <div class="brain-top-banner">
+          <div class="brain-conn-status">
+            <span class="brain-status-dot disconnected" id="modalBrainDot"></span>
+            <div>
+              <strong id="modalBrainName" style="font-size:1.05rem;color:#f8fafc;">Brain: Disconnected</strong>
+              <div id="modalBrainSubtext" style="font-size:0.75rem;color:#94a3b8;">Plug in VEX V5 USB cable to connect Web Serial CDC port</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button type="button" id="btnModalConnectBrain" class="primary" style="padding:6px 14px;font-size:0.82rem;">🔌 Connect via USB</button>
+            <button type="button" id="btnModalDisconnectBrain" class="btn-danger-outline" style="padding:6px 12px;font-size:0.82rem;display:none;">Disconnect</button>
+          </div>
+        </div>
+
+        <!-- Telemetry Cards Grid -->
+        <div class="brain-telemetry-grid">
+          <!-- Battery Gauge Card -->
+          <div class="brain-gauge-card">
+            <div class="gauge-card-title">🔋 Main 12.8V Battery</div>
+            <div class="gauge-card-hero" id="modalBattPct">94%</div>
+            <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalBattFill" style="width:94%;"></div></div>
+            <div class="gauge-card-meta">
+              <span>Voltage: <strong id="modalBattMv">12.45 V</strong></span>
+              <span>Temp: <strong id="modalBattTemp">28 °C</strong></span>
+            </div>
+          </div>
+
+          <!-- Kernel & Radio Card -->
+          <div class="brain-gauge-card">
+            <div class="gauge-card-title">📡 Link &amp; VEXos Kernel</div>
+            <div class="gauge-card-meta-list">
+              <div class="gauge-meta-row"><span>Firmware:</span><strong id="modalFirmware">VEXos 1.1.4</strong></div>
+              <div class="gauge-meta-row"><span>Radio:</span><strong id="modalRadio">VEXnet 2.0 (-58 dBm)</strong></div>
+              <div class="gauge-meta-row"><span>Controller:</span><strong id="modalController" style="color:#22c55e;">Paired &amp; Active</strong></div>
+              <div class="gauge-meta-row"><span>System Port:</span><strong style="color:#38bdf8;">CDC Port 1 (115200)</strong></div>
+            </div>
+          </div>
+
+          <!-- Active Slot & Quick Controls Card -->
+          <div class="brain-gauge-card">
+            <div class="gauge-card-title">⚡ Flash &amp; Program Control</div>
+            <div style="margin-bottom:8px;">
+              <label for="modalSlotSelect" style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:4px;">Target Memory Slot:</label>
+              <select id="modalSlotSelect" class="debug-slot-select" style="width:100%;">
+                <option value="1">Slot 1: Override_Auton (146 KB)</option>
+                <option value="2">Slot 2: Skills_60s_Run (142 KB)</option>
+                <option value="3">Slot 3: Solo_AWP_Blue (138 KB)</option>
+                <option value="4">Slot 4: [Empty Slot]</option>
+                <option value="5">Slot 5: [Empty Slot]</option>
+                <option value="6">Slot 6: [Empty Slot]</option>
+                <option value="7">Slot 7: [Empty Slot]</option>
+                <option value="8">Slot 8: [Empty Slot]</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button type="button" id="btnModalUploadAuton" class="primary" style="flex:1;font-size:0.78rem;padding:7px;">⚡ Flash Current Auton</button>
+              <button type="button" id="btnModalRunProgram" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">▶ Run</button>
+              <button type="button" id="btnModalStopProgram" style="background:#dc2626;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">⏹ Stop</button>
+            </div>
+            <div id="modalUploadProgressWrap" style="margin-top:6px;display:none;">
+              <div style="font-size:0.70rem;color:#38bdf8;margin-bottom:2px;" id="modalUploadProgressLabel">Uploading... 0%</div>
+              <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalUploadProgressBar" style="width:0%;background:#38bdf8;"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Smart Port Telemetry Section -->
+        <div class="brain-smartports-section">
+          <div class="smartports-header">
+            <h4>🔌 Smart Ports &amp; Device Bus (21 Ports)</h4>
+            <span style="font-size:0.72rem;color:#94a3b8;">Live hardware diagnostics &amp; motor temps</span>
+          </div>
+          <div class="smartports-grid" id="modalSmartportsGrid">
+            <!-- Dynamically populated from V5BrainSerial -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:0.75rem;color:#64748b;">Supports Web Serial API on Chrome, Edge, Opera, and VEX CDC adapters.</span>
+        <button type="button" id="btnBrainModalDone" class="primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="version.js?v=20260921.k3"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.k17"></script>
+  <script src="firebase-config.js?v=20260921.k3"></script>
+  <script src="v5-brain-serial.js"></script>
+  <script src="project-manager.js"></script>
   <script src="cpp-parser.js?v=20260920.k16"></script>
-  <script src="app.js?v=20260920.k17"></script>
+  <script src="app.js?v=20260921.k3"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

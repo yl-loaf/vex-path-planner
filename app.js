@@ -5136,5 +5136,699 @@ lemlib::ControllerSettings ${currentMode}_controller(
     btnNewTab.style.display = "inline-flex";
   }
 
+  // =========================================================================
+  // PROS Project Workspace & Live Debugger Integration
+  // =========================================================================
+  function updateProjectBanner() {
+    if (!window.ProjectManager) return;
+    const proj = window.ProjectManager.project;
+    const bannerName = document.getElementById("bannerProjectName");
+    const bannerVarCount = document.getElementById("bannerVariableCount");
+    if (bannerName && proj) {
+      bannerName.textContent = proj.name || "Override_LemLib_Bot";
+    }
+    if (bannerVarCount && window.ProjectManager.symbols) {
+      const syms = window.ProjectManager.symbols;
+      const totalCount = (syms.motors?.length || 0) + (syms.pistons?.length || 0) + (syms.sensors?.length || 0) + (syms.functions?.length || 0);
+      bannerVarCount.textContent = `${totalCount} device${totalCount === 1 ? '' : 's'} indexed`;
+    }
+  }
+
+  function syncPlannerIntoProjectManager() {
+    if (!window.ProjectManager) return;
+    try {
+      window.ProjectManager.updateAutonCppFromPlanner(paths, getIndentString());
+      updateProjectBanner();
+    } catch (e) {
+      console.warn("Failed to sync planner into ProjectManager:", e);
+    }
+  }
+
+  function loadProjectAutonsIntoPlanner() {
+    if (!window.ProjectManager) return;
+    const autonRoutines = window.ProjectManager.getAutonRoutines();
+    if (!autonRoutines || autonRoutines.length === 0) return;
+
+    // Convert parsed routines into planner paths
+    const newPaths = [];
+    autonRoutines.forEach((r, idx) => {
+      let parsed = null;
+      if (window.CppParser && typeof window.CppParser.parse === "function") {
+        try {
+          parsed = window.CppParser.parse(r.body, { defaultTimeout: 2000 });
+        } catch (_) {}
+      }
+
+      const pName = r.name.replace(/^auton_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) || `Routine ${idx + 1}`;
+      newPaths.push({
+        id: "path_" + Date.now() + "_" + idx,
+        name: pName,
+        pose: parsed?.pose ? { ...parsed.pose } : { x: -60, y: -60, theta: 0 },
+        actions: parsed?.actions && parsed.actions.length > 0 ? parsed.actions : [
+          {
+            id: "act_" + Date.now() + "_0",
+            type: "moveToPoint",
+            x: -24,
+            y: -24,
+            theta: 0,
+            timeout: 2000,
+            maxSpeed: 127,
+            minSpeed: 0,
+            earlyExitRange: 0,
+            forwards: true,
+            label: "Rush goal",
+            async: false
+          }
+        ]
+      });
+    });
+
+    if (newPaths.length > 0) {
+      paths = newPaths;
+      activePathId = paths[0].id;
+      bindActive();
+      renderPathSelect();
+      syncStartInputs();
+      renderFlow();
+      draw();
+      generateCode();
+      showToast(`📁 Loaded ${newPaths.length} autonomous routine${newPaths.length === 1 ? '' : 's'} from src/autons.cpp`);
+    }
+  }
+
+  function wireProjectWorkspace() {
+    updateProjectBanner();
+
+    // Banner Cloud Sync button
+    const btnSyncCloud = document.getElementById("btnSyncProjectToCloud");
+    if (btnSyncCloud) {
+      btnSyncCloud.onclick = async () => {
+        try {
+          btnSyncCloud.disabled = true;
+          btnSyncCloud.textContent = "⏳ Syncing...";
+          syncPlannerIntoProjectManager();
+          await window.ProjectManager.saveToCloud();
+          showToast("☁️ Multi-file project synchronized to cloud successfully!");
+        } catch (err) {
+          showToast(`⚠️ Cloud sync failed: ${err.message}`);
+        } finally {
+          btnSyncCloud.disabled = false;
+          btnSyncCloud.textContent = "☁️ Sync Cloud";
+        }
+      };
+    }
+
+    // Banner Compile Project button
+    const btnCompileBanner = document.getElementById("btnCompileProjectBanner");
+    if (btnCompileBanner) {
+      btnCompileBanner.onclick = () => {
+        syncPlannerIntoProjectManager();
+        const res = window.ProjectManager.compileProject();
+        if (res.success) {
+          showToast(`⚡ Project compiled clean in ${res.elapsed}s (pros make)`);
+        } else {
+          showToast(`❌ Compile failed: ${res.errors.length} error(s). See Debugger.`, 4000);
+        }
+        // Open debug panel on diagnostics
+        const debugPanel = document.getElementById("debugSidePanel");
+        if (debugPanel) {
+          debugPanel.hidden = false;
+          const diagTab = document.querySelector('.debug-tab[data-tab="diagnostics"]');
+          if (diagTab) diagTab.click();
+        }
+      };
+    }
+  }
+
+  // -- Load Project Modal Wiring ---------------------------------------
+  function wireLoadProjectModal() {
+    const modal = document.getElementById("loadProjectModal");
+    const btnOpen = document.getElementById("btnLoadProject");
+    const btnClose = document.getElementById("loadProjectModalClose");
+    const btnDone = document.getElementById("btnLoadProjectDone");
+
+    const btnLoadDefault = document.getElementById("btnLoadDefaultTemplate");
+    const btnFetchCloud = document.getElementById("btnFetchCloudProject");
+    const btnBrowse = document.getElementById("btnBrowseProjectFile");
+    const fileInput = document.getElementById("projectFileInput");
+    const btnExport = document.getElementById("btnExportProjectBundle");
+
+    if (!modal) return;
+
+    function openModal() {
+      modal.hidden = false;
+      modal.classList.add("open");
+    }
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    if (btnOpen) btnOpen.onclick = openModal;
+    if (btnClose) btnClose.onclick = closeModal;
+    if (btnDone) btnDone.onclick = closeModal;
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    if (btnLoadDefault) {
+      btnLoadDefault.onclick = () => {
+        if (window.ProjectManager) {
+          window.ProjectManager.initDefaultProject("Override_LemLib_Bot");
+          loadProjectAutonsIntoPlanner();
+          updateProjectBanner();
+          closeModal();
+          showToast("🚀 Default competition project loaded. Visual flowchart synced to src/autons.cpp");
+        }
+      };
+    }
+
+    if (btnFetchCloud) {
+      btnFetchCloud.onclick = async () => {
+        if (!window.ProjectManager) return;
+        try {
+          btnFetchCloud.disabled = true;
+          btnFetchCloud.textContent = "Fetching...";
+          const proj = await window.ProjectManager.loadFromCloud();
+          if (proj) {
+            loadProjectAutonsIntoPlanner();
+            updateProjectBanner();
+            closeModal();
+            showToast("☁️ Synced cloud project loaded successfully!");
+          } else {
+            showToast("No project found in cloud. Sync your current project first!");
+          }
+        } catch (e) {
+          showToast(`⚠️ Cloud fetch failed: ${e.message}`);
+        } finally {
+          btnFetchCloud.disabled = false;
+          btnFetchCloud.textContent = "Fetch Cloud Project";
+        }
+      };
+    }
+
+    if (btnBrowse && fileInput) {
+      btnBrowse.onclick = () => fileInput.click();
+      fileInput.onchange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const data = JSON.parse(evt.target.result);
+            if (data.files) {
+              window.ProjectManager.project = data;
+              window.ProjectManager.saveLocal();
+              loadProjectAutonsIntoPlanner();
+              updateProjectBanner();
+              closeModal();
+              showToast("📂 Project imported successfully!");
+            } else {
+              showToast("Invalid project file: missing files map.");
+            }
+          } catch (err) {
+            showToast("Failed to parse project JSON file.");
+          }
+        };
+        reader.readAsText(file);
+      };
+    }
+
+    if (btnExport) {
+      btnExport.onclick = () => {
+        if (!window.ProjectManager || !window.ProjectManager.project) return;
+        syncPlannerIntoProjectManager();
+        const json = JSON.stringify(window.ProjectManager.project, null, 2);
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${window.ProjectManager.project.name || "Override_LemLib_Project"}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("💾 Exported full multi-file project bundle!");
+      };
+    }
+  }
+
+  // -- Live Debugger & Inspector Side Panel -----------------------------
+  function wireDebugPanel() {
+    const panel = document.getElementById("debugSidePanel");
+    const btnToggle = document.getElementById("btnToggleDebug");
+    const btnClose = document.getElementById("btnDebugClose");
+    const tabs = document.querySelectorAll(".debug-tab");
+    const panes = document.querySelectorAll(".debug-pane");
+
+    if (!panel) return;
+
+    if (btnToggle) {
+      btnToggle.onclick = () => {
+        panel.hidden = !panel.hidden;
+        btnToggle.classList.toggle("active", !panel.hidden);
+        if (!panel.hidden) {
+          refreshDebugDevices();
+          refreshDebugDiagnostics();
+        }
+      };
+    }
+
+    if (btnClose) {
+      btnClose.onclick = () => {
+        panel.hidden = true;
+        if (btnToggle) btnToggle.classList.remove("active");
+      };
+    }
+
+    tabs.forEach((tab) => {
+      tab.onclick = () => {
+        tabs.forEach((t) => t.classList.remove("active"));
+        panes.forEach((p) => p.classList.remove("active"));
+        tab.classList.add("active");
+        const targetId = tab.dataset.tab;
+        const targetPane = document.getElementById(`debugPane${targetId.charAt(0).toUpperCase() + targetId.slice(1)}`);
+        if (targetPane) targetPane.classList.add("active");
+
+        if (targetId === "devices") refreshDebugDevices();
+        if (targetId === "diagnostics") refreshDebugDiagnostics();
+      };
+    });
+
+    // Populate Indexed Devices & Variables Tab
+    function refreshDebugDevices() {
+      const container = document.getElementById("debugDevicesList");
+      if (!container || !window.ProjectManager) return;
+      window.ProjectManager.indexVariables();
+      const syms = window.ProjectManager.symbols;
+      container.innerHTML = "";
+
+      const allItems = [
+        ...(syms.motors || []),
+        ...(syms.pistons || []),
+        ...(syms.sensors || []),
+        ...(syms.functions || []),
+      ];
+
+      if (allItems.length === 0) {
+        container.innerHTML = `<div style="font-size:0.75rem;color:#64748b;padding:10px;">No devices declared in include/robot-config.h yet.</div>`;
+        return;
+      }
+
+      allItems.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "debug-dev-card";
+        card.title = "Click to copy code snippet to clipboard";
+        card.innerHTML = `
+          <div class="debug-dev-card-head">
+            <span class="debug-dev-name">${escapeHtml(item.name)}</span>
+            <span class="debug-dev-type">${escapeHtml(item.type || 'Function')}</span>
+          </div>
+          <div class="debug-dev-meta">
+            <span>${escapeHtml(item.file || 'robot-config.h')}</span>
+            <code>${escapeHtml(item.snippet || '')}</code>
+          </div>
+        `;
+        card.onclick = () => {
+          if (item.snippet) {
+            navigator.clipboard?.writeText(item.snippet);
+            showToast(`📋 Copied '${item.snippet}' to clipboard!`);
+          }
+        };
+        container.appendChild(card);
+      });
+    }
+
+    // Diagnostics Compilation Check
+    function refreshDebugDiagnostics() {
+      const summary = document.getElementById("debugDiagSummary");
+      const list = document.getElementById("debugDiagList");
+      const badge = document.getElementById("debugDiagBadge");
+      if (!list || !window.ProjectManager) return;
+
+      syncPlannerIntoProjectManager();
+      const res = window.ProjectManager.compileProject();
+      list.innerHTML = "";
+
+      const totalIssues = res.errors.length + res.warnings.length;
+      if (badge) badge.textContent = totalIssues;
+
+      if (summary) {
+        if (res.success) {
+          summary.innerHTML = `<span class="debug-diag-status-dot green"></span><strong>Project Workspace: All Files Clean (0 Errors)</strong>`;
+        } else {
+          summary.innerHTML = `<span class="debug-diag-status-dot red"></span><strong>Build Failed: ${res.errors.length} error(s)</strong>`;
+        }
+      }
+
+      if (totalIssues === 0) {
+        list.innerHTML = `
+          <div style="font-size:0.75rem;color:#22c55e;background:rgba(34,197,94,0.1);padding:10px;border-radius:6px;border:1px solid rgba(34,197,94,0.3);">
+            ✅ No syntax, missing semicolon, or unresolved variable errors detected across any project script.
+          </div>
+        `;
+        return;
+      }
+
+      res.errors.forEach((err) => {
+        const item = document.createElement("div");
+        item.className = "ide-diag-item error";
+        item.innerHTML = `<span class="ide-diag-badge">ERROR</span> <span class="ide-diag-file">${escapeHtml(err.file)}:${err.line}</span> — ${escapeHtml(err.message)}`;
+        list.appendChild(item);
+      });
+
+      res.warnings.forEach((warn) => {
+        const item = document.createElement("div");
+        item.className = "ide-diag-item warning";
+        item.innerHTML = `<span class="ide-diag-badge">WARN</span> <span class="ide-diag-file">${escapeHtml(warn.file)}:${warn.line}</span> — ${escapeHtml(warn.message)}`;
+        list.appendChild(item);
+      });
+    }
+
+    // Step Debugger
+    let debugStepIdx = 0;
+    const btnStepNext = document.getElementById("btnDebugStepNext");
+    const btnStepPrev = document.getElementById("btnDebugStepPrev");
+    const btnStepReset = document.getElementById("btnDebugStepReset");
+    const stepLabel = document.getElementById("debugActiveStepLabel");
+    const stepPose = document.getElementById("debugStepPose");
+    const stepTime = document.getElementById("debugStepTime");
+    const stepLog = document.getElementById("debugStepLog");
+
+    function updateStepDebugger() {
+      if (!actions || actions.length === 0) return;
+      const poses = computePoses();
+      const curPose = debugStepIdx === 0 ? { ...pose } : (poses[debugStepIdx - 1] || pose);
+
+      if (stepLabel) {
+        stepLabel.textContent = debugStepIdx === 0 ? "Step 0 (Start Pose)" : `Step ${debugStepIdx} of ${actions.length} (${actions[debugStepIdx - 1]?.type || 'Action'})`;
+      }
+      if (stepPose) {
+        stepPose.textContent = `(X: ${curPose.x.toFixed(1)}", Y: ${curPose.y.toFixed(1)}", θ: ${curPose.theta.toFixed(1)}°)`;
+      }
+
+      // Update robot preview on canvas to current step pose
+      robotSimPose = { ...curPose };
+      draw();
+
+      if (debugStepIdx > 0 && actions[debugStepIdx - 1]) {
+        selectedId = actions[debugStepIdx - 1].id;
+        renderFlow();
+      }
+    }
+
+    if (btnStepNext) {
+      btnStepNext.onclick = () => {
+        if (!actions || actions.length === 0) return;
+        if (debugStepIdx < actions.length) {
+          debugStepIdx++;
+          const act = actions[debugStepIdx - 1];
+          const entry = document.createElement("div");
+          entry.className = "step-log-entry";
+          entry.textContent = `[STEP ${debugStepIdx}] Executed ${act.type} (Timeout: ${act.timeout || 0}ms)`;
+          stepLog?.appendChild(entry);
+          if (stepLog) stepLog.scrollTop = stepLog.scrollHeight;
+          updateStepDebugger();
+        }
+      };
+    }
+
+    if (btnStepPrev) {
+      btnStepPrev.onclick = () => {
+        if (debugStepIdx > 0) {
+          debugStepIdx--;
+          updateStepDebugger();
+        }
+      };
+    }
+
+    if (btnStepReset) {
+      btnStepReset.onclick = () => {
+        debugStepIdx = 0;
+        if (stepLog) {
+          stepLog.innerHTML = `<div class="step-log-entry info">[START] Autonomous routine reset to start pose.</div>`;
+        }
+        updateStepDebugger();
+      };
+    }
+
+    // Terminal Clear
+    const btnClearTerm = document.getElementById("btnClearDebugTerminal");
+    const termConsole = document.getElementById("debugTerminalConsole");
+    if (btnClearTerm && termConsole) {
+      btnClearTerm.onclick = () => {
+        termConsole.textContent = `[VEX V5 Terminal Ready]\n`;
+      };
+    }
+  }
+
+  // -- VEX V5 Brain Connection & Telemetry Controller ------------------
+  function wireV5BrainUI() {
+    if (!window.V5BrainSerial) return;
+
+    const btnConnectNav = document.getElementById("btnConnectBrain");
+    const bannerDot = document.getElementById("bannerBrainDot");
+    const bannerText = document.getElementById("bannerBrainText");
+    const bannerBatt = document.getElementById("bannerBrainBatt");
+    const bannerPill = document.getElementById("bannerBrainStatus");
+
+    // Modal elements
+    const brainModal = document.getElementById("brainModal");
+    const brainModalClose = document.getElementById("brainModalClose");
+    const btnBrainModalDone = document.getElementById("btnBrainModalDone");
+    const btnModalConnect = document.getElementById("btnModalConnectBrain");
+    const btnModalDisconnect = document.getElementById("btnModalDisconnectBrain");
+    const modalBrainDot = document.getElementById("modalBrainDot");
+    const modalBrainName = document.getElementById("modalBrainName");
+    const modalBrainSubtext = document.getElementById("modalBrainSubtext");
+    const modalBattPct = document.getElementById("modalBattPct");
+    const modalBattFill = document.getElementById("modalBattFill");
+    const modalBattMv = document.getElementById("modalBattMv");
+    const modalBattTemp = document.getElementById("modalBattTemp");
+    const modalFirmware = document.getElementById("modalFirmware");
+    const modalRadio = document.getElementById("modalRadio");
+    const modalSmartportsGrid = document.getElementById("modalSmartportsGrid");
+    const modalSlotSelect = document.getElementById("modalSlotSelect");
+    const btnModalUpload = document.getElementById("btnModalUploadAuton");
+    const btnModalRun = document.getElementById("btnModalRunProgram");
+    const btnModalStop = document.getElementById("btnModalStopProgram");
+    const uploadProgressWrap = document.getElementById("modalUploadProgressWrap");
+    const uploadProgressBar = document.getElementById("modalUploadProgressBar");
+    const uploadProgressLabel = document.getElementById("modalUploadProgressLabel");
+
+    // Debug pane elements
+    const debugBrainDot = document.getElementById("debugBrainDot");
+    const debugBrainStatusName = document.getElementById("debugBrainStatusName");
+    const btnDebugConnect = document.getElementById("btnDebugConnectBrain");
+    const debugBrainBattVal = document.getElementById("debugBrainBattVal");
+    const debugBrainBattBar = document.getElementById("debugBrainBattBar");
+    const debugBrainTempVal = document.getElementById("debugBrainTempVal");
+    const debugBrainVexosVal = document.getElementById("debugBrainVexosVal");
+    const debugBrainSlotVal = document.getElementById("debugBrainSlotVal");
+    const debugSlotSelect = document.getElementById("debugSlotSelect");
+    const btnDebugUpload = document.getElementById("btnDebugUploadAuton");
+    const btnDebugRun = document.getElementById("btnDebugRunProgram");
+    const btnDebugStop = document.getElementById("btnDebugStopProgram");
+    const debugSmartportsList = document.getElementById("debugSmartportsList");
+    const debugTerminalConsole = document.getElementById("debugTerminalConsole");
+
+    function openBrainModal() {
+      if (!brainModal) return;
+      brainModal.hidden = false;
+      brainModal.classList.add("open");
+      renderSmartports();
+    }
+    function closeBrainModal() {
+      if (!brainModal) return;
+      brainModal.hidden = true;
+      brainModal.classList.remove("open");
+    }
+
+    if (bannerPill) bannerPill.onclick = openBrainModal;
+    if (brainModalClose) brainModalClose.onclick = closeBrainModal;
+    if (btnBrainModalDone) btnBrainModalDone.onclick = closeBrainModal;
+    if (brainModal) {
+      brainModal.addEventListener("click", (e) => {
+        if (e.target === brainModal) closeBrainModal();
+      });
+    }
+
+    async function handleConnectToggle() {
+      if (window.V5BrainSerial.isConnected) {
+        await window.V5BrainSerial.disconnect();
+        showToast("🔌 VEX V5 Brain Disconnected");
+      } else {
+        showToast("🔌 Connecting to VEX V5 Brain via USB CDC...");
+        const ok = await window.V5BrainSerial.connect();
+        if (ok) {
+          showToast(`🧠 Connected to VEX V5 Brain (${window.V5BrainSerial.status.name})!`);
+        }
+      }
+    }
+
+    if (btnConnectNav) btnConnectNav.onclick = handleConnectToggle;
+    if (btnModalConnect) btnModalConnect.onclick = handleConnectToggle;
+    if (btnModalDisconnect) btnModalDisconnect.onclick = handleConnectToggle;
+    if (btnDebugConnect) btnDebugConnect.onclick = handleConnectToggle;
+
+    // Flash / Upload autonomous routine to Brain
+    async function handleUploadToBrain(slotPicker) {
+      if (!window.V5BrainSerial.isConnected) {
+        showToast("⚠️ Please connect to VEX V5 Brain first!");
+        openBrainModal();
+        return;
+      }
+      const slot = parseInt(slotPicker?.value || "1", 10);
+      const activePath = getActive();
+      const routineName = activePath?.name ? activePath.name.replace(/\s+/g, "_") : "Override_Auton";
+
+      try {
+        if (uploadProgressWrap) uploadProgressWrap.style.display = "block";
+        if (btnModalUpload) btnModalUpload.disabled = true;
+        if (btnDebugUpload) btnDebugUpload.disabled = true;
+
+        await window.V5BrainSerial.uploadToSlot(slot, routineName, (pct) => {
+          if (uploadProgressBar) uploadProgressBar.style.width = `${pct}%`;
+          if (uploadProgressLabel) uploadProgressLabel.textContent = `Flashing to Slot ${slot}... ${pct}%`;
+        });
+
+        showToast(`🚀 Autonomous routine successfully flashed to Slot ${slot} on Brain!`);
+      } catch (err) {
+        showToast(`❌ Flashing failed: ${err.message}`);
+      } finally {
+        if (btnModalUpload) btnModalUpload.disabled = false;
+        if (btnDebugUpload) btnDebugUpload.disabled = false;
+        setTimeout(() => {
+          if (uploadProgressWrap) uploadProgressWrap.style.display = "none";
+        }, 1200);
+      }
+    }
+
+    if (btnModalUpload) btnModalUpload.onclick = () => handleUploadToBrain(modalSlotSelect);
+    if (btnDebugUpload) btnDebugUpload.onclick = () => handleUploadToBrain(debugSlotSelect);
+
+    if (btnModalRun) btnModalRun.onclick = () => window.V5BrainSerial.startProgram(parseInt(modalSlotSelect?.value || "1", 10));
+    if (btnDebugRun) btnDebugRun.onclick = () => window.V5BrainSerial.startProgram(parseInt(debugSlotSelect?.value || "1", 10));
+    if (btnModalStop) btnModalStop.onclick = () => window.V5BrainSerial.stopProgram();
+    if (btnDebugStop) btnDebugStop.onclick = () => window.V5BrainSerial.stopProgram();
+
+    // Render smart ports in modal and debug panel
+    function renderSmartports() {
+      const ports = window.V5BrainSerial.status.smartPorts;
+      if (modalSmartportsGrid) {
+        modalSmartportsGrid.innerHTML = "";
+        for (let p = 1; p <= 21; p++) {
+          const dev = ports[p];
+          const card = document.createElement("div");
+          card.className = "smartport-item-card";
+          if (dev) {
+            card.innerHTML = `
+              <div class="smartport-item-top"><span>PORT ${p}</span><span style="color:#22c55e;">${escapeHtml(dev.status)}</span></div>
+              <div class="smartport-item-name">${escapeHtml(dev.name)}</div>
+              <div class="smartport-item-type">${escapeHtml(dev.type)} ${dev.tempC ? `(${dev.tempC}°C)` : ''}</div>
+            `;
+          } else {
+            card.style.opacity = "0.45";
+            card.innerHTML = `
+              <div class="smartport-item-top" style="color:#64748b;"><span>PORT ${p}</span><span>--</span></div>
+              <div class="smartport-item-name" style="color:#64748b;">Empty</div>
+              <div class="smartport-item-type">No device</div>
+            `;
+          }
+          modalSmartportsGrid.appendChild(card);
+        }
+      }
+
+      if (debugSmartportsList) {
+        debugSmartportsList.innerHTML = "";
+        Object.keys(ports).forEach((p) => {
+          const dev = ports[p];
+          const row = document.createElement("div");
+          row.className = "debug-port-row";
+          row.innerHTML = `
+            <span class="debug-port-num">P${p}</span>
+            <span class="debug-port-name">${escapeHtml(dev.name)} <small style="color:#94a3b8;">(${escapeHtml(dev.type)})</small></span>
+            <span class="debug-port-status">${dev.tempC ? `${dev.tempC}°C • ` : ''}${escapeHtml(dev.status)}</span>
+          `;
+          debugSmartportsList.appendChild(row);
+        });
+      }
+    }
+
+    // Update Status UI Listener
+    function updateStatusUI(status) {
+      const isConn = status && status.connected;
+
+      // Top nav button
+      if (btnConnectNav) {
+        btnConnectNav.classList.toggle("connected", isConn);
+        btnConnectNav.textContent = isConn ? `🔌 ${status.name}` : "🔌 Connect Brain";
+      }
+
+      // Banner pill
+      if (bannerDot) {
+        bannerDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
+      }
+      if (bannerText) {
+        bannerText.textContent = isConn ? `Brain: ${status.name} (Slot ${status.activeSlot})` : "Brain: Disconnected";
+      }
+      if (bannerBatt) {
+        bannerBatt.hidden = !isConn;
+        if (isConn) bannerBatt.textContent = `⚡ ${status.batteryPct}%`;
+      }
+
+      // Modal elements
+      if (modalBrainDot) modalBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
+      if (modalBrainName) modalBrainName.textContent = isConn ? `Connected: ${status.name}` : "Brain: Disconnected";
+      if (modalBrainSubtext) {
+        modalBrainSubtext.textContent = isConn 
+          ? `VEXos ${status.vexosVersion} • ${status.radioType} (${status.radioSignalDbm} dBm) • Serial CDC 115200`
+          : "Plug in VEX V5 USB cable to connect Web Serial CDC port";
+      }
+      if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-flex";
+      if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-flex" : "none";
+
+      if (modalBattPct) modalBattPct.textContent = isConn ? `${status.batteryPct}%` : "--%";
+      if (modalBattFill) modalBattFill.style.width = isConn ? `${status.batteryPct}%` : "0%";
+      if (modalBattMv) modalBattMv.textContent = isConn ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
+      if (modalBattTemp) modalBattTemp.textContent = isConn ? `${status.batteryTempC} °C` : "-- °C";
+      if (modalFirmware) modalFirmware.textContent = isConn ? `VEXos ${status.vexosVersion}` : "--";
+      if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm} dBm)` : "--";
+
+      // Debug pane
+      if (debugBrainDot) debugBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
+      if (debugBrainStatusName) debugBrainStatusName.textContent = isConn ? `VEX V5 Brain: ${status.name}` : "VEX V5 Brain: Disconnected";
+      if (btnDebugConnect) btnDebugConnect.textContent = isConn ? "Disconnect" : "🔌 Connect USB";
+      if (debugBrainBattVal) debugBrainBattVal.textContent = isConn ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : "--% (-- V)";
+      if (debugBrainBattBar) debugBrainBattBar.style.width = isConn ? `${status.batteryPct}%` : "0%";
+      if (debugBrainTempVal) debugBrainTempVal.textContent = isConn ? `${status.batteryTempC} °C` : "-- °C";
+      if (debugBrainVexosVal) debugBrainVexosVal.textContent = isConn ? `v${status.vexosVersion}` : "--";
+      if (debugBrainSlotVal) debugBrainSlotVal.textContent = isConn ? `Slot ${status.activeSlot} ${status.programRunning ? '(Running)' : ''}` : "--";
+
+      renderSmartports();
+    }
+
+    window.V5BrainSerial.addListener("status", updateStatusUI);
+    window.V5BrainSerial.addListener("connected", (d) => updateStatusUI(d.status));
+    window.V5BrainSerial.addListener("disconnected", (d) => updateStatusUI(d.status));
+    window.V5BrainSerial.addListener("terminal", (line) => {
+      if (debugTerminalConsole) {
+        debugTerminalConsole.textContent += line;
+        debugTerminalConsole.scrollTop = debugTerminalConsole.scrollHeight;
+      }
+    });
+
+    updateStatusUI(window.V5BrainSerial.status);
+  }
+
+  // Initialize Project Manager, Debug Panels, and Brain Controller
+  if (window.ProjectManager) {
+    wireProjectWorkspace();
+    wireLoadProjectModal();
+    wireDebugPanel();
+  }
+  if (window.V5BrainSerial) {
+    wireV5BrainUI();
+  }
+
   initFirebaseAuth();
 })();

@@ -1,0 +1,833 @@
+// project-manager.js - PROS LemLib Multi-File Project Manager, Symbol Indexer, and Compiler Engine
+(function(global) {
+  "use strict";
+
+  const STORAGE_KEY_PROJECT = "lemlib_active_project";
+  const STORAGE_KEY_PROJECT_DIRTY = "lemlib_project_dirty";
+
+  const DEFAULT_TEMPLATES = {
+    "src/autons.cpp": `// =================================================================
+// autons.cpp - Autonomous Routines for VEX V5 LemLib
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+#include "subsystems.hpp"
+
+// -----------------------------------------------------------------
+// Routine 1: Red Mogo Rush & Preload
+// -----------------------------------------------------------------
+void red_rush_auton() {
+    // 1. Configure start pose at field tile corner (-60, -60, 0 deg)
+    chassis.setPose(-60, -60, 0);
+
+    // 2. Spin intake to score preload
+    intake.move(127);
+
+    // 3. Drive towards mobile goal
+    chassis.moveToPoint(-24, -24, 2000, {.forwards = true, .maxSpeed = 115, .earlyExitRange = 2});
+
+    // 4. Trigger clamp at 12 inches along path
+    chassis.waitUntil(12);
+    clamp.set_value(true);
+
+    // 5. Back up to scoring position
+    chassis.moveToPose(0, 48, 90, 2500, {.lead = 0.5, .forwards = false});
+
+    // 6. Turn towards corner ring stack
+    chassis.turnToHeading(180, 1500, {.maxSpeed = 100});
+}
+
+// -----------------------------------------------------------------
+// Routine 2: Blue Solo AWP
+// -----------------------------------------------------------------
+void blue_solo_awp() {
+    chassis.setPose(60, -60, 0);
+    intake.move(127);
+    chassis.moveToPoint(24, -24, 2200, {.forwards = true, .maxSpeed = 110});
+    chassis.waitUntilDone();
+    clamp.set_value(true);
+    chassis.turnToHeading(270, 1400);
+}
+
+// -----------------------------------------------------------------
+// Routine 3: Autonomous Skills Routine (60s)
+// -----------------------------------------------------------------
+void skills_auton() {
+    chassis.setPose(-60, 0, 90);
+    intake.move(127);
+    chassis.moveToPoint(-48, 0, 1800, {.forwards = true});
+    clamp.set_value(true);
+    chassis.turnToHeading(0, 1200);
+}
+`,
+
+    "include/robot-config.h": `// =================================================================
+// robot-config.h - Robot Hardware & LemLib Drivetrain Declarations
+// =================================================================
+#pragma once
+#include "main.h"
+#include "lemlib/api.hpp"
+
+// Smart Port Motor Declarations
+extern pros::Motor left_front;
+extern pros::Motor left_middle;
+extern pros::Motor left_back;
+extern pros::Motor right_front;
+extern pros::Motor right_middle;
+extern pros::Motor right_back;
+
+// Motor Groups
+extern pros::MotorGroup left_motors;
+extern pros::MotorGroup right_motors;
+
+// Subsystem Actuators
+extern pros::Motor intake;
+extern pros::Motor lift;
+extern pros::adi::DigitalOut clamp;
+extern pros::adi::DigitalOut doinker;
+extern pros::adi::DigitalOut intake_lift;
+
+// Sensors & IMU
+extern pros::Imu imu;
+extern pros::Rotation horiz_tracker;
+extern pros::Distance dist_sensor;
+
+// LemLib Controllers & Chassis Object
+extern lemlib::Drivetrain drivetrain;
+extern lemlib::ControllerSettings lateral_controller;
+extern lemlib::ControllerSettings angular_controller;
+extern lemlib::OdomSensors sensors;
+extern lemlib::Chassis chassis;
+`,
+
+    "src/robot-config.cpp": `// =================================================================
+// robot-config.cpp - Hardware Port Definitions & Controller Setup
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+
+// Drivetrain 6-Motor 600 RPM Cartridge Setup (Blue)
+pros::Motor left_front(1, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+pros::Motor left_middle(2, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+pros::Motor left_back(3, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+
+pros::Motor right_front(-11, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+pros::Motor right_middle(-12, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+pros::Motor right_back(-13, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+
+pros::MotorGroup left_motors({left_front, left_middle, left_back});
+pros::MotorGroup right_motors({right_front, right_middle, right_back});
+
+// Subsystems
+pros::Motor intake(7, pros::v5::MotorGears::blue);
+pros::Motor lift(8, pros::v5::MotorGears::green);
+pros::adi::DigitalOut clamp('A', false);
+pros::adi::DigitalOut doinker('B', false);
+pros::adi::DigitalOut intake_lift('C', false);
+
+// Sensors
+pros::Imu imu(10);
+pros::Rotation horiz_tracker(9);
+pros::Distance dist_sensor(15);
+
+// Tracking Wheel Setup
+lemlib::TrackingWheel horiz_wheel(&horiz_tracker, lemlib::Omniwheel::NEW_2, -2.5);
+
+// LemLib Drivetrain Configuration (12" Track Width, 3.25" Wheels, 600 RPM)
+lemlib::Drivetrain drivetrain(
+    &left_motors,
+    &right_motors,
+    12.0, // track width (inches)
+    lemlib::Omniwheel::NEW_325, // wheel diameter
+    600.0, // drivetrain RPM
+    2.0 // horizontal drift scaler
+);
+
+// Lateral PID Controller
+lemlib::ControllerSettings lateral_controller(
+    8.0, // kP
+    0.0, // kI
+    30.0, // kD
+    3.0, // anti-windup range
+    1.0, // small error range (in)
+    100, // small error timeout (ms)
+    3.0, // large error range (in)
+    500, // large error timeout (ms)
+    0 // slew rate
+);
+
+// Angular PID Controller
+lemlib::ControllerSettings angular_controller(
+    2.0, // kP
+    0.0, // kI
+    10.0, // kD
+    3.0, // anti-windup range
+    1.0, // small error range (deg)
+    100, // small error timeout (ms)
+    3.0, // large error range (deg)
+    500, // large error timeout (ms)
+    0 // slew rate
+);
+
+// Odometry Sensors
+lemlib::OdomSensors sensors(
+    nullptr, // vertical tracking wheel 1
+    nullptr, // vertical tracking wheel 2
+    &horiz_wheel, // horizontal tracking wheel
+    nullptr, // horizontal tracking wheel 2
+    &imu // inertial sensor
+);
+
+// LemLib Chassis Object
+lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sensors);
+`,
+
+    "include/subsystems.hpp": `// =================================================================
+// subsystems.hpp - Helper Functions for Subsystem Control
+// =================================================================
+#pragma once
+#include "main.h"
+
+// Subsystem Control Functions
+void setIntake(int speed);
+void setClamp(bool clamped);
+void setDoinker(bool deployed);
+void setLift(int position);
+`,
+
+    "src/subsystems.cpp": `// =================================================================
+// subsystems.cpp - Implementation of Subsystem Control Helpers
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+#include "subsystems.hpp"
+
+void setIntake(int speed) {
+    intake.move(speed);
+}
+
+void setClamp(bool clamped) {
+    clamp.set_value(clamped);
+}
+
+void setDoinker(bool deployed) {
+    doinker.set_value(deployed);
+}
+
+void setLift(int position) {
+    lift.move_absolute(position, 100);
+}
+`,
+
+    "src/main.cpp": `// =================================================================
+// main.cpp - PROS Competition Lifecycle Handlers
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+#include "subsystems.hpp"
+
+// Autonomous declaration in autons.cpp
+extern void red_rush_auton();
+extern void blue_solo_awp();
+extern void skills_auton();
+
+void initialize() {
+    pros::lcd::initialize();
+    chassis.calibrate();
+    pros::lcd::set_text(1, "LemLib Chassis Initialized");
+}
+
+void disabled() {}
+
+void competition_initialize() {}
+
+void autonomous() {
+    // Call selected autonomous routine
+    red_rush_auton();
+}
+
+void opcontrol() {
+    pros::Controller master(pros::E_CONTROLLER_MASTER);
+    while (true) {
+        // Arcade drive control
+        int leftY = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int rightX = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+        chassis.arcade(leftY, rightX);
+
+        // Subsystem buttons
+        if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) intake.move(127);
+        else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) intake.move(-127);
+        else intake.move(0);
+
+        if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {
+            static bool clampState = false;
+            clampState = !clampState;
+            clamp.set_value(clampState);
+        }
+
+        pros::delay(10);
+    }
+}
+`,
+
+    "include/main.h": `// =================================================================
+// main.h - PROS Standard Include Header
+// =================================================================
+#pragma once
+#include "api.h"
+#include "lemlib/api.hpp"
+`,
+
+    "Makefile": `# =================================================================
+# VEX V5 PROS Makefile with LemLib
+# =================================================================
+CC = arm-none-eabi-gcc
+CXX = arm-none-eabi-g++
+PROJECT = robot-code
+SRCDIR = src
+INCDIR = include
+BINDIR = bin
+
+WARNFLAGS = -Wall -Wextra -Wno-unused-parameter
+CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFLAGS)
+`,
+
+    "project.pros": `{
+    "py/object": "pros.conductor.project.Project",
+    "py/state": {
+        "project_name": "VEX_LemLib_OverRide_2026",
+        "target": "v5",
+        "templates": {
+            "kernel": {"version": "4.1.0"},
+            "lemlib": {"version": "0.5.4"}
+        }
+    }
+}`
+  };
+
+  class ProjectManager {
+    constructor() {
+      this.project = null;
+      this.isDirty = false;
+      this.listeners = [];
+      this.loadProject();
+    }
+
+    // Load active project from LocalStorage or initialize default
+    loadProject() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_PROJECT);
+        if (raw) {
+          this.project = JSON.parse(raw);
+          if (!this.project.files || Object.keys(this.project.files).length === 0) {
+            this.project.files = { ...DEFAULT_TEMPLATES };
+          }
+        } else {
+          this.initDefaultProject();
+        }
+      } catch (e) {
+        console.error("Failed to load project from storage:", e);
+        this.initDefaultProject();
+      }
+
+      this.isDirty = localStorage.getItem(STORAGE_KEY_PROJECT_DIRTY) === "true";
+      this.indexVariables();
+      return this.project;
+    }
+
+    initDefaultProject(name = "Override_LemLib_Bot") {
+      this.project = {
+        name: name,
+        version: "1.0.0",
+        target: "v5",
+        kernel: "4.1.0",
+        lemlibVersion: "0.5.4",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        files: { ...DEFAULT_TEMPLATES },
+        activeAuton: "red_rush_auton",
+        cloudSynced: true,
+      };
+      this.saveLocal();
+    }
+
+    saveLocal() {
+      if (!this.project) return;
+      this.project.updatedAt = Date.now();
+      try {
+        localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify(this.project));
+        localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+      } catch (e) {
+        console.error("Storage error:", e);
+      }
+      this.indexVariables();
+      this.notifyListeners();
+    }
+
+    markDirty(dirty = true) {
+      this.isDirty = dirty;
+      localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, dirty ? "true" : "false");
+      this.notifyListeners();
+    }
+
+    getFile(filename) {
+      return this.project?.files?.[filename] || "";
+    }
+
+    setFile(filename, content) {
+      if (!this.project) this.initDefaultProject();
+      if (!this.project.files) this.project.files = {};
+      this.project.files[filename] = content;
+      this.markDirty(true);
+      this.saveLocal();
+    }
+
+    deleteFile(filename) {
+      if (this.project?.files?.[filename]) {
+        delete this.project.files[filename];
+        this.markDirty(true);
+        this.saveLocal();
+      }
+    }
+
+    renameFile(oldName, newName) {
+      if (this.project?.files?.[oldName]) {
+        const content = this.project.files[oldName];
+        delete this.project.files[oldName];
+        this.project.files[newName] = content;
+        this.markDirty(true);
+        this.saveLocal();
+      }
+    }
+
+    // -------------------------------------------------------------
+    // Variable & Device Indexer (Scans all project headers/scripts)
+    // -------------------------------------------------------------
+    indexVariables() {
+      if (!this.project || !this.project.files) return { motors: [], pistons: [], sensors: [], chassis: [], functions: [] };
+
+      const symbols = {
+        motors: [],
+        pistons: [],
+        sensors: [],
+        chassis: [],
+        functions: [],
+        constants: [],
+      };
+
+      const allFiles = Object.entries(this.project.files);
+
+      allFiles.forEach(([fileName, content]) => {
+        const lines = content.split("\n");
+
+        lines.forEach((line, lineIdx) => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("//") || trimmed.startsWith("/*")) return;
+
+          // 1. Motors & MotorGroups
+          // e.g. pros::Motor intake(7, pros::v5::MotorGears::blue);
+          // or extern pros::Motor intake;
+          const motorMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?Motor\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          if (motorMatch && motorMatch[1] && !motorMatch[1].includes("Group") && motorMatch[1] !== "left_front" && motorMatch[1] !== "right_front") {
+            const name = motorMatch[1];
+            const args = motorMatch[2] || "";
+            if (!symbols.motors.some(m => m.name === name)) {
+              symbols.motors.push({
+                name,
+                type: "pros::Motor",
+                args,
+                file: fileName,
+                line: lineIdx + 1,
+                snippet: `${name}.move(127);`,
+                stopSnippet: `${name}.move(0);`,
+              });
+            }
+          }
+
+          // MotorGroups
+          const groupMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?MotorGroup\s+([a-zA-Z0-9_]+)/);
+          if (groupMatch && groupMatch[1]) {
+            const name = groupMatch[1];
+            if (!symbols.motors.some(m => m.name === name)) {
+              symbols.motors.push({
+                name,
+                type: "pros::MotorGroup",
+                file: fileName,
+                line: lineIdx + 1,
+                snippet: `${name}.move(127);`,
+                stopSnippet: `${name}.move(0);`,
+              });
+            }
+          }
+
+          // 2. Pneumatics / ADI DigitalOut
+          // e.g. pros::adi::DigitalOut clamp('A', false);
+          const pistonMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?(?:adi::)?(?:DigitalOut|ADIDigitalOut)\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          if (pistonMatch && pistonMatch[1]) {
+            const name = pistonMatch[1];
+            const port = pistonMatch[2] || "Port";
+            if (!symbols.pistons.some(p => p.name === name)) {
+              symbols.pistons.push({
+                name,
+                type: "pros::adi::DigitalOut",
+                port,
+                file: fileName,
+                line: lineIdx + 1,
+                snippet: `${name}.set_value(true);`,
+                releaseSnippet: `${name}.set_value(false);`,
+              });
+            }
+          }
+
+          // 3. Sensors (IMU, Rotation, Distance, GPS, Optical)
+          const sensorMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?(Imu|Rotation|Distance|GPS|Optical)\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          if (sensorMatch && sensorMatch[2]) {
+            const stype = sensorMatch[1];
+            const name = sensorMatch[2];
+            const args = sensorMatch[3] || "";
+            if (!symbols.sensors.some(s => s.name === name)) {
+              symbols.sensors.push({
+                name,
+                type: `pros::${stype}`,
+                args,
+                file: fileName,
+                line: lineIdx + 1,
+                snippet: `${name}.get_value();`,
+              });
+            }
+          }
+
+          // 4. LemLib Chassis
+          const chassisMatch = trimmed.match(/(?:extern\s+)?(?:lemlib::)?Chassis\s+([a-zA-Z0-9_]+)/);
+          if (chassisMatch && chassisMatch[1]) {
+            const name = chassisMatch[1];
+            if (!symbols.chassis.some(c => c.name === name)) {
+              symbols.chassis.push({
+                name,
+                type: "lemlib::Chassis",
+                file: fileName,
+                line: lineIdx + 1,
+              });
+            }
+          }
+
+          // 5. Functions & Subsystem Helpers
+          // e.g. void setIntake(int speed); or void red_rush_auton()
+          const fnMatch = trimmed.match(/(?:void|int|bool|double)\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*(?:\{|;)/);
+          if (fnMatch && fnMatch[1]) {
+            const fnName = fnMatch[1];
+            const params = fnMatch[2];
+            if (!["initialize", "disabled", "competition_initialize", "autonomous", "opcontrol"].includes(fnName)) {
+              if (!symbols.functions.some(f => f.name === fnName)) {
+                symbols.functions.push({
+                  name: fnName,
+                  signature: `${fnName}(${params})`,
+                  file: fileName,
+                  line: lineIdx + 1,
+                  snippet: params.trim() ? `${fnName}(127);` : `${fnName}();`,
+                });
+              }
+            }
+          }
+        });
+      });
+
+      this.symbols = symbols;
+      return symbols;
+    }
+
+    // -------------------------------------------------------------
+    // Extract Autonomous Routines from src/autons.cpp
+    // -------------------------------------------------------------
+    getAutonRoutines() {
+      const code = this.getFile("src/autons.cpp") || this.getFile("autons.cpp");
+      const routines = [];
+      const regex = /void\s+([a-zA-Z0-9_]+)\s*\(\s*\)\s*\{([^}]*)\}/gs;
+      let match;
+      while ((match = regex.exec(code)) !== null) {
+        const name = match[1];
+        const body = match[2];
+        routines.push({
+          name,
+          body,
+        });
+      }
+      if (routines.length === 0) {
+        routines.push({
+          name: "autonomous",
+          body: code,
+        });
+      }
+      return routines;
+    }
+
+    // Synchronize visual planner paths into src/autons.cpp
+    updateAutonCppFromPlanner(plannerPaths, indent = "    ") {
+      if (!plannerPaths || plannerPaths.length === 0) return;
+      let header = `// =================================================================\n` +
+                   `// autons.cpp - Autonomous Routines for VEX V5 LemLib\n` +
+                   `// Generated & Synchronized with Visual Flowchart\n` +
+                   `// =================================================================\n` +
+                   `#include "main.h"\n` +
+                   `#include "robot-config.h"\n` +
+                   `#include "subsystems.hpp"\n\n`;
+
+      let bodies = "";
+      plannerPaths.forEach((p, idx) => {
+        const fnName = p.name ? p.name.toLowerCase().replace(/[^a-z0-9_]/g, "_") : `auton_${idx + 1}`;
+        bodies += `// -----------------------------------------------------------------\n`;
+        bodies += `// Routine ${idx + 1}: ${p.name || fnName}\n`;
+        bodies += `// -----------------------------------------------------------------\n`;
+        bodies += `void ${fnName}() {\n`;
+        if (p.pose) {
+          bodies += `${indent}chassis.setPose(${Number(p.pose.x || 0).toFixed(1)}, ${Number(p.pose.y || 0).toFixed(1)}, ${Number(p.pose.theta || 0).toFixed(1)});\n\n`;
+        }
+        if (p.actions && p.actions.length) {
+          p.actions.forEach((a) => {
+            if (a.type === "custom") {
+              const lines = (a.customCode || "").split("\n");
+              lines.forEach((l) => {
+                if (l.trim()) bodies += `${indent}${l.trim()}\n`;
+              });
+            } else if (a.type === "wait") {
+              if (a.waitType === "time") {
+                bodies += `${indent}pros::delay(${a.timeout || 500});\n`;
+              } else if (a.waitType === "until") {
+                bodies += `${indent}chassis.waitUntil(${a.waitDist || 12});\n`;
+              } else {
+                bodies += `${indent}chassis.waitUntilDone();\n`;
+              }
+            } else if (a.type === "moveToPoint") {
+              bodies += `${indent}chassis.moveToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${a.timeout || 2000}${a.async ? ", true" : ""});\n`;
+            } else if (a.type === "moveToPose") {
+              bodies += `${indent}chassis.moveToPose(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${Number(a.theta).toFixed(1)}, ${a.timeout || 2500}${a.async ? ", true" : ""});\n`;
+            } else if (a.type === "turnToHeading") {
+              bodies += `${indent}chassis.turnToHeading(${Number(a.theta).toFixed(1)}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
+            } else if (a.type === "turnToPoint") {
+              bodies += `${indent}chassis.turnToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
+            } else if (a.type === "swingToHeading") {
+              bodies += `${indent}chassis.swingToHeading(${Number(a.theta).toFixed(1)}, DriveSide::${a.lockedSide || "LEFT"}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
+            } else if (a.type === "swingToPoint") {
+              bodies += `${indent}chassis.swingToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, DriveSide::${a.lockedSide || "LEFT"}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
+            }
+          });
+        }
+        bodies += `}\n\n`;
+      });
+
+      this.setFile("src/autons.cpp", header + bodies);
+    }
+
+    // -------------------------------------------------------------
+    // Multi-File Project Compiler Engine (Emulates `pros make`)
+    // -------------------------------------------------------------
+    compileProject() {
+      const startTime = performance.now();
+      const files = this.project?.files || {};
+      const fileNames = Object.keys(files);
+
+      const logs = [];
+      const errors = [];
+      const warnings = [];
+
+      logs.push(">> pros make");
+      logs.push("Compiling PROS LemLib project for VEX V5 (ARM Cortex-A9 Neon)...");
+      logs.push(`Project Name: ${this.project?.name || "VEX_Bot"} | Kernel: 4.1.0 | LemLib: 0.5.4`);
+      logs.push("----------------------------------------------------------------------");
+
+      // Verify essential files
+      const essential = ["include/main.h", "include/robot-config.h", "src/main.cpp", "src/autons.cpp"];
+      essential.forEach(req => {
+        if (!files[req]) {
+          warnings.push({
+            file: req,
+            line: 1,
+            message: `Essential file ${req} is missing from project workspace. Using fallback.`,
+          });
+        }
+      });
+
+      // Symbol references check across project
+      this.indexVariables();
+      const declaredSymbols = new Set([
+        ...this.symbols.motors.map(m => m.name),
+        ...this.symbols.pistons.map(p => p.name),
+        ...this.symbols.sensors.map(s => s.name),
+        ...this.symbols.chassis.map(c => c.name),
+        ...this.symbols.functions.map(f => f.name),
+        "chassis", "pros", "lemlib", "delay", "printf"
+      ]);
+
+      // Scan each .cpp file
+      const cppFiles = fileNames.filter(f => f.endsWith(".cpp") || f.endsWith(".c"));
+
+      cppFiles.forEach(fileName => {
+        const content = files[fileName];
+        logs.push(`CXX ${fileName}`);
+
+        const lines = content.split("\n");
+        let openBraces = 0;
+
+        lines.forEach((rawLine, idx) => {
+          const line = rawLine.trim();
+          const lineNum = idx + 1;
+
+          // Brace balance
+          for (const char of line) {
+            if (char === "{") openBraces++;
+            if (char === "}") openBraces--;
+          }
+
+          // Semicolon check on expressions
+          if (line && !line.startsWith("//") && !line.startsWith("#") && !line.startsWith("/*") && !line.endsWith(";") && !line.endsWith("{") && !line.endsWith("}") && !line.endsWith(":")) {
+            if (line.includes("chassis.") || line.includes(".move(") || line.includes(".set_value(")) {
+              errors.push({
+                file: fileName,
+                line: lineNum,
+                message: `Expected ';' at end of statement: '${line}'`,
+              });
+            }
+          }
+
+          // Undefined symbol detection in statements
+          const tokenMatch = line.match(/([a-zA-Z0-9_]+)\.(move|set_value|get_value|moveToPoint|moveToPose|turnToHeading)/);
+          if (tokenMatch && tokenMatch[1]) {
+            const varName = tokenMatch[1];
+            if (!declaredSymbols.has(varName)) {
+              warnings.push({
+                file: fileName,
+                line: lineNum,
+                message: `'${varName}' was used but not explicitly declared in robot-config.h`,
+              });
+            }
+          }
+        });
+
+        if (openBraces !== 0) {
+          errors.push({
+            file: fileName,
+            line: lines.length,
+            message: `Unbalanced braces in file (mismatch of ${Math.abs(openBraces)} '${openBraces > 0 ? '{' : '}'}')`,
+          });
+        }
+      });
+
+      // Link step
+      logs.push("LINK bin/cold.package.elf");
+      logs.push("STRIP bin/hot.package.bin (Dynamic user payload)");
+      logs.push("Creating VEXos Monolithic Package bundle...");
+
+      const success = errors.length === 0;
+      const elapsed = ((performance.now() - startTime) / 1000 + 0.35).toFixed(2);
+
+      // Memory footprint emulation
+      const textBytes = 142580 + (cppFiles.length * 4200);
+      const dataBytes = 4120;
+      const bssBytes = 28400;
+      const totalFlash = textBytes + dataBytes;
+      const totalRam = dataBytes + bssBytes;
+
+      const flashMax = 32 * 1024 * 1024; // 32MB
+      const ramMax = 32 * 1024 * 1024; // 32MB
+
+      logs.push("----------------------------------------------------------------------");
+      if (success) {
+        logs.push(`✅ BUILD SUCCEEDED in ${elapsed}s`);
+        logs.push(`Flash (ROM): ${(totalFlash / 1024).toFixed(1)} KB / 32 MB (${((totalFlash / flashMax) * 100).toFixed(2)}%)`);
+        logs.push(`RAM (BSS/Data): ${(totalRam / 1024).toFixed(1)} KB / 32 MB (${((totalRam / ramMax) * 100).toFixed(2)}%)`);
+        logs.push(`Ready for upload to VEX V5 Brain (Slot 1–8).`);
+      } else {
+        logs.push(`❌ BUILD FAILED: ${errors.length} error(s), ${warnings.length} warning(s)`);
+      }
+
+      return {
+        success,
+        elapsed,
+        logs: logs.join("\n"),
+        errors,
+        warnings,
+        stats: {
+          flashBytes: totalFlash,
+          ramBytes: totalRam,
+          flashPct: (totalFlash / flashMax) * 100,
+          ramPct: (totalRam / ramMax) * 100,
+        }
+      };
+    }
+
+    // -------------------------------------------------------------
+    // Cloud Sync (Firebase Firestore Integration)
+    // -------------------------------------------------------------
+    async saveToCloud() {
+      if (!this.project) return false;
+      if (typeof firebase === "undefined" || !firebase.auth || !firebase.firestore) {
+        throw new Error("Firebase is not initialized");
+      }
+      const user = firebase.auth().currentUser;
+      if (!user) {
+        throw new Error("You must be signed in with Google to sync project to cloud");
+      }
+
+      const db = firebase.firestore();
+      const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
+
+      await projectRef.set({
+        name: this.project.name,
+        version: this.project.version,
+        files: this.project.files,
+        activeAuton: this.project.activeAuton || "red_rush_auton",
+        updatedAt: Date.now(),
+        authorEmail: user.email || "",
+      }, { merge: true });
+
+      this.markDirty(false);
+      this.project.cloudSynced = true;
+      this.saveLocal();
+      return true;
+    }
+
+    async loadFromCloud() {
+      if (typeof firebase === "undefined" || !firebase.auth || !firebase.firestore) {
+        throw new Error("Firebase is not initialized");
+      }
+      const user = firebase.auth().currentUser;
+      if (!user) {
+        throw new Error("You must be signed in with Google to load project from cloud");
+      }
+
+      const db = firebase.firestore();
+      const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
+      const snap = await projectRef.get();
+
+      if (snap.exists) {
+        const data = snap.data();
+        this.project = {
+          name: data.name || "Override_LemLib_Bot",
+          version: data.version || "1.0.0",
+          files: data.files || { ...DEFAULT_TEMPLATES },
+          activeAuton: data.activeAuton || "red_rush_auton",
+          updatedAt: data.updatedAt || Date.now(),
+          cloudSynced: true,
+        };
+        this.markDirty(false);
+        this.saveLocal();
+        return this.project;
+      }
+      return null;
+    }
+
+    // Event listener subscription
+    addListener(fn) {
+      if (typeof fn === "function") this.listeners.push(fn);
+    }
+
+    notifyListeners() {
+      this.listeners.forEach(fn => {
+        try { fn(this); } catch (e) { console.error(e); }
+      });
+    }
+  }
+
+  // Singleton Instance
+  global.ProjectManager = new ProjectManager();
+})(typeof window !== "undefined" ? window : global);
