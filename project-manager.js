@@ -2322,6 +2322,10 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     // Cloud Sync (Server & Firebase Firestore Dual-Cloud Integration)
     // -------------------------------------------------------------
     async saveToCloud(onProgress = null, onlyChanges = true) {
+      if (typeof window !== "undefined" && window.SessionGuard && !window.SessionGuard.isInstanceActive()) {
+        console.warn("[ProjectManager] Save aborted: Instance is deactivated by single-instance session guard.");
+        return false;
+      }
       if (!this.project) return false;
       let user = null;
       if (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) {

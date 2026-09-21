@@ -154,12 +154,18 @@
 
   function initAuth() {
     try {
+      if (window.SessionGuard) {
+        window.SessionGuard.init({ pageName: "IDE / Code Studio" });
+      }
       // Check cached user immediately so IDE can sync and display state before network auth
       try {
         const cachedRaw = localStorage.getItem("lemlib_saved_google_user");
         if (cachedRaw) {
           const cachedUser = JSON.parse(cachedRaw);
           if (cachedUser) {
+            if (window.SessionGuard) {
+              window.SessionGuard.setUser(cachedUser);
+            }
             updateAuthUI(cachedUser);
             ProjectManager.loadFromCloud(false).then((proj) => {
               if (proj) {
@@ -174,6 +180,9 @@
 
       firebase.auth().onAuthStateChanged((user) => {
         cloudUser = user;
+        if (window.SessionGuard) {
+          window.SessionGuard.setUser(user);
+        }
         updateAuthUI();
         if (user) {
           try {

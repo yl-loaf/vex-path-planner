@@ -4126,6 +4126,10 @@
   }
 
   async function cloudSave(force) {
+    if (window.SessionGuard && !window.SessionGuard.isInstanceActive()) {
+      console.warn("[CloudSave] Aborted: This instance is deactivated by single-instance session guard.");
+      return;
+    }
     const activeUser = cloudUser || getSavedGoogleUser();
     if (!activeUser || cloudApplying) return;
     setCloudStatus("Saving…", "busy");
@@ -4384,6 +4388,12 @@
     // Immediately restore cached user from localStorage so there is zero UI flicker on reload
     const isExplicitSignOut = localStorage.getItem(AUTH_EXPLICIT_SIGNOUT_KEY) === "true";
     const saved = getSavedGoogleUser();
+    if (window.SessionGuard) {
+      window.SessionGuard.init({ pageName: "Path Planner" });
+      if (saved && !isExplicitSignOut) {
+        window.SessionGuard.setUser(saved);
+      }
+    }
     if (saved && !isExplicitSignOut) {
       updateAuthUI(saved, false);
       setCloudStatus("Connecting…", "busy");
@@ -4422,6 +4432,9 @@
 
     firebase.auth().onAuthStateChanged(async (user) => {
       cloudUser = user;
+      if (window.SessionGuard) {
+        window.SessionGuard.setUser(user);
+      }
       if (user) {
         saveGoogleUserProfile(user);
         updateAuthUI();

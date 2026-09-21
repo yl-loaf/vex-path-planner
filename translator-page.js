@@ -232,6 +232,10 @@
   }
 
   async function cloudSave() {
+    if (window.SessionGuard && !window.SessionGuard.isInstanceActive()) {
+      console.warn("[CloudSave] Aborted: Instance is deactivated by single-instance session guard.");
+      return;
+    }
     if (!cloudReady || !cloudUser || cloudApplying) return;
     try {
       setCloudStatus("Syncing…", "busy");
@@ -521,8 +525,15 @@
       return;
     }
 
+    if (window.SessionGuard) {
+      window.SessionGuard.init({ pageName: "Autonomous Translator" });
+    }
+
     const isExplicitSignOut = localStorage.getItem(AUTH_EXPLICIT_SIGNOUT_KEY) === "true";
     const saved = getSavedGoogleUser();
+    if (window.SessionGuard && saved && !isExplicitSignOut) {
+      window.SessionGuard.setUser(saved);
+    }
     if (saved && !isExplicitSignOut) {
       updateAuthUI(saved, false);
       setCloudStatus("Connecting…", "busy");
@@ -575,6 +586,9 @@
 
     firebase.auth().onAuthStateChanged(async (user) => {
       cloudUser = user;
+      if (window.SessionGuard) {
+        window.SessionGuard.setUser(user);
+      }
       if (user) {
         saveGoogleUserProfile(user);
         updateAuthUI();

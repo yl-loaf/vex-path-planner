@@ -262,6 +262,146 @@ app.get('/api/project/status', (req, res) => {
   });
 });
 
+// Single-Instance Account Session Coordination
+const activeSessions = new Map();
+const SESSION_EXPIRY_MS = 25000; // 25s without heartbeat considered stale
+
+function getUserSessionKey(uid, email) {
+  if (uid && String(uid).trim()) return 'uid_' + String(uid).trim();
+  if (email && String(email).trim()) return 'email_' + String(email).trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+  return null;
+}
+
+// Clean expired sessions periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, sess] of activeSessions.entries()) {
+    if (now - sess.lastHeartbeat > SESSION_EXPIRY_MS) {
+      activeSessions.delete(key);
+    }
+  }
+}, 10000);
+
+app.post('/api/session/register', (req, res) => {
+  const { uid, email, sessionId, page, userAgent, forceTakeover } = req.body || {};
+  const userKey = getUserSessionKey(uid, email);
+  if (!userKey || !sessionId) {
+    return res.status(400).json({ error: 'Missing user identification or sessionId' });
+  }
+
+  const now = Date.now();
+  const existing = activeSessions.get(userKey);
+
+  // Check if an existing distinct session is currently active
+  if (existing && existing.sessionId !== sessionId && (now - existing.lastHeartbeat <= SESSION_EXPIRY_MS)) {
+    if (!forceTakeover) {
+      return res.json({
+        success: false,
+        conflict: true,
+        activeSession: {
+          sessionId: existing.sessionId,
+          page: existing.page,
+          userAgent: existing.userAgent,
+          openedAt: existing.openedAt,
+          lastHeartbeat: existing.lastHeartbeat
+        }
+      });
+    }
+  }
+
+  // Register or Takeover as active session
+  const newSession = {
+    sessionId,
+    uid: uid || '',
+    email: email || '',
+    page: page || 'App',
+    userAgent: userAgent || 'Browser',
+    openedAt: existing && existing.sessionId === sessionId ? existing.openedAt : now,
+    lastHeartbeat: now
+  };
+  activeSessions.set(userKey, newSession);
+  console.log(`[SessionServer] Registered active session for ${email || uid} (sess: ${sessionId.slice(0, 10)}..., page: ${newSession.page}, takeover: ${Boolean(forceTakeover)})`);
+
+  res.json({
+    success: true,
+    conflict: false,
+    tookOver: Boolean(forceTakeover)
+  });
+});
+
+app.post('/api/session/heartbeat', (req, res) => {
+  const { uid, email, sessionId, page } = req.body || {};
+  const userKey = getUserSessionKey(uid, email);
+  if (!userKey || !sessionId) {
+    return res.status(400).json({ error: 'Missing user identification or sessionId' });
+  }
+
+  const now = Date.now();
+  const existing = activeSessions.get(userKey);
+
+  if (!existing) {
+    // Re-register if still the only instance
+    const newSession = {
+      sessionId,
+      uid: uid || '',
+      email: email || '',
+      page: page || 'App',
+      openedAt: now,
+      lastHeartbeat: now
+    };
+    activeSessions.set(userKey, newSession);
+    return res.json({ valid: true });
+  }
+
+  if (existing.sessionId !== sessionId) {
+    // Another instance took over or registered
+    return res.json({
+      valid: false,
+      reason: 'taken_over',
+      activeSession: {
+        sessionId: existing.sessionId,
+        page: existing.page,
+        openedAt: existing.openedAt,
+        lastHeartbeat: existing.lastHeartbeat
+      }
+    });
+  }
+
+  // Update heartbeat
+  existing.lastHeartbeat = now;
+  if (page) existing.page = page;
+  res.json({ valid: true });
+});
+
+app.post('/api/session/release', (req, res) => {
+  const { uid, email, sessionId } = req.body || {};
+  const userKey = getUserSessionKey(uid, email);
+  if (userKey && sessionId) {
+    const existing = activeSessions.get(userKey);
+    if (existing && existing.sessionId === sessionId) {
+      activeSessions.delete(userKey);
+      console.log(`[SessionServer] Released session for ${email || uid} (${sessionId.slice(0, 10)}...)`);
+    }
+  }
+  res.json({ success: true });
+});
+
+app.get('/api/session/status', (req, res) => {
+  const { uid, email, sessionId } = req.query;
+  const userKey = getUserSessionKey(uid, email);
+  if (!userKey) {
+    return res.status(400).json({ error: 'Missing user identification' });
+  }
+  const now = Date.now();
+  const existing = activeSessions.get(userKey);
+  const isAlive = existing && (now - existing.lastHeartbeat <= SESSION_EXPIRY_MS);
+  res.json({
+    active: isAlive && existing.sessionId === sessionId,
+    conflict: isAlive && existing.sessionId !== sessionId,
+    activeSession: isAlive ? existing : null
+  });
+});
+
 // Explicitly serve version.js with no-cache headers so update checks are instant
 app.get('/version.js', (req, res) => {
   res.set({
