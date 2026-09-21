@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260921.k58" />
+  <link rel="stylesheet" href="style.css?v=20260921.k63" />
 </head>
 <body>
   <!-- =================================================================
@@ -250,9 +250,9 @@
         <nav class="header-mode-nav">
           <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation & Visual Path Planner">🗺️ Planner &amp; Sim</button>
           <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
-          <a href="translator.html" class="mode-nav-btn" title="Convert C++ Autons to Visual Blocks">📥 C++ Translator</a>
-          <button type="button" class="mode-nav-btn" id="navModePidTuner" title="LemLib PID Gain Tuning Visualizer">🎛️ PID Tuner</button>
           <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB & Telemetry">🔌 Brain</button>
+          <!-- Secondary modes kept accessible in Tools menu -->
+          <button type="button" id="navModePidTuner" hidden></button>
         </nav>
       </div>
 
@@ -261,16 +261,19 @@
         <!-- Project Workspace Menu -->
         <button id="btnLoadProject" type="button" class="btn-nav-compact" title="Open Project Workspace Manager">📁 Project</button>
         
-        <!-- Hardware Brain Link -->
-        <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view detailed VEX V5 Brain telemetry &amp; upload manager">
+        <!-- Hardware Brain Link & Quick Connect -->
+        <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB">
           <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
           <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
           <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
+          <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">🔌 Connect</button>
         </div>
-        <button id="btnConnectBrain" type="button" class="btn-nav-compact" title="Connect to VEX V5 Brain via USB Web Serial CDC or simulated link">🔌 Connect</button>
 
         <!-- Debugger Toggle -->
-        <button id="btnToggleDebug" type="button" class="btn-nav-debug" title="Toggle Cross-Script Variable Inspector, Compiler Diagnostics &amp; Live Debugger">🐞 Debug</button>
+        <button id="btnToggleDebug" type="button" class="btn-nav-debug" title="Toggle Cross-Script Variable Inspector &amp; Live Debugger">🐞 Debug</button>
+
+        <!-- Interactive Tutorial -->
+        <button id="btnOpenTutorial" type="button" class="btn-nav-tut" title="Open Interactive LemLib Studio Tutorial">🎓 Tutorial</button>
 
         <!-- Tools Dropdown Menu -->
         <div class="tools-dropdown-wrap">
@@ -278,6 +281,8 @@
             ⚙️ Tools ▾
           </button>
           <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden>
+            <button type="button" id="btnToolsTutorial" class="tools-menu-item">🎓 Interactive Onboarding Tour</button>
+            <div class="tools-menu-divider"></div>
             <a href="translator.html" class="tools-menu-item">📥 C++ Code Translator</a>
             <button type="button" id="btnPidTuner" class="tools-menu-item">🎛️ PID Gain Tuner</button>
             <button type="button" id="btnExportVideo" class="tools-menu-item">🎥 Export .mp4 Video</button>
@@ -312,10 +317,16 @@
         <span class="project-raw-badge" id="bannerRawBadge" style="display:none;background:rgba(16,185,129,0.18);border:1px solid #10b981;color:#10b981;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;cursor:pointer;align-items:center;gap:4px;" title="Raw C++ code preserved from IDE. Click to view versions.">🛡️ Raw C++ Preserved</span>
       </div>
       <div class="project-banner-right">
-        <button type="button" id="btnVersionHistoryBanner" class="btn-xs-versions" title="View C++ Code Version History, Backups &amp; Snapshots">📜 Versions (<span id="bannerVersionCount">0</span>)</button>
-        <button type="button" id="btnSyncProjectToCloud" class="btn-xs-sync" title="Sync entire multi-file project to cloud">☁️ Sync Cloud</button>
         <button type="button" id="btnCompileProjectBanner" class="btn-xs-compile" title="Compile entire project workspace (pros make)">⚡ Compile Project</button>
-        <a href="ide.html" class="btn-xs-ide" title="Open complete project files in dedicated C++ IDE">💻 Open Full C++ IDE ↗</a>
+        <!-- Consolidated Project Options Menu -->
+        <div class="compact-dropdown-wrap">
+          <button type="button" id="btnProjectActionsDropdown" class="btn-xs-sync" title="Project options, version history &amp; sync">📁 Project Menu ▾</button>
+          <div class="compact-dropdown-menu" id="projectActionsMenu" hidden>
+            <button type="button" id="btnSyncProjectToCloud" title="Sync entire multi-file project to cloud">☁️ Sync Cloud</button>
+            <button type="button" id="btnVersionHistoryBanner" title="View C++ Code Version History, Backups &amp; Snapshots">📜 Version History (<span id="bannerVersionCount">0</span>)</button>
+            <a href="ide.html" class="compact-menu-link" title="Open complete project files in dedicated C++ IDE">💻 Open Full C++ IDE ↗</a>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -345,15 +356,21 @@
             </div>
           </div>
 
-          <div class="path-selector" id="pathSelector">
-            <label class="path-label">Auton routine
+          <div class="path-selector-neat" id="pathSelector">
+            <label class="path-label">Routine
               <select id="pathSelect"></select>
             </label>
-            <div class="path-btns">
-              <button type="button" id="btnPathAdd" title="New routine">+ New</button>
-              <button type="button" id="btnPathRename" title="Rename">Rename</button>
-              <button type="button" id="btnPathDup" title="Duplicate">Dup</button>
-              <button type="button" id="btnPathDel" class="danger" title="Delete routine">Del</button>
+            <div class="path-btn-group">
+              <button type="button" id="btnPathAdd" class="btn-routine-primary" title="Create new autonomous routine">+ New</button>
+              <div class="compact-dropdown-wrap">
+                <button type="button" id="btnRoutineMenuDropdown" class="btn-routine-more" title="More routine actions (Rename, Duplicate, Delete)">⋯</button>
+                <div class="compact-dropdown-menu" id="routineActionsMenu" hidden>
+                  <button type="button" id="btnPathRename">✏️ Rename Routine</button>
+                  <button type="button" id="btnPathDup">📋 Duplicate Routine</button>
+                  <div class="compact-dropdown-divider"></div>
+                  <button type="button" id="btnPathDel" class="danger-item">🗑️ Delete Routine</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1965,15 +1982,16 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260921.k58"></script>
+  <script src="version.js?v=20260921.k63"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k58"></script>
-  <script src="v5-brain-serial.js?v=20260921.k58"></script>
-  <script src="project-manager.js?v=20260921.k58"></script>
+  <script src="firebase-config.js?v=20260921.k63"></script>
+  <script src="v5-brain-serial.js?v=20260921.k63"></script>
+  <script src="project-manager.js?v=20260921.k63"></script>
   <script src="cpp-parser.js?v=20260921.k22"></script>
-  <script src="app.js?v=20260921.k58"></script>
+  <script src="app.js?v=20260921.k63"></script>
+  <script src="tutorial.js?v=20260921.t1"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

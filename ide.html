@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PROS & LemLib C++ IDE · VEX V5 Path Planner</title>
   <meta name="description" content="Dedicated multi-file C++ coding IDE for VEX V5 robotics with LemLib, full project compiler, and cloud persistence." />
-  <link rel="stylesheet" href="style.css?v=20260921.k58" />
+  <link rel="stylesheet" href="style.css?v=20260921.k63" />
 </head>
 <body class="ide-page-body">
   <div id="app" class="ide-app-container">
@@ -27,32 +27,48 @@
       </div>
 
       <div class="header-center">
-        <button type="button" id="btnConnectBrain" class="btn-brain-nav" title="Connect to VEX V5 Brain via USB Web Serial CDC or simulated link">
-          🔌 Connect Brain
-        </button>
-        <div id="ideBrainStatus" class="banner-brain-pill" title="Brain Status">
+        <!-- Hardware Brain Status & Quick Connect -->
+        <div id="ideBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect USB">
           <span class="brain-status-dot disconnected" id="ideBrainDot"></span>
           <span class="brain-status-text" id="ideBrainText">Brain: Disconnected</span>
           <span class="brain-battery-pill" id="ideBrainBatt" hidden>⚡ 94%</span>
+          <button type="button" id="btnConnectBrain" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">🔌 Connect</button>
         </div>
-        <button type="button" id="btnCompileProject" class="btn-ide-compile" title="Compile entire PROS LemLib project (pros make)">
-          ⚡ Compile (pros make)
-        </button>
-        <button type="button" id="btnUploadToBrain" class="btn-ide-upload" title="Upload compiled PROS binary to VEX V5 Brain slot">
-          🚀 Flash to Brain
-        </button>
-        <button type="button" id="btnDownloadCode" class="btn-ide-save-cloud" style="background:#0284c7;border-color:#38bdf8;" title="Download active file or export full PROS project">
-          📥 Download Code
-        </button>
-        <button type="button" id="btnVersionHistoryIDE" class="btn-ide-versions" title="View Code Version History, Backups &amp; Snapshots">
-          📜 Versions (<span id="ideVersionCount">0</span>)
-        </button>
-        <button type="button" id="btnSaveCloudProject" class="btn-ide-save-cloud" title="Save and synchronize complete project to cloud">
-          ☁️ Save &amp; Sync Project
-        </button>
-        <button type="button" id="btnOpenInPlanner" class="btn-ide-open-planner" title="Load active autons.cpp into the visual flowchart planner">
-          🗺️ Open autons.cpp in Visual Planner
-        </button>
+
+        <!-- Build & Flash Primary Group -->
+        <div class="ide-btn-group">
+          <button type="button" id="btnCompileProject" class="btn-ide-compile" title="Compile entire PROS LemLib project (pros make)">
+            ⚡ Compile
+          </button>
+          <button type="button" id="btnUploadToBrain" class="btn-ide-upload" title="Upload compiled PROS binary to VEX V5 Brain slot">
+            🚀 Flash
+          </button>
+        </div>
+
+        <!-- Consolidated Project & Cloud Menu -->
+        <div class="compact-dropdown-wrap">
+          <button type="button" id="btnIdeProjectDropdown" class="btn-ide-save-cloud" title="Project actions, version history, exports, and cloud synchronization">
+            📁 Project ▾
+          </button>
+          <div class="compact-dropdown-menu" id="ideProjectMenu" hidden>
+            <button type="button" id="btnSaveCloudProject" title="Save and synchronize complete project to cloud">
+              ☁️ Save &amp; Sync Project
+            </button>
+            <button type="button" id="btnVersionHistoryIDE" title="View Code Version History, Backups &amp; Snapshots">
+              📜 Version History (<span id="ideVersionCount">0</span>)
+            </button>
+            <button type="button" id="btnDownloadCode" title="Download active file or export full PROS project">
+              📥 Download Code / Export
+            </button>
+            <div class="compact-dropdown-divider"></div>
+            <button type="button" id="btnOpenInPlanner" title="Load active autons.cpp into the visual flowchart planner">
+              🗺️ Open in Visual Planner
+            </button>
+            <button type="button" id="btnIdeOpenTutorial" title="Launch Interactive LemLib Studio Tutorial">
+              🎓 Interactive Tutorial
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="header-actions">
@@ -473,10 +489,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k58"></script>
-  <script src="v5-brain-serial.js?v=20260921.k58"></script>
-  <script src="project-manager.js?v=20260921.k58"></script>
-  <script src="ide.js?v=20260921.k58"></script>
+  <script src="firebase-config.js?v=20260921.k63"></script>
+  <script src="v5-brain-serial.js?v=20260921.k63"></script>
+  <script src="project-manager.js?v=20260921.k63"></script>
+  <script src="ide.js?v=20260921.k63"></script>
+  <script src="tutorial.js?v=20260921.t1"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {

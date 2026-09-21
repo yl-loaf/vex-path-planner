@@ -1909,6 +1909,32 @@
       });
     }
 
+    // Consolidated IDE Project Dropdown
+    const btnIdeProjectDropdown = document.getElementById("btnIdeProjectDropdown");
+    const ideProjectMenu = document.getElementById("ideProjectMenu");
+    if (btnIdeProjectDropdown && ideProjectMenu) {
+      btnIdeProjectDropdown.addEventListener("click", (e) => {
+        e.stopPropagation();
+        ideProjectMenu.hidden = !ideProjectMenu.hidden;
+      });
+      document.addEventListener("click", (e) => {
+        if (!ideProjectMenu.contains(e.target) && e.target !== btnIdeProjectDropdown) {
+          ideProjectMenu.hidden = true;
+        }
+      });
+    }
+
+    // Interactive Tutorial Trigger in IDE
+    const btnIdeOpenTutorial = document.getElementById("btnIdeOpenTutorial");
+    if (btnIdeOpenTutorial) {
+      btnIdeOpenTutorial.addEventListener("click", () => {
+        if (ideProjectMenu) ideProjectMenu.hidden = true;
+        if (typeof window.openTutorial === "function") {
+          window.openTutorial(0);
+        }
+      });
+    }
+
     if (btnClearLogs) {
       btnClearLogs.addEventListener("click", () => {
         if (elBuildConsole) elBuildConsole.textContent = "";

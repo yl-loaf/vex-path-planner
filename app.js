@@ -4313,6 +4313,13 @@
         saveGoogleUserProfile(user);
         updateAuthUI();
         await cloudLoad();
+        try {
+          const userTutDone = localStorage.getItem("lemlib_tutorial_user_" + user.uid) === "true";
+          const globalTutDone = localStorage.getItem("lemlib_tutorial_completed_v1") === "true";
+          if (!userTutDone && !globalTutDone && window.LemLibTutorial) {
+            window.LemLibTutorial.checkAutoLaunch();
+          }
+        } catch (_) {}
       } else {
         const signedOut = localStorage.getItem(AUTH_EXPLICIT_SIGNOUT_KEY) === "true";
         if (signedOut) {
@@ -5695,11 +5702,44 @@ lemlib::ControllerSettings ${currentMode}_controller(
     addPath(n.trim() || `Routine ${paths.length + 1}`);
   };
   const bRen = document.getElementById("btnPathRename");
-  if (bRen) bRen.onclick = renameActivePath;
+  if (bRen) {
+    bRen.onclick = () => {
+      const menu = document.getElementById("routineActionsMenu");
+      if (menu) menu.hidden = true;
+      renameActivePath();
+    };
+  }
   const bDup = document.getElementById("btnPathDup");
-  if (bDup) bDup.onclick = duplicateActivePath;
+  if (bDup) {
+    bDup.onclick = () => {
+      const menu = document.getElementById("routineActionsMenu");
+      if (menu) menu.hidden = true;
+      duplicateActivePath();
+    };
+  }
   const bDel = document.getElementById("btnPathDel");
-  if (bDel) bDel.onclick = deleteActivePath;
+  if (bDel) {
+    bDel.onclick = () => {
+      const menu = document.getElementById("routineActionsMenu");
+      if (menu) menu.hidden = true;
+      deleteActivePath();
+    };
+  }
+
+  // Routine Actions Dropdown toggle
+  const btnRoutineMenu = document.getElementById("btnRoutineMenuDropdown");
+  const routineActionsMenu = document.getElementById("routineActionsMenu");
+  if (btnRoutineMenu && routineActionsMenu) {
+    btnRoutineMenu.onclick = (e) => {
+      e.stopPropagation();
+      routineActionsMenu.hidden = !routineActionsMenu.hidden;
+    };
+    document.addEventListener("click", (e) => {
+      if (!routineActionsMenu.contains(e.target) && e.target !== btnRoutineMenu) {
+        routineActionsMenu.hidden = true;
+      }
+    });
+  }
   document.querySelectorAll('input[name="codeMode"]').forEach((el) => {
     el.addEventListener("change", () => generateCode());
   });
@@ -6309,16 +6349,51 @@ lemlib::ControllerSettings ${currentMode}_controller(
       });
     }
 
+    // Interactive Tutorial Button Triggers
+    const btnOpenTutorial = document.getElementById("btnOpenTutorial");
+    if (btnOpenTutorial) {
+      btnOpenTutorial.onclick = () => {
+        if (typeof window.openTutorial === "function") {
+          window.openTutorial(0);
+        }
+      };
+    }
+    const btnToolsTutorial = document.getElementById("btnToolsTutorial");
+    if (btnToolsTutorial) {
+      btnToolsTutorial.onclick = () => {
+        if (toolsDropdownMenu) toolsDropdownMenu.hidden = true;
+        if (typeof window.openTutorial === "function") {
+          window.openTutorial(0);
+        }
+      };
+    }
+
     updateHomepageStats();
   }
 
   function wireProjectWorkspace() {
     updateProjectBanner();
 
+    // Banner Project Actions Dropdown
+    const btnProjectActionsDropdown = document.getElementById("btnProjectActionsDropdown");
+    const projectActionsMenu = document.getElementById("projectActionsMenu");
+    if (btnProjectActionsDropdown && projectActionsMenu) {
+      btnProjectActionsDropdown.onclick = (e) => {
+        e.stopPropagation();
+        projectActionsMenu.hidden = !projectActionsMenu.hidden;
+      };
+      document.addEventListener("click", (e) => {
+        if (!projectActionsMenu.contains(e.target) && e.target !== btnProjectActionsDropdown) {
+          projectActionsMenu.hidden = true;
+        }
+      });
+    }
+
     // Banner Versions button
     const btnVersionsBanner = document.getElementById("btnVersionHistoryBanner");
     if (btnVersionsBanner) {
       btnVersionsBanner.onclick = () => {
+        if (projectActionsMenu) projectActionsMenu.hidden = true;
         if (typeof window.openVersionHistoryModal === "function") {
           window.openVersionHistoryModal("src/autons.cpp");
         }
@@ -6329,6 +6404,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
     const btnSyncCloud = document.getElementById("btnSyncProjectToCloud");
     if (btnSyncCloud) {
       btnSyncCloud.onclick = async () => {
+        if (projectActionsMenu) projectActionsMenu.hidden = true;
         try {
           btnSyncCloud.disabled = true;
           btnSyncCloud.textContent = "⏳ Syncing...";
