@@ -196,6 +196,16 @@
 
   async function cloudLoad() {
     if (!cloudReady || !cloudUser) return;
+    const isJustLoggedIn = (typeof sessionStorage !== "undefined" && sessionStorage.getItem("lemlib_just_logged_in") === "true");
+    if (isJustLoggedIn) {
+      console.log("[Translator] User just logged in. Clearing local copy and forcing cloud sync.");
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {
+        console.warn("Error deleting local copy:", e);
+      }
+    }
+
     try {
       setCloudStatus("Loading…", "busy");
       const doc = await firebase
@@ -221,9 +231,29 @@
           syncSlotUI();
           cloudApplying = false;
           setCloudStatus("In sync", "ok");
+          if (isJustLoggedIn && typeof sessionStorage !== "undefined") {
+            sessionStorage.removeItem("lemlib_just_logged_in");
+          }
           return;
         }
       }
+
+      if (isJustLoggedIn) {
+        console.log("[Translator] Cloud is empty for newly logged in user. Initializing clean default routines.");
+        paths = [{
+          id: uidPath(),
+          name: "Routine 1",
+          pose: { x: -60, y: -60, theta: 0 },
+          actions: []
+        }];
+        activePathId = paths[0].id;
+        saveLocal();
+        syncSlotUI();
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.removeItem("lemlib_just_logged_in");
+        }
+      }
+
       setCloudStatus("In sync", "ok");
     } catch (e) {
       console.error("Cloud load error:", e);
@@ -542,6 +572,9 @@
     const btnIn = document.getElementById("btnGoogleSignIn");
     if (btnIn) {
       btnIn.onclick = async () => {
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.setItem("lemlib_just_logged_in", "true");
+        }
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: "select_account" });
         try {
@@ -559,6 +592,9 @@
     const btnSwitch = document.getElementById("btnSwitchAccount");
     if (btnSwitch) {
       btnSwitch.onclick = async () => {
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.setItem("lemlib_just_logged_in", "true");
+        }
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: "select_account" });
         try {

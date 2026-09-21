@@ -4070,6 +4070,18 @@
   async function cloudLoad(force = false) {
     const activeUser = cloudUser || getSavedGoogleUser();
     if (!activeUser) return;
+
+    const isJustLoggedIn = (typeof sessionStorage !== "undefined" && sessionStorage.getItem("lemlib_just_logged_in") === "true");
+    if (isJustLoggedIn) {
+      console.log("[CloudLoad] User just logged in. Clearing local path copy and forcing cloud sync.");
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {
+        console.warn("Error deleting local path copy:", e);
+      }
+      force = true;
+    }
+
     setCloudStatus("Loading…", "busy");
     try {
       // 1. Load active project workspace using ProjectManager.loadFromCloud (checks both server and Firestore)
@@ -4112,9 +4124,35 @@
             const pathData = snap.data();
             applyPathPayload(pathData);
             saveLocal();
+            pathLoaded = true;
           }
         } catch (fsErr) {
           console.warn("Firestore path check warning:", fsErr);
+        }
+      }
+
+      if (isJustLoggedIn) {
+        if (!pathLoaded) {
+          console.log("[CloudLoad] No cloud path found. Resetting to default paths.");
+          paths = [
+            {
+              id: "p_default",
+              name: "Red Left",
+              pose: { x: -60, y: -60, theta: 0 },
+              actions: [],
+            },
+          ];
+          activePathId = "p_default";
+          saveLocal();
+          bindActive();
+          syncPathSelect();
+          syncBotInputs();
+          syncStartInputs();
+          renderFlow();
+          draw();
+        }
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.removeItem("lemlib_just_logged_in");
         }
       }
 
@@ -4320,10 +4358,13 @@
       setCloudStatus("Connecting…", "busy");
       const cred = await firebase.auth().signInWithPopup(provider);
       if (cred && cred.user) {
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.setItem("lemlib_just_logged_in", "true");
+        }
         cloudUser = cred.user;
         saveGoogleUserProfile(cred.user);
         updateAuthUI();
-        await cloudLoad();
+        await cloudLoad(true);
       }
     } catch (e) {
       console.error("Google sign-in error:", e);

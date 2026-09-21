@@ -2500,8 +2500,44 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         throw new Error("You must be signed in with Google to load project from cloud");
       }
 
+      const isJustLoggedIn = (typeof sessionStorage !== "undefined" && sessionStorage.getItem("lemlib_just_logged_in") === "true");
+      if (isJustLoggedIn) {
+        console.log("[ProjectManager] User just logged in. Deleting local copy and forcing cloud sync.");
+        try {
+          localStorage.removeItem(STORAGE_KEY_PROJECT);
+          localStorage.removeItem(STORAGE_KEY_PROJECT_DIRTY);
+          await idbDelete(IDB_PROJECT_KEY);
+        } catch (e) {
+          console.warn("Error deleting local copy during login:", e);
+        }
+        force = true;
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.removeItem("lemlib_just_logged_in");
+        }
+        this.project = null;
+        this.isDirty = false;
+        this.changedFiles.clear();
+      }
+
       let candidateData = null;
       let candidateSource = "";
+
+      // Helper to check if a loaded data is default template
+      const checkCandidateDefault = (cand) => {
+        if (!cand) return true;
+        if (cand.isDefault === true) return true;
+        const files = cand.files || {};
+        const keys = Object.keys(files);
+        if (keys.length === 0) return true;
+        if (cand.name === "Override_LemLib_Bot" || !cand.name) {
+          const defaultKeys = Object.keys(DEFAULT_TEMPLATES);
+          if (keys.length <= defaultKeys.length) {
+            const isExactTemplates = keys.every(k => DEFAULT_TEMPLATES[k] && files[k] === DEFAULT_TEMPLATES[k]);
+            if (isExactTemplates) return true;
+          }
+        }
+        return false;
+      };
 
       // 1. Fetch from Server Cloud Store
       try {
@@ -2563,9 +2599,25 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
                 fsData.files = decompressed;
               }
             }
+            
             const fsTime = Number(fsData.updatedAt) || 0;
             const candTime = candidateData ? (Number(candidateData.updatedAt) || 0) : 0;
-            if (!candidateData || fsTime > candTime || (fsData.files && Object.keys(fsData.files).length > 0)) {
+            const isFsDefault = checkCandidateDefault(fsData);
+            const isCandDefault = checkCandidateDefault(candidateData);
+
+            // Precedence rule: custom project always takes precedence over default. Otherwise newer wins.
+            let useFs = false;
+            if (!candidateData) {
+              useFs = true;
+            } else if (isCandDefault && !isFsDefault) {
+              useFs = true;
+            } else if (!isCandDefault && isFsDefault) {
+              useFs = false;
+            } else {
+              useFs = (fsTime > candTime);
+            }
+
+            if (useFs) {
               candidateData = fsData;
               candidateSource = "firestore";
             }
@@ -2576,6 +2628,13 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       }
 
       if (!candidateData) {
+        if (isJustLoggedIn) {
+          console.log("[ProjectManager] No cloud project found for newly logged in user. Starting with clean default project.");
+          this.initDefaultProject();
+          await this.saveLocal(false);
+          this.notifyListeners("load");
+          return this.project;
+        }
         return null;
       }
 
@@ -2594,12 +2653,22 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       const cloudTime = Number(candidateData.updatedAt) || 0;
       const localTime = Number(this.project?.updatedAt) || 0;
       const isLocalDefault = this.isDefaultProject();
+      const isCloudDefault = checkCandidateDefault(candidateData);
 
-      // If local is default, ALWAYS adopt cloud project!
-      // Only keep local if local has real custom work AND local work is newer than cloud AND force is false
-      if (!force && !isLocalDefault && localTime > cloudTime) {
-        console.log(`[ProjectManager] Retaining newer local project workspace (local: ${localTime} vs cloud: ${cloudTime})`);
-        return null;
+      // Precedence decisions on final load selection
+      if (!force) {
+        if (isLocalDefault) {
+          // Local is default (lowest precedence) -> load cloud
+          console.log("[ProjectManager] Local workspace is default (lowest precedence). Loading cloud project.");
+        } else if (isCloudDefault) {
+          // Cloud is default but local is custom -> Retain local custom project
+          console.log("[ProjectManager] Cloud project is default template, but local workspace contains custom work. Retaining local.");
+          return null;
+        } else if (localTime > cloudTime) {
+          // Both are custom -> newer wins
+          console.log(`[ProjectManager] Retaining newer local project workspace (local: ${localTime} vs cloud: ${cloudTime})`);
+          return null;
+        }
       }
 
       this.project = {
@@ -2612,7 +2681,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         activeAuton: candidateData.activeAuton || "red_rush_auton",
         updatedAt: cloudTime || Date.now(),
         cloudSynced: true,
-        isDefault: false,
+        isDefault: isCloudDefault,
       };
       this.markDirty(false);
       this.changedFiles.clear();

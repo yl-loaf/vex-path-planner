@@ -225,6 +225,9 @@
 
       if (btnSignIn) {
         btnSignIn.onclick = () => {
+          if (typeof sessionStorage !== "undefined") {
+            sessionStorage.setItem("lemlib_just_logged_in", "true");
+          }
           const provider = new firebase.auth.GoogleAuthProvider();
           firebase.auth().signInWithPopup(provider).catch(alert);
         };
@@ -236,6 +239,9 @@
       }
       if (btnSwitch) {
         btnSwitch.onclick = () => {
+          if (typeof sessionStorage !== "undefined") {
+            sessionStorage.setItem("lemlib_just_logged_in", "true");
+          }
           const provider = new firebase.auth.GoogleAuthProvider();
           provider.setCustomParameters({ prompt: "select_account" });
           firebase.auth().signInWithPopup(provider).catch(alert);
