@@ -24,9 +24,9 @@
   const HIT_R = 14;
 
   let bot = {
-    trackWidth: 12,
-    robotW: 14,
-    robotL: 14,
+    trackWidth: 12.0,
+    robotW: 14.0,
+    robotL: 14.0,
     wheelDiam: 3.25,
     driveRpm: 600,
     defaultMaxSpeed: 127,
@@ -34,16 +34,35 @@
     lateralDrift: 1.0,
     turnDrift: 1.0,
     defaultLead: 0.6,
+    // LemLib Lateral Controller PID & Settling Parameters
     lateralKp: 8.0,
     lateralKi: 0.0,
     lateralKd: 30.0,
     lateralWindup: 3.0,
+    lateralSmallErr: 1.0,
+    lateralSmallTime: 100,
+    lateralLargeErr: 3.0,
+    lateralLargeTime: 500,
     lateralSlew: 0,
-    angularKp: 3.0,
+    // LemLib Angular Controller PID & Settling Parameters
+    angularKp: 2.0,
     angularKi: 0.0,
-    angularKd: 20.0,
+    angularKd: 10.0,
     angularWindup: 3.0,
+    angularSmallErr: 1.0,
+    angularSmallTime: 100,
+    angularLargeErr: 3.0,
+    angularLargeTime: 500,
     angularSlew: 0,
+    // Tracking Wheels & Odometry Sensors
+    horizTrackerOffset: -2.5,
+    horizTrackerWheelDiam: 2.0,
+    horizTrackerPort: 9,
+    vertTrackerOffset: 0.0,
+    vertTrackerWheelDiam: 2.75,
+    vertTrackerPort: null,
+    imuPort: 10,
+    // Top-down image & CAD
     botImage: null,
     botImageOrientation: 0, // 0: UP, 90: RIGHT, 180: DOWN, 270: LEFT
     botImageOpacity: 1.0,
@@ -430,18 +449,22 @@
    * LemLib discrete PID controller (matching src/lemlib/PID.cpp)
    */
   class LemLibPID {
-    constructor(kP, kI, kD) {
-      this.kP = kP;
-      this.kI = kI;
-      this.kD = kD;
+    constructor(kP, kI, kD, windup = 0, slew = 0) {
+      this.kP = kP || 0;
+      this.kI = kI || 0;
+      this.kD = kD || 0;
+      this.windup = windup || 0;
+      this.slew = slew || 0;
       this.prevError = 0;
       this.totalError = 0;
+      this.prevOutput = 0;
       this.initialized = false;
     }
 
     reset() {
       this.prevError = 0;
       this.totalError = 0;
+      this.prevOutput = 0;
       this.initialized = false;
     }
 
@@ -450,13 +473,31 @@
         this.prevError = error;
         this.initialized = true;
       }
+      // Anti-windup
+      if (this.windup > 0) {
+        if (Math.abs(error) < this.windup) {
+          this.totalError += error * dt;
+        } else {
+          this.totalError = 0;
+        }
+      } else {
+        this.totalError += error * dt;
+      }
+      // Reset integral on sign change
       if ((error > 0 && this.prevError < 0) || (error < 0 && this.prevError > 0)) {
         this.totalError = 0;
       }
-      this.totalError += error * dt;
+
       const deriv = dt > 0 ? (error - this.prevError) / dt : 0;
+      let output = (this.kP * error) + (this.kI * this.totalError) + (this.kD * deriv);
+
+      // Slew rate limiting
+      if (this.slew > 0) {
+        output = lemlibSlew(output, this.prevOutput, this.slew, dt);
+      }
+      this.prevOutput = output;
       this.prevError = error;
-      return this.kP * error + this.kI * this.totalError + this.kD * deriv;
+      return output;
     }
   }
 
@@ -496,6 +537,30 @@
     const timeoutS = Math.max(0.1, (action.timeout || 2000) / 1000);
     const earlyExitRange = Math.max(0, action.earlyExitRange || 0);
 
+    // Lateral & Angular Controller Settings
+    const latKp = b.lateralKp != null ? b.lateralKp : 8.0;
+    const latKi = b.lateralKi != null ? b.lateralKi : 0.0;
+    const latKd = b.lateralKd != null ? b.lateralKd : 30.0;
+    const latWindup = b.lateralWindup != null ? b.lateralWindup : 3.0;
+    const latSlew = b.lateralSlew != null ? b.lateralSlew : 0;
+    const latSmallErr = b.lateralSmallErr != null ? b.lateralSmallErr : 1.0;
+    const latSmallTime = (b.lateralSmallTime != null ? b.lateralSmallTime : 100) / 1000;
+    const latLargeErr = b.lateralLargeErr != null ? b.lateralLargeErr : 3.0;
+    const latLargeTime = (b.lateralLargeTime != null ? b.lateralLargeTime : 500) / 1000;
+
+    const angKp = b.angularKp != null ? b.angularKp : 2.0;
+    const angKi = b.angularKi != null ? b.angularKi : 0.0;
+    const angKd = b.angularKd != null ? b.angularKd : 10.0;
+    const angWindup = b.angularWindup != null ? b.angularWindup : 3.0;
+    const angSlew = b.angularSlew != null ? b.angularSlew : 0;
+    const angSmallErr = b.angularSmallErr != null ? b.angularSmallErr : 1.0;
+    const angSmallTime = (b.angularSmallTime != null ? b.angularSmallTime : 100) / 1000;
+    const angLargeErr = b.angularLargeErr != null ? b.angularLargeErr : 3.0;
+    const angLargeTime = (b.angularLargeTime != null ? b.angularLargeTime : 500) / 1000;
+
+    const latPid = new LemLibPID(latKp, latKi, latKd, latWindup, latSlew);
+    const angPid = new LemLibPID(angKp, angKi, angKd, angWindup, angSlew);
+
     let pose = { x: fromPose.x, y: fromPose.y, theta: fromPose.theta };
     let vLin = 0;
     let omegaDeg = 0;
@@ -529,6 +594,8 @@
       const approachTheta = reversed ? normalizeAngle(target.theta + 180) : target.theta;
       const approachRad = (approachTheta * Math.PI) / 180;
       let close = false;
+      let settleSmallTimer = 0;
+      let settleLargeTimer = 0;
 
       while (t < timeoutS) {
         const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
@@ -550,21 +617,35 @@
         const desiredHeading = close ? target.theta : (reversed ? normalizeAngle(carrotAngle + 180) : carrotAngle);
         const angError = angleError(pose.theta, desiredHeading);
 
-        // LemLib settling exit condition
-        if (close && dist < 0.65 && Math.abs(angError) < 2.0) break;
+        // LemLib settling timers
+        if (dist < latSmallErr && Math.abs(angError) < angSmallErr) {
+          settleSmallTimer += dt;
+        } else {
+          settleSmallTimer = 0;
+        }
+        if (dist < latLargeErr && Math.abs(angError) < angLargeErr) {
+          settleLargeTimer += dt;
+        } else {
+          settleLargeTimer = 0;
+        }
+
+        if (settleSmallTimer >= latSmallTime || settleLargeTimer >= latLargeTime) break;
         if (earlyExitRange > 0 && dist < earlyExitRange) break;
 
         const alignCos = Math.cos((angError * Math.PI) / 180);
-        let latPower = clamp(dist / 14, 0, maxSpeed);
+        const rawLatPid = latPid.update(dist, dt);
+        let latPower = clamp(rawLatPid / 127, -maxSpeed, maxSpeed);
         if (close) {
           latPower *= Math.max(0, alignCos);
         } else {
           // Slow down linearly if heading is misaligned with carrot
           latPower *= Math.max(0.15, alignCos);
         }
+        if (Math.abs(latPower) < minSpeed) latPower = Math.sign(latPower) * minSpeed;
         if (reversed) latPower = -latPower;
 
-        let angPower = clamp((angError / 32) * Math.max(0.2, drift), -maxSpeed, maxSpeed);
+        const rawAngPid = angPid.update(angError, dt);
+        let angPower = clamp((rawAngPid / 127) * Math.max(0.2, drift), -maxSpeed, maxSpeed);
 
         // Desaturation / overturn prioritization
         const desat = lemlibDesaturate(latPower, angPower, maxSpeed);
@@ -596,6 +677,8 @@
       const reversed = action.forwards === false;
       const target = { x: action.x, y: action.y };
       let close = false;
+      let settleSmallTimer = 0;
+      let settleLargeTimer = 0;
 
       while (t < timeoutS) {
         const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
@@ -605,19 +688,28 @@
         const desiredHeading = reversed ? normalizeAngle(targetAngle + 180) : targetAngle;
         const angError = angleError(pose.theta, desiredHeading);
 
+        if (dist < latSmallErr) settleSmallTimer += dt;
+        else settleSmallTimer = 0;
+        if (dist < latLargeErr) settleLargeTimer += dt;
+        else settleLargeTimer = 0;
+
+        if (settleSmallTimer >= latSmallTime || settleLargeTimer >= latLargeTime) break;
         if (dist < 0.65 + earlyExitRange) break;
 
         const alignCos = Math.cos((angError * Math.PI) / 180);
-        let latPower = clamp(dist / 14, 0, maxSpeed);
+        const rawLatPid = latPid.update(dist, dt);
+        let latPower = clamp(rawLatPid / 127, -maxSpeed, maxSpeed);
         if (close) {
           latPower *= Math.max(0, alignCos);
         } else {
           latPower *= Math.max(0.18, alignCos);
         }
+        if (Math.abs(latPower) < minSpeed) latPower = Math.sign(latPower) * minSpeed;
         if (reversed) latPower = -latPower;
 
         // LemLib turns off angular steering when settling within 7.5 in
-        const angPower = close ? 0 : clamp((angError / 32) * Math.max(0.2, drift), -maxSpeed, maxSpeed);
+        const rawAngPid = angPid.update(angError, dt);
+        const angPower = close ? 0 : clamp((rawAngPid / 127) * Math.max(0.2, drift), -maxSpeed, maxSpeed);
 
         const desat = lemlibDesaturate(latPower, angPower, maxSpeed);
         const targetVLin = ((desat.left + desat.right) / 2) * vMax;
@@ -651,12 +743,21 @@
       }
 
       const maxOmega = getMaxTurnRateDps(b);
+      let settleSmallTimer = 0;
+      let settleLargeTimer = 0;
 
       while (t < timeoutS) {
         const angError = angleError(pose.theta, targetHeading);
+        if (Math.abs(angError) < angSmallErr) settleSmallTimer += dt;
+        else settleSmallTimer = 0;
+        if (Math.abs(angError) < angLargeErr) settleLargeTimer += dt;
+        else settleLargeTimer = 0;
+
+        if (settleSmallTimer >= angSmallTime || settleLargeTimer >= angLargeTime) break;
         if (Math.abs(angError) < 1.0 + earlyExitRange) break;
 
-        let angPower = clamp(angError / 26, -maxSpeed, maxSpeed);
+        const rawAngPid = angPid.update(angError, dt);
+        let angPower = clamp(rawAngPid / 127, -maxSpeed, maxSpeed);
         if (Math.abs(angPower) < minSpeed) angPower = Math.sign(angPower) * minSpeed;
 
         const targetOmega = angPower * maxOmega;
@@ -686,6 +787,8 @@
       }
 
       let vDrive = 0;
+      let settleSmallTimer = 0;
+      let settleLargeTimer = 0;
 
       while (t < timeoutS) {
         let targetHeading = pose.theta;
@@ -697,9 +800,16 @@
         }
 
         const angError = angleError(pose.theta, targetHeading);
+        if (Math.abs(angError) < angSmallErr) settleSmallTimer += dt;
+        else settleSmallTimer = 0;
+        if (Math.abs(angError) < angLargeErr) settleLargeTimer += dt;
+        else settleLargeTimer = 0;
+
+        if (settleSmallTimer >= angSmallTime || settleLargeTimer >= angLargeTime) break;
         if (Math.abs(angError) < 0.6 + earlyExitRange && t > 0.04) break;
 
-        let pwr = clamp(angError / 26, -maxSpeed, maxSpeed);
+        const rawAngPid = angPid.update(angError, dt);
+        let pwr = clamp(rawAngPid / 127, -maxSpeed, maxSpeed);
         if (Math.abs(pwr) < minSpeed) pwr = Math.sign(pwr) * minSpeed;
 
         const targetVDrive = pwr * vMax;
@@ -1841,6 +1951,43 @@
   function renderFlow() {
     actionFlow.innerHTML = "";
     const poses = computePoses();
+
+    // Top LemLib Bot Specs & PID summary banner in block interface
+    const botBanner = document.createElement("div");
+    botBanner.className = "action-flow-bot-banner";
+    botBanner.style.cssText = "margin-bottom:12px;background:rgba(15,23,42,0.92);border:1px solid #1e293b;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;";
+    botBanner.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.1rem;">🤖</span>
+        <div style="display:flex;flex-direction:column;">
+          <span style="font-size:0.75rem;font-weight:700;color:#f1f5f9;">LemLib Drivetrain: ${bot.trackWidth || 12}" Track · ${bot.wheelDiam || 3.25}" Wheels · ${bot.driveRpm || 600} RPM</span>
+          <span style="font-size:0.68rem;color:#94a3b8;">Lateral PID: (${bot.lateralKp || 8}, ${bot.lateralKi || 0}, ${bot.lateralKd || 30}) · Angular PID: (${bot.angularKp || 2}, ${bot.angularKi || 0}, ${bot.angularKd || 10})</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button type="button" class="btn-xs-clean" id="btnQuickTunePidFromFlow" style="font-size:0.68rem;color:#38bdf8;border-color:rgba(56,189,248,0.3);cursor:pointer;">🎛️ Tune PID</button>
+        <button type="button" class="btn-xs-clean" id="btnQuickConfigBotFromFlow" style="font-size:0.68rem;cursor:pointer;">⚙️ Bot Specs</button>
+      </div>
+    `;
+    const tuneBtn = botBanner.querySelector("#btnQuickTunePidFromFlow");
+    if (tuneBtn) {
+      tuneBtn.addEventListener("click", () => {
+        const btnOpenBot = document.getElementById("btnOpenPidFromBot");
+        if (btnOpenBot) btnOpenBot.click();
+      });
+    }
+    const specsBtn = botBanner.querySelector("#btnQuickConfigBotFromFlow");
+    if (specsBtn) {
+      specsBtn.addEventListener("click", () => {
+        const botSec = document.getElementById("botSettings");
+        if (botSec) {
+          botSec.scrollIntoView({ behavior: "smooth" });
+          botSec.style.borderColor = "#38bdf8";
+          setTimeout(() => { botSec.style.borderColor = ""; }, 1500);
+        }
+      });
+    }
+    actionFlow.appendChild(botBanner);
 
     actions.forEach((a, idx) => {
       const block = document.createElement("div");
@@ -3331,16 +3478,51 @@
 
   function syncBotInputs() {
     const el = (id) => document.getElementById(id);
-    if (el("trackWidth")) el("trackWidth").value = bot.trackWidth;
-    if (el("robotW")) el("robotW").value = bot.robotW;
-    if (el("robotL")) el("robotL").value = bot.robotL;
-    if (el("wheelDiam")) el("wheelDiam").value = bot.wheelDiam;
-    if (el("driveRpm")) el("driveRpm").value = bot.driveRpm;
-    if (el("defaultMaxSpeed")) el("defaultMaxSpeed").value = bot.defaultMaxSpeed;
-    if (el("defaultMinSpeed")) el("defaultMinSpeed").value = bot.defaultMinSpeed;
+    if (el("trackWidth")) el("trackWidth").value = bot.trackWidth != null ? bot.trackWidth : 12;
+    if (el("robotW")) el("robotW").value = bot.robotW != null ? bot.robotW : 14;
+    if (el("robotL")) el("robotL").value = bot.robotL != null ? bot.robotL : 14;
+    if (el("wheelDiam")) el("wheelDiam").value = bot.wheelDiam != null ? bot.wheelDiam : 3.25;
+    if (el("wheelDiamPreset")) el("wheelDiamPreset").value = String(bot.wheelDiam != null ? bot.wheelDiam : 3.25);
+    if (el("driveRpm")) el("driveRpm").value = bot.driveRpm != null ? bot.driveRpm : 600;
+    if (el("driveRpmPreset")) el("driveRpmPreset").value = String(bot.driveRpm != null ? bot.driveRpm : 600);
+    if (el("defaultMaxSpeed")) el("defaultMaxSpeed").value = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+    if (el("defaultMinSpeed")) el("defaultMinSpeed").value = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
     if (el("botLateralDrift")) el("botLateralDrift").value = bot.lateralDrift != null ? bot.lateralDrift : 1.0;
     if (el("botTurnDrift")) el("botTurnDrift").value = bot.turnDrift != null ? bot.turnDrift : 1.0;
     if (el("botDefaultLead")) el("botDefaultLead").value = bot.defaultLead != null ? bot.defaultLead : 0.6;
+
+    // LemLib Lateral Controller
+    if (el("botLateralKp")) el("botLateralKp").value = bot.lateralKp != null ? bot.lateralKp : 8.0;
+    if (el("botLateralKi")) el("botLateralKi").value = bot.lateralKi != null ? bot.lateralKi : 0.0;
+    if (el("botLateralKd")) el("botLateralKd").value = bot.lateralKd != null ? bot.lateralKd : 30.0;
+    if (el("botLateralWindup")) el("botLateralWindup").value = bot.lateralWindup != null ? bot.lateralWindup : 3.0;
+    if (el("botLateralSmallErr")) el("botLateralSmallErr").value = bot.lateralSmallErr != null ? bot.lateralSmallErr : 1.0;
+    if (el("botLateralSmallTime")) el("botLateralSmallTime").value = bot.lateralSmallTime != null ? bot.lateralSmallTime : 100;
+    if (el("botLateralLargeErr")) el("botLateralLargeErr").value = bot.lateralLargeErr != null ? bot.lateralLargeErr : 3.0;
+    if (el("botLateralLargeTime")) el("botLateralLargeTime").value = bot.lateralLargeTime != null ? bot.lateralLargeTime : 500;
+    if (el("botLateralSlew")) el("botLateralSlew").value = bot.lateralSlew != null ? bot.lateralSlew : 0;
+
+    // LemLib Angular Controller
+    if (el("botAngularKp")) el("botAngularKp").value = bot.angularKp != null ? bot.angularKp : 2.0;
+    if (el("botAngularKi")) el("botAngularKi").value = bot.angularKi != null ? bot.angularKi : 0.0;
+    if (el("botAngularKd")) el("botAngularKd").value = bot.angularKd != null ? bot.angularKd : 10.0;
+    if (el("botAngularWindup")) el("botAngularWindup").value = bot.angularWindup != null ? bot.angularWindup : 3.0;
+    if (el("botAngularSmallErr")) el("botAngularSmallErr").value = bot.angularSmallErr != null ? bot.angularSmallErr : 1.0;
+    if (el("botAngularSmallTime")) el("botAngularSmallTime").value = bot.angularSmallTime != null ? bot.angularSmallTime : 100;
+    if (el("botAngularLargeErr")) el("botAngularLargeErr").value = bot.angularLargeErr != null ? bot.angularLargeErr : 3.0;
+    if (el("botAngularLargeTime")) el("botAngularLargeTime").value = bot.angularLargeTime != null ? bot.angularLargeTime : 500;
+    if (el("botAngularSlew")) el("botAngularSlew").value = bot.angularSlew != null ? bot.angularSlew : 0;
+
+    // Odometry & Sensors
+    if (el("horizTrackerOffset")) el("horizTrackerOffset").value = bot.horizTrackerOffset != null ? bot.horizTrackerOffset : -2.5;
+    if (el("horizTrackerDiam")) el("horizTrackerDiam").value = bot.horizTrackerWheelDiam != null ? bot.horizTrackerWheelDiam : 2.0;
+    if (el("imuSensorPort")) el("imuSensorPort").value = bot.imuPort != null ? bot.imuPort : 10;
+
+    // Sync detail text
+    if (el("botSyncDetail")) {
+      el("botSyncDetail").textContent = `${bot.driveRpm || 600} RPM · ${bot.wheelDiam || 3.25}" Wheels · ${bot.trackWidth || 12}" Track`;
+    }
+
     initBotImageElement();
     syncBotVisualUI();
   }
@@ -3357,7 +3539,32 @@
       lateralDrift: "botLateralDrift",
       turnDrift: "botTurnDrift",
       defaultLead: "botDefaultLead",
+      // Lateral PID
+      lateralKp: "botLateralKp",
+      lateralKi: "botLateralKi",
+      lateralKd: "botLateralKd",
+      lateralWindup: "botLateralWindup",
+      lateralSmallErr: "botLateralSmallErr",
+      lateralSmallTime: "botLateralSmallTime",
+      lateralLargeErr: "botLateralLargeErr",
+      lateralLargeTime: "botLateralLargeTime",
+      lateralSlew: "botLateralSlew",
+      // Angular PID
+      angularKp: "botAngularKp",
+      angularKi: "botAngularKi",
+      angularKd: "botAngularKd",
+      angularWindup: "botAngularWindup",
+      angularSmallErr: "botAngularSmallErr",
+      angularSmallTime: "botAngularSmallTime",
+      angularLargeErr: "botAngularLargeErr",
+      angularLargeTime: "botAngularLargeTime",
+      angularSlew: "botAngularSlew",
+      // Sensors
+      horizTrackerOffset: "horizTrackerOffset",
+      horizTrackerWheelDiam: "horizTrackerDiam",
+      imuPort: "imuSensorPort",
     };
+
     Object.entries(map).forEach(([key, id]) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -3376,6 +3583,16 @@
           el.value = v;
         }
         bot[key] = isNaN(v) ? bot[key] : v;
+
+        // Keep dropdown presets in sync
+        if (key === "wheelDiam") {
+          const sel = document.getElementById("wheelDiamPreset");
+          if (sel) sel.value = String(v);
+        }
+        if (key === "driveRpm") {
+          const sel = document.getElementById("driveRpmPreset");
+          if (sel) sel.value = String(v);
+        }
 
         // Aspect ratio locking between robotW and robotL based on photo ratio
         if (key === "robotW" && bot.botLockRatio && bot.botImageNaturalRatio) {
@@ -3396,11 +3613,110 @@
           if (elW) elW.value = bot.robotW;
         }
 
+        const syncDetail = document.getElementById("botSyncDetail");
+        if (syncDetail) {
+          syncDetail.textContent = `${bot.driveRpm || 600} RPM · ${bot.wheelDiam || 3.25}" Wheels · ${bot.trackWidth || 12}" Track`;
+        }
+
         syncBotVisualUI();
         markDirty();
+        renderFlow();
         draw();
+        updateTimeDisplay();
       });
     });
+
+    // Preset dropdowns
+    const wheelPreset = document.getElementById("wheelDiamPreset");
+    if (wheelPreset) {
+      wheelPreset.addEventListener("change", () => {
+        const val = Number(wheelPreset.value);
+        if (!isNaN(val)) {
+          bot.wheelDiam = val;
+          const wInput = document.getElementById("wheelDiam");
+          if (wInput) wInput.value = val;
+          markDirty();
+          renderFlow();
+          draw();
+          updateTimeDisplay();
+        }
+      });
+    }
+
+    const driveRpmPreset = document.getElementById("driveRpmPreset");
+    if (driveRpmPreset) {
+      driveRpmPreset.addEventListener("change", () => {
+        const val = Number(driveRpmPreset.value);
+        if (!isNaN(val)) {
+          bot.driveRpm = val;
+          const rpmInput = document.getElementById("driveRpm");
+          if (rpmInput) rpmInput.value = val;
+          markDirty();
+          renderFlow();
+          draw();
+          updateTimeDisplay();
+        }
+      });
+    }
+
+    // PID sub-tabs in sidebar
+    const btnTabLat = document.getElementById("btnBotPidTabLat");
+    const btnTabAng = document.getElementById("btnBotPidTabAng");
+    const latCard = document.getElementById("botPidLatCard");
+    const angCard = document.getElementById("botPidAngCard");
+
+    if (btnTabLat && btnTabAng && latCard && angCard) {
+      btnTabLat.addEventListener("click", () => {
+        btnTabLat.style.background = "#0284c7";
+        btnTabLat.style.color = "#fff";
+        btnTabAng.style.background = "transparent";
+        btnTabAng.style.color = "#94a3b8";
+        latCard.style.display = "block";
+        angCard.style.display = "none";
+      });
+
+      btnTabAng.addEventListener("click", () => {
+        btnTabAng.style.background = "#0284c7";
+        btnTabAng.style.color = "#fff";
+        btnTabLat.style.background = "transparent";
+        btnTabLat.style.color = "#94a3b8";
+        angCard.style.display = "block";
+        latCard.style.display = "none";
+      });
+    }
+
+    // Two-way sync buttons with src/robot-config.cpp
+    const btnSyncFromCpp = document.getElementById("btnSyncBotFromCpp");
+    if (btnSyncFromCpp) {
+      btnSyncFromCpp.addEventListener("click", () => {
+        if (window.ProjectManager && typeof window.ProjectManager.extractLemLibConfig === "function") {
+          const cfg = window.ProjectManager.extractLemLibConfig();
+          if (cfg) {
+            Object.assign(bot, cfg);
+            syncBotInputs();
+            markDirty();
+            renderFlow();
+            draw();
+            updateTimeDisplay();
+            showToast("🔄 Successfully synchronized bot specs & PID from src/robot-config.cpp!");
+            return;
+          }
+        }
+        showToast("ℹ️ robot-config.cpp already matches current robot setup!");
+      });
+    }
+
+    const btnSaveToCpp = document.getElementById("btnSaveBotToCpp");
+    if (btnSaveToCpp) {
+      btnSaveToCpp.addEventListener("click", () => {
+        if (window.ProjectManager && typeof window.ProjectManager.updateRobotConfigCpp === "function") {
+          window.ProjectManager.updateRobotConfigCpp(bot);
+          showToast("💾 Updated src/robot-config.cpp with current LemLib bot specs & PID constants!");
+        } else {
+          showToast("💾 Bot settings stored and applied to simulation!");
+        }
+      });
+    }
   }
 
   
@@ -4214,12 +4530,18 @@
       if (bot.lateralKd != null) state.lateral.kd = bot.lateralKd;
       if (bot.lateralWindup != null) state.lateral.windup = bot.lateralWindup;
       if (bot.lateralSlew != null) state.lateral.slew = bot.lateralSlew;
+      if (bot.lateralSmallErr != null) state.lateral.smallErr = bot.lateralSmallErr;
+      if (bot.lateralSmallTime != null) state.lateral.smallTime = bot.lateralSmallTime;
+      if (bot.lateralLargeTime != null) state.lateral.largeTime = bot.lateralLargeTime;
 
       if (bot.angularKp != null) state.angular.kp = bot.angularKp;
       if (bot.angularKi != null) state.angular.ki = bot.angularKi;
       if (bot.angularKd != null) state.angular.kd = bot.angularKd;
       if (bot.angularWindup != null) state.angular.windup = bot.angularWindup;
       if (bot.angularSlew != null) state.angular.slew = bot.angularSlew;
+      if (bot.angularSmallErr != null) state.angular.smallErr = bot.angularSmallErr;
+      if (bot.angularSmallTime != null) state.angular.smallTime = bot.angularSmallTime;
+      if (bot.angularLargeTime != null) state.angular.largeTime = bot.angularLargeTime;
 
       syncInputsFromState();
       modal.hidden = false;
@@ -4606,12 +4928,23 @@ lemlib::ControllerSettings ${currentMode}_controller(
           bot.lateralKd = cur.kd;
           bot.lateralWindup = cur.windup;
           bot.lateralSlew = cur.slew;
+          bot.lateralSmallErr = cur.smallErr;
+          bot.lateralSmallTime = cur.smallTime;
+          bot.lateralLargeTime = cur.largeTime;
         } else {
           bot.angularKp = cur.kp;
           bot.angularKi = cur.ki;
           bot.angularKd = cur.kd;
           bot.angularWindup = cur.windup;
           bot.angularSlew = cur.slew;
+          bot.angularSmallErr = cur.smallErr;
+          bot.angularSmallTime = cur.smallTime;
+          bot.angularLargeTime = cur.largeTime;
+        }
+
+        syncBotInputs();
+        if (window.ProjectManager && typeof window.ProjectManager.updateRobotConfigCpp === "function") {
+          window.ProjectManager.updateRobotConfigCpp(bot);
         }
 
         markDirty();
@@ -4619,7 +4952,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
         draw();
         updateTimeDisplay();
         closeModal();
-        showToast(`🚀 Applied ${currentMode} PID gains to bot and autonomous simulator!`);
+        showToast(`🚀 Applied ${currentMode} PID gains to bot & updated src/robot-config.cpp!`);
       });
     }
 

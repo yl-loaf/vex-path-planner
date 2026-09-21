@@ -577,6 +577,92 @@
     };
   }
 
+  // Parse LemLib Drivetrain & ControllerSettings from raw C++ code
+  function parseLemlibRobotConfig(cppCode) {
+    if (!cppCode) return null;
+    const resolveWheel = (raw) => {
+      if (!raw) return 3.25;
+      const str = String(raw).trim();
+      if (str.includes("NEW_2") && !str.includes("NEW_275")) return 2.0;
+      if (str.includes("OLD_275") || str.includes("NEW_275")) return 2.75;
+      if (str.includes("OLD_325") || str.includes("NEW_325")) return 3.25;
+      if (str.includes("OLD_4") || str.includes("NEW_4")) return 4.0;
+      const num = parseFloat(str.replace(/[^0-9.]/g, ""));
+      return isNaN(num) || num <= 0 ? 3.25 : num;
+    };
+
+    const res = {
+      found: false,
+      trackWidth: 12.0,
+      wheelDiam: 3.25,
+      driveRpm: 600,
+      horizontalDrift: 2.0,
+      lateralKp: 8.0,
+      lateralKi: 0.0,
+      lateralKd: 30.0,
+      lateralWindup: 3.0,
+      lateralSmallErr: 1.0,
+      lateralSmallTime: 100,
+      lateralLargeErr: 3.0,
+      lateralLargeTime: 500,
+      lateralSlew: 0,
+      angularKp: 2.0,
+      angularKi: 0.0,
+      angularKd: 10.0,
+      angularWindup: 3.0,
+      angularSmallErr: 1.0,
+      angularSmallTime: 100,
+      angularLargeErr: 3.0,
+      angularLargeTime: 500,
+      angularSlew: 0,
+    };
+
+    // Drivetrain
+    const dtM = cppCode.match(/(?:extern\s+)?(?:lemlib::)?Drivetrain\s+([a-zA-Z0-9_]+)\s*\(([^;]+)\);/);
+    if (dtM && dtM[2]) {
+      res.found = true;
+      const args = dtM[2].split(",").map(a => a.trim().replace(/\/\*.*?\*\//g, "").replace(/\/\/.*$/gm, "").trim());
+      if (args.length >= 3 && !isNaN(parseFloat(args[2]))) res.trackWidth = parseFloat(args[2]);
+      if (args.length >= 4) res.wheelDiam = resolveWheel(args[3]);
+      if (args.length >= 5 && !isNaN(parseFloat(args[4]))) res.driveRpm = parseFloat(args[4]);
+      if (args.length >= 6 && !isNaN(parseFloat(args[5]))) res.horizontalDrift = parseFloat(args[5]);
+    }
+
+    // Lateral Controller
+    const latM = cppCode.match(/(?:extern\s+)?(?:lemlib::)?ControllerSettings\s+(?:lateral_controller|lateralController|lateral_pid|[a-zA-Z0-9_]*lat[a-zA-Z0-9_]*)\s*\(([^;]+)\);/i);
+    if (latM && latM[1]) {
+      res.found = true;
+      const args = latM[1].split(",").map(a => parseFloat(a.replace(/\/\*.*?\*\//g, "").replace(/\/\/.*$/gm, "").trim()));
+      if (!isNaN(args[0])) res.lateralKp = args[0];
+      if (!isNaN(args[1])) res.lateralKi = args[1];
+      if (!isNaN(args[2])) res.lateralKd = args[2];
+      if (!isNaN(args[3])) res.lateralWindup = args[3];
+      if (!isNaN(args[4])) res.lateralSmallErr = args[4];
+      if (!isNaN(args[5])) res.lateralSmallTime = args[5];
+      if (!isNaN(args[6])) res.lateralLargeErr = args[6];
+      if (!isNaN(args[7])) res.lateralLargeTime = args[7];
+      if (!isNaN(args[8])) res.lateralSlew = args[8];
+    }
+
+    // Angular Controller
+    const angM = cppCode.match(/(?:extern\s+)?(?:lemlib::)?ControllerSettings\s+(?:angular_controller|angularController|angular_pid|[a-zA-Z0-9_]*ang[a-zA-Z0-9_]*)\s*\(([^;]+)\);/i);
+    if (angM && angM[1]) {
+      res.found = true;
+      const args = angM[1].split(",").map(a => parseFloat(a.replace(/\/\*.*?\*\//g, "").replace(/\/\/.*$/gm, "").trim()));
+      if (!isNaN(args[0])) res.angularKp = args[0];
+      if (!isNaN(args[1])) res.angularKi = args[1];
+      if (!isNaN(args[2])) res.angularKd = args[2];
+      if (!isNaN(args[3])) res.angularWindup = args[3];
+      if (!isNaN(args[4])) res.angularSmallErr = args[4];
+      if (!isNaN(args[5])) res.angularSmallTime = args[5];
+      if (!isNaN(args[6])) res.angularLargeErr = args[6];
+      if (!isNaN(args[7])) res.angularLargeTime = args[7];
+      if (!isNaN(args[8])) res.angularSlew = args[8];
+    }
+
+    return res;
+  }
+
   const SAMPLE_ROUTINES = {
     preload_rush: `// Autonomous: 4-Ring Alliance Stake & Mogo Rush
 void autonomous() {
@@ -646,6 +732,7 @@ void skillsAuton() {
     cleanCommentText,
     parseCppAuton,
     createDefaultAction,
+    parseLemlibRobotConfig,
     SAMPLE_ROUTINES,
   };
 });

@@ -533,7 +533,283 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       });
 
       this.symbols = symbols;
+      this.extractLemLibConfig();
       return symbols;
+    }
+
+    // -------------------------------------------------------------
+    // LemLib Omniwheel & Dimension Helper
+    // -------------------------------------------------------------
+    resolveWheelDiameter(raw) {
+      if (!raw) return 3.25;
+      const str = String(raw).trim();
+      if (str.includes("NEW_2") && !str.includes("NEW_275")) return 2.0;
+      if (str.includes("OLD_275") || str.includes("NEW_275")) return 2.75;
+      if (str.includes("OLD_325") || str.includes("NEW_325")) return 3.25;
+      if (str.includes("OLD_4") || str.includes("NEW_4")) return 4.0;
+      const num = parseFloat(str.replace(/[^0-9.]/g, ""));
+      return isNaN(num) || num <= 0 ? 3.25 : num;
+    }
+
+    // -------------------------------------------------------------
+    // Extract LemLib Drivetrain, PID Controllers & Sensors from C++
+    // -------------------------------------------------------------
+    extractLemLibConfig() {
+      if (!this.project || !this.project.files) return null;
+      const config = {
+        drivetrain: {
+          trackWidth: 12.0,
+          wheelDiam: 3.25,
+          driveRpm: 600,
+          horizontalDrift: 2.0,
+        },
+        lateralController: {
+          kp: 8.0,
+          ki: 0.0,
+          kd: 30.0,
+          windup: 3.0,
+          smallErr: 1.0,
+          smallTime: 100,
+          largeErr: 3.0,
+          largeTime: 500,
+          slew: 0,
+        },
+        angularController: {
+          kp: 2.0,
+          ki: 0.0,
+          kd: 10.0,
+          windup: 3.0,
+          smallErr: 1.0,
+          smallTime: 100,
+          largeErr: 3.0,
+          largeTime: 500,
+          slew: 0,
+        },
+        trackingWheels: {
+          horiz: { name: "horiz_wheel", offset: -2.5, wheelDiam: 2.0, port: 9 },
+          vert: { name: "vert_wheel", offset: 0, wheelDiam: 2.75, port: null },
+        },
+        sensors: {
+          imuPort: 10,
+          distPort: 15,
+        },
+        motors: {
+          leftPorts: [1, 2, 3],
+          rightPorts: [-11, -12, -13],
+          gearset: "blue",
+        },
+        sourceFile: "src/robot-config.cpp",
+      };
+
+      const files = this.project.files;
+      const allText = Object.entries(files).map(([k, v]) => `// File: ${k}\n${v}`).join("\n\n");
+
+      // 1. Drivetrain
+      const dtMatch = allText.match(/(?:extern\s+)?(?:lemlib::)?Drivetrain\s+([a-zA-Z0-9_]+)\s*\(([^;]+)\);/);
+      if (dtMatch && dtMatch[2]) {
+        const args = dtMatch[2].split(",").map(a => a.trim().replace(/\/\*.*?\*\//g, "").replace(/\/\/.*$/gm, "").trim());
+        if (args.length >= 3) {
+          const tw = parseFloat(args[2]);
+          if (!isNaN(tw) && tw > 0) config.drivetrain.trackWidth = tw;
+        }
+        if (args.length >= 4) {
+          config.drivetrain.wheelDiam = this.resolveWheelDiameter(args[3]);
+        }
+        if (args.length >= 5) {
+          const rpm = parseFloat(args[4]);
+          if (!isNaN(rpm) && rpm > 0) config.drivetrain.driveRpm = rpm;
+        }
+        if (args.length >= 6) {
+          const drift = parseFloat(args[5]);
+          if (!isNaN(drift) && drift > 0) config.drivetrain.horizontalDrift = drift;
+        }
+      }
+
+      // 2. Lateral Controller
+      const latMatch = allText.match(/(?:extern\s+)?(?:lemlib::)?ControllerSettings\s+(?:lateral_controller|lateralController|lateral_pid|[a-zA-Z0-9_]*lat[a-zA-Z0-9_]*)\s*\(([^;]+)\);/i);
+      if (latMatch && latMatch[1]) {
+        const args = latMatch[1].split(",").map(a => parseFloat(a.replace(/\/\*.*?\*\//g, "").replace(/\/\/.*$/gm, "").trim()));
+        if (!isNaN(args[0])) config.lateralController.kp = args[0];
+        if (!isNaN(args[1])) config.lateralController.ki = args[1];
+        if (!isNaN(args[2])) config.lateralController.kd = args[2];
+        if (!isNaN(args[3])) config.lateralController.windup = args[3];
+        if (!isNaN(args[4])) config.lateralController.smallErr = args[4];
+        if (!isNaN(args[5])) config.lateralController.smallTime = args[5];
+        if (!isNaN(args[6])) config.lateralController.largeErr = args[6];
+        if (!isNaN(args[7])) config.lateralController.largeTime = args[7];
+        if (!isNaN(args[8])) config.lateralController.slew = args[8];
+      }
+
+      // 3. Angular Controller
+      const angMatch = allText.match(/(?:extern\s+)?(?:lemlib::)?ControllerSettings\s+(?:angular_controller|angularController|angular_pid|[a-zA-Z0-9_]*ang[a-zA-Z0-9_]*)\s*\(([^;]+)\);/i);
+      if (angMatch && angMatch[1]) {
+        const args = angMatch[1].split(",").map(a => parseFloat(a.replace(/\/\*.*?\*\//g, "").replace(/\/\/.*$/gm, "").trim()));
+        if (!isNaN(args[0])) config.angularController.kp = args[0];
+        if (!isNaN(args[1])) config.angularController.ki = args[1];
+        if (!isNaN(args[2])) config.angularController.kd = args[2];
+        if (!isNaN(args[3])) config.angularController.windup = args[3];
+        if (!isNaN(args[4])) config.angularController.smallErr = args[4];
+        if (!isNaN(args[5])) config.angularController.smallTime = args[5];
+        if (!isNaN(args[6])) config.angularController.largeErr = args[6];
+        if (!isNaN(args[7])) config.angularController.largeTime = args[7];
+        if (!isNaN(args[8])) config.angularController.slew = args[8];
+      }
+
+      // 4. Tracking Wheels
+      const twRegex = /(?:extern\s+)?(?:lemlib::)?TrackingWheel\s+([a-zA-Z0-9_]+)\s*\(([^;]+)\);/g;
+      let twMatch;
+      while ((twMatch = twRegex.exec(allText)) !== null) {
+        const name = twMatch[1];
+        const args = twMatch[2].split(",").map(a => a.trim());
+        const diam = args[1] ? this.resolveWheelDiameter(args[1]) : 2.0;
+        const offset = args[2] ? parseFloat(args[2]) : 0;
+        if (name.toLowerCase().includes("horiz") || name.toLowerCase().includes("drift")) {
+          config.trackingWheels.horiz = { name, offset: isNaN(offset) ? -2.5 : offset, wheelDiam: diam };
+        } else if (name.toLowerCase().includes("vert") || name.toLowerCase().includes("fwd")) {
+          config.trackingWheels.vert = { name, offset: isNaN(offset) ? 0 : offset, wheelDiam: diam };
+        }
+      }
+
+      // 5. Sensors (IMU)
+      const imuMatch = allText.match(/(?:pros::)?Imu\s+([a-zA-Z0-9_]+)\s*\(\s*([0-9]+)\s*\)/);
+      if (imuMatch && imuMatch[2]) {
+        config.sensors.imuPort = parseInt(imuMatch[2], 10);
+      }
+
+      this.lemlibConfig = config;
+      return config;
+    }
+
+    // -------------------------------------------------------------
+    // Update src/robot-config.cpp with UI Bot Settings & Dimensions
+    // -------------------------------------------------------------
+    updateRobotConfigCpp(bot) {
+      if (!this.project) this.initDefaultProject();
+      const wheelEnum = (diam) => {
+        if (Math.abs(diam - 2.0) < 0.1) return "lemlib::Omniwheel::NEW_2";
+        if (Math.abs(diam - 2.75) < 0.1) return "lemlib::Omniwheel::NEW_275";
+        if (Math.abs(diam - 3.25) < 0.1) return "lemlib::Omniwheel::NEW_325";
+        if (Math.abs(diam - 4.0) < 0.1) return "lemlib::Omniwheel::NEW_4";
+        return `${Number(diam).toFixed(2)}`;
+      };
+
+      const trackWidth = Number(bot.trackWidth || 12).toFixed(1);
+      const wheelDiamEnum = wheelEnum(bot.wheelDiam || 3.25);
+      const driveRpm = Number(bot.driveRpm || 600).toFixed(1);
+      const driftScaler = Number(bot.lateralDrift || 2.0).toFixed(1);
+
+      // Lateral PID
+      const latKp = Number(bot.lateralKp != null ? bot.lateralKp : 8.0).toFixed(2);
+      const latKi = Number(bot.lateralKi != null ? bot.lateralKi : 0.0).toFixed(3);
+      const latKd = Number(bot.lateralKd != null ? bot.lateralKd : 30.0).toFixed(2);
+      const latWindup = Number(bot.lateralWindup != null ? bot.lateralWindup : 3.0).toFixed(1);
+      const latSmallErr = Number(bot.lateralSmallErr != null ? bot.lateralSmallErr : 1.0).toFixed(1);
+      const latSmallTime = Math.round(bot.lateralSmallTime != null ? bot.lateralSmallTime : 100);
+      const latLargeErr = Number(bot.lateralLargeErr != null ? bot.lateralLargeErr : 3.0).toFixed(1);
+      const latLargeTime = Math.round(bot.lateralLargeTime != null ? bot.lateralLargeTime : 500);
+      const latSlew = Math.round(bot.lateralSlew != null ? bot.lateralSlew : 0);
+
+      // Angular PID
+      const angKp = Number(bot.angularKp != null ? bot.angularKp : 2.0).toFixed(2);
+      const angKi = Number(bot.angularKi != null ? bot.angularKi : 0.0).toFixed(3);
+      const angKd = Number(bot.angularKd != null ? bot.angularKd : 10.0).toFixed(2);
+      const angWindup = Number(bot.angularWindup != null ? bot.angularWindup : 3.0).toFixed(1);
+      const angSmallErr = Number(bot.angularSmallErr != null ? bot.angularSmallErr : 1.0).toFixed(1);
+      const angSmallTime = Math.round(bot.angularSmallTime != null ? bot.angularSmallTime : 100);
+      const angLargeErr = Number(bot.angularLargeErr != null ? bot.angularLargeErr : 3.0).toFixed(1);
+      const angLargeTime = Math.round(bot.angularLargeTime != null ? bot.angularLargeTime : 500);
+      const angSlew = Math.round(bot.angularSlew != null ? bot.angularSlew : 0);
+
+      const horizOffset = Number(bot.horizTrackerOffset != null ? bot.horizTrackerOffset : -2.5).toFixed(1);
+      const horizWheelEnum = wheelEnum(bot.horizTrackerWheelDiam != null ? bot.horizTrackerWheelDiam : 2.0);
+      const imuPort = bot.imuPort || 10;
+      const horizPort = bot.horizTrackerPort || 9;
+
+      const newConfigCpp = `// =================================================================
+// robot-config.cpp - Hardware Port Definitions & Controller Setup
+// Synchronized with LemLib Autonomous Planner & PID Tuner
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+
+// Drivetrain 6-Motor Setup (${driveRpm} RPM)
+pros::Motor left_front(1, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+pros::Motor left_middle(2, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+pros::Motor left_back(3, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+
+pros::Motor right_front(-11, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+pros::Motor right_middle(-12, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+pros::Motor right_back(-13, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
+
+pros::MotorGroup left_motors({left_front, left_middle, left_back});
+pros::MotorGroup right_motors({right_front, right_middle, right_back});
+
+// Subsystems
+pros::Motor intake(7, pros::v5::MotorGears::blue);
+pros::Motor lift(8, pros::v5::MotorGears::green);
+pros::adi::DigitalOut clamp('A', false);
+pros::adi::DigitalOut doinker('B', false);
+pros::adi::DigitalOut intake_lift('C', false);
+
+// Sensors
+pros::Imu imu(${imuPort});
+pros::Rotation horiz_tracker(${horizPort});
+pros::Distance dist_sensor(15);
+
+// Tracking Wheel Setup
+lemlib::TrackingWheel horiz_wheel(&horiz_tracker, ${horizWheelEnum}, ${horizOffset});
+
+// LemLib Drivetrain Configuration (${trackWidth}" Track Width, ${bot.wheelDiam || 3.25}" Wheels, ${driveRpm} RPM)
+lemlib::Drivetrain drivetrain(
+    &left_motors,
+    &right_motors,
+    ${trackWidth}, // track width (inches)
+    ${wheelDiamEnum}, // wheel diameter
+    ${driveRpm}, // drivetrain RPM
+    ${driftScaler} // horizontal drift scaler
+);
+
+// Lateral PID Controller
+lemlib::ControllerSettings lateral_controller(
+    ${latKp}, // kP
+    ${latKi}, // kI
+    ${latKd}, // kD
+    ${latWindup}, // anti-windup range
+    ${latSmallErr}, // small error range (in)
+    ${latSmallTime}, // small error timeout (ms)
+    ${latLargeErr}, // large error range (in)
+    ${latLargeTime}, // large error timeout (ms)
+    ${latSlew} // slew rate
+);
+
+// Angular PID Controller
+lemlib::ControllerSettings angular_controller(
+    ${angKp}, // kP
+    ${angKi}, // kI
+    ${angKd}, // kD
+    ${angWindup}, // anti-windup range
+    ${angSmallErr}, // small error range (deg)
+    ${angSmallTime}, // small error timeout (ms)
+    ${angLargeErr}, // large error range (deg)
+    ${angLargeTime}, // large error timeout (ms)
+    ${angSlew} // slew rate
+);
+
+// Odometry Sensors
+lemlib::OdomSensors sensors(
+    nullptr, // vertical tracking wheel 1
+    nullptr, // vertical tracking wheel 2
+    &horiz_wheel, // horizontal tracking wheel
+    nullptr, // horizontal tracking wheel 2
+    &imu // inertial sensor
+);
+
+// LemLib Chassis Object
+lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sensors);
+`;
+
+      this.setFile("src/robot-config.cpp", newConfigCpp);
+      return newConfigCpp;
     }
 
     // -------------------------------------------------------------
