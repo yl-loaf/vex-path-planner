@@ -421,6 +421,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       const allFiles = Object.entries(this.project.files);
 
       allFiles.forEach(([fileName, content]) => {
+        if (!content || typeof content !== "string") return;
         const lines = content.split("\n");
 
         lines.forEach((line, lineIdx) => {
@@ -1015,6 +1016,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       cppFiles.forEach(fileName => {
         const content = files[fileName];
         logs.push(`CXX ${fileName}`);
+        if (!content || typeof content !== "string") return;
 
         const lines = content.split("\n");
         let openBraces = 0;

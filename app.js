@@ -1269,24 +1269,90 @@
     return poses;
   }
 
+  function drawVectorFieldFallback(ctx, w, h) {
+    // 1. Dark anti-glare foam background
+    ctx.fillStyle = "#111827";
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Render 6x6 VEX Foam Tiles (24" x 24" each)
+    const tileSize = w / 6;
+    for (let row = 0; row < 6; row++) {
+      for (let col = 0; col < 6; col++) {
+        const x = col * tileSize;
+        const y = row * tileSize;
+        ctx.fillStyle = (row + col) % 2 === 0 ? "#1e293b" : "#18202f";
+        ctx.fillRect(x, y, tileSize, tileSize);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, tileSize, tileSize);
+      }
+    }
+
+    // 3. Alliance Zones & Goal Corners (Red: Left, Blue: Right)
+    ctx.fillStyle = "rgba(239, 68, 68, 0.18)";
+    ctx.fillRect(0, 0, tileSize * 2, tileSize * 2);
+    ctx.fillRect(0, h - tileSize * 2, tileSize * 2, tileSize * 2);
+
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(2, 2, tileSize * 2 - 4, tileSize * 2 - 4);
+    ctx.strokeRect(2, h - tileSize * 2 + 2, tileSize * 2 - 4, tileSize * 2 - 4);
+
+    ctx.fillStyle = "rgba(59, 130, 246, 0.18)";
+    ctx.fillRect(w - tileSize * 2, 0, tileSize * 2, tileSize * 2);
+    ctx.fillRect(w - tileSize * 2, h - tileSize * 2, tileSize * 2, tileSize * 2);
+
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(w - tileSize * 2 + 2, 2, tileSize * 2 - 4, tileSize * 2 - 4);
+    ctx.strokeRect(w - tileSize * 2 + 2, h - tileSize * 2 + 2, tileSize * 2 - 4, tileSize * 2 - 4);
+
+    // 4. White Autonomous & Alliance Tape Lines
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h);
+    ctx.stroke();
+
+    // 5. Center Ladder Goal
+    const cx = w / 2;
+    const cy = h / 2;
+    ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 2;
+    ctx.fillRect(cx - tileSize * 0.75, cy - tileSize * 0.75, tileSize * 1.5, tileSize * 1.5);
+    ctx.strokeRect(cx - tileSize * 0.75, cy - tileSize * 0.75, tileSize * 1.5, tileSize * 1.5);
+
+    ctx.beginPath();
+    ctx.moveTo(cx - 15, cy); ctx.lineTo(cx + 15, cy);
+    ctx.moveTo(cx, cy - 15); ctx.lineTo(cx, cy + 15);
+    ctx.stroke();
+
+    // 6. Perimeter Wall
+    ctx.strokeStyle = "#475569";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, w - 6, h - 6);
+  }
+
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!ctx || !canvas) return;
+    try {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (imgReady && fieldImg.naturalWidth) {
-      ctx.drawImage(fieldImg, 0, 0, canvas.width, canvas.height);
-    } else {
-      ctx.fillStyle = "#1a1f2a";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+      if (imgReady && fieldImg.naturalWidth) {
+        ctx.drawImage(fieldImg, 0, 0, canvas.width, canvas.height);
+      } else {
+        drawVectorFieldFallback(ctx, canvas.width, canvas.height);
+      }
 
-    ctx.strokeStyle = "rgba(255,255,255,0.05)";
-    ctx.lineWidth = 1;
-    for (let i = -72; i <= 72; i += 24) {
-      let p1 = fieldToCanvas(i, -72), p2 = fieldToCanvas(i, 72);
-      ctx.beginPath(); ctx.moveTo(p1.cx, p1.cy); ctx.lineTo(p2.cx, p2.cy); ctx.stroke();
-      p1 = fieldToCanvas(-72, i); p2 = fieldToCanvas(72, i);
-      ctx.beginPath(); ctx.moveTo(p1.cx, p1.cy); ctx.lineTo(p2.cx, p2.cy); ctx.stroke();
-    }
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      for (let i = -72; i <= 72; i += 24) {
+        let p1 = fieldToCanvas(i, -72), p2 = fieldToCanvas(i, 72);
+        ctx.beginPath(); ctx.moveTo(p1.cx, p1.cy); ctx.lineTo(p2.cx, p2.cy); ctx.stroke();
+        p1 = fieldToCanvas(-72, i); p2 = fieldToCanvas(72, i);
+        ctx.beginPath(); ctx.moveTo(p1.cx, p1.cy); ctx.lineTo(p2.cx, p2.cy); ctx.stroke();
+      }
 
     buildSimPath();
     const poses = [{ x: pose.x, y: pose.y, theta: pose.theta }];
@@ -1504,6 +1570,9 @@
         ctx.lineTo(cp.cx + Math.cos(sRad) * arrowLen * dir, cp.cy + Math.sin(sRad) * arrowLen * dir);
         ctx.stroke();
       }
+    }
+    } catch (err) {
+      console.warn("Error rendering simulation canvas:", err);
     }
   }
 
@@ -5860,6 +5929,25 @@ lemlib::ControllerSettings ${currentMode}_controller(
       elDevices.textContent = String(totalCount || 12);
     }
   }
+
+  function resizeCanvas() {
+    if (!canvas) return;
+    const wrap = canvas.parentElement || document.getElementById("canvasWrap");
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const hud = document.getElementById("simFloatingHud");
+    const hudHeight = hud ? hud.offsetHeight : 50;
+    const availW = Math.max(280, rect.width - 16);
+    const availH = Math.max(280, window.innerHeight - 160 - hudHeight);
+    const size = Math.min(availW, availH);
+    if (size > 0) {
+      canvas.style.width = size + "px";
+      canvas.style.height = size + "px";
+    }
+    draw();
+  }
+
+  window.addEventListener("resize", resizeCanvas);
 
   function showPlannerView() {
     const homeView = document.getElementById("homepageView");

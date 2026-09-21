@@ -503,7 +503,7 @@
   function runCompilation() {
     saveCurrentEditorState();
     if (!elBuildConsole) return;
-    elBuildConsole.textContent = "Compiling project workspace...\n";
+    elBuildConsole.textContent = "Compiling project workspace (pros make)...\n";
 
     // Switch tab to build
     const buildTabBtn = document.querySelector('.ide-out-tab[data-tab="build"]');
@@ -511,32 +511,33 @@
 
     setTimeout(() => {
       try {
-        const res = ProjectManager.compileProject();
-        elBuildConsole.textContent = res.logs;
+        const pm = window.ProjectManager;
+        if (!pm) throw new Error("ProjectManager service is unavailable");
+        const res = pm.compileProject();
+        elBuildConsole.textContent = res.logs || "Compilation complete.";
+
+        const errCount = (res.errors || []).length;
+        const warnCount = (res.warnings || []).length;
 
         // Update Diagnostics
-        if (elDiagCount) elDiagCount.textContent = res.errors.length + res.warnings.length;
+        if (elDiagCount) elDiagCount.textContent = errCount + warnCount;
         if (elDiagnosticsList) {
-          if (res.errors.length === 0 && res.warnings.length === 0) {
+          if (errCount === 0 && warnCount === 0) {
             elDiagnosticsList.innerHTML = `<div class="ide-diag-empty">✅ No syntax errors or warnings found across all project files.</div>`;
           } else {
             elDiagnosticsList.innerHTML = "";
-            res.errors.forEach(err => {
+            (res.errors || []).forEach(err => {
               const row = document.createElement("div");
               row.className = "ide-diag-item error";
               row.innerHTML = `<span class="ide-diag-badge">ERROR</span> <strong class="ide-diag-file">${err.file}:${err.line}</strong> - <span>${err.message}</span>`;
-              row.onclick = () => {
-                switchToFile(err.file);
-              };
+              row.onclick = () => switchToFile(err.file);
               elDiagnosticsList.appendChild(row);
             });
-            res.warnings.forEach(warn => {
+            (res.warnings || []).forEach(warn => {
               const row = document.createElement("div");
               row.className = "ide-diag-item warning";
               row.innerHTML = `<span class="ide-diag-badge">WARN</span> <strong class="ide-diag-file">${warn.file}:${warn.line}</strong> - <span>${warn.message}</span>`;
-              row.onclick = () => {
-                switchToFile(warn.file);
-              };
+              row.onclick = () => switchToFile(warn.file);
               elDiagnosticsList.appendChild(row);
             });
           }
@@ -549,13 +550,18 @@
           const memRamFill = document.getElementById("memRamFill");
           const memRamText = document.getElementById("memRamText");
 
-          if (memFlashFill) memFlashFill.style.width = `${Math.min(100, res.stats.flashPct)}%`;
-          if (memFlashText) memFlashText.textContent = `${(res.stats.flashBytes / 1024).toFixed(1)} KB / 32.0 MB (${res.stats.flashPct.toFixed(2)}%)`;
-          if (memRamFill) memRamFill.style.width = `${Math.min(100, res.stats.ramPct)}%`;
-          if (memRamText) memRamText.textContent = `${(res.stats.ramBytes / 1024).toFixed(1)} KB / 32.0 MB (${res.stats.ramPct.toFixed(2)}%)`;
+          const flashPct = res.stats.flashPct || 0;
+          const flashBytes = res.stats.flashBytes || 0;
+          const ramPct = res.stats.ramPct || 0;
+          const ramBytes = res.stats.ramBytes || 0;
+
+          if (memFlashFill) memFlashFill.style.width = `${Math.min(100, flashPct)}%`;
+          if (memFlashText) memFlashText.textContent = `${(flashBytes / 1024).toFixed(1)} KB / 32.0 MB (${flashPct.toFixed(2)}%)`;
+          if (memRamFill) memRamFill.style.width = `${Math.min(100, ramPct)}%`;
+          if (memRamText) memRamText.textContent = `${(ramBytes / 1024).toFixed(1)} KB / 32.0 MB (${ramPct.toFixed(2)}%)`;
         }
       } catch (err) {
-        elBuildConsole.textContent += `\n❌ Compilation error: ${err.message}\n`;
+        elBuildConsole.textContent += `\n❌ Compilation error: ${err.message || err}\n`;
       }
     }, 150);
   }
