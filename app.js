@@ -3545,18 +3545,24 @@
     const btnOut = document.getElementById("btnSignOut");
     const btnSwitch = document.getElementById("btnSwitchAccount");
     const userEl = document.getElementById("authUser");
-    if (!btnIn) return;
+
+    const homeBtnIn = document.getElementById("btnHomeGoogleSignIn");
+    const homeBtnOut = document.getElementById("btnHomeSignOut");
+    const homeUserEl = document.getElementById("homeAuthUser");
 
     const activeUser = cloudUser || previewUser;
     if (activeUser) {
-      btnIn.hidden = true;
+      if (btnIn) btnIn.hidden = true;
       if (btnOut) btnOut.hidden = false;
       if (btnSwitch) btnSwitch.hidden = false;
+      if (homeBtnIn) homeBtnIn.hidden = true;
+      if (homeBtnOut) homeBtnOut.hidden = false;
+
+      const name = activeUser.displayName || activeUser.email || "Signed in";
+      const email = activeUser.email || "";
+
       if (userEl) {
         userEl.hidden = false;
-        const name = activeUser.displayName || activeUser.email || "Signed in";
-        const email = activeUser.email || "";
-
         if (isPendingReconnect) {
           userEl.innerHTML = `
             <span class="auth-saved-tag" title="Saved account: ${escapeHtml(email)} · Click Reconnect to refresh session">👤 ${escapeHtml(name)}</span>
@@ -3575,21 +3581,38 @@
           `;
         }
       }
+
+      if (homeUserEl) {
+        homeUserEl.hidden = false;
+        homeUserEl.innerHTML = `<span class="auth-saved-tag">👤 ${escapeHtml(name)}</span>`;
+      }
     } else {
-      btnIn.hidden = false;
+      if (btnIn) btnIn.hidden = false;
+      if (homeBtnIn) homeBtnIn.hidden = false;
       const lastEmail = localStorage.getItem(AUTH_EMAIL_KEY);
       if (lastEmail && localStorage.getItem(AUTH_EXPLICIT_SIGNOUT_KEY) !== "true") {
-        btnIn.title = `Sign in as ${lastEmail} (saved session)`;
-        btnIn.textContent = `Sign in (${lastEmail.split("@")[0]})`;
+        if (btnIn) {
+          btnIn.title = `Sign in as ${lastEmail} (saved session)`;
+          btnIn.textContent = `Sign in (${lastEmail.split("@")[0]})`;
+        }
+        if (homeBtnIn) homeBtnIn.textContent = `Sign in (${lastEmail.split("@")[0]})`;
       } else {
-        btnIn.title = "Sign in with Google to sync paths across devices";
-        btnIn.textContent = "Sign in with Google";
+        if (btnIn) {
+          btnIn.title = "Sign in with Google to sync paths across devices";
+          btnIn.textContent = "Sign in with Google";
+        }
+        if (homeBtnIn) homeBtnIn.textContent = "Sign in with Google";
       }
       if (btnOut) btnOut.hidden = true;
       if (btnSwitch) btnSwitch.hidden = true;
+      if (homeBtnOut) homeBtnOut.hidden = true;
       if (userEl) {
         userEl.hidden = true;
         userEl.textContent = "";
+      }
+      if (homeUserEl) {
+        homeUserEl.hidden = true;
+        homeUserEl.textContent = "";
       }
       setCloudStatus("");
     }
@@ -3693,8 +3716,12 @@
     }
 
     const btnIn = document.getElementById("btnGoogleSignIn");
+    const homeBtnIn = document.getElementById("btnHomeGoogleSignIn");
     if (btnIn) {
       btnIn.onclick = () => triggerGoogleSignIn(false);
+    }
+    if (homeBtnIn) {
+      homeBtnIn.onclick = () => triggerGoogleSignIn(false);
     }
 
     const btnSwitch = document.getElementById("btnSwitchAccount");
@@ -3703,19 +3730,20 @@
     }
 
     const btnOut = document.getElementById("btnSignOut");
-    if (btnOut) {
-      btnOut.onclick = async () => {
-        try {
-          clearSavedGoogleUser();
-          cloudUser = null;
-          await firebase.auth().signOut();
-          updateAuthUI();
-          setCloudStatus("");
-        } catch (e) {
-          console.error(e);
-        }
-      };
-    }
+    const homeBtnOut = document.getElementById("btnHomeSignOut");
+    const handleSignOut = async () => {
+      try {
+        clearSavedGoogleUser();
+        cloudUser = null;
+        await firebase.auth().signOut();
+        updateAuthUI();
+        setCloudStatus("");
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (btnOut) btnOut.onclick = handleSignOut;
+    if (homeBtnOut) homeBtnOut.onclick = handleSignOut;
 
     firebase.auth().onAuthStateChanged(async (user) => {
       cloudUser = user;
@@ -5139,26 +5167,139 @@ lemlib::ControllerSettings ${currentMode}_controller(
   // =========================================================================
   // PROS Project Workspace & Live Debugger Integration
   // =========================================================================
+  let _autoMergeSessionChoice = null;
+
   function updateProjectBanner() {
     if (!window.ProjectManager) return;
     const proj = window.ProjectManager.project;
     const bannerName = document.getElementById("bannerProjectName");
     const bannerVarCount = document.getElementById("bannerVariableCount");
+    const headerBadge = document.getElementById("headerProjectBadge");
     if (bannerName && proj) {
       bannerName.textContent = proj.name || "Override_LemLib_Bot";
+    }
+    if (headerBadge && proj) {
+      headerBadge.textContent = `📁 ${proj.name || "Override_LemLib_Bot"}`;
     }
     if (bannerVarCount && window.ProjectManager.symbols) {
       const syms = window.ProjectManager.symbols;
       const totalCount = (syms.motors?.length || 0) + (syms.pistons?.length || 0) + (syms.sensors?.length || 0) + (syms.functions?.length || 0);
       bannerVarCount.textContent = `${totalCount} device${totalCount === 1 ? '' : 's'} indexed`;
     }
+    updateHomepageStats();
   }
 
-  function syncPlannerIntoProjectManager() {
+  function promptMergeAutonCpp(options = {}) {
+    return new Promise((resolve) => {
+      if (!window.ProjectManager) {
+        resolve(false);
+        return;
+      }
+
+      const indent = getIndentString();
+      const hasDiff = window.ProjectManager.hasCodeDifference(paths, indent);
+      if (!hasDiff) {
+        // No difference, proceed silently
+        window.ProjectManager.updateAutonCppFromPlanner(paths, indent);
+        updateProjectBanner();
+        resolve(true);
+        return;
+      }
+
+      // If user chose to remember session choice
+      if (_autoMergeSessionChoice) {
+        window.ProjectManager.mergePlannerIntoAutonCpp(paths, _autoMergeSessionChoice, indent);
+        updateProjectBanner();
+        resolve(true);
+        return;
+      }
+
+      // Show confirmation dialog before merging code
+      const modal = document.getElementById("mergeDiffModal");
+      const btnClose = document.getElementById("btnMergeModalClose");
+      const btnKeep = document.getElementById("btnMergeKeep");
+      const btnAppend = document.getElementById("btnMergeAppend");
+      const btnOverwrite = document.getElementById("btnMergeOverwrite");
+      const newPreview = document.getElementById("mergeNewCodePreview");
+      const existingPreview = document.getElementById("mergeExistingCodePreview");
+      const newBadge = document.getElementById("mergeNewRoutinesBadge");
+      const chkRemember = document.getElementById("chkMergeRememberSession");
+
+      if (!modal) {
+        window.ProjectManager.updateAutonCppFromPlanner(paths, indent);
+        updateProjectBanner();
+        resolve(true);
+        return;
+      }
+
+      // Populate preview contents
+      const generatedCode = window.ProjectManager.generateAutonCppCode(paths, indent);
+      const existingCode = window.ProjectManager.getFile("src/autons.cpp") || "// Empty src/autons.cpp";
+
+      if (newPreview) newPreview.textContent = generatedCode;
+      if (existingPreview) existingPreview.textContent = existingCode;
+      if (newBadge) newBadge.textContent = `${paths.length} Routine${paths.length === 1 ? '' : 's'}`;
+
+      modal.hidden = false;
+      modal.classList.add("open");
+
+      function cleanup() {
+        modal.hidden = true;
+        modal.classList.remove("open");
+        if (btnClose) btnClose.onclick = null;
+        if (btnKeep) btnKeep.onclick = null;
+        if (btnAppend) btnAppend.onclick = null;
+        if (btnOverwrite) btnOverwrite.onclick = null;
+      }
+
+      if (btnClose) {
+        btnClose.onclick = () => {
+          cleanup();
+          resolve(false);
+        };
+      }
+
+      if (btnKeep) {
+        btnKeep.onclick = () => {
+          cleanup();
+          showToast("Kept existing src/autons.cpp (No changes made)");
+          resolve(false);
+        };
+      }
+
+      if (btnAppend) {
+        btnAppend.onclick = () => {
+          if (chkRemember && chkRemember.checked) _autoMergeSessionChoice = "append";
+          window.ProjectManager.mergePlannerIntoAutonCpp(paths, "append", indent);
+          updateProjectBanner();
+          cleanup();
+          showToast("➕ Appended visual routine into src/autons.cpp");
+          resolve(true);
+        };
+      }
+
+      if (btnOverwrite) {
+        btnOverwrite.onclick = () => {
+          if (chkRemember && chkRemember.checked) _autoMergeSessionChoice = "replace";
+          window.ProjectManager.mergePlannerIntoAutonCpp(paths, "replace", indent);
+          updateProjectBanner();
+          cleanup();
+          showToast("✅ Merged & overwritten src/autons.cpp from visual blocks");
+          resolve(true);
+        };
+      }
+    });
+  }
+
+  function syncPlannerIntoProjectManager(options = { ask: false }) {
     if (!window.ProjectManager) return;
     try {
-      window.ProjectManager.updateAutonCppFromPlanner(paths, getIndentString());
-      updateProjectBanner();
+      if (options.ask) {
+        promptMergeAutonCpp();
+      } else {
+        window.ProjectManager.updateAutonCppFromPlanner(paths, getIndentString());
+        updateProjectBanner();
+      }
     } catch (e) {
       console.warn("Failed to sync planner into ProjectManager:", e);
     }
@@ -5214,6 +5355,213 @@ lemlib::ControllerSettings ${currentMode}_controller(
       generateCode();
       showToast(`📁 Loaded ${newPaths.length} autonomous routine${newPaths.length === 1 ? '' : 's'} from src/autons.cpp`);
     }
+  }
+
+  // =========================================================================
+  // HOMEPAGE HUB & CLEAN NAVIGATION SYSTEM
+  // =========================================================================
+  function updateHomepageStats() {
+    const elProj = document.getElementById("homeStatProjects");
+    const elAutons = document.getElementById("homeStatAutons");
+    const elDevices = document.getElementById("homeStatDevices");
+
+    if (elProj && window.ProjectManager?.project) {
+      elProj.textContent = "1";
+    }
+    if (elAutons) {
+      elAutons.textContent = String(paths.length || 1);
+    }
+    if (elDevices && window.ProjectManager?.symbols) {
+      const syms = window.ProjectManager.symbols;
+      const totalCount = (syms.motors?.length || 0) + (syms.pistons?.length || 0) + (syms.sensors?.length || 0) + (syms.functions?.length || 0);
+      elDevices.textContent = String(totalCount || 12);
+    }
+  }
+
+  function showPlannerView() {
+    const homeView = document.getElementById("homepageView");
+    const appView = document.getElementById("app");
+    if (homeView) homeView.style.display = "none";
+    if (appView) {
+      appView.style.display = "flex";
+      // Trigger canvas resize and redraw
+      setTimeout(() => {
+        if (typeof resizeCanvas === "function") resizeCanvas();
+        draw();
+      }, 50);
+    }
+  }
+
+  function showHomepageView() {
+    const homeView = document.getElementById("homepageView");
+    const appView = document.getElementById("app");
+    if (appView) appView.style.display = "none";
+    if (homeView) homeView.style.display = "flex";
+    updateHomepageStats();
+  }
+
+  function wireHomepageHub() {
+    const btnLaunchDirect = document.getElementById("btnLaunchPlannerDirect");
+    const btnHeroPlanner = document.getElementById("btnHeroOpenPlanner");
+    const btnCardPlanner = document.getElementById("btnCardLaunchPlanner");
+    const btnReturnHome = document.getElementById("btnReturnHomeHub");
+
+    const btnHeroBrain = document.getElementById("btnHeroConnectBrain");
+    const btnCardBrain = document.getElementById("btnCardOpenBrain");
+    const btnCardPid = document.getElementById("btnCardOpenPid");
+    const btnCardVideo = document.getElementById("btnCardExportVideo");
+
+    // Launch buttons
+    if (btnLaunchDirect) btnLaunchDirect.onclick = showPlannerView;
+    if (btnHeroPlanner) btnHeroPlanner.onclick = showPlannerView;
+    if (btnCardPlanner) btnCardPlanner.onclick = showPlannerView;
+    if (btnReturnHome) btnReturnHome.onclick = showHomepageView;
+
+    // Modal launchers from Home
+    if (btnHeroBrain) {
+      btnHeroBrain.onclick = () => {
+        const modal = document.getElementById("brainModal");
+        if (modal) {
+          modal.hidden = false;
+          modal.classList.add("open");
+        }
+      };
+    }
+    if (btnCardBrain) {
+      btnCardBrain.onclick = () => {
+        const modal = document.getElementById("brainModal");
+        if (modal) {
+          modal.hidden = false;
+          modal.classList.add("open");
+        }
+      };
+    }
+    if (btnCardPid) {
+      btnCardPid.onclick = () => {
+        showPlannerView();
+        const modal = document.getElementById("pidModal");
+        if (modal) {
+          modal.hidden = false;
+          modal.classList.add("open");
+        }
+      };
+    }
+    if (btnCardVideo) {
+      btnCardVideo.onclick = () => {
+        showPlannerView();
+        const modal = document.getElementById("videoExportModal");
+        if (modal) {
+          modal.hidden = false;
+          modal.classList.add("open");
+        }
+      };
+    }
+
+    // Quick Competition Templates
+    const btnTplOverride = document.getElementById("btnTplOverride");
+    const btnTplSkills = document.getElementById("btnTplSkills");
+    const btnTplSoloAwp = document.getElementById("btnTplSoloAwp");
+
+    if (btnTplOverride) {
+      btnTplOverride.onclick = () => {
+        paths = [
+          {
+            id: "path_override_match",
+            name: "Override Match Routine",
+            pose: { x: -60, y: -60, theta: 0 },
+            actions: [
+              { id: "act_1", type: "moveToPoint", x: -24, y: -24, timeout: 2000, maxSpeed: 127, minSpeed: 0, earlyExitRange: 0, forwards: true, label: "Rush Center Goal", async: false },
+              { id: "act_2", type: "clampPiston", state: "true", label: "Clamp Mobile Goal", delay: 100 },
+              { id: "act_3", type: "intakeMotor", speed: 127, label: "Intake 3 Rings", delay: 300 },
+              { id: "act_4", type: "moveToPose", x: -50, y: -50, theta: 225, timeout: 2500, maxSpeed: 100, minSpeed: 0, earlyExitRange: 0, forwards: false, label: "Score in Corner", async: false }
+            ]
+          }
+        ];
+        activePathId = paths[0].id;
+        bindActive();
+        renderPathSelect();
+        syncStartInputs();
+        renderFlow();
+        generateCode();
+        showPlannerView();
+        promptMergeAutonCpp();
+        showToast("⚡ Loaded Override Match routine into planner!");
+      };
+    }
+
+    if (btnTplSkills) {
+      btnTplSkills.onclick = () => {
+        paths = [
+          {
+            id: "path_skills_60s",
+            name: "60s Full Field Skills",
+            pose: { x: -60, y: 0, theta: 90 },
+            actions: [
+              { id: "act_sk1", type: "moveToPoint", x: -24, y: 0, timeout: 1800, maxSpeed: 127, minSpeed: 0, earlyExitRange: 0, forwards: true, label: "Clear Alliance Goal", async: false },
+              { id: "act_sk2", type: "clampPiston", state: "true", label: "Clamp Goal", delay: 100 },
+              { id: "act_sk3", type: "moveToPose", x: 0, y: 48, theta: 45, timeout: 3000, maxSpeed: 110, minSpeed: 0, earlyExitRange: 0, forwards: true, label: "Quadrant 1 Clearing", async: false },
+              { id: "act_sk4", type: "moveToPose", x: 48, y: 0, theta: 135, timeout: 3000, maxSpeed: 110, minSpeed: 0, earlyExitRange: 0, forwards: true, label: "Quadrant 2 Rings", async: false },
+              { id: "act_sk5", type: "moveToPose", x: 0, y: -48, theta: 225, timeout: 3000, maxSpeed: 110, minSpeed: 0, earlyExitRange: 0, forwards: true, label: "Quadrant 3 Scoring", async: false },
+              { id: "act_sk6", type: "moveToPose", x: -48, y: -48, theta: 315, timeout: 2500, maxSpeed: 100, minSpeed: 0, earlyExitRange: 0, forwards: true, label: "Corner Parking", async: false }
+            ]
+          }
+        ];
+        activePathId = paths[0].id;
+        bindActive();
+        renderPathSelect();
+        syncStartInputs();
+        renderFlow();
+        generateCode();
+        showPlannerView();
+        promptMergeAutonCpp();
+        showToast("⚡ Loaded 60-Second Full Field Skills routine into planner!");
+      };
+    }
+
+    if (btnTplSoloAwp) {
+      btnTplSoloAwp.onclick = () => {
+        paths = [
+          {
+            id: "path_solo_awp",
+            name: "Solo Autonomous Win Point",
+            pose: { x: -60, y: 24, theta: 90 },
+            actions: [
+              { id: "act_awp1", type: "moveToPoint", x: -36, y: 24, timeout: 1500, maxSpeed: 127, minSpeed: 0, earlyExitRange: 0, forwards: true, label: "Cross Line", async: false },
+              { id: "act_awp2", type: "intakeMotor", speed: 127, label: "Score Preload", delay: 400 },
+              { id: "act_awp3", type: "turnToHeading", theta: 180, timeout: 1200, maxSpeed: 110, minSpeed: 0, earlyExitRange: 0, label: "Turn To Ladder", async: false },
+              { id: "act_awp4", type: "moveToPose", x: 0, y: 0, theta: 180, timeout: 2200, maxSpeed: 100, minSpeed: 0, earlyExitRange: 0, forwards: true, label: "Touch Ladder", async: false }
+            ]
+          }
+        ];
+        activePathId = paths[0].id;
+        bindActive();
+        renderPathSelect();
+        syncStartInputs();
+        renderFlow();
+        generateCode();
+        showPlannerView();
+        promptMergeAutonCpp();
+        showToast("⚡ Loaded Solo Autonomous Win Point routine into planner!");
+      };
+    }
+
+    // Tools Dropdown wiring
+    const btnToolsDropdown = document.getElementById("btnToolsDropdown");
+    const toolsDropdownMenu = document.getElementById("toolsDropdownMenu");
+    if (btnToolsDropdown && toolsDropdownMenu) {
+      btnToolsDropdown.onclick = (e) => {
+        e.stopPropagation();
+        toolsDropdownMenu.hidden = !toolsDropdownMenu.hidden;
+      };
+
+      document.addEventListener("click", (e) => {
+        if (!toolsDropdownMenu.contains(e.target) && e.target !== btnToolsDropdown) {
+          toolsDropdownMenu.hidden = true;
+        }
+      });
+    }
+
+    updateHomepageStats();
   }
 
   function wireProjectWorkspace() {
@@ -5776,6 +6124,17 @@ lemlib::ControllerSettings ${currentMode}_controller(
         if (isConn) bannerBatt.textContent = `⚡ ${status.batteryPct}%`;
       }
 
+      // Homepage Brain pill
+      const homeDot = document.getElementById("homeBrainDot");
+      const homeText = document.getElementById("homeBrainText");
+      const homeBatt = document.getElementById("homeBrainBatt");
+      if (homeDot) homeDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
+      if (homeText) homeText.textContent = isConn ? `Brain: ${status.name}` : "Brain: Disconnected";
+      if (homeBatt) {
+        homeBatt.hidden = !isConn;
+        if (isConn) homeBatt.textContent = `⚡ ${status.batteryPct}%`;
+      }
+
       // Modal elements
       if (modalBrainDot) modalBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
       if (modalBrainName) modalBrainName.textContent = isConn ? `Connected: ${status.name}` : "Brain: Disconnected";
@@ -5820,7 +6179,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
     updateStatusUI(window.V5BrainSerial.status);
   }
 
-  // Initialize Project Manager, Debug Panels, and Brain Controller
+  // Initialize Homepage Hub, Project Manager, Debug Panels, and Brain Controller
+  wireHomepageHub();
   if (window.ProjectManager) {
     wireProjectWorkspace();
     wireLoadProjectModal();

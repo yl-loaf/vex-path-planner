@@ -561,9 +561,9 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       return routines;
     }
 
-    // Synchronize visual planner paths into src/autons.cpp
-    updateAutonCppFromPlanner(plannerPaths, indent = "    ") {
-      if (!plannerPaths || plannerPaths.length === 0) return;
+    // Generate C++ code string from visual planner paths
+    generateAutonCppCode(plannerPaths, indent = "    ") {
+      if (!plannerPaths || plannerPaths.length === 0) return "";
       let header = `// =================================================================\n` +
                    `// autons.cpp - Autonomous Routines for VEX V5 LemLib\n` +
                    `// Generated & Synchronized with Visual Flowchart\n` +
@@ -615,7 +615,79 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         bodies += `}\n\n`;
       });
 
-      this.setFile("src/autons.cpp", header + bodies);
+      return header + bodies;
+    }
+
+    // Check if the visual blocks code differs from existing src/autons.cpp
+    hasCodeDifference(plannerPaths, indent = "    ") {
+      const currentCode = this.getFile("src/autons.cpp") || "";
+      const generatedCode = this.generateAutonCppCode(plannerPaths, indent);
+      
+      const normalize = (s) => s.replace(/\s+/g, " ").trim();
+      return normalize(currentCode) !== normalize(generatedCode);
+    }
+
+    // Smart Merge of visual planner paths into src/autons.cpp
+    mergePlannerIntoAutonCpp(plannerPaths, mode = "replace", indent = "    ") {
+      if (mode === "keep") return this.getFile("src/autons.cpp");
+
+      const generated = this.generateAutonCppCode(plannerPaths, indent);
+      if (mode === "replace") {
+        this.setFile("src/autons.cpp", generated);
+        return generated;
+      }
+
+      if (mode === "append") {
+        const existing = this.getFile("src/autons.cpp") || "";
+        const existingRoutines = this.getAutonRoutines();
+        const existingNames = new Set(existingRoutines.map(r => r.name.toLowerCase()));
+
+        let appendBodies = "";
+        plannerPaths.forEach((p, idx) => {
+          const fnName = p.name ? p.name.toLowerCase().replace(/[^a-z0-9_]/g, "_") : `auton_${idx + 1}`;
+          if (!existingNames.has(fnName)) {
+            appendBodies += `\n// -----------------------------------------------------------------\n`;
+            appendBodies += `// Appended Routine: ${p.name || fnName}\n`;
+            appendBodies += `// -----------------------------------------------------------------\n`;
+            appendBodies += `void ${fnName}() {\n`;
+            if (p.pose) {
+              appendBodies += `${indent}chassis.setPose(${Number(p.pose.x || 0).toFixed(1)}, ${Number(p.pose.y || 0).toFixed(1)}, ${Number(p.pose.theta || 0).toFixed(1)});\n\n`;
+            }
+            if (p.actions && p.actions.length) {
+              p.actions.forEach((a) => {
+                if (a.type === "custom") {
+                  const lines = (a.customCode || "").split("\n");
+                  lines.forEach((l) => {
+                    if (l.trim()) appendBodies += `${indent}${l.trim()}\n`;
+                  });
+                } else if (a.type === "wait") {
+                  appendBodies += `${indent}pros::delay(${a.timeout || 500});\n`;
+                } else if (a.type === "moveToPoint") {
+                  appendBodies += `${indent}chassis.moveToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${a.timeout || 2000}${a.async ? ", true" : ""});\n`;
+                } else if (a.type === "moveToPose") {
+                  appendBodies += `${indent}chassis.moveToPose(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${Number(a.theta).toFixed(1)}, ${a.timeout || 2500}${a.async ? ", true" : ""});\n`;
+                } else if (a.type === "turnToHeading") {
+                  appendBodies += `${indent}chassis.turnToHeading(${Number(a.theta).toFixed(1)}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
+                } else if (a.type === "turnToPoint") {
+                  appendBodies += `${indent}chassis.turnToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
+                }
+              });
+            }
+            appendBodies += `}\n`;
+          }
+        });
+
+        const merged = existing + (appendBodies ? "\n" + appendBodies : "");
+        this.setFile("src/autons.cpp", merged);
+        return merged;
+      }
+
+      return generated;
+    }
+
+    // Synchronize visual planner paths into src/autons.cpp
+    updateAutonCppFromPlanner(plannerPaths, indent = "    ") {
+      return this.mergePlannerIntoAutonCpp(plannerPaths, "replace", indent);
     }
 
     // -------------------------------------------------------------

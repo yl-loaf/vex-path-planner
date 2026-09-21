@@ -10,42 +10,296 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260921.k3" />
+  <link rel="stylesheet" href="style.css?v=20260921.k4" />
 </head>
 <body>
-  <div id="app">
-    <header>
-      <div class="header-left">
-        <h1>VEX V5 LemLib Path Planner</h1>
-        <p class="subtitle">Override 2026-27 · inches · center (0,0) · heading 0° = +Y, CW+</p>
+  <!-- =================================================================
+       VEX V5 LemLib Suite - HOMEPAGE HUB
+       ================================================================= -->
+  <div id="homepageView" class="homepage-container">
+    <header class="home-top-nav">
+      <div class="home-nav-brand">
+        <div class="home-logo-icon">🤖</div>
+        <div>
+          <h1 class="home-brand-title">VEX V5 LemLib Suite</h1>
+          <p class="home-brand-subtitle">Override 2026-27 · Autonomous Path Planning &amp; PROS C++ IDE</p>
+        </div>
       </div>
+      <div class="home-nav-actions">
+        <div id="homeAuthArea" class="auth-area">
+          <button id="btnHomeGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
+          <span id="homeAuthUser" class="auth-user" hidden></span>
+          <button id="btnHomeSignOut" type="button" hidden title="Sign out">Sign out</button>
+        </div>
+        <div id="homeBrainPill" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry">
+          <span class="brain-status-dot disconnected" id="homeBrainDot"></span>
+          <span class="brain-status-text" id="homeBrainText">Brain: Disconnected</span>
+          <span class="brain-battery-pill" id="homeBrainBatt" hidden>⚡ 94%</span>
+        </div>
+        <button type="button" id="btnLaunchPlannerDirect" class="btn-home-primary-launch">
+          🚀 Open Visual Planner
+        </button>
+      </div>
+    </header>
+
+    <main class="home-main-content">
+      <!-- Hero Banner -->
+      <section class="home-hero-card">
+        <div class="home-hero-text">
+          <div class="home-hero-badge">VEX ROBOTICS COMPETITION · OVERRIDE SEASON</div>
+          <h2 class="home-hero-headline">Autonomous Robotics Studio</h2>
+          <p class="home-hero-desc">
+            Complete high-performance engineering suite for VEX V5 teams using LemLib. Design precise 2D odometry trajectories, write C++ code with cross-script variable indexing, test motion profiles, and flash directly to your V5 Brain.
+          </p>
+          <div class="home-hero-actions">
+            <button type="button" id="btnHeroOpenPlanner" class="btn-hero-main">
+              🗺️ Launch Visual Path Planner
+            </button>
+            <a href="ide.html" class="btn-hero-secondary">
+              💻 Open PROS C++ IDE
+            </a>
+            <button type="button" id="btnHeroConnectBrain" class="btn-hero-tertiary">
+              🔌 Connect V5 Brain
+            </button>
+          </div>
+        </div>
+        <div class="home-hero-stats-panel">
+          <div class="home-stat-box">
+            <span class="home-stat-num" id="homeStatProjects">1</span>
+            <span class="home-stat-label">Active Project</span>
+          </div>
+          <div class="home-stat-box">
+            <span class="home-stat-num" id="homeStatAutons">4</span>
+            <span class="home-stat-label">Auton Routines</span>
+          </div>
+          <div class="home-stat-box">
+            <span class="home-stat-num" id="homeStatDevices">12</span>
+            <span class="home-stat-label">Indexed Devices</span>
+          </div>
+          <div class="home-stat-box">
+            <span class="home-stat-num" style="color:#22c55e;">LemLib 0.5.4</span>
+            <span class="home-stat-label">PROS Kernel 4.1</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Core Modules Bento Grid -->
+      <section class="home-modules-section">
+        <div class="home-section-header">
+          <h3>🛠️ Core Engineering Modules</h3>
+          <p>Everything you need from initial waypoint planning to competition match execution</p>
+        </div>
+        <div class="home-grid">
+          <!-- Card 1: Visual Path Planner -->
+          <div class="home-card" id="cardModulePlanner">
+            <div class="home-card-icon" style="background:rgba(56,189,248,0.15);color:#38bdf8;">🗺️</div>
+            <div class="home-card-body">
+              <h4>Visual Flowchart &amp; Path Planner</h4>
+              <p>Design multi-action autonomous routines with interactive waypoints, booleans, and 2D simulation.</p>
+              <div class="home-card-tags">
+                <span>Field Trajectories</span>
+                <span>Pose Coordinates</span>
+                <span>Subsystem Actions</span>
+              </div>
+            </div>
+            <button type="button" class="home-card-btn" id="btnCardLaunchPlanner">Launch Planner →</button>
+          </div>
+
+          <!-- Card 2: PROS C++ IDE -->
+          <div class="home-card" id="cardModuleIde">
+            <div class="home-card-icon" style="background:rgba(16,185,129,0.15);color:#10b981;">💻</div>
+            <div class="home-card-body">
+              <h4>PROS C++ Multi-File Coding Studio</h4>
+              <p>Dedicated coding IDE with cross-file variable indexing, syntax diagnostics, and ARM Cortex compilation.</p>
+              <div class="home-card-tags">
+                <span>src/autons.cpp</span>
+                <span>pros make</span>
+                <span>Navigation Guard</span>
+              </div>
+            </div>
+            <a href="ide.html" class="home-card-btn">Open C++ IDE →</a>
+          </div>
+
+          <!-- Card 3: V5 Brain Hardware Manager -->
+          <div class="home-card" id="cardModuleBrain">
+            <div class="home-card-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b;">🔌</div>
+            <div class="home-card-body">
+              <h4>VEX V5 Brain Suite &amp; Flasher</h4>
+              <p>Direct Web Serial USB CDC communication, 21-port device diagnostics, and 8-slot program flasher.</p>
+              <div class="home-card-tags">
+                <span>Live Battery</span>
+                <span>Motor Temps</span>
+                <span>CDC 115200</span>
+              </div>
+            </div>
+            <button type="button" class="home-card-btn" id="btnCardOpenBrain">Inspect Hardware →</button>
+          </div>
+
+          <!-- Card 4: C++ Code Translator -->
+          <div class="home-card" id="cardModuleTranslator">
+            <div class="home-card-icon" style="background:rgba(168,85,247,0.15);color:#c084fc;">📥</div>
+            <div class="home-card-body">
+              <h4>C++ to Flowchart Translator</h4>
+              <p>Paste raw LemLib C++ autonomous code to instantly generate interactive visual blocks and trajectory paths.</p>
+              <div class="home-card-tags">
+                <span>AST Parser</span>
+                <span>moveToPose</span>
+                <span>waitUntil</span>
+              </div>
+            </div>
+            <a href="translator.html" class="home-card-btn">Open Translator →</a>
+          </div>
+
+          <!-- Card 5: PID Motion Tuner -->
+          <div class="home-card" id="cardModulePid">
+            <div class="home-card-icon" style="background:rgba(236,72,153,0.15);color:#f472b6;">🎛️</div>
+            <div class="home-card-body">
+              <h4>PID Velocity &amp; Heading Tuner</h4>
+              <p>Analyze step-response curves, settle times, overshoot percentages, and tune kP, kI, kD gains in real time.</p>
+              <div class="home-card-tags">
+                <span>Lateral PID</span>
+                <span>Angular PID</span>
+                <span>Step Response</span>
+              </div>
+            </div>
+            <button type="button" class="home-card-btn" id="btnCardOpenPid">Open PID Tuner →</button>
+          </div>
+
+          <!-- Card 6: Video Exporter & Simulator -->
+          <div class="home-card" id="cardModuleVideo">
+            <div class="home-card-icon" style="background:rgba(2,132,199,0.15);color:#38bdf8;">🎥</div>
+            <div class="home-card-body">
+              <h4>Match Simulator &amp; Video Exporter</h4>
+              <p>Simulate full 15s autonomous routines or 60s skills runs and export 60fps MP4 match videos for scouting.</p>
+              <div class="home-card-tags">
+                <span>60 FPS MP4</span>
+                <span>Time Clearance</span>
+                <span>Scouting Logs</span>
+              </div>
+            </div>
+            <button type="button" class="home-card-btn" id="btnCardExportVideo">Simulate &amp; Record →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Competition Starter Templates -->
+      <section class="home-templates-section">
+        <div class="home-section-header">
+          <h3>⚡ Quick-Start Competition Templates</h3>
+          <p>Pre-configured LemLib autonomous routines ready for the Override 2026-27 field</p>
+        </div>
+        <div class="home-template-grid">
+          <div class="template-card" data-template="highstakes">
+            <div class="template-badge">OVERRIDE 2026-27</div>
+            <h4>Autonomous Match Routine Suite</h4>
+            <p>Rush center goal, clamp alliance mobile goal, intake 3 rings, and score in the corner zone.</p>
+            <div class="template-meta">
+              <span>⏱️ 14.2s runtime</span>
+              <span>📍 4 actions</span>
+            </div>
+            <button type="button" class="btn-template-load" id="btnTplOverride">Load Routine in Planner</button>
+          </div>
+
+          <div class="template-card" data-template="skills">
+            <div class="template-badge skills">ROBOT SKILLS</div>
+            <h4>60-Second Full Field Skills</h4>
+            <p>Comprehensive routing through all 4 field quadrants, mobile goal clearing, and hang sequence.</p>
+            <div class="template-meta">
+              <span>⏱️ 58.4s runtime</span>
+              <span>📍 12 actions</span>
+            </div>
+            <button type="button" class="btn-template-load" id="btnTplSkills">Load Skills Template</button>
+          </div>
+
+          <div class="template-card" data-template="solo_awp">
+            <div class="template-badge awp">SOLO AWP</div>
+            <h4>Autonomous Win Point (Solo AWP)</h4>
+            <p>Guaranteed win-point routine clearing alliance line, scoring preload ring, and touching ladder.</p>
+            <div class="template-meta">
+              <span>⏱️ 13.8s runtime</span>
+              <span>📍 5 actions</span>
+            </div>
+            <button type="button" class="btn-template-load" id="btnTplSoloAwp">Load AWP Template</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- =================================================================
+       MAIN VISUAL PATH PLANNER APP INTERFACE
+       ================================================================= -->
+  <div id="app" style="display:none;">
+    <header class="neat-planner-header">
+      <!-- Left: Home Button & App Title -->
+      <div class="header-left">
+        <button type="button" id="btnReturnHomeHub" class="btn-nav-home" title="Return to Homepage Hub">
+          🏠 Home Hub
+        </button>
+        <div class="header-titles">
+          <h1>VEX V5 LemLib Planner</h1>
+          <span class="header-project-pill" id="headerProjectBadge">📁 Override_LemLib_Bot</span>
+        </div>
+      </div>
+
+      <!-- Center: Simulation Controls -->
+      <div class="header-center-sim">
+        <div class="sim-control-pill">
+          <button id="btnSim" class="btn-sim-play" title="Play Autonomous Simulation">▶ Simulate</button>
+          <button id="btnStop" class="btn-sim-stop" title="Stop Simulation">⏹</button>
+          <label class="speed-label" title="Simulation Speed">
+            <input type="range" id="simSpeed" min="0.25" max="3" step="0.25" value="1" />
+            <span id="speedLabel">1×</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Right: Grouped Action Menus -->
       <div class="header-actions">
+        <!-- Project Workspace Menu -->
+        <button id="btnLoadProject" type="button" class="btn-nav-compact" title="Open Project Workspace Manager">📁 Project</button>
+        
+        <!-- Hardware Brain Link -->
+        <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view detailed VEX V5 Brain telemetry &amp; upload manager">
+          <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
+          <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
+          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
+        </div>
+        <button id="btnConnectBrain" type="button" class="btn-nav-compact" title="Connect to VEX V5 Brain via USB Web Serial CDC or simulated link">🔌 Connect</button>
+
+        <!-- C++ IDE Direct Link -->
+        <a id="btnOpenIde" href="ide.html" class="btn-nav-ide" style="text-decoration:none;" title="Open full multi-file PROS C++ Coding IDE">💻 C++ IDE</a>
+
+        <!-- Debugger Toggle -->
+        <button id="btnToggleDebug" type="button" class="btn-nav-debug" title="Toggle Cross-Script Variable Inspector, Compiler Diagnostics &amp; Live Debugger">🐞 Debug</button>
+
+        <!-- Tools Dropdown Menu -->
+        <div class="tools-dropdown-wrap">
+          <button type="button" id="btnToolsDropdown" class="btn-nav-tools" title="Additional Engineering Tools">
+            ⚙️ Tools ▾
+          </button>
+          <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden>
+            <a href="translator.html" class="tools-menu-item">📥 C++ Code Translator</a>
+            <button type="button" id="btnPidTuner" class="tools-menu-item">🎛️ PID Gain Tuner</button>
+            <button type="button" id="btnExportVideo" class="tools-menu-item">🎥 Export .mp4 Video</button>
+            <div class="tools-menu-divider"></div>
+            <button type="button" id="btnImport" class="tools-menu-item">📂 Import .vpath</button>
+            <button type="button" id="btnExport" class="tools-menu-item">💾 Export .vpath</button>
+            <button type="button" id="btnClear" class="tools-menu-item danger-item">🗑️ Clear Current Routine</button>
+            <div class="tools-menu-divider"></div>
+            <button type="button" id="btnHelp" class="tools-menu-item">❓ Help &amp; Guides</button>
+          </div>
+        </div>
+
+        <!-- Google Auth & Cloud Area -->
         <div id="authArea" class="auth-area">
-          <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google (saved across sessions)">Sign in with Google</button>
+          <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google (saved across sessions)">Sign in</button>
           <span id="authUser" class="auth-user" hidden></span>
           <button id="btnSwitchAccount" type="button" class="switch-account-btn" hidden title="Switch Google account">Switch</button>
           <button id="btnSignOut" type="button" hidden title="Sign out of Google account">Sign out</button>
           <span id="cloudStatus" class="cloud-status" title="Cloud sync status"></span>
-          <a id="btnNewTab" href="#" target="_blank" class="new-tab-link" title="Open in new window (unrestricted popups & Google login)" style="display:none;">↗ New tab</a>
+          <a id="btnNewTab" href="#" target="_blank" class="new-tab-link" title="Open in new window" style="display:none;">↗</a>
         </div>
-        <button id="btnConnectBrain" type="button" class="btn-brain-nav" title="Connect to VEX V5 Brain via USB Web Serial CDC or simulated link">🔌 Connect Brain</button>
-        <button id="btnLoadProject" type="button" class="btn-project-nav" title="Load complete PROS LemLib project workspace (only autons.cpp will be visually edited)">📁 Load Project</button>
-        <a id="btnOpenIde" href="ide.html" class="btn-ide-nav" style="text-decoration:none;" title="Open full multi-file PROS C++ Coding IDE on dedicated page">💻 C++ IDE</a>
-        <button id="btnToggleDebug" type="button" class="btn-debug-nav" title="Toggle Cross-Script Variable Inspector, Compiler Diagnostics & Live Debugger">🐞 Debug</button>
-        <a id="btnCppTranslator" href="translator.html" class="btn-cpp-translate" style="text-decoration:none;" title="Translate raw C++ LemLib auton code into visual blocks & map on a dedicated page">📥 C++ Translator</a>
-        <button id="btnPidTuner" type="button" class="btn-pid-nav" title="PID Tuning Visualizer: preview and tune kP, kI, kD gains with real-time response curves">🎛️ PID Tuner</button>
-        <button id="btnExportVideo" type="button" class="btn-video-nav" title="Export animated .mp4 video of your simulated autonomous routine">🎥 Export .mp4</button>
-        <button id="btnImport" title="Import .vpath">Import</button>
-        <button id="btnExport" title="Export .vpath">Export .vpath</button>
-        <button id="btnClear" class="danger">Clear</button>
-        <button id="btnHelp" type="button" class="help-nav-btn" title="Help, motion guides & keyboard shortcuts">❓ Help</button>
-        <button id="btnSim" class="primary">▶ Simulate</button>
-        <button id="btnStop">Stop</button>
-        <label class="speed">
-          Speed
-          <input type="range" id="simSpeed" min="0.25" max="3" step="0.25" value="1" />
-          <span id="speedLabel">1×</span>
-        </label>
       </div>
     </header>
 
@@ -54,13 +308,8 @@
       <div class="project-banner-left">
         <span class="project-badge">📁 PROS PROJECT</span>
         <strong class="project-name-label" id="bannerProjectName">Override_LemLib_Bot</strong>
-        <span class="project-file-label">Workspace File: <code style="color:#38bdf8;background:rgba(56,189,248,0.12);padding:2px 6px;border-radius:4px;font-weight:600;">src/autons.cpp</code></span>
+        <span class="project-file-label">Synced File: <code style="color:#38bdf8;background:rgba(56,189,248,0.12);padding:2px 6px;border-radius:4px;font-weight:600;">src/autons.cpp</code></span>
         <span class="project-variable-pill" id="bannerVariableCount" title="Variables and devices indexed across robot-config.h and other project files">0 devices indexed</span>
-        <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view detailed VEX V5 Brain telemetry & upload manager">
-          <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
-          <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
-        </div>
       </div>
       <div class="project-banner-right">
         <button type="button" id="btnSyncProjectToCloud" class="btn-xs-sync" title="Sync entire multi-file project to cloud">☁️ Sync Cloud</button>
@@ -1301,15 +1550,82 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260921.k3"></script>
+  <!-- =================================================================
+       CODE MERGE & DIFF CONFIRMATION MODAL
+       "ask the user b4 merging the 2 code"
+       ================================================================= -->
+  <div id="mergeDiffModal" class="modal-backdrop" hidden>
+    <div class="modal-card merge-diff-modal-card">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.2rem;">🔀</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">Merge Autonomous Routines into src/autons.cpp</h3>
+            <p style="margin:0;font-size:0.75rem;color:#94a3b8;">Review code changes before updating your active PROS LemLib project workspace</p>
+          </div>
+        </div>
+        <button type="button" id="btnMergeModalClose" class="modal-close" title="Close">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding:14px 18px;">
+        <div class="merge-summary-banner" id="mergeSummaryBanner">
+          <span class="merge-badge-info">ℹ️ DIFF DETECTED</span>
+          <span id="mergeSummaryText">Visual flowchart blocks have generated updated code for <strong>src/autons.cpp</strong>.</span>
+        </div>
+
+        <!-- Side-by-Side Diff Preview -->
+        <div class="merge-diff-grid">
+          <div class="merge-diff-col">
+            <div class="merge-col-header" style="color:#38bdf8;">
+              <span>✨ Flowchart Input (New Code)</span>
+              <span class="merge-tag-badge" id="mergeNewRoutinesBadge">1 Routine</span>
+            </div>
+            <pre class="merge-code-preview" id="mergeNewCodePreview">// Incoming generated code</pre>
+          </div>
+
+          <div class="merge-diff-col">
+            <div class="merge-col-header" style="color:#cbd5e1;">
+              <span>📄 Current Workspace (src/autons.cpp)</span>
+              <span class="merge-tag-badge" id="mergeExistingRoutinesBadge">Active File</span>
+            </div>
+            <pre class="merge-code-preview" id="mergeExistingCodePreview">// Current workspace code</pre>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
+          <label style="font-size:0.75rem;color:#94a3b8;display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="chkMergeRememberSession" />
+            Remember choice for this session (Auto-merge without asking again)
+          </label>
+          <span style="font-size:0.72rem;color:#64748b;">All updates are synchronized to LocalStorage and Cloud</span>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;background:#09111e;padding:12px 18px;border-top:1px solid #1e293b;">
+        <button type="button" id="btnMergeKeep" class="btn-subtle" style="font-size:0.8rem;">
+          ❌ Keep Existing autons.cpp (Cancel)
+        </button>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="btnMergeAppend" class="btn-merge-append" style="font-size:0.8rem;">
+            ➕ Append as New Routine
+          </button>
+          <button type="button" id="btnMergeOverwrite" class="primary" style="font-size:0.8rem;padding:7px 16px;">
+            ✅ Merge &amp; Overwrite autons.cpp
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="version.js?v=20260921.k4"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k3"></script>
+  <script src="firebase-config.js?v=20260921.k4"></script>
   <script src="v5-brain-serial.js"></script>
   <script src="project-manager.js"></script>
   <script src="cpp-parser.js?v=20260920.k16"></script>
-  <script src="app.js?v=20260921.k3"></script>
+  <script src="app.js?v=20260921.k4"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
