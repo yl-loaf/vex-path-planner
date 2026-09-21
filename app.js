@@ -1012,8 +1012,10 @@
     // keep active path data in sync
     bindActive();
     const ap = activePath();
-    ap.pose = pose;
-    ap.actions = actions;
+    if (ap) {
+      ap.pose = pose;
+      ap.actions = actions;
+    }
     const data = {
       version: 2,
       paths,
@@ -1027,6 +1029,10 @@
       saveStatus.className = "save-status ok";
     } catch (e) {
       saveStatus.textContent = "Save failed";
+    }
+
+    if (window.ProjectManager) {
+      syncPlannerIntoProjectManager({ ask: false });
     }
   }
 
@@ -5820,12 +5826,18 @@ lemlib::ControllerSettings ${currentMode}_controller(
     } catch (e) {
       console.warn("Failed to sync planner into ProjectManager:", e);
     } finally {
-      setTimeout(() => { isSyncingFromPlanner = false; }, 100);
+      setTimeout(() => { isSyncingFromPlanner = false; }, 300);
     }
   }
 
-  function loadProjectAutonsIntoPlanner(showNotification = false) {
-    if (!window.ProjectManager) return;
+  function loadProjectAutonsIntoPlanner(showNotification = false, force = false) {
+    if (!window.ProjectManager || isSyncingFromPlanner) return;
+
+    const indent = typeof getIndentString === "function" ? getIndentString() : "    ";
+    if (!force && !window.ProjectManager.hasCodeDifference(paths, indent)) {
+      return;
+    }
+
     const autonRoutines = window.ProjectManager.getAutonRoutines();
     if (!autonRoutines || autonRoutines.length === 0) return;
 
@@ -5844,22 +5856,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
       const pName = r.name.replace(/^auton_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) || `Routine ${idx + 1}`;
       const startPose = parsed?.startPose || parsed?.pose || { x: -60, y: -60, theta: 0 };
-      const actions = parsed?.actions && parsed.actions.length > 0 ? parsed.actions : [
-        {
-          id: "act_" + Date.now() + "_" + idx + "_0",
-          type: "moveToPoint",
-          x: -24,
-          y: -24,
-          theta: 0,
-          timeout: 2000,
-          maxSpeed: 127,
-          minSpeed: 0,
-          earlyExitRange: 0,
-          forwards: true,
-          label: "Rush goal",
-          async: false
-        }
-      ];
+      const actions = (parsed && Array.isArray(parsed.actions)) ? parsed.actions : [];
 
       newPaths.push({
         id: "path_" + Date.now() + "_" + idx,
@@ -6219,7 +6216,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
   function wireProjectWorkspace() {
     updateProjectBanner();
-    loadProjectAutonsIntoPlanner();
+    loadProjectAutonsIntoPlanner(false, true);
 
     // Banner Cloud Sync button
     const btnSyncCloud = document.getElementById("btnSyncProjectToCloud");
@@ -6300,7 +6297,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
         window.promptWipeChallenge("Standard Competition Template", () => {
           window.ProjectManager.wipeProject();
           window.ProjectManager.initDefaultProject("Override_LemLib_Bot");
-          loadProjectAutonsIntoPlanner();
+          loadProjectAutonsIntoPlanner(false, true);
           updateProjectBanner();
           closeModal();
           showToast("🚀 Current workspace wiped clean! Standard template loaded.");
@@ -6317,7 +6314,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
             btnFetchCloud.textContent = "Fetching...";
             const proj = await window.ProjectManager.loadFromCloud();
             if (proj) {
-              loadProjectAutonsIntoPlanner();
+              loadProjectAutonsIntoPlanner(false, true);
               updateProjectBanner();
               closeModal();
               showToast("☁️ Previous workspace wiped! Synced cloud project loaded.");
@@ -6349,7 +6346,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
                 window.ProjectManager.wipeProject();
                 window.ProjectManager.project = data;
                 window.ProjectManager.saveLocal();
-                loadProjectAutonsIntoPlanner();
+                loadProjectAutonsIntoPlanner(false, true);
                 updateProjectBanner();
                 closeModal();
                 showToast(`💥 Current workspace wiped! Imported "${targetName}" successfully.`);
