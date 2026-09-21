@@ -850,6 +850,7 @@
     renderIntelliSenseList();
     positionPopupAtCursor();
     elIntelliSense.hidden = false;
+    elIntelliSense.style.display = "flex";
   }
 
   function renderIntelliSenseList() {
@@ -902,25 +903,35 @@
     const lineIndex = lines.length - 1;
     const colIndex = lines[lineIndex].length;
 
-    const lineHeight = 21; // ~1.5 * 14px font
-    const charWidth = 8.1;  // Consolas 13.5px width
+    const lineHeight = 22; // Matches line-height 22px
+    const charWidth = 8.1;  // Consolas 13.5px font width
 
-    let top = (lineIndex + 1) * lineHeight - elCodeEditor.scrollTop + 10;
+    let top = (lineIndex + 1) * lineHeight - elCodeEditor.scrollTop + 8;
     let left = colIndex * charWidth - elCodeEditor.scrollLeft + 12;
 
     // Boundary constraints
     const maxTop = elCodeEditor.clientHeight - 220;
-    if (top > maxTop) top = Math.max(10, top - 250);
+    if (top > maxTop) top = Math.max(8, top - 250);
 
     const maxLeft = elCodeEditor.clientWidth - 400;
-    if (left > maxLeft) left = Math.max(10, maxLeft);
+    if (left > maxLeft) left = Math.max(8, maxLeft);
+    if (top < 8) top = 8;
+    if (left < 8) left = 8;
 
     elIntelliSense.style.top = `${top}px`;
     elIntelliSense.style.left = `${left}px`;
+
+    if (elParamHint) {
+      elParamHint.style.top = `${Math.max(8, top - 45)}px`;
+      elParamHint.style.left = `${left}px`;
+    }
   }
 
   function hideIntelliSense() {
-    if (elIntelliSense) elIntelliSense.hidden = true;
+    if (elIntelliSense) {
+      elIntelliSense.hidden = true;
+      elIntelliSense.style.display = "none";
+    }
   }
 
   function acceptSelectedIntelliSense() {
@@ -947,6 +958,7 @@
     elCodeEditor.focus();
 
     hideIntelliSense();
+    hideParamHint();
     onEditorChange();
   }
 
@@ -987,11 +999,15 @@
 
     positionPopupAtCursor();
     elParamHint.hidden = false;
+    elParamHint.style.display = "block";
     return true;
   }
 
   function hideParamHint() {
-    if (elParamHint) elParamHint.hidden = true;
+    if (elParamHint) {
+      elParamHint.hidden = true;
+      elParamHint.style.display = "none";
+    }
   }
 
   function insertSnippet(snippet) {
@@ -1079,27 +1095,33 @@
       }
 
       // If IntelliSense is open
-      if (elIntelliSense && !elIntelliSense.hidden) {
+      const isIntelOpen = elIntelliSense && !elIntelliSense.hidden && elIntelliSense.style.display !== "none";
+      if (isIntelOpen) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
+          e.stopPropagation();
           intelSelectedIndex = (intelSelectedIndex + 1) % intelItems.length;
           renderIntelliSenseList();
           return;
         }
         if (e.key === "ArrowUp") {
           e.preventDefault();
+          e.stopPropagation();
           intelSelectedIndex = (intelSelectedIndex - 1 + intelItems.length) % intelItems.length;
           renderIntelliSenseList();
           return;
         }
         if (e.key === "Enter" || e.key === "Tab") {
           e.preventDefault();
+          e.stopPropagation();
           acceptSelectedIntelliSense();
           return;
         }
         if (e.key === "Escape") {
           e.preventDefault();
+          e.stopPropagation();
           hideIntelliSense();
+          hideParamHint();
           return;
         }
       }
@@ -1174,40 +1196,257 @@
       });
     }
 
-    const btnIdeImportProject = document.getElementById("btnIdeImportProject");
-    const ideProjectFileInput = document.getElementById("ideProjectFileInput");
+    // -------------------------------------------------------------
+    // Multi-File Project Folder & Archive Import / Export System
+    // -------------------------------------------------------------
+    function isIgnoredFile(path) {
+      if (!path) return true;
+      const lower = path.toLowerCase();
+      const base = path.split(/[\/\\]/).pop();
+      if (base.startsWith(".") && base !== ".gitignore" && base !== ".editorconfig") return true;
+      if (lower.includes("/.git/") || lower.includes("/.vscode/") || lower.includes("/bin/") || lower.includes("/build/") || lower.includes("/node_modules/") || lower.includes("/__macosx/")) return true;
+      if (lower.endsWith(".o") || lower.endsWith(".elf") || lower.endsWith(".bin") || lower.endsWith(".ds_store") || lower.endsWith(".zip") || lower.endsWith(".tar.gz")) return true;
+      return false;
+    }
 
-    if (btnIdeImportProject && ideProjectFileInput) {
-      btnIdeImportProject.onclick = () => ideProjectFileInput.click();
-      ideProjectFileInput.onchange = (e) => {
+    function applyNewImportedProject(projName, filesMap) {
+      const fileCount = Object.keys(filesMap).length;
+      if (fileCount === 0) {
+        alert("No valid source files found in selected project folder.");
+        return;
+      }
+      window.promptWipeChallenge(`${projName} (${fileCount} files)`, () => {
+        ProjectManager.wipeProject();
+        ProjectManager.project = {
+          name: projName,
+          version: "1.0.0",
+          target: "v5",
+          kernel: "4.1.0",
+          lemlibVersion: "0.5.4",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          files: filesMap,
+          activeAuton: "red_rush_auton",
+          cloudSynced: false
+        };
+        ProjectManager.saveLocal();
+        renderProjectHeader();
+        renderFileTree();
+        renderTabs();
+
+        const fileList = Object.keys(filesMap);
+        const mainCpp = fileList.find(f => f === "src/autons.cpp" || f === "src/main.cpp") ||
+                        fileList.find(f => f.startsWith("src/") && f.endsWith(".cpp")) ||
+                        fileList.find(f => f.endsWith(".cpp") || f.endsWith(".hpp") || f.endsWith(".h")) ||
+                        fileList[0];
+
+        if (mainCpp) loadFile(mainCpp);
+        renderSymbols();
+        showToast(`💥 Workspace updated! Imported "${projName}" with ${fileCount} files.`);
+      });
+    }
+
+    async function processFolderFiles(fileList) {
+      if (!fileList || fileList.length === 0) return;
+      const validFiles = Array.from(fileList).filter(f => !isIgnoredFile(f.webkitRelativePath || f.name));
+      if (validFiles.length === 0) {
+        alert("No valid C++/header files found in the chosen folder.");
+        return;
+      }
+
+      let rootFolder = "";
+      for (const f of validFiles) {
+        const pathStr = f.webkitRelativePath || f.name;
+        const parts = pathStr.split(/[\/\\]/);
+        if (parts.length > 1 && !rootFolder) {
+          rootFolder = parts[0];
+        }
+      }
+
+      const rootPrefix = rootFolder ? rootFolder + "/" : "";
+      const filesMap = {};
+
+      for (const f of validFiles) {
+        try {
+          const fullPath = (f.webkitRelativePath || f.name).replace(/\\/g, "/");
+          let relPath = fullPath;
+          if (rootPrefix && relPath.startsWith(rootPrefix)) {
+            relPath = relPath.substring(rootPrefix.length);
+          }
+          if (!relPath) continue;
+
+          const text = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => resolve("");
+            reader.readAsText(f);
+          });
+
+          filesMap[relPath] = text;
+        } catch (e) {
+          console.warn("Error reading file:", f.name, e);
+        }
+      }
+
+      applyNewImportedProject(rootFolder || "Imported_PROS_Project", filesMap);
+    }
+
+    async function processZipFile(zipFile) {
+      if (typeof JSZip === "undefined") {
+        alert("JSZip library is unavailable. Please check your network connection.");
+        return;
+      }
+      try {
+        const zip = await JSZip.loadAsync(zipFile);
+        const filesMap = {};
+        const entryPaths = Object.keys(zip.files).filter(p => !zip.files[p].dir && !isIgnoredFile(p));
+
+        if (entryPaths.length === 0) {
+          alert("No source files found in ZIP archive.");
+          return;
+        }
+
+        let commonPrefix = "";
+        const firstPart = entryPaths[0].split(/[\/\\]/)[0];
+        if (firstPart && entryPaths.every(p => p.startsWith(firstPart + "/") || p.startsWith(firstPart + "\\"))) {
+          commonPrefix = firstPart + "/";
+        }
+
+        const projName = commonPrefix ? commonPrefix.replace(/[\/\\]$/, "") : zipFile.name.replace(/\.zip$/i, "");
+
+        for (const path of entryPaths) {
+          const entry = zip.files[path];
+          let relPath = path.replace(/\\/g, "/");
+          if (commonPrefix && relPath.startsWith(commonPrefix)) {
+            relPath = relPath.substring(commonPrefix.length);
+          }
+          if (!relPath) continue;
+
+          const text = await entry.async("string");
+          filesMap[relPath] = text;
+        }
+
+        applyNewImportedProject(projName, filesMap);
+      } catch (err) {
+        console.error("ZIP import error:", err);
+        alert("Failed to parse ZIP folder: " + err.message);
+      }
+    }
+
+    async function scanDirectoryEntry(entry, currentPath = "") {
+      const map = {};
+      if (entry.isFile) {
+        const file = await new Promise(res => entry.file(res));
+        if (!isIgnoredFile(file.name)) {
+          const text = await file.text();
+          const relPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+          map[relPath] = text;
+        }
+      } else if (entry.isDirectory) {
+        if (entry.name === ".git" || entry.name === "bin" || entry.name === "build" || entry.name === ".vscode" || entry.name === "node_modules" || entry.name === "__MACOSX") return {};
+        const dirReader = entry.createReader();
+        let entries = [];
+        let batch;
+        do {
+          batch = await new Promise(res => dirReader.readEntries(res));
+          entries = entries.concat(batch);
+        } while (batch.length > 0);
+
+        for (const child of entries) {
+          const childPath = currentPath ? `${currentPath}/${child.name}` : child.name;
+          const sub = await scanDirectoryEntry(child, childPath);
+          Object.assign(map, sub);
+        }
+      }
+      return map;
+    }
+
+    const btnIdeImportProject = document.getElementById("btnIdeImportProject");
+    const ideFolderFileInput = document.getElementById("ideFolderFileInput");
+    const ideZipFileInput = document.getElementById("ideZipFileInput");
+
+    if (btnIdeImportProject) {
+      btnIdeImportProject.onclick = () => {
+        const choice = prompt(
+          "Import PROS Multi-File Project Folder:\n\nSelect import method:\n1 = Select Complete Folder (Directory)\n2 = Select ZIP Archive (.zip)\n3 = Cancel",
+          "1"
+        );
+        if (choice === "1" && ideFolderFileInput) {
+          ideFolderFileInput.value = "";
+          ideFolderFileInput.click();
+        } else if (choice === "2" && ideZipFileInput) {
+          ideZipFileInput.value = "";
+          ideZipFileInput.click();
+        }
+      };
+    }
+
+    if (ideFolderFileInput) {
+      ideFolderFileInput.onchange = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          processFolderFiles(e.target.files);
+        }
+      };
+    }
+
+    if (ideZipFileInput) {
+      ideZipFileInput.onchange = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          try {
-            const data = JSON.parse(evt.target.result);
-            if (data.files) {
-              const targetName = file.name || (data.name ? `${data.name}.json` : "Imported Project");
-              window.promptWipeChallenge(targetName, () => {
-                ProjectManager.wipeProject();
-                ProjectManager.project = data;
-                ProjectManager.saveLocal();
-                renderProjectHeader();
-                renderFileTree();
-                renderTabs();
-                loadFile("src/autons.cpp");
-                renderSymbols();
-                alert(`💥 Workspace wiped clean and imported "${targetName}" successfully!`);
-              });
-            } else {
-              alert("Invalid project file: missing files map.");
-            }
-          } catch (err) {
-            alert("Failed to parse project JSON file.");
-          }
-        };
-        reader.readAsText(file);
+        if (file.name.endsWith(".zip")) {
+          processZipFile(file);
+        } else {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            try {
+              const data = JSON.parse(evt.target.result);
+              if (data.files) {
+                applyNewImportedProject(data.name || file.name.replace(/\.json$/i, ""), data.files);
+              }
+            } catch (err) { alert("Invalid project JSON"); }
+          };
+          reader.readAsText(file);
+        }
       };
+    }
+
+    // Drag and drop handler for folders or zip files directly on file tree sidebar
+    const dropTarget = document.getElementById("ideFileTree") || document.querySelector(".ide-sidebar");
+    if (dropTarget) {
+      dropTarget.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropTarget.classList.add("drag-hover");
+      });
+      dropTarget.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dropTarget.classList.remove("drag-hover");
+      });
+      dropTarget.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        dropTarget.classList.remove("drag-hover");
+
+        const items = e.dataTransfer.items;
+        if (items && items.length > 0) {
+          const entry = items[0].webkitGetAsEntry ? items[0].webkitGetAsEntry() : null;
+          if (entry && entry.isDirectory) {
+            const filesMap = await scanDirectoryEntry(entry);
+            if (Object.keys(filesMap).length > 0) {
+              applyNewImportedProject(entry.name, filesMap);
+              return;
+            }
+          }
+        }
+
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+          const first = files[0];
+          if (first.name.endsWith(".zip")) {
+            processZipFile(first);
+          } else {
+            processFolderFiles(files);
+          }
+        }
+      });
     }
 
     const btnDownloadCode = document.getElementById("btnDownloadCode");
@@ -1215,13 +1454,13 @@
       btnDownloadCode.addEventListener("click", () => {
         saveCurrentEditorState();
         const choices = prompt(
-          `Select download format:\n1 = Active File (${activeFile})\n2 = Full Multi-File Project (.json bundle)`,
-          "1"
+          `Select download format:\n1 = Active File (${activeFile})\n2 = Complete Multi-File Project Folder (.zip Archive)`,
+          "2"
         );
         if (choices === "1") {
           window.ProjectManager.downloadFile(activeFile);
         } else if (choices === "2") {
-          window.ProjectManager.exportProjectJson();
+          window.ProjectManager.exportProjectZip();
         }
       });
     }
@@ -1247,6 +1486,7 @@
     const btnBrainModalDone = document.getElementById("btnBrainModalDone");
     const btnModalConnect = document.getElementById("btnModalConnectBrain");
     const btnModalDisconnect = document.getElementById("btnModalDisconnectBrain");
+    const btnModalSimulateBrain = document.getElementById("btnModalSimulateBrain");
     const modalBrainDot = document.getElementById("modalBrainDot");
     const modalBrainName = document.getElementById("modalBrainName");
     const modalBrainSubtext = document.getElementById("modalBrainSubtext");
@@ -1301,6 +1541,13 @@
       btnModalDisconnect.addEventListener("click", async () => {
         if (!window.V5BrainSerial) return;
         await window.V5BrainSerial.disconnect();
+      });
+    }
+
+    if (btnModalSimulateBrain) {
+      btnModalSimulateBrain.addEventListener("click", () => {
+        if (!window.V5BrainSerial) return;
+        window.V5BrainSerial.connectSimulated();
       });
     }
 

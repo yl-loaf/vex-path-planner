@@ -4342,6 +4342,12 @@ kbd {
   color: #ef4444;
 }
 
+.ide-file-tree.drag-hover, .ide-sidebar.drag-hover {
+  outline: 2px dashed #38bdf8 !important;
+  outline-offset: -4px !important;
+  background: rgba(56, 189, 248, 0.08) !important;
+}
+
 .ide-editor-toolbar {
   padding: 4px 12px;
   background: #091322;
@@ -4455,19 +4461,30 @@ kbd {
   position: relative;
   overflow: hidden;
 }
+/* Global hidden attribute enforcement */
+[hidden] {
+  display: none !important;
+}
+
 .ide-line-numbers {
-  width: 44px;
+  width: 48px;
   background: #070d18;
   border-right: 1px solid #1e293b;
   color: #475569;
-  font-family: "Consolas", "Courier New", monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 13.5px;
+  line-height: 22px;
   padding: 8px 0;
   text-align: right;
   padding-right: 8px;
   user-select: none;
   overflow: hidden;
+  box-sizing: border-box;
+}
+
+.ide-line-numbers > div {
+  height: 22px;
+  line-height: 22px;
 }
 
 .ide-editor-stage {
@@ -4486,9 +4503,9 @@ kbd {
   bottom: 0;
   margin: 0;
   padding: 8px 12px;
-  font-family: "Consolas", "Courier New", monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 13.5px;
+  line-height: 22px;
   tab-size: 4;
   white-space: pre;
   word-break: normal;
@@ -4514,9 +4531,9 @@ kbd {
   border: none;
   outline: none;
   resize: none;
-  font-family: "Consolas", "Courier New", monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 13.5px;
+  line-height: 22px;
   tab-size: 4;
   white-space: pre;
   word-break: normal;
@@ -4553,6 +4570,10 @@ kbd {
   min-width: 380px;
   max-width: 620px;
   animation: intelFadeIn 0.1s ease-out;
+}
+
+.ide-intellisense-popup[hidden] {
+  display: none !important;
 }
 
 @keyframes intelFadeIn {
@@ -4598,7 +4619,7 @@ kbd {
 }
 
 .ide-intel-label {
-  font-family: "Consolas", "Courier New", monospace;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
   font-weight: 600;
   white-space: nowrap;
   flex: 1;
@@ -4626,7 +4647,7 @@ kbd {
 }
 
 .ide-intel-doc-detail {
-  font-family: "Consolas", "Courier New", monospace;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
   color: #4ec9b0;
   font-size: 0.72rem;
   line-height: 1.4;
@@ -4651,10 +4672,14 @@ kbd {
   border-radius: 4px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   padding: 6px 10px;
-  font-family: "Consolas", "Courier New", monospace;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
   font-size: 0.78rem;
   color: #cccccc;
   max-width: 480px;
+}
+
+.ide-param-hint-popup[hidden] {
+  display: none !important;
 }
 
 .ide-param-sig {

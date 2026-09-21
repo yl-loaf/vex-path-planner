@@ -363,6 +363,35 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.notifyListeners();
     }
 
+    async exportProjectZip() {
+      if (!this.project) return;
+      const projName = this.project.name || "Override_LemLib_Bot";
+      
+      if (typeof JSZip !== "undefined") {
+        try {
+          const zip = new JSZip();
+          const folder = zip.folder(projName);
+          const files = this.project.files || {};
+          for (const [filename, content] of Object.entries(files)) {
+            folder.file(filename, content);
+          }
+          const blob = await zip.generateAsync({ type: "blob" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${projName}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          return;
+        } catch (e) {
+          console.warn("JSZip export failed, falling back to JSON export:", e);
+        }
+      }
+      this.exportProjectJson();
+    }
+
     exportProjectJson() {
       if (!this.project) return;
       const json = JSON.stringify(this.project, null, 2);
@@ -1391,7 +1420,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     if (btnBackup) {
       btnBackup.onclick = () => {
         if (global.ProjectManager) {
-          global.ProjectManager.exportProjectJson();
+          global.ProjectManager.exportProjectZip();
         }
       };
     }

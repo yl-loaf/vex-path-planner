@@ -67,8 +67,11 @@
     // Connect to VEX V5 Brain via Web Serial API
     async connect() {
       if (!this.isWebSerialSupported()) {
-        console.warn("Web Serial API is not supported in this browser environment. Launching Simulated V5 Brain mode.");
-        return this.connectSimulated();
+        alert("Web Serial API is not supported in this browser. Please use Chrome or Edge on desktop to connect to physical VEX V5 Brain.");
+        this.isConnected = false;
+        this.status.connected = false;
+        this.emit("disconnected", { status: this.status });
+        return false;
       }
 
       try {
@@ -84,8 +87,11 @@
         this.emit("connected", { simulated: false, status: this.status });
         return true;
       } catch (err) {
-        console.warn("Real serial connection cancelled or unavailable. Fallback to simulated Brain connection:", err);
-        return this.connectSimulated();
+        console.warn("Real serial connection cancelled or unavailable:", err);
+        this.isConnected = false;
+        this.status.connected = false;
+        this.emit("disconnected", { status: this.status });
+        return false;
       }
     }
 
@@ -96,7 +102,7 @@
       this.status.connected = true;
       this.startTelemetryLoop();
       this.emit("connected", { simulated: true, status: this.status });
-      this.emit("terminal", "[VEX V5 Brain connected via USB Serial CDC]\n[VEXos 1.1.4 Kernel Ready] System Port active.\n[LemLib 0.5.4] Telemetry streaming at 20Hz.\n");
+      this.emit("terminal", "[VEX V5 Brain Connected (Simulated Mode)]\n[VEXos 1.1.4 Kernel Active] Telemetry online.\n");
       return true;
     }
 
