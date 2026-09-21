@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260921.k41" />
+  <link rel="stylesheet" href="style.css?v=20260921.k44" />
 </head>
 <body>
   <!-- =================================================================
@@ -1866,15 +1866,15 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260921.k41"></script>
+  <script src="version.js?v=20260921.k44"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k41"></script>
+  <script src="firebase-config.js?v=20260921.k44"></script>
   <script src="v5-brain-serial.js?v=20260921.k22"></script>
   <script src="project-manager.js?v=20260921.k22"></script>
   <script src="cpp-parser.js?v=20260921.k22"></script>
-  <script src="app.js?v=20260921.k41"></script>
+  <script src="app.js?v=20260921.k44"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
@@ -1901,8 +1901,12 @@ void autonomous() {
 
       // Fetch and update global visitor count badge
       async function updateGlobalVisitorBadge() {
+        const SHEET_URL = 'https://script.google.com/macros/u/1/s/AKfycbz3JDQwKnL94Ad3Zi1k9tDepsdqEOIuj2iKS5QPIjGAhxpGcvHioO2EZNyUdfGVVZbJ/exec';
         try {
-          var res = await fetch('/api/stats');
+          // Track hit on load
+          fetch(SHEET_URL + '?action=track&page=home&ua=' + encodeURIComponent(navigator.userAgent), { mode: 'no-cors' }).catch(() => {});
+          
+          var res = await fetch(SHEET_URL);
           if (!res.ok) throw new Error();
           var data = await res.json();
           var badge = document.getElementById('globalVisitorBadge');
@@ -1911,11 +1915,12 @@ void autonomous() {
           }
         } catch (err) {
           try {
-            var hitRes = await fetch('https://api.counterapi.dev/v1/vex-lemlib-suite/views/up');
-            var hitData = await hitRes.json();
+            var res = await fetch('/api/stats');
+            if (!res.ok) throw new Error();
+            var data = await res.json();
             var badge = document.getElementById('globalVisitorBadge');
-            if (badge && hitData && hitData.count !== undefined) {
-              badge.textContent = hitData.count.toLocaleString();
+            if (badge && data && data.totalViews !== undefined) {
+              badge.textContent = data.totalViews.toLocaleString();
             }
           } catch (e) {
             var localViews = localStorage.getItem('vex_total_views') || '128';
