@@ -16,6 +16,9 @@
   const elAutosaveToggleLabel = document.getElementById("ideAutosaveToggleLabel");
   const elAutosaveIcon = document.getElementById("ideAutosaveIcon");
   const elAutosaveTimestamp = document.getElementById("ideAutosaveTimestamp");
+  const elSaveProgressPill = document.getElementById("ideSaveProgressPill");
+  const elSaveProgressText = document.getElementById("ideSaveProgressText");
+  const elSaveProgressBarFill = document.getElementById("ideSaveProgressBarFill");
 
   const elFileTree = document.getElementById("ideFileTree");
   const elSymbolsTree = document.getElementById("ideSymbolsTree");
@@ -199,7 +202,7 @@
     });
   }
 
-  function updateAutosaveUI(status, customMsg) {
+  function updateAutosaveUI(status, customMsg, progressStr = null) {
     if (!autosaveEnabled) {
       if (elAutosaveBadge) {
         elAutosaveBadge.className = "ide-autosave-badge disabled";
@@ -211,6 +214,7 @@
       if (elAutosaveToggleLabel) elAutosaveToggleLabel.textContent = "Autosave: OFF";
       if (elAutosaveIcon) elAutosaveIcon.textContent = "⏸️";
       if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = "Autosave Paused";
+      if (elSaveProgressPill) elSaveProgressPill.hidden = true;
       return;
     }
 
@@ -220,31 +224,75 @@
 
     const timeStr = lastSaveTimestamp || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
+    let pct = 0;
+    if (progressStr) {
+      const match = progressStr.match(/\((\d+)%\)/);
+      if (match) pct = parseInt(match[1], 10);
+    }
+
     if (status === "saving") {
+      const progSuffix = progressStr ? ` ${progressStr}` : "";
       if (elAutosaveBadge) {
         elAutosaveBadge.className = "ide-autosave-badge saving";
-        elAutosaveBadge.title = "Autosaving code changes in background...";
+        elAutosaveBadge.title = `Autosaving code changes...${progSuffix}`;
       }
       if (elAutosaveDot) elAutosaveDot.className = "autosave-dot saving";
-      if (elAutosaveText) elAutosaveText.textContent = "● Saving...";
-      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = "Saving changes...";
+      if (elAutosaveText) elAutosaveText.textContent = `● Saving${progSuffix}`;
+      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = `Saving${progSuffix}`;
+
+      if (elSaveProgressPill && elSaveProgressText) {
+        elSaveProgressPill.hidden = false;
+        elSaveProgressPill.className = "ide-save-progress-pill saving";
+        elSaveProgressText.textContent = `⏳ ${progressStr || "Saving..."}`;
+        if (elSaveProgressBarFill) elSaveProgressBarFill.style.width = `${Math.max(8, pct)}%`;
+      }
     } else if (status === "synced") {
+      const progSuffix = progressStr ? ` ${progressStr}` : "";
       if (elAutosaveBadge) {
         elAutosaveBadge.className = "ide-autosave-badge synced";
-        elAutosaveBadge.title = `Cloud synchronized at ${timeStr}`;
+        elAutosaveBadge.title = `Cloud synchronized at ${timeStr}${progSuffix}`;
       }
       if (elAutosaveDot) elAutosaveDot.className = "autosave-dot synced";
-      if (elAutosaveText) elAutosaveText.textContent = `☁️ Synced ${timeStr}`;
-      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = `Cloud synced ${timeStr}`;
+      if (elAutosaveText) elAutosaveText.textContent = `☁️ Synced${progSuffix}`;
+      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = `Cloud synced${progSuffix} · ${timeStr}`;
+
+      if (elSaveProgressPill && elSaveProgressText) {
+        elSaveProgressPill.hidden = false;
+        elSaveProgressPill.className = "ide-save-progress-pill done";
+        elSaveProgressText.textContent = `☁️ ${progressStr || "100% Synced"}`;
+        if (elSaveProgressBarFill) elSaveProgressBarFill.style.width = "100%";
+        setTimeout(() => {
+          if (elSaveProgressPill && elSaveProgressPill.classList.contains("done")) {
+            elSaveProgressPill.hidden = true;
+          }
+        }, 3500);
+      }
     } else {
       // ready / saved
+      const progSuffix = progressStr ? ` ${progressStr}` : "";
       if (elAutosaveBadge) {
         elAutosaveBadge.className = "ide-autosave-badge";
-        elAutosaveBadge.title = `Autosaved locally at ${timeStr}`;
+        elAutosaveBadge.title = `Autosaved locally at ${timeStr}${progSuffix}`;
       }
       if (elAutosaveDot) elAutosaveDot.className = "autosave-dot";
       if (elAutosaveText) elAutosaveText.textContent = customMsg || `✓ Saved ${timeStr}`;
-      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = `Saved ${timeStr}`;
+      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = customMsg || `Saved ${timeStr}`;
+
+      if (elSaveProgressPill && elSaveProgressText) {
+        if (progressStr) {
+          elSaveProgressPill.hidden = false;
+          elSaveProgressPill.className = "ide-save-progress-pill done";
+          elSaveProgressText.textContent = `✓ ${progressStr}`;
+          if (elSaveProgressBarFill) elSaveProgressBarFill.style.width = "100%";
+          setTimeout(() => {
+            if (elSaveProgressPill && elSaveProgressPill.classList.contains("done")) {
+              elSaveProgressPill.hidden = true;
+            }
+          }, 3500);
+        } else {
+          elSaveProgressPill.hidden = true;
+        }
+      }
     }
   }
 
@@ -252,7 +300,13 @@
     if (!autosaveEnabled) return;
     if (autosaveTimer) clearTimeout(autosaveTimer);
 
-    updateAutosaveUI("saving");
+    if (window.ProjectManager) {
+      const totalBytes = window.ProjectManager.getProjectSizeBytes();
+      const initialProg = window.ProjectManager.formatSavingProgress(0, totalBytes);
+      updateAutosaveUI("saving", null, initialProg);
+    } else {
+      updateAutosaveUI("saving");
+    }
 
     if (immediate) {
       performAutosave();
@@ -267,27 +321,38 @@
 
     try {
       saveCurrentEditorState();
-      if (!activeFile && window.ProjectManager) {
-        window.ProjectManager.saveLocal();
+
+      const pm = window.ProjectManager;
+      const totalBytes = pm ? pm.getProjectSizeBytes() : 0;
+
+      const onProgress = (curr, total, progStr) => {
+        updateAutosaveUI("saving", null, progStr);
+      };
+
+      if (pm) {
+        await pm.saveWithProgress(onProgress);
       }
 
       const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
       lastSaveTimestamp = timeStr;
+      const finalProgStr = pm ? pm.formatSavingProgress(totalBytes, totalBytes) : "";
 
-      if (cloudUser && window.ProjectManager) {
+      if (cloudUser && pm) {
         try {
-          await window.ProjectManager.saveToCloud();
-          window.ProjectManager.markDirty(false);
-          updateAutosaveUI("synced");
+          await pm.saveToCloud((curr, total, progStr) => {
+            updateAutosaveUI("saving", null, progStr);
+          });
+          pm.markDirty(false);
+          updateAutosaveUI("synced", null, finalProgStr);
         } catch (err) {
-          window.ProjectManager.markDirty(false);
-          updateAutosaveUI("ready", `✓ Saved ${timeStr}`);
+          pm.markDirty(false);
+          updateAutosaveUI("ready", `✓ Saved ${finalProgStr}`, finalProgStr);
         }
       } else {
-        if (window.ProjectManager) {
-          window.ProjectManager.markDirty(false);
+        if (pm) {
+          pm.markDirty(false);
         }
-        updateAutosaveUI("ready", `✓ Saved ${timeStr}`);
+        updateAutosaveUI("ready", `✓ Saved ${finalProgStr}`, finalProgStr);
       }
       renderProjectHeader();
     } catch (e) {
@@ -1266,19 +1331,50 @@
       btnSaveCloud.addEventListener("click", async () => {
         saveCurrentEditorState();
         const cloudStatus = document.getElementById("cloudStatus");
-        if (cloudStatus) cloudStatus.textContent = "⏳ Saving…";
+        const pm = window.ProjectManager;
+        const totalBytes = pm ? pm.getProjectSizeBytes() : 0;
+
+        btnSaveCloud.disabled = true;
+        const origBtnText = btnSaveCloud.innerHTML;
+
+        const onProgress = (curr, total, progStr) => {
+          btnSaveCloud.innerHTML = `⏳ Saving ${progStr}`;
+          if (cloudStatus) cloudStatus.textContent = `⏳ ${progStr}`;
+          updateAutosaveUI("saving", null, progStr);
+        };
+
         try {
-          await ProjectManager.saveToCloud();
-          ProjectManager.markDirty(false);
-          renderProjectHeader();
-          if (cloudStatus) cloudStatus.textContent = "☁️ Synced";
-          alert("✅ Project workspace saved & synchronized to cloud successfully!");
+          if (cloudUser) {
+            await pm.saveToCloud(onProgress);
+            pm.markDirty(false);
+            renderProjectHeader();
+            const finalStr = pm.formatSavingProgress(totalBytes, totalBytes);
+            if (cloudStatus) cloudStatus.textContent = `☁️ Synced ${finalStr}`;
+            updateAutosaveUI("synced", null, finalStr);
+            btnSaveCloud.innerHTML = `✓ Synced ${finalStr}`;
+            setTimeout(() => { btnSaveCloud.innerHTML = origBtnText; btnSaveCloud.disabled = false; }, 2500);
+            showToast(`✅ Cloud synced ${finalStr} successfully!`);
+          } else {
+            await pm.saveWithProgress(onProgress);
+            pm.markDirty(false);
+            renderProjectHeader();
+            const finalStr = pm.formatSavingProgress(totalBytes, totalBytes);
+            if (cloudStatus) cloudStatus.textContent = `💾 Saved ${finalStr}`;
+            updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
+            btnSaveCloud.innerHTML = `✓ Saved ${finalStr}`;
+            setTimeout(() => { btnSaveCloud.innerHTML = origBtnText; btnSaveCloud.disabled = false; }, 2500);
+            showToast(`💾 Saved locally: ${finalStr} (Sign in with Google to sync to cloud)`);
+          }
         } catch (e) {
-          ProjectManager.saveLocal();
-          ProjectManager.markDirty(false);
+          await pm.saveWithProgress(onProgress);
+          pm.markDirty(false);
           renderProjectHeader();
-          if (cloudStatus) cloudStatus.textContent = "💾 Local";
-          alert(`💾 Saved locally to browser storage!\n\n(${e.message || "Sign in with Google to sync to cloud."})`);
+          const finalStr = pm.formatSavingProgress(totalBytes, totalBytes);
+          if (cloudStatus) cloudStatus.textContent = `💾 Saved ${finalStr}`;
+          updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
+          btnSaveCloud.innerHTML = `✓ Saved ${finalStr}`;
+          setTimeout(() => { btnSaveCloud.innerHTML = origBtnText; btnSaveCloud.disabled = false; }, 2500);
+          showToast(`💾 Saved locally: ${finalStr}\n(${e.message})`);
         }
       });
     }
@@ -1329,7 +1425,7 @@
         alert("No valid source files found in selected project folder.");
         return;
       }
-      window.promptWipeChallenge(`${projName} (${fileCount} files)`, () => {
+      window.promptWipeChallenge(`${projName} (${fileCount} files)`, async () => {
         ProjectManager.wipeProject();
         ProjectManager.project = {
           name: projName,
@@ -1343,7 +1439,16 @@
           activeAuton: "red_rush_auton",
           cloudSynced: false
         };
-        ProjectManager.saveLocal();
+
+        const totalBytes = ProjectManager.getProjectSizeBytes();
+        updateAutosaveUI("saving", null, ProjectManager.formatSavingProgress(0, totalBytes));
+
+        await ProjectManager.saveWithProgress((curr, total, progStr) => {
+          updateAutosaveUI("saving", null, progStr);
+        });
+
+        const finalStr = ProjectManager.formatSavingProgress(totalBytes, totalBytes);
+        updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
         renderProjectHeader();
         renderFileTree();
         renderTabs();
@@ -1356,7 +1461,7 @@
 
         if (mainCpp) loadFile(mainCpp);
         renderSymbols();
-        showToast(`💥 Workspace updated! Imported "${projName}" with ${fileCount} files.`);
+        showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}).`);
       });
     }
 
@@ -1957,10 +2062,18 @@
     if (btnNavGuardSaveAndReturn) {
       btnNavGuardSaveAndReturn.addEventListener("click", async () => {
         saveCurrentEditorState();
+        btnNavGuardSaveAndReturn.disabled = true;
+        const onProgress = (curr, total, progStr) => {
+          btnNavGuardSaveAndReturn.textContent = `💾 Saving ${progStr}...`;
+        };
         try {
-          await ProjectManager.saveToCloud();
+          if (cloudUser) {
+            await ProjectManager.saveToCloud(onProgress);
+          } else {
+            await ProjectManager.saveWithProgress(onProgress);
+          }
         } catch (e) {
-          ProjectManager.saveLocal();
+          await ProjectManager.saveWithProgress(onProgress);
         }
         ProjectManager.markDirty(false);
         window.location.href = pendingNavigationUrl || "index.html";

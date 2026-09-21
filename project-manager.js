@@ -523,8 +523,87 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       URL.revokeObjectURL(url);
     }
 
-    saveLocal(skipIndex = false) {
+    getProjectSizeBytes() {
+      if (!this.project) return 0;
+      let bytes = 0;
+      if (this.project.files) {
+        for (const [name, content] of Object.entries(this.project.files)) {
+          bytes += (name.length + 4);
+          if (typeof content === "string") {
+            bytes += (typeof Blob !== "undefined" ? new Blob([content]).size : content.length * 2);
+          }
+        }
+      }
+      return Math.max(bytes, 512);
+    }
+
+    formatSavingProgress(savedBytes, totalBytes) {
+      const curMB = (Math.max(0, savedBytes) / (1024 * 1024)).toFixed(2);
+      const totMB = (Math.max(1, totalBytes) / (1024 * 1024)).toFixed(2);
+      const pct = totalBytes > 0 ? Math.min(100, Math.round((savedBytes / totalBytes) * 100)) : 100;
+      return `${curMB}MB/${totMB}MB(${pct}%)`;
+    }
+
+    async saveWithProgress(onProgress, skipIndex = false) {
+      if (!this.project) return 0;
+      const totalBytes = this.getProjectSizeBytes();
+      this.project.updatedAt = Date.now();
+
+      const emit = (curr) => {
+        const clamped = Math.min(curr, totalBytes);
+        if (typeof onProgress === "function") {
+          try {
+            onProgress(clamped, totalBytes, this.formatSavingProgress(clamped, totalBytes));
+          } catch (e) {
+            console.error("Save progress handler error:", e);
+          }
+        }
+      };
+
+      emit(Math.round(totalBytes * 0.15));
+
+      // 1. Asynchronously persist full project to IndexedDB (multi-gigabyte capacity, never hits 5MB quota)
+      await idbPut(IDB_PROJECT_KEY, this.project);
+      emit(Math.round(totalBytes * 0.55));
+
+      // 2. Attempt to mirror to localStorage for instantaneous fast boot
+      try {
+        localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify(this.project));
+        localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+      } catch (e) {
+        try {
+          localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify({
+            _idb: true,
+            name: this.project.name || "Override_LemLib_Bot",
+            version: this.project.version || "1.0.0",
+            updatedAt: this.project.updatedAt,
+            fileCount: Object.keys(this.project.files || {}).length
+          }));
+          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+        } catch (innerErr) {
+          try {
+            localStorage.removeItem(STORAGE_KEY_PROJECT);
+            localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+          } catch (ign) {}
+        }
+      }
+      emit(Math.round(totalBytes * 0.85));
+
+      if (!skipIndex) {
+        this.indexVariables();
+      }
+
+      emit(totalBytes);
+      this.notifyListeners("save");
+      return totalBytes;
+    }
+
+    saveLocal(skipIndex = false, onProgress = null) {
       if (!this.project) return;
+      if (typeof onProgress === "function") {
+        this.saveWithProgress(onProgress, skipIndex);
+        return;
+      }
       this.project.updatedAt = Date.now();
 
       // 1. Asynchronously persist full project to IndexedDB (multi-gigabyte capacity, never hits 5MB quota)
@@ -1439,7 +1518,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     // -------------------------------------------------------------
     // Cloud Sync (Firebase Firestore Integration)
     // -------------------------------------------------------------
-    async saveToCloud() {
+    async saveToCloud(onProgress = null) {
       if (!this.project) return false;
       if (typeof firebase === "undefined" || !firebase.auth || !firebase.firestore) {
         throw new Error("Firebase is not initialized");
@@ -1449,8 +1528,24 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         throw new Error("You must be signed in with Google to sync project to cloud");
       }
 
+      const totalBytes = this.getProjectSizeBytes();
+      const emit = (curr) => {
+        const clamped = Math.min(curr, totalBytes);
+        if (typeof onProgress === "function") {
+          try {
+            onProgress(clamped, totalBytes, this.formatSavingProgress(clamped, totalBytes));
+          } catch (e) {
+            console.error("Cloud progress error:", e);
+          }
+        }
+      };
+
+      emit(Math.round(totalBytes * 0.15));
+
       const db = firebase.firestore();
       const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
+
+      emit(Math.round(totalBytes * 0.45));
 
       await projectRef.set({
         name: this.project.name,
@@ -1461,9 +1556,12 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         authorEmail: user.email || "",
       }, { merge: true });
 
+      emit(Math.round(totalBytes * 0.80));
+
       this.markDirty(false);
       this.project.cloudSynced = true;
-      this.saveLocal();
+      await this.saveWithProgress(onProgress);
+      emit(totalBytes);
       return true;
     }
 

@@ -4455,6 +4455,49 @@ kbd {
   font-family: monospace;
 }
 
+.ide-save-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.70rem;
+  font-family: monospace;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.ide-save-progress-pill.saving {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: #f59e0b;
+  color: #fde68a;
+}
+.ide-save-progress-pill.done {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #4ade80;
+}
+.ide-save-progress-bar-wrap {
+  width: 44px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+  display: inline-block;
+}
+.ide-save-progress-bar-fill {
+  display: block;
+  height: 100%;
+  background: #f59e0b;
+  width: 0%;
+  transition: width 0.12s ease;
+}
+.ide-save-progress-pill.done .ide-save-progress-bar-fill {
+  background: #22c55e;
+}
+
 .ide-editor-wrapper {
   flex: 1;
   display: flex;

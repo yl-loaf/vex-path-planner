@@ -6243,8 +6243,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
           btnSyncCloud.disabled = true;
           btnSyncCloud.textContent = "⏳ Syncing...";
           syncPlannerIntoProjectManager();
-          await window.ProjectManager.saveToCloud();
-          showToast("☁️ Multi-file project synchronized to cloud successfully!");
+          let finalStr = "";
+          await window.ProjectManager.saveToCloud((curr, total, progStr) => {
+            btnSyncCloud.textContent = `⏳ ${progStr}`;
+            finalStr = progStr;
+          });
+          showToast(`☁️ Multi-file project synchronized to cloud (${finalStr || "100%"})!`);
         } catch (err) {
           showToast(`⚠️ Cloud sync failed: ${err.message}`);
         } finally {
