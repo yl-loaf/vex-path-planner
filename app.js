@@ -216,6 +216,10 @@
     });
   }
 
+  function renderPathSelect() {
+    syncPathSelect();
+  }
+
   function switchPath(id) {
     if (!paths.some((p) => p.id === id)) return;
     activePathId = id;
@@ -5900,7 +5904,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       paths = newPaths;
       activePathId = paths[0].id;
       bindActive();
-      renderPathSelect();
+      syncPathSelect();
       syncStartInputs();
       renderFlow();
       draw();
@@ -6051,7 +6055,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
         ];
         activePathId = paths[0].id;
         bindActive();
-        renderPathSelect();
+        syncPathSelect();
         syncStartInputs();
         renderFlow();
         generateCode();
@@ -6080,7 +6084,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
         ];
         activePathId = paths[0].id;
         bindActive();
-        renderPathSelect();
+        syncPathSelect();
         syncStartInputs();
         renderFlow();
         generateCode();
@@ -6107,7 +6111,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
         ];
         activePathId = paths[0].id;
         bindActive();
-        renderPathSelect();
+        syncPathSelect();
         syncStartInputs();
         renderFlow();
         generateCode();
