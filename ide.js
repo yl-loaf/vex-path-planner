@@ -211,7 +211,14 @@
     });
   }
 
+  function saveCurrentEditorState() {
+    if (activeFile && elCodeEditor && window.ProjectManager) {
+      window.ProjectManager.setFile(activeFile, elCodeEditor.value);
+    }
+  }
+
   function switchToFile(filename) {
+    saveCurrentEditorState();
     if (!openTabs.includes(filename)) {
       openTabs.push(filename);
     }
@@ -222,6 +229,7 @@
   }
 
   function closeTab(filename) {
+    saveCurrentEditorState();
     openTabs = openTabs.filter(t => t !== filename);
     if (activeFile === filename) {
       activeFile = openTabs[openTabs.length - 1] || "src/autons.cpp";
@@ -381,6 +389,7 @@
 
     if (btnSaveCloud) {
       btnSaveCloud.addEventListener("click", async () => {
+        saveCurrentEditorState();
         const cloudStatus = document.getElementById("cloudStatus");
         if (cloudStatus) cloudStatus.textContent = "⏳ Saving…";
         try {
@@ -390,8 +399,11 @@
           if (cloudStatus) cloudStatus.textContent = "☁️ Synced";
           alert("✅ Project workspace saved & synchronized to cloud successfully!");
         } catch (e) {
-          if (cloudStatus) cloudStatus.textContent = "⚠️ Error";
-          alert(`Could not sync to cloud: ${e.message}`);
+          ProjectManager.saveLocal();
+          ProjectManager.markDirty(false);
+          renderProjectHeader();
+          if (cloudStatus) cloudStatus.textContent = "💾 Local";
+          alert(`💾 Saved locally to browser storage!\n\n(${e.message || "Sign in with Google to sync to cloud."})`);
         }
       });
     }
@@ -489,6 +501,7 @@
   }
 
   function runCompilation() {
+    saveCurrentEditorState();
     if (!elBuildConsole) return;
     elBuildConsole.textContent = "Compiling project workspace...\n";
 
@@ -497,48 +510,52 @@
     if (buildTabBtn) buildTabBtn.click();
 
     setTimeout(() => {
-      const res = ProjectManager.compileProject();
-      elBuildConsole.textContent = res.logs;
+      try {
+        const res = ProjectManager.compileProject();
+        elBuildConsole.textContent = res.logs;
 
-      // Update Diagnostics
-      if (elDiagCount) elDiagCount.textContent = res.errors.length + res.warnings.length;
-      if (elDiagnosticsList) {
-        if (res.errors.length === 0 && res.warnings.length === 0) {
-          elDiagnosticsList.innerHTML = `<div class="ide-diag-empty">✅ No syntax errors or warnings found across all project files.</div>`;
-        } else {
-          elDiagnosticsList.innerHTML = "";
-          res.errors.forEach(err => {
-            const row = document.createElement("div");
-            row.className = "ide-diag-item error";
-            row.innerHTML = `<span class="ide-diag-badge">ERROR</span> <strong class="ide-diag-file">${err.file}:${err.line}</strong> - <span>${err.message}</span>`;
-            row.onclick = () => {
-              switchToFile(err.file);
-            };
-            elDiagnosticsList.appendChild(row);
-          });
-          res.warnings.forEach(warn => {
-            const row = document.createElement("div");
-            row.className = "ide-diag-item warning";
-            row.innerHTML = `<span class="ide-diag-badge">WARN</span> <strong class="ide-diag-file">${warn.file}:${warn.line}</strong> - <span>${warn.message}</span>`;
-            row.onclick = () => {
-              switchToFile(warn.file);
-            };
-            elDiagnosticsList.appendChild(row);
-          });
+        // Update Diagnostics
+        if (elDiagCount) elDiagCount.textContent = res.errors.length + res.warnings.length;
+        if (elDiagnosticsList) {
+          if (res.errors.length === 0 && res.warnings.length === 0) {
+            elDiagnosticsList.innerHTML = `<div class="ide-diag-empty">✅ No syntax errors or warnings found across all project files.</div>`;
+          } else {
+            elDiagnosticsList.innerHTML = "";
+            res.errors.forEach(err => {
+              const row = document.createElement("div");
+              row.className = "ide-diag-item error";
+              row.innerHTML = `<span class="ide-diag-badge">ERROR</span> <strong class="ide-diag-file">${err.file}:${err.line}</strong> - <span>${err.message}</span>`;
+              row.onclick = () => {
+                switchToFile(err.file);
+              };
+              elDiagnosticsList.appendChild(row);
+            });
+            res.warnings.forEach(warn => {
+              const row = document.createElement("div");
+              row.className = "ide-diag-item warning";
+              row.innerHTML = `<span class="ide-diag-badge">WARN</span> <strong class="ide-diag-file">${warn.file}:${warn.line}</strong> - <span>${warn.message}</span>`;
+              row.onclick = () => {
+                switchToFile(warn.file);
+              };
+              elDiagnosticsList.appendChild(row);
+            });
+          }
         }
-      }
 
-      // Update Memory Map
-      if (res.stats) {
-        const memFlashFill = document.getElementById("memFlashFill");
-        const memFlashText = document.getElementById("memFlashText");
-        const memRamFill = document.getElementById("memRamFill");
-        const memRamText = document.getElementById("memRamText");
+        // Update Memory Map
+        if (res.stats) {
+          const memFlashFill = document.getElementById("memFlashFill");
+          const memFlashText = document.getElementById("memFlashText");
+          const memRamFill = document.getElementById("memRamFill");
+          const memRamText = document.getElementById("memRamText");
 
-        if (memFlashFill) memFlashFill.style.width = `${Math.min(100, res.stats.flashPct)}%`;
-        if (memFlashText) memFlashText.textContent = `${(res.stats.flashBytes / 1024).toFixed(1)} KB / 32.0 MB (${res.stats.flashPct.toFixed(2)}%)`;
-        if (memRamFill) memRamFill.style.width = `${Math.min(100, res.stats.ramPct)}%`;
-        if (memRamText) memRamText.textContent = `${(res.stats.ramBytes / 1024).toFixed(1)} KB / 32.0 MB (${res.stats.ramPct.toFixed(2)}%)`;
+          if (memFlashFill) memFlashFill.style.width = `${Math.min(100, res.stats.flashPct)}%`;
+          if (memFlashText) memFlashText.textContent = `${(res.stats.flashBytes / 1024).toFixed(1)} KB / 32.0 MB (${res.stats.flashPct.toFixed(2)}%)`;
+          if (memRamFill) memRamFill.style.width = `${Math.min(100, res.stats.ramPct)}%`;
+          if (memRamText) memRamText.textContent = `${(res.stats.ramBytes / 1024).toFixed(1)} KB / 32.0 MB (${res.stats.ramPct.toFixed(2)}%)`;
+        }
+      } catch (err) {
+        elBuildConsole.textContent += `\n❌ Compilation error: ${err.message}\n`;
       }
     }, 150);
   }

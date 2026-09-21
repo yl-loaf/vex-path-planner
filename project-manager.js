@@ -404,7 +404,10 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     // Variable & Device Indexer (Scans all project headers/scripts)
     // -------------------------------------------------------------
     indexVariables() {
-      if (!this.project || !this.project.files) return { motors: [], pistons: [], sensors: [], chassis: [], functions: [] };
+      if (!this.project || !this.project.files) {
+        this.symbols = { motors: [], pistons: [], sensors: [], chassis: [], functions: [], constants: [] };
+        return this.symbols;
+      }
 
       const symbols = {
         motors: [],
@@ -998,11 +1001,11 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       // Symbol references check across project
       this.indexVariables();
       const declaredSymbols = new Set([
-        ...this.symbols.motors.map(m => m.name),
-        ...this.symbols.pistons.map(p => p.name),
-        ...this.symbols.sensors.map(s => s.name),
-        ...this.symbols.chassis.map(c => c.name),
-        ...this.symbols.functions.map(f => f.name),
+        ...(this.symbols?.motors || []).map(m => m.name),
+        ...(this.symbols?.pistons || []).map(p => p.name),
+        ...(this.symbols?.sensors || []).map(s => s.name),
+        ...(this.symbols?.chassis || []).map(c => c.name),
+        ...(this.symbols?.functions || []).map(f => f.name),
         "chassis", "pros", "lemlib", "delay", "printf"
       ]);
 

@@ -845,7 +845,7 @@ button.full { width: 100%; }
   border-color: #3b82f6;
 }
 
-.modal {
+.modal, .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.65);
@@ -853,8 +853,9 @@ button.full { width: 100%; }
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(2px);
 }
-.modal[hidden] { display: none !important; }
+.modal[hidden], .modal-overlay[hidden] { display: none !important; }
 .modal-card {
   background: var(--panel);
   border: 1px solid var(--border);
