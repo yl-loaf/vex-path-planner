@@ -42,16 +42,22 @@ export function updateBuildVersion() {
   fs.writeFileSync(versionFile, outputContent, 'utf8');
   console.log(`[build] Updated version.js to build: ${nextBuild}`);
 
-  // Also update cache-busting query strings in index.html
-  const indexFile = path.join(__dirname, 'index.html');
-  if (fs.existsSync(indexFile)) {
-    let html = fs.readFileSync(indexFile, 'utf8');
-    html = html.replace(/(style\.css\?v=)[^"']+/g, `$1${nextBuild}`);
-    html = html.replace(/(version\.js\?v=)[^"']+/g, `$1${nextBuild}`);
-    html = html.replace(/(app\.js\?v=)[^"']+/g, `$1${nextBuild}`);
-    html = html.replace(/(firebase-config\.js\?v=)[^"']+/g, `$1${nextBuild}`);
-    fs.writeFileSync(indexFile, html, 'utf8');
-    console.log(`[build] Updated asset cache-busters in index.html to ${nextBuild}`);
+  // Also update cache-busting query strings in index.html, ide.html, translator.html
+  const htmlFiles = ['index.html', 'ide.html', 'translator.html'];
+  for (const f of htmlFiles) {
+    const filePath = path.join(__dirname, f);
+    if (fs.existsSync(filePath)) {
+      let html = fs.readFileSync(filePath, 'utf8');
+      html = html.replace(/(style\.css\?v=)[^"']+/g, `$1${nextBuild}`);
+      html = html.replace(/(version\.js\?v=)[^"']+/g, `$1${nextBuild}`);
+      html = html.replace(/(app\.js\?v=)[^"']+/g, `$1${nextBuild}`);
+      html = html.replace(/(ide\.js\?v=)[^"']+/g, `$1${nextBuild}`);
+      html = html.replace(/(project-manager\.js\?v=)[^"']+/g, `$1${nextBuild}`);
+      html = html.replace(/(v5-brain-serial\.js\?v=)[^"']+/g, `$1${nextBuild}`);
+      html = html.replace(/(firebase-config\.js\?v=)[^"']+/g, `$1${nextBuild}`);
+      fs.writeFileSync(filePath, html, 'utf8');
+      console.log(`[build] Updated asset cache-busters in ${f} to ${nextBuild}`);
+    }
   }
 
   return nextBuild;

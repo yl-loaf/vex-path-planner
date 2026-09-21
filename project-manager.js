@@ -5,6 +5,81 @@
   const STORAGE_KEY_PROJECT = "lemlib_active_project";
   const STORAGE_KEY_PROJECT_DIRTY = "lemlib_project_dirty";
 
+  const IDB_DB_NAME = "LemLibProjectDB";
+  const IDB_STORE_NAME = "projects";
+  const IDB_PROJECT_KEY = "active_project";
+
+  function openProjectDB() {
+    return new Promise((resolve) => {
+      if (typeof indexedDB === "undefined") return resolve(null);
+      try {
+        const req = indexedDB.open(IDB_DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(IDB_STORE_NAME)) {
+            db.createObjectStore(IDB_STORE_NAME);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+
+  function idbPut(key, val) {
+    return openProjectDB().then((db) => {
+      if (!db) return false;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(IDB_STORE_NAME, "readwrite");
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+          tx.onabort = () => resolve(false);
+          const store = tx.objectStore(IDB_STORE_NAME);
+          store.put(val, key);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    });
+  }
+
+  function idbGet(key) {
+    return openProjectDB().then((db) => {
+      if (!db) return null;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(IDB_STORE_NAME, "readonly");
+          const store = tx.objectStore(IDB_STORE_NAME);
+          const req = store.get(key);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  function idbDelete(key) {
+    return openProjectDB().then((db) => {
+      if (!db) return false;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(IDB_STORE_NAME, "readwrite");
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+          const store = tx.objectStore(IDB_STORE_NAME);
+          store.delete(key);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    });
+  }
+
   const DEFAULT_TEMPLATES = {
     "src/autons.cpp": `// =================================================================
 // autons.cpp - Autonomous Routines for VEX V5 LemLib
@@ -311,6 +386,29 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.isDirty = false;
       this.listeners = [];
       this.loadProject();
+      this.initAsyncStorage();
+    }
+
+    async initAsyncStorage() {
+      try {
+        const idbProj = await idbGet(IDB_PROJECT_KEY);
+        if (idbProj && idbProj.files && Object.keys(idbProj.files).length > 0) {
+          const currentTimestamp = this.project?.updatedAt || 0;
+          const idbTimestamp = idbProj.updatedAt || 0;
+          // If IDB has a valid project and either we don't have one or IDB is at least as fresh
+          if (!this.project || idbTimestamp >= currentTimestamp || this.project._idb) {
+            this.project = idbProj;
+            this.isDirty = localStorage.getItem(STORAGE_KEY_PROJECT_DIRTY) === "true";
+            this.indexVariables();
+            this.notifyListeners("load");
+          }
+        } else if (this.project && !this.project._idb) {
+          // Sync existing project into IDB
+          idbPut(IDB_PROJECT_KEY, this.project);
+        }
+      } catch (err) {
+        console.warn("Async storage sync warning:", err);
+      }
     }
 
     // Load active project from LocalStorage or initialize default
@@ -318,9 +416,29 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       try {
         const raw = localStorage.getItem(STORAGE_KEY_PROJECT);
         if (raw) {
-          this.project = JSON.parse(raw);
-          if (!this.project.files || Object.keys(this.project.files).length === 0) {
-            this.project.files = { ...DEFAULT_TEMPLATES };
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed._idb) {
+            // Full project is in IndexedDB; initAsyncStorage will populate it
+            if (!this.project) {
+              this.project = {
+                name: parsed.name || "Override_LemLib_Bot",
+                version: parsed.version || "1.0.0",
+                target: "v5",
+                kernel: "4.1.0",
+                lemlibVersion: "0.5.4",
+                createdAt: parsed.updatedAt || Date.now(),
+                updatedAt: parsed.updatedAt || Date.now(),
+                files: { ...DEFAULT_TEMPLATES },
+                activeAuton: "red_rush_auton",
+                cloudSynced: true,
+                _idb: true
+              };
+            }
+          } else {
+            this.project = parsed;
+            if (!this.project.files || Object.keys(this.project.files).length === 0) {
+              this.project.files = { ...DEFAULT_TEMPLATES };
+            }
           }
         } else {
           this.initDefaultProject();
@@ -358,9 +476,10 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       } catch (e) {
         console.error("Wipe storage error:", e);
       }
+      idbDelete(IDB_PROJECT_KEY);
       this.project = null;
       this.isDirty = false;
-      this.notifyListeners();
+      this.notifyListeners("wipe");
     }
 
     async exportProjectZip() {
@@ -407,11 +526,33 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     saveLocal(skipIndex = false) {
       if (!this.project) return;
       this.project.updatedAt = Date.now();
+
+      // 1. Asynchronously persist full project to IndexedDB (multi-gigabyte capacity, never hits 5MB quota)
+      idbPut(IDB_PROJECT_KEY, this.project);
+
+      // 2. Attempt to mirror to localStorage for instantaneous fast boot
       try {
         localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify(this.project));
         localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
       } catch (e) {
-        console.error("Storage error:", e);
+        // QuotaExceededError: LocalStorage quota exceeded (project size > 5MB limit).
+        // Store a lightweight pointer in localStorage so the tab and other tabs know the project is in IndexedDB.
+        try {
+          localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify({
+            _idb: true,
+            name: this.project.name || "Override_LemLib_Bot",
+            version: this.project.version || "1.0.0",
+            updatedAt: this.project.updatedAt,
+            fileCount: Object.keys(this.project.files || {}).length
+          }));
+          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+        } catch (innerErr) {
+          try {
+            // Remove oversized stale project data to avoid blocking other localStorage items
+            localStorage.removeItem(STORAGE_KEY_PROJECT);
+            localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+          } catch (ign) {}
+        }
       }
       if (!skipIndex) {
         this.indexVariables();

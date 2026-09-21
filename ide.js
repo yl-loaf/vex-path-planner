@@ -267,7 +267,7 @@
 
     try {
       saveCurrentEditorState();
-      if (window.ProjectManager) {
+      if (!activeFile && window.ProjectManager) {
         window.ProjectManager.saveLocal();
       }
 
@@ -453,7 +453,12 @@
         }
         return;
       }
-      window.ProjectManager.setFile(activeFile, elCodeEditor.value, true);
+      window.ProjectManager.setFile(activeFile, elCodeEditor.value, false);
+      if (window.ProjectManager.debounceSaveTimer) {
+        clearTimeout(window.ProjectManager.debounceSaveTimer);
+        window.ProjectManager.debounceSaveTimer = null;
+      }
+      window.ProjectManager.saveLocal();
     }
   }
 
@@ -1293,13 +1298,14 @@
     // -------------------------------------------------------------
     // Multi-File Project Folder & Archive Import / Export System
     // -------------------------------------------------------------
-    function isIgnoredFile(path) {
+    function isIgnoredFile(path, size = 0) {
       if (!path) return true;
       const lower = path.toLowerCase().replace(/\\/g, "/");
       const base = path.split(/[\/\\]/).pop();
       if (base.startsWith(".") && base !== ".gitignore" && base !== ".editorconfig") return true;
-      if (lower.includes("/.git/") || lower.includes("/.vscode/") || lower.includes("/bin/") || lower.includes("/build/") || lower.includes("/node_modules/") || lower.includes("/__macosx/")) return true;
-      if (lower.endsWith(".o") || lower.endsWith(".elf") || lower.endsWith(".bin") || lower.endsWith(".ds_store") || lower.endsWith(".zip") || lower.endsWith(".tar.gz")) return true;
+      if (lower.includes("/.git/") || lower.includes("/.vscode/") || lower.includes("/.idea/") || lower.includes("/bin/") || lower.includes("/build/") || lower.includes("/node_modules/") || lower.includes("/__macosx/") || lower.includes("/firmware/")) return true;
+      if (lower.endsWith(".o") || lower.endsWith(".elf") || lower.endsWith(".bin") || lower.endsWith(".hex") || lower.endsWith(".map") || lower.endsWith(".a") || lower.endsWith(".lib") || lower.endsWith(".so") || lower.endsWith(".dylib") || lower.endsWith(".ds_store") || lower.endsWith(".zip") || lower.endsWith(".tar.gz") || lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".ico") || lower.endsWith(".pdf") || lower.endsWith(".woff") || lower.endsWith(".woff2") || lower.endsWith(".ttf")) return true;
+      if (size && size > 2 * 1024 * 1024) return true;
       return false;
     }
 
@@ -1356,7 +1362,7 @@
 
     async function processFolderFiles(fileList) {
       if (!fileList || fileList.length === 0) return;
-      const validFiles = Array.from(fileList).filter(f => !isIgnoredFile(f.webkitRelativePath || f.name));
+      const validFiles = Array.from(fileList).filter(f => !isIgnoredFile(f.webkitRelativePath || f.name, f.size));
       if (validFiles.length === 0) {
         alert("No valid C++/header files found in the chosen folder.");
         return;
@@ -1484,13 +1490,13 @@
       const map = {};
       if (entry.isFile) {
         const file = await new Promise(res => entry.file(res));
-        if (!isIgnoredFile(file.name)) {
+        if (!isIgnoredFile(file.name, file.size)) {
           const text = await file.text();
           const relPath = currentPath ? `${currentPath}/${file.name}` : file.name;
           map[relPath] = text;
         }
       } else if (entry.isDirectory) {
-        if (entry.name === ".git" || entry.name === "bin" || entry.name === "build" || entry.name === ".vscode" || entry.name === "node_modules" || entry.name === "__MACOSX") return {};
+        if (entry.name === ".git" || entry.name === "bin" || entry.name === "build" || entry.name === ".vscode" || entry.name === "node_modules" || entry.name === "__MACOSX" || entry.name === "firmware") return {};
         const dirReader = entry.createReader();
         let entries = [];
         let batch;
