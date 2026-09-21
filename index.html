@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260921.k26" />
+  <link rel="stylesheet" href="style.css?v=20260921.k39" />
 </head>
 <body>
   <!-- =================================================================
@@ -26,6 +26,9 @@
         </div>
       </div>
       <div class="home-nav-actions">
+        <a href="stats.html" class="btn-nav-stats" title="View website visitor analytics and stats">
+          📊 Stats <span id="globalVisitorBadge" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 6px;border-radius:10px;font-size:0.75rem;margin-left:4px;">...</span>
+        </a>
         <div id="homeAuthArea" class="auth-area">
           <button id="btnHomeGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
           <span id="homeAuthUser" class="auth-user" hidden></span>
@@ -1863,15 +1866,15 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260921.k26"></script>
+  <script src="version.js?v=20260921.k39"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k26"></script>
+  <script src="firebase-config.js?v=20260921.k39"></script>
   <script src="v5-brain-serial.js?v=20260921.k22"></script>
   <script src="project-manager.js?v=20260921.k22"></script>
   <script src="cpp-parser.js?v=20260921.k22"></script>
-  <script src="app.js?v=20260921.k26"></script>
+  <script src="app.js?v=20260921.k39"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
@@ -1895,6 +1898,22 @@ void autonomous() {
           }
         };
       }
+
+      // Fetch and update global visitor count badge
+      async function updateGlobalVisitorBadge() {
+        try {
+          var res = await fetch('/api/stats');
+          var data = await res.json();
+          var badge = document.getElementById('globalVisitorBadge');
+          if (badge && data && data.totalViews !== undefined) {
+            badge.textContent = data.totalViews.toLocaleString();
+          }
+        } catch (err) {
+          console.error('Failed to load visitor stats:', err);
+        }
+      }
+      updateGlobalVisitorBadge();
+      setInterval(updateGlobalVisitorBadge, 15000);
     })();
   </script>
 </body>

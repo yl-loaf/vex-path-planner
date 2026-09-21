@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Website Visitor Statistics · VEX V5 Suite</title>
+  <meta name="description" content="Live visitor statistics and website analytics dashboard for the VEX V5 LemLib Suite." />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .stats-container {
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .stats-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .stat-card-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .stat-card-desc {
+      font-size: 0.8rem;
+      color: var(--green);
+      margin-top: 6px;
+    }
+    .stats-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 30px;
+    }
+    .stats-section h3 {
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      background: rgba(0,0,0,0.2);
+    }
+    tr:hover td {
+      background: rgba(255,255,255,0.02);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-home { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .badge-ide { background: rgba(168,85,247,0.15); color: #a855f7; }
+    .badge-translator { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge-stats { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge-other { background: rgba(139,155,180,0.15); color: var(--muted); }
+    .nav-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn-nav {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-nav:hover {
+      background: var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="stats-container">
+    <div class="stats-header">
+      <div>
+        <h1 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">📊 Website Visitor Analytics</h1>
+        <p style="color: var(--muted);">Real-time tracking of website visitors, page views, and activity across the VEX V5 LemLib Suite.</p>
+      </div>
+      <div class="nav-actions">
+        <a href="/" class="btn-nav">🗺️ Visual Planner</a>
+        <a href="ide.html" class="btn-nav">💻 PROS IDE</a>
+        <a href="translator.html" class="btn-nav">🔄 C++ Translator</a>
+      </div>
+    </div>
+
+    <!-- Overview Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-card-title">Total Page Views</div>
+        <div class="stat-card-value" id="valTotalViews">--</div>
+        <div class="stat-card-desc">📈 Real-time cumulative requests</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-title">Unique Visitors</div>
+        <div class="stat-card-value" id="valUniqueVisitors">--</div>
+        <div class="stat-card-desc">👥 Distinct visitor sessions tracked</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-title">Most Popular Page</div>
+        <div class="stat-card-value" id="valTopPage" style="font-size: 1.5rem; padding-top: 10px;">--</div>
+        <div class="stat-card-desc">🔥 Highest traffic destination</div>
+      </div>
+    </div>
+
+    <!-- Page Breakdown Section -->
+    <div class="stats-section">
+      <h3>📑 Traffic by Page Module</h3>
+      <div class="stats-grid" style="margin-bottom: 0;" id="pageBreakdownGrid">
+        <!-- Dynamically populated page breakdown -->
+      </div>
+    </div>
+
+    <!-- Recent Visits Table -->
+    <div class="stats-section">
+      <h3>🕒 Recent Visitor Activity Log <span style="font-size:0.8rem; font-weight:normal; color:var(--muted); margin-left:10px;">🔒 IP addresses are securely masked for privacy</span></h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Module / Page</th>
+              <th>Masked Visitor ID</th>
+              <th>User Agent</th>
+            </tr>
+          </thead>
+          <tbody id="recentVisitsBody">
+            <tr>
+              <td colspan="4" style="text-align: center; color: var(--muted);">Loading visitor statistics...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+
+        document.getElementById('valTotalViews').textContent = (data.totalViews || 0).toLocaleString();
+        document.getElementById('valUniqueVisitors').textContent = (data.uniqueVisitors || 0).toLocaleString();
+
+        const pages = data.pages || { home: 0, ide: 0, translator: 0, stats: 0, other: 0 };
+        
+        // Find top page
+        let topPageName = 'Home / Planner';
+        let maxViews = pages.home || 0;
+        if ((pages.ide || 0) > maxViews) { maxViews = pages.ide; topPageName = 'PROS C++ IDE'; }
+        if ((pages.translator || 0) > maxViews) { maxViews = pages.translator; topPageName = 'C++ Translator'; }
+        if ((pages.stats || 0) > maxViews) { maxViews = pages.stats; topPageName = 'Visitor Stats'; }
+        document.getElementById('valTopPage').textContent = topPageName;
+
+        // Render page breakdown
+        const pageNames = {
+          home: { title: 'Home & Visual Planner', badge: 'badge-home', icon: '🗺️' },
+          ide: { title: 'PROS C++ IDE', badge: 'badge-ide', icon: '💻' },
+          translator: { title: 'C++ Translator', badge: 'badge-translator', icon: '🔄' },
+          stats: { title: 'Visitor Stats Page', badge: 'badge-stats', icon: '📊' },
+          other: { title: 'Other Static Assets', badge: 'badge-other', icon: '📁' }
+        };
+
+        const breakdownGrid = document.getElementById('pageBreakdownGrid');
+        breakdownGrid.innerHTML = Object.entries(pageNames).map(([key, info]) => {
+          const count = pages[key] || 0;
+          return `
+            <div class="stat-card" style="padding: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span class="badge ${info.badge}">${info.icon} ${info.title}</span>
+              </div>
+              <div style="font-size: 1.8rem; font-weight: 700;">${count.toLocaleString()}</div>
+              <div class="stat-card-desc" style="color: var(--muted);">Page requests</div>
+            </div>
+          `;
+        }).join('');
+
+        // Render recent visits
+        const tbody = document.getElementById('recentVisitsBody');
+        const visitors = data.visitors || [];
+        if (visitors.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--muted);">No visits recorded yet.</td></tr>';
+        } else {
+          tbody.innerHTML = visitors.map(v => {
+            const dateStr = new Date(v.timestamp).toLocaleString();
+            let badgeClass = 'badge-other';
+            let pageLabel = v.page;
+            if (v.page === 'home') { badgeClass = 'badge-home'; pageLabel = 'Visual Planner / Home'; }
+            else if (v.page === 'ide') { badgeClass = 'badge-ide'; pageLabel = 'PROS C++ IDE'; }
+            else if (v.page === 'translator') { badgeClass = 'badge-translator'; pageLabel = 'C++ Translator'; }
+            else if (v.page === 'stats') { badgeClass = 'badge-stats'; pageLabel = 'Stats Dashboard'; }
+
+            return `
+              <tr>
+                <td>${dateStr}</td>
+                <td><span class="badge ${badgeClass}">${pageLabel}</span></td>
+                <td style="font-family: monospace; color: var(--cyan);">${v.ip}</td>
+                <td style="color: var(--muted); font-size: 0.8rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${v.userAgent}">${v.userAgent}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+      } catch (err) {
+        console.error('Failed to fetch stats:', err);
+      }
+    }
+
+    fetchStats();
+    // Refresh every 10 seconds
+    setInterval(fetchStats, 10000);
+  </script>
+</body>
+</html>

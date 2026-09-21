@@ -53,6 +53,9 @@
       </div>
 
       <div class="header-actions">
+        <a href="stats.html" class="btn-nav-stats" style="background:#1a2433;color:#e8eef7;border:1px solid #2a3548;padding:6px 12px;border-radius:8px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="View visitor stats">
+          📊 Stats <span id="globalVisitorBadgeIDE" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 6px;border-radius:10px;font-size:0.75rem;">...</span>
+        </a>
         <div id="authArea" class="auth-area">
           <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
           <span id="authUser" class="auth-user" hidden></span>
@@ -373,5 +376,17 @@
   <script src="v5-brain-serial.js?v=20260921.k22"></script>
   <script src="project-manager.js?v=20260921.k22"></script>
   <script src="ide.js?v=20260921.k22"></script>
+  <script>
+    (async function() {
+      try {
+        var res = await fetch('/api/stats');
+        var data = await res.json();
+        var badge = document.getElementById('globalVisitorBadgeIDE');
+        if (badge && data && data.totalViews !== undefined) {
+          badge.textContent = data.totalViews.toLocaleString();
+        }
+      } catch(e) {}
+    })();
+  </script>
 </body>
 </html>
