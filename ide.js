@@ -69,6 +69,12 @@
     ProjectManager.addListener(() => {
       renderProjectHeader();
       renderSymbols();
+      if (activeFile && elCodeEditor) {
+        const latest = ProjectManager.getFile(activeFile);
+        if (latest !== elCodeEditor.value && document.activeElement !== elCodeEditor) {
+          loadFile(activeFile);
+        }
+      }
     });
   }
 

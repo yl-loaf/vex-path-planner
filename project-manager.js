@@ -951,6 +951,89 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     // Generate C++ code string from visual planner paths
+    fallbackEmitRoutineBody(pose0, acts, indent = "    ") {
+      let code = "";
+      if (pose0) {
+        code += `${indent}chassis.setPose(${Number(pose0.x || 0).toFixed(1)}, ${Number(pose0.y || 0).toFixed(1)}, ${Number(pose0.theta || 0).toFixed(1)});\n`;
+      }
+      for (const a of acts || []) {
+        const label = (a.label || "").trim();
+        const cleanComment = label ? label.replace(/^\/\/\s*/, "") : "";
+        if (a.type === "custom") {
+          if (cleanComment) code += `${indent}// ${cleanComment}\n`;
+          const lines = (a.customCode || "").split("\n");
+          for (const line of lines) {
+            if (line.trim().length === 0) code += "\n";
+            else code += `${indent}${line}\n`;
+          }
+          continue;
+        }
+        if (a.type === "wait") {
+          if (cleanComment) code += `${indent}// ${cleanComment}\n`;
+          if (a.waitType === "distance" || a.waitType === "until") {
+            code += `${indent}chassis.waitUntil(${a.distance != null ? a.distance : (a.waitDist != null ? a.waitDist : 12)});\n`;
+          } else if (a.waitType === "done") {
+            code += `${indent}chassis.waitUntilDone();\n`;
+          } else if (a.waitType === "time") {
+            code += `${indent}pros::delay(${a.delayMs != null ? a.delayMs : (a.timeout != null ? a.timeout : 250)});\n`;
+          } else {
+            code += `${indent}chassis.waitUntilDone();\n`;
+          }
+          if (a.customCode && a.customCode.trim()) {
+            const lines = a.customCode.trim().split("\n");
+            for (const line of lines) {
+              if (line.trim().length === 0) code += "\n";
+              else code += `${indent}${line}\n`;
+            }
+          }
+          continue;
+        }
+        const px = Number((a.x || 0) + (a.offsetX || 0)).toFixed(1);
+        const py = Number((a.y || 0) + (a.offsetY || 0)).toFixed(1);
+        const pt = Number((a.theta || 0) + (a.offsetTheta || 0)).toFixed(1);
+        const params = [];
+        if (a.forwards === false) params.push(".forwards = false");
+        if (a.type === "moveToPose" && a.lead != null && Number(a.lead) !== 0.6) {
+          params.push(`.lead = ${Number(a.lead)}`);
+        }
+        if (a.driftScaler != null && Number(a.driftScaler) !== 1.0) {
+          params.push(`.horizontalDrift = ${Number(a.driftScaler)}`);
+        }
+        if (a.maxSpeed != null && Number(a.maxSpeed) !== 127) {
+          params.push(`.maxSpeed = ${Number(a.maxSpeed)}`);
+        }
+        if (a.minSpeed != null && Number(a.minSpeed) !== 0) {
+          params.push(`.minSpeed = ${Number(a.minSpeed)}`);
+        }
+        if (a.earlyExitRange) params.push(`.earlyExitRange = ${a.earlyExitRange}`);
+        const paramStr = params.length ? `, {${params.join(", ")}}` : "";
+        const asyncArg = a.async ? ", true" : "";
+        const inlineComment = cleanComment ? ` // ${cleanComment}` : "";
+
+        switch (a.type) {
+          case "moveToPoint":
+            code += `${indent}chassis.moveToPoint(${px}, ${py}, ${a.timeout || 2000}${paramStr}${asyncArg});${inlineComment}\n`;
+            break;
+          case "moveToPose":
+            code += `${indent}chassis.moveToPose(${px}, ${py}, ${pt}, ${a.timeout || 2500}${paramStr}${asyncArg});${inlineComment}\n`;
+            break;
+          case "turnToPoint":
+            code += `${indent}chassis.turnToPoint(${px}, ${py}, ${a.timeout || 1500}${paramStr}${asyncArg});${inlineComment}\n`;
+            break;
+          case "turnToHeading":
+            code += `${indent}chassis.turnToHeading(${pt}, ${a.timeout || 1500}${paramStr}${asyncArg});${inlineComment}\n`;
+            break;
+          case "swingToPoint":
+            code += `${indent}chassis.swingToPoint(${px}, ${py}, DriveSide::${a.lockedSide || "LEFT"}, ${a.timeout || 1500}${paramStr}${asyncArg});${inlineComment}\n`;
+            break;
+          case "swingToHeading":
+            code += `${indent}chassis.swingToHeading(${pt}, DriveSide::${a.lockedSide || "LEFT"}, ${a.timeout || 1500}${paramStr}${asyncArg});${inlineComment}\n`;
+            break;
+        }
+      }
+      return code;
+    }
+
     generateAutonCppCode(plannerPaths, indent = "    ") {
       if (!plannerPaths || plannerPaths.length === 0) return "";
       let header = `// =================================================================\n` +
@@ -968,38 +1051,10 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         bodies += `// Routine ${idx + 1}: ${p.name || fnName}\n`;
         bodies += `// -----------------------------------------------------------------\n`;
         bodies += `void ${fnName}() {\n`;
-        if (p.pose) {
-          bodies += `${indent}chassis.setPose(${Number(p.pose.x || 0).toFixed(1)}, ${Number(p.pose.y || 0).toFixed(1)}, ${Number(p.pose.theta || 0).toFixed(1)});\n\n`;
-        }
-        if (p.actions && p.actions.length) {
-          p.actions.forEach((a) => {
-            if (a.type === "custom") {
-              const lines = (a.customCode || "").split("\n");
-              lines.forEach((l) => {
-                if (l.trim()) bodies += `${indent}${l.trim()}\n`;
-              });
-            } else if (a.type === "wait") {
-              if (a.waitType === "time") {
-                bodies += `${indent}pros::delay(${a.timeout || 500});\n`;
-              } else if (a.waitType === "until") {
-                bodies += `${indent}chassis.waitUntil(${a.waitDist || 12});\n`;
-              } else {
-                bodies += `${indent}chassis.waitUntilDone();\n`;
-              }
-            } else if (a.type === "moveToPoint") {
-              bodies += `${indent}chassis.moveToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${a.timeout || 2000}${a.async ? ", true" : ""});\n`;
-            } else if (a.type === "moveToPose") {
-              bodies += `${indent}chassis.moveToPose(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${Number(a.theta).toFixed(1)}, ${a.timeout || 2500}${a.async ? ", true" : ""});\n`;
-            } else if (a.type === "turnToHeading") {
-              bodies += `${indent}chassis.turnToHeading(${Number(a.theta).toFixed(1)}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
-            } else if (a.type === "turnToPoint") {
-              bodies += `${indent}chassis.turnToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
-            } else if (a.type === "swingToHeading") {
-              bodies += `${indent}chassis.swingToHeading(${Number(a.theta).toFixed(1)}, DriveSide::${a.lockedSide || "LEFT"}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
-            } else if (a.type === "swingToPoint") {
-              bodies += `${indent}chassis.swingToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, DriveSide::${a.lockedSide || "LEFT"}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
-            }
-          });
+        if (typeof window !== "undefined" && window.PlannerApp && typeof window.PlannerApp.emitRoutineBody === "function") {
+          bodies += window.PlannerApp.emitRoutineBody(p.pose, p.actions, indent);
+        } else {
+          bodies += this.fallbackEmitRoutineBody(p.pose, p.actions, indent);
         }
         bodies += `}\n\n`;
       });

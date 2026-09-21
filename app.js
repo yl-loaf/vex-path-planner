@@ -1006,6 +1006,10 @@
     try { generateCode(); } catch (_) {}
     try { scheduleCloudSave(); } catch (_) {}
     try { scheduleHistoryPush(); } catch (_) {}
+
+    if (window.ProjectManager) {
+      syncPlannerIntoProjectManager({ ask: false });
+    }
   }
 
   function saveLocal() {
@@ -6885,6 +6889,13 @@ lemlib::ControllerSettings ${currentMode}_controller(
   // Ensure simulation canvas is directly displayed and drawn on load
   showPlannerView();
   updateTimeDisplay();
+
+  window.PlannerApp = {
+    emitRoutineBody,
+    syncPlannerIntoProjectManager,
+    getPaths: () => paths,
+    getIndentString
+  };
 
   initFirebaseAuth();
 })();
