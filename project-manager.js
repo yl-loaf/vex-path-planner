@@ -524,19 +524,52 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     cleanFilesForFirestore(files) {
       if (!files || typeof files !== "object") return {};
       const clean = {};
-      for (const [path, content] of Object.entries(files)) {
-        if (!path || typeof content !== "string") continue;
+      const IGNORED_PATH_PREFIXES = [
+        ".cache/",
+        ".clangd/",
+        ".vscode/",
+        ".git/",
+        "bin/",
+        "build/",
+        "firmware/",
+        "dist/",
+        "node_modules/"
+      ];
+      const IGNORED_EXTENSIONS = [
+        ".idx", ".bin", ".elf", ".o", ".a", ".d", ".map", ".gch", ".pch",
+        ".so", ".dylib", ".dll", ".exe", ".zip", ".tar", ".gz", ".7z", ".iso"
+      ];
+
+      for (const [rawPath, content] of Object.entries(files)) {
+        if (!rawPath || typeof content !== "string") continue;
+        const normPath = rawPath.replace(/\\/g, "/");
+
+        // Check ignored prefixes
+        const isIgnoredPrefix = IGNORED_PATH_PREFIXES.some(prefix => normPath.startsWith(prefix) || normPath.includes("/" + prefix));
+        if (isIgnoredPrefix) {
+          console.log(`[ProjectManager] Skipping cache/build artifact for cloud sync: ${normPath}`);
+          continue;
+        }
+
+        // Check ignored extensions
+        const lowerPath = normPath.toLowerCase();
+        const isIgnoredExt = IGNORED_EXTENSIONS.some(ext => lowerPath.endsWith(ext));
+        if (isIgnoredExt) {
+          console.log(`[ProjectManager] Skipping binary/indexer file for cloud sync: ${normPath}`);
+          continue;
+        }
+
         // Skip binary content if present
         if (content.indexOf("\0") !== -1) {
-          console.warn(`[ProjectManager] Skipping binary file for cloud sync: ${path}`);
+          console.warn(`[ProjectManager] Skipping binary null-byte file for cloud sync: ${normPath}`);
           continue;
         }
-        // Skip single files larger than 2MB
-        if (content.length > 2 * 1024 * 1024) {
-          console.warn(`[ProjectManager] Skipping oversized file for cloud sync: ${path} (${content.length} bytes)`);
+        // Skip single files larger than 1.5MB
+        if (content.length > 1.5 * 1024 * 1024) {
+          console.warn(`[ProjectManager] Skipping oversized file for cloud sync: ${normPath} (${content.length} bytes)`);
           continue;
         }
-        clean[path] = content;
+        clean[normPath] = content;
       }
       return clean;
     }
@@ -2396,15 +2429,40 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
             authorEmail: user.email || email,
             isDefault: false,
             totalFiles: Object.keys(cleanFiles).length,
-            files: filesField
+            files: (totalFilesJsonSize < 200 * 1024 && (!compressedPayload || compressedPayload.length < 500000)) ? cleanFiles : primaryFiles,
+            chunkCount: 0,
+            isChunked: false
           };
 
-          if (compressedPayload) {
+          const MAX_DOC_PROPERTY_CHARS = 600000;
+          if (compressedPayload && compressedPayload.length > MAX_DOC_PROPERTY_CHARS) {
+            // Split into safe subcollection chunks to guarantee never exceeding Firestore 1MB document limit
+            const CHUNK_SIZE = 400000;
+            const chunkCount = Math.ceil(compressedPayload.length / CHUNK_SIZE);
+            docPayload.compressedFiles = null;
+            docPayload.chunkCount = chunkCount;
+            docPayload.isChunked = true;
+
+            const chunksColl = projectRef.collection("chunks");
+            const chunkPromises = [];
+            for (let i = 0; i < chunkCount; i++) {
+              const chunkStr = compressedPayload.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+              chunkPromises.push(chunksColl.doc(`chunk_${i}`).set({
+                chunkIndex: i,
+                totalChunks: chunkCount,
+                data: chunkStr,
+                updatedAt: now
+              }));
+            }
+            await Promise.all(chunkPromises);
+          } else if (compressedPayload) {
             docPayload.compressedFiles = compressedPayload;
+            docPayload.chunkCount = 0;
+            docPayload.isChunked = false;
           }
 
-          await projectRef.set(docPayload);
-          console.log(`[ProjectManager] Firestore saved: "${this.project.name}" (${Object.keys(cleanFiles).length} files, compressed: ${Boolean(compressedPayload)})`);
+          await projectRef.set(docPayload, { merge: true });
+          console.log(`[ProjectManager] Firestore saved: "${this.project.name}" (${Object.keys(cleanFiles).length} files, chunked: ${Boolean(docPayload.isChunked)})`);
         } catch (fsErr) {
           console.warn("[ProjectManager] Firestore save notice:", fsErr);
         }
@@ -2466,26 +2524,40 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           const snap = await projectRef.get();
           if (snap.exists) {
             const fsData = snap.data();
-            if (fsData.compressedFiles) {
+            if (fsData.isChunked || (fsData.chunkCount && fsData.chunkCount > 0)) {
+              try {
+                const chunksSnap = await projectRef.collection("chunks").get();
+                const chunkList = [];
+                chunksSnap.forEach((cDoc) => {
+                  const cData = cDoc.data();
+                  if (cData) {
+                    if (typeof cData.data === "string") {
+                      chunkList.push({
+                        idx: typeof cData.chunkIndex === "number" ? cData.chunkIndex : 0,
+                        text: cData.data
+                      });
+                    } else if (cData.files) {
+                      // Legacy chunk format compatibility
+                      fsData.files = Object.assign(fsData.files || {}, cData.files);
+                    }
+                  }
+                });
+                if (chunkList.length > 0) {
+                  chunkList.sort((a, b) => a.idx - b.idx);
+                  const fullCompressed = chunkList.map(c => c.text).join("");
+                  const decompressed = await this.decompressFiles(fullCompressed);
+                  if (decompressed && Object.keys(decompressed).length > 0) {
+                    fsData.files = decompressed;
+                  }
+                }
+              } catch (chunkErr) {
+                console.warn("[ProjectManager] Error reading Firestore chunks:", chunkErr);
+              }
+            } else if (fsData.compressedFiles) {
               const decompressed = await this.decompressFiles(fsData.compressedFiles);
               if (decompressed && Object.keys(decompressed).length > 0) {
                 fsData.files = decompressed;
               }
-            }
-            if ((!fsData.files || Object.keys(fsData.files).length === 0) && fsData.chunkCount) {
-              try {
-                const chunksSnap = await projectRef.collection("chunks").get();
-                const combinedFiles = {};
-                chunksSnap.forEach((cDoc) => {
-                  const cData = cDoc.data();
-                  if (cData && cData.files) {
-                    Object.assign(combinedFiles, cData.files);
-                  }
-                });
-                if (Object.keys(combinedFiles).length > 0) {
-                  fsData.files = combinedFiles;
-                }
-              } catch (_) {}
             }
             const fsTime = Number(fsData.updatedAt) || 0;
             const candTime = candidateData ? (Number(candidateData.updatedAt) || 0) : 0;

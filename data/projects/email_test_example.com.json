@@ -1,0 +1,14 @@
+{
+  "uid": "test_uid_123",
+  "email": "test@example.com",
+  "updatedAt": 1789997640640,
+  "savedAt": 1789997640793,
+  "project": {
+    "name": "TestBot",
+    "updatedAt": 1789997640640,
+    "files": {
+      "src/main.cpp": "// test"
+    }
+  },
+  "pathPayload": null
+}

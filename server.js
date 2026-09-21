@@ -9,8 +9,19 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+// Enable CORS for all routes (important for web view/iframe environments)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Cloud Project Storage Store for cross-device sync
 const projectsDir = path.join(__dirname, 'data', 'projects');
@@ -31,17 +42,20 @@ function getProjectFilePaths(uid, email) {
   return paths;
 }
 
-function saveUserProject(uid, email, project, pathPayload = null) {
+function saveUserProject(uid, email, project = null, pathPayload = null) {
   try {
     const filePaths = getProjectFilePaths(uid, email);
     if (!filePaths.length) return false;
+    const existing = getUserProject(uid, email) || {};
+    const finalProject = project || existing.project || null;
+    const finalPathPayload = pathPayload !== null ? pathPayload : (existing.pathPayload || null);
     const payload = {
-      uid: uid || '',
-      email: email || '',
-      updatedAt: (project && project.updatedAt) || Date.now(),
+      uid: uid || existing.uid || '',
+      email: email || existing.email || '',
+      updatedAt: (finalProject && finalProject.updatedAt) || Date.now(),
       savedAt: Date.now(),
-      project: project,
-      pathPayload: pathPayload
+      project: finalProject,
+      pathPayload: finalPathPayload
     };
     const jsonStr = JSON.stringify(payload, null, 2);
     for (const fp of filePaths) {
@@ -177,13 +191,13 @@ app.get('/api/stats', (req, res) => {
 });
 
 // Cloud Project Synchronization Endpoints (Cross-Device Cloud Sync)
-app.post('/api/project', (req, res) => {
+const handleSaveProject = (req, res) => {
   const { uid, email, project, pathPayload } = req.body || {};
   if (!uid && !email) {
     return res.status(400).json({ error: 'Missing user identification (uid or email required)' });
   }
-  if (!project || typeof project !== 'object') {
-    return res.status(400).json({ error: 'Missing or invalid project payload' });
+  if (!project && !pathPayload) {
+    return res.status(400).json({ error: 'Missing payload data (project or pathPayload required)' });
   }
 
   const success = saveUserProject(uid, email, project, pathPayload);
@@ -191,16 +205,19 @@ app.post('/api/project', (req, res) => {
     return res.status(500).json({ error: 'Failed to persist project on server' });
   }
 
-  const fileCount = project.files && typeof project.files === 'object' ? Object.keys(project.files).length : 0;
-  console.log(`[CloudProjectServer] Saved project "${project.name}" (${fileCount} files) for user ${email || uid}`);
+  const fileCount = project && project.files && typeof project.files === 'object' ? Object.keys(project.files).length : 0;
+  console.log(`[CloudProjectServer] Saved project payload for user ${email || uid} (files: ${fileCount}, path: ${Boolean(pathPayload)})`);
   res.json({
     success: true,
     savedAt: Date.now(),
-    updatedAt: project.updatedAt || Date.now(),
-    name: project.name,
+    updatedAt: (project && project.updatedAt) || Date.now(),
+    name: project?.name || 'Project',
     fileCount: fileCount
   });
-});
+};
+
+app.post('/api/project', handleSaveProject);
+app.put('/api/project', handleSaveProject);
 
 app.get('/api/project', (req, res) => {
   const { uid, email } = req.query;
