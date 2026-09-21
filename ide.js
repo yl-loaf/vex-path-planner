@@ -1490,19 +1490,10 @@
 
     if (btnIdeImportProject) {
       btnIdeImportProject.onclick = async () => {
-        const choice = prompt(
-          "Import PROS Multi-File Project Folder:\n\nSelect import method:\n1 = Select Complete Folder (Directory)\n2 = Select ZIP Archive (.zip)\n3 = Cancel",
-          "1"
-        );
-        if (choice === "1") {
-          const handled = await selectDirectoryWithNativePicker();
-          if (!handled && ideFolderFileInput) {
-            ideFolderFileInput.value = "";
-            ideFolderFileInput.click();
-          }
-        } else if (choice === "2" && ideZipFileInput) {
-          ideZipFileInput.value = "";
-          ideZipFileInput.click();
+        const handled = await selectDirectoryWithNativePicker();
+        if (!handled && ideFolderFileInput) {
+          ideFolderFileInput.value = "";
+          ideFolderFileInput.click();
         }
       };
     }
