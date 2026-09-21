@@ -6138,6 +6138,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
   function wireProjectWorkspace() {
     updateProjectBanner();
+    loadProjectAutonsIntoPlanner();
 
     // Banner Cloud Sync button
     const btnSyncCloud = document.getElementById("btnSyncProjectToCloud");

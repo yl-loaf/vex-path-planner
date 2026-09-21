@@ -710,24 +710,21 @@
   // "prevent going back to the main site unless the project has been saved and synced"
   // -------------------------------------------------------------
   function wireNavGuard() {
-    const handleNavigationAttempt = (targetUrl) => {
-      if (ProjectManager.isDirty) {
-        pendingNavigationUrl = targetUrl;
-        if (navGuardModal) {
-          navGuardModal.hidden = false;
-          navGuardModal.classList.add("open");
-        }
-      } else {
-        window.location.href = targetUrl;
+    const navigateToPlanner = () => {
+      saveCurrentEditorState();
+      if (window.ProjectManager) {
+        window.ProjectManager.saveLocal();
+        window.ProjectManager.markDirty(false);
       }
+      window.location.href = "index.html";
     };
 
     if (btnBackPlanner) {
-      btnBackPlanner.addEventListener("click", () => handleNavigationAttempt("index.html"));
+      btnBackPlanner.addEventListener("click", navigateToPlanner);
     }
 
     if (btnOpenPlanner) {
-      btnOpenPlanner.addEventListener("click", () => handleNavigationAttempt("index.html"));
+      btnOpenPlanner.addEventListener("click", navigateToPlanner);
     }
 
     if (btnNavGuardStay) {
@@ -753,43 +750,28 @@
     if (btnNavGuardDiscard) {
       btnNavGuardDiscard.addEventListener("click", () => {
         ProjectManager.markDirty(false);
-        if (pendingNavigationUrl) {
-          window.location.href = pendingNavigationUrl;
-        } else {
-          window.location.href = "index.html";
-        }
+        window.location.href = pendingNavigationUrl || "index.html";
       });
     }
 
     if (btnNavGuardSaveAndReturn) {
       btnNavGuardSaveAndReturn.addEventListener("click", async () => {
+        saveCurrentEditorState();
         try {
           await ProjectManager.saveToCloud();
-          ProjectManager.markDirty(false);
-          if (pendingNavigationUrl) {
-            window.location.href = pendingNavigationUrl;
-          } else {
-            window.location.href = "index.html";
-          }
         } catch (e) {
-          // If not signed in to Firebase, save locally and proceed
           ProjectManager.saveLocal();
-          ProjectManager.markDirty(false);
-          if (pendingNavigationUrl) {
-            window.location.href = pendingNavigationUrl;
-          } else {
-            window.location.href = "index.html";
-          }
         }
+        ProjectManager.markDirty(false);
+        window.location.href = pendingNavigationUrl || "index.html";
       });
     }
 
     // Standard Browser BeforeUnload guard
     window.addEventListener("beforeunload", (e) => {
+      saveCurrentEditorState();
       if (ProjectManager.isDirty) {
-        e.preventDefault();
-        e.returnValue = "You have unsaved project edits. Please save and sync to the cloud first.";
-        return e.returnValue;
+        ProjectManager.saveLocal();
       }
     });
   }
