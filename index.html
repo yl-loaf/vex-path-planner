@@ -10,13 +10,13 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260921.k5" />
+  <link rel="stylesheet" href="style.css?v=20260921.k6" />
 </head>
 <body>
   <!-- =================================================================
        VEX V5 LemLib Suite - HOMEPAGE HUB
        ================================================================= -->
-  <div id="homepageView" class="homepage-container">
+  <div id="homepageView" class="homepage-container" style="display:none;">
     <header class="home-top-nav">
       <div class="home-nav-brand">
         <div class="home-logo-icon">🤖</div>
@@ -37,7 +37,7 @@
           <span class="brain-battery-pill" id="homeBrainBatt" hidden>⚡ 94%</span>
         </div>
         <button type="button" id="btnLaunchPlannerDirect" class="btn-home-primary-launch">
-          🚀 Open Visual Planner
+          🗺️ Visual Path Planner &amp; Sim
         </button>
       </div>
     </header>
@@ -229,12 +229,12 @@
   <!-- =================================================================
        MAIN VISUAL PATH PLANNER APP INTERFACE
        ================================================================= -->
-  <div id="app" style="display:none;">
+  <div id="app" style="display:flex;">
     <header class="neat-planner-header">
       <!-- Left: Home Button & App Title -->
       <div class="header-left">
-        <button type="button" id="btnReturnHomeHub" class="btn-nav-home" title="Return to Homepage Hub">
-          🏠 Home Hub
+        <button type="button" id="btnReturnHomeHub" class="btn-nav-home" title="View Competition Dashboard Hub">
+          🏠 Hub
         </button>
         <div class="header-titles">
           <h1>VEX V5 LemLib Planner</h1>
@@ -242,19 +242,18 @@
         </div>
       </div>
 
-      <!-- Center: Simulation Controls -->
-      <div class="header-center-sim">
-        <div class="sim-control-pill">
-          <button id="btnSim" class="btn-sim-play" title="Play Autonomous Simulation">▶ Simulate</button>
-          <button id="btnStop" class="btn-sim-stop" title="Stop Simulation">⏹</button>
-          <label class="speed-label" title="Simulation Speed">
-            <input type="range" id="simSpeed" min="0.25" max="3" step="0.25" value="1" />
-            <span id="speedLabel">1×</span>
-          </label>
-        </div>
+      <!-- Center: Navigation Modes -->
+      <div class="header-center-modes">
+        <nav class="header-mode-nav">
+          <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation & Visual Path Planner">🗺️ Planner &amp; Sim</button>
+          <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
+          <a href="translator.html" class="mode-nav-btn" title="Convert C++ Autons to Visual Blocks">📥 C++ Translator</a>
+          <button type="button" class="mode-nav-btn" id="navModePidTuner" title="LemLib PID Gain Tuning Visualizer">🎛️ PID Tuner</button>
+          <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB & Telemetry">🔌 Brain</button>
+        </nav>
       </div>
 
-      <!-- Right: Grouped Action Menus -->
+      <!-- Right: Actions & Tools -->
       <div class="header-actions">
         <!-- Project Workspace Menu -->
         <button id="btnLoadProject" type="button" class="btn-nav-compact" title="Open Project Workspace Manager">📁 Project</button>
@@ -266,9 +265,6 @@
           <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
         </div>
         <button id="btnConnectBrain" type="button" class="btn-nav-compact" title="Connect to VEX V5 Brain via USB Web Serial CDC or simulated link">🔌 Connect</button>
-
-        <!-- C++ IDE Direct Link -->
-        <a id="btnOpenIde" href="ide.html" class="btn-nav-ide" style="text-decoration:none;" title="Open full multi-file PROS C++ Coding IDE">💻 C++ IDE</a>
 
         <!-- Debugger Toggle -->
         <button id="btnToggleDebug" type="button" class="btn-nav-debug" title="Toggle Cross-Script Variable Inspector, Compiler Diagnostics &amp; Live Debugger">🐞 Debug</button>
@@ -321,381 +317,430 @@
     <div class="main">
       <!-- Flowchart / Action Editor -->
       <aside class="panel flowchart-panel">
-        <div class="panel-header">
-          <h2>Path Flowchart</h2>
-          <div style="display:flex;align-items:center;gap:4px;">
-            <button type="button" id="btnAutoAllTimeouts" class="btn-flowchart-routine" style="background:#0f2942;border-color:#0284c7;color:#38bdf8;" title="Intelligently calculate timeouts for all moves with +100ms clearance for battery">⚡ Auto Timeouts (+100ms)</button>
-            <button type="button" id="btnOpenRoutineFlowchart" class="btn-flowchart-routine" title="View interactive seamless multitask flowchart for full routine">⚡ Flowchart</button>
-            <span id="saveStatus" class="save-status">Saved</span>
-          </div>
+        <!-- Modern Segmented Tabs for Clean, Uncluttered Navigation -->
+        <div class="planner-tab-bar" id="plannerTabBar" role="tablist">
+          <button type="button" class="planner-tab-btn active" data-tab="flowchart" id="tabBtnFlowchart">
+            <span class="tab-icon">🎯</span> Routine (<span id="tabActionCount">0</span>)
+          </button>
+          <button type="button" class="planner-tab-btn" data-tab="bot" id="tabBtnBot">
+            <span class="tab-icon">🤖</span> Bot &amp; PID
+          </button>
+          <button type="button" class="planner-tab-btn" data-tab="code" id="tabBtnCode">
+            <span class="tab-icon">💻</span> C++ Code
+          </button>
         </div>
 
-        <div class="path-selector" id="pathSelector">
-          <label class="path-label">Auton routine
-            <select id="pathSelect"></select>
-          </label>
-          <div class="path-btns">
-            <button type="button" id="btnPathAdd" title="New routine">+ New</button>
-            <button type="button" id="btnPathRename" title="Rename">Rename</button>
-            <button type="button" id="btnPathDup" title="Duplicate">Dup</button>
-            <button type="button" id="btnPathDel" class="danger" title="Delete routine">Del</button>
-          </div>
-        </div>
-
-        <div class="start-card" id="startCard">
-          <div class="card-title">
-            <span class="badge start">START</span>
-            <span class="hint-inline">Drag robot on field · must touch wall</span>
-          </div>
-          <div class="card-body row">
-            <label>X <input type="number" id="startX" step="0.1" value="-60" /></label>
-            <label>Y <input type="number" id="startY" step="0.1" value="-60" /></label>
-            <label>θ° <input type="number" id="startTheta" step="1" value="0" /></label>
-          </div>
-          <div class="btn-row compact">
-            <button class="preset" data-preset="redL">Red L</button>
-            <button class="preset" data-preset="redR">Red R</button>
-            <button class="preset" data-preset="blueL">Blue L</button>
-            <button class="preset" data-preset="blueR">Blue R</button>
-          </div>
-        </div>
-
-        <div class="connector">▼</div>
-
-        <div id="actionFlow" class="action-flow">
-          <!-- action cards injected here -->
-        </div>
-
-        <div class="add-bar">
-          <select id="newType">
-            <option value="moveToPoint">moveToPoint</option>
-            <option value="moveToPose">moveToPose</option>
-            <option value="turnToPoint">turnToPoint</option>
-            <option value="turnToHeading">turnToHeading</option>
-            <option value="swingToPoint">swingToPoint</option>
-            <option value="swingToHeading">swingToHeading</option>
-            <option value="wait">📍 Wait / Event Trigger</option>
-            <option value="custom">Custom Code</option>
-          </select>
-          <button id="btnAddAction" class="primary">+ Add</button>
-        </div>
-
-
-        <section class="bot-settings" id="botSettings">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:4px;">
-            <h2 style="margin-bottom:0;display:flex;align-items:center;gap:6px;">
-              <span>🤖 LemLib Bot &amp; Hardware Setup</span>
-            </h2>
-            <div style="display:flex;gap:4px;">
-              <button type="button" id="btnSyncBotFromCpp" class="btn-xs-clean" title="Extract and sync values from src/robot-config.cpp">🔄 Sync from C++</button>
-              <button type="button" id="btnSaveBotToCpp" class="btn-xs-clean" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);" title="Inject these values into src/robot-config.cpp">💾 Update C++</button>
-              <button type="button" id="btnOpenPidFromBot" class="btn-sm-pid-shortcut" title="Open PID Tuning Visualizer">🎛️ Tune PID</button>
+        <!-- TAB PANE 1: Flowchart & Actions -->
+        <div class="planner-tab-pane active" id="paneTabFlowchart">
+          <div class="panel-header" style="margin-top:6px;">
+            <h2>Auton Action Flow</h2>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <button type="button" id="btnAutoAllTimeouts" class="btn-flowchart-routine" style="background:#0f2942;border-color:#0284c7;color:#38bdf8;" title="Intelligently calculate timeouts for all moves with +100ms clearance for battery">⚡ Auto Timeouts (+100ms)</button>
+              <button type="button" id="btnOpenRoutineFlowchart" class="btn-flowchart-routine" title="View interactive seamless multitask flowchart for full routine">⚡ Flowchart</button>
+              <span id="saveStatus" class="save-status">Saved</span>
             </div>
           </div>
-          
-          <div id="botSyncStatusBadge" class="bot-sync-badge synced" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:4px 8px;font-size:0.72rem;color:#34d399;">
-            <span>⚡ Synced with <code>src/robot-config.cpp</code></span>
-            <span id="botSyncDetail" style="color:#94a3b8;font-size:0.68rem;">600 RPM · 3.25" Wheels</span>
+
+          <div class="path-selector" id="pathSelector">
+            <label class="path-label">Auton routine
+              <select id="pathSelect"></select>
+            </label>
+            <div class="path-btns">
+              <button type="button" id="btnPathAdd" title="New routine">+ New</button>
+              <button type="button" id="btnPathRename" title="Rename">Rename</button>
+              <button type="button" id="btnPathDup" title="Duplicate">Dup</button>
+              <button type="button" id="btnPathDel" class="danger" title="Delete routine">Del</button>
+            </div>
           </div>
 
-          <p class="hint" style="margin-bottom:6px">Actual robot dimensions in inches scale accurately onto the 144&quot; field and drive all LemLib simulation calculations</p>
-          
-          <!-- Drivetrain & Dimensions -->
-          <div class="row">
-            <label>Track width (in)
-              <input type="number" id="trackWidth" step="0.1" value="12" min="1" title="Center-to-center distance between left and right wheels"/>
-            </label>
-            <label>Robot width (in)
-              <input type="number" id="robotW" step="0.1" value="14" min="1" title="Lateral width in actual inches (left-to-right)"/>
-            </label>
-            <label>Robot length (in)
-              <input type="number" id="robotL" step="0.1" value="14" min="1" title="Longitudinal length in actual inches (front-to-back)"/>
-            </label>
+          <div class="start-card" id="startCard">
+            <div class="card-title">
+              <span class="badge start">START</span>
+              <span class="hint-inline">Drag robot on field · must touch wall</span>
+            </div>
+            <div class="card-body row">
+              <label>X <input type="number" id="startX" step="0.1" value="-60" /></label>
+              <label>Y <input type="number" id="startY" step="0.1" value="-60" /></label>
+              <label>θ° <input type="number" id="startTheta" step="1" value="0" /></label>
+            </div>
+            <div class="btn-row compact">
+              <button class="preset" data-preset="redL">Red L</button>
+              <button class="preset" data-preset="redR">Red R</button>
+              <button class="preset" data-preset="blueL">Blue L</button>
+              <button class="preset" data-preset="blueR">Blue R</button>
+            </div>
           </div>
-          <div class="row">
-            <label>Wheel diam (in)
+
+          <div class="connector">▼</div>
+
+          <div id="actionFlow" class="action-flow">
+            <!-- action cards injected here -->
+          </div>
+
+          <div class="add-bar">
+            <select id="newType">
+              <option value="moveToPoint">moveToPoint</option>
+              <option value="moveToPose">moveToPose</option>
+              <option value="turnToPoint">turnToPoint</option>
+              <option value="turnToHeading">turnToHeading</option>
+              <option value="swingToPoint">swingToPoint</option>
+              <option value="swingToHeading">swingToHeading</option>
+              <option value="wait">📍 Wait / Event Trigger</option>
+              <option value="custom">Custom Code</option>
+            </select>
+            <button id="btnAddAction" class="primary">+ Add</button>
+          </div>
+        </div>
+
+        <!-- TAB PANE 2: Bot & LemLib PID Hardware Setup -->
+        <div class="planner-tab-pane" id="paneTabBot" style="display:none;">
+          <section class="bot-settings" id="botSettings" style="margin-top:4px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:4px;">
+              <h2 style="margin-bottom:0;display:flex;align-items:center;gap:6px;">
+                <span>🤖 LemLib Bot &amp; Hardware Setup</span>
+              </h2>
               <div style="display:flex;gap:4px;">
-                <input type="number" id="wheelDiam" step="0.05" value="3.25" min="0.5" style="width:65px;"/>
-                <select id="wheelDiamPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;flex:1;">
-                  <option value="3.25">3.25" (NEW_325)</option>
-                  <option value="2.75">2.75" (NEW_275)</option>
-                  <option value="2.0">2.00" (NEW_2)</option>
-                  <option value="4.0">4.00" (NEW_4)</option>
-                </select>
-              </div>
-            </label>
-            <label>Drivetrain RPM
-              <div style="display:flex;gap:4px;">
-                <input type="number" id="driveRpm" step="1" value="600" min="1" style="width:65px;"/>
-                <select id="driveRpmPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;flex:1;">
-                  <option value="600">600 RPM (Blue 1:1)</option>
-                  <option value="450">450 RPM (Blue 36:48)</option>
-                  <option value="360">360 RPM (Green 36:60)</option>
-                  <option value="200">200 RPM (Green 1:1)</option>
-                  <option value="100">100 RPM (Red 1:1)</option>
-                </select>
-              </div>
-            </label>
-          </div>
-          <div class="row" style="margin-top:6px">
-            <label>Default max speed
-              <input type="number" id="defaultMaxSpeed" min="0" max="127" step="1" value="127"/>
-            </label>
-            <label>Default min speed
-              <input type="number" id="defaultMinSpeed" min="0" max="127" step="1" value="0"/>
-            </label>
-          </div>
-
-          <!-- LemLib PID Controllers Configuration (Direct in UI) -->
-          <div class="lemlib-pid-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius:8px;padding:8px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-              <span style="font-size:0.75rem;font-weight:700;color:#38bdf8;">🎛️ LemLib PID Controller Constants</span>
-              <div class="pid-ui-tab-toggle" style="display:flex;gap:2px;background:#0b0f19;padding:2px;border-radius:4px;">
-                <button type="button" id="btnBotPidTabLat" class="btn-xs-tab active" style="padding:2px 6px;font-size:0.68rem;background:#0284c7;color:#fff;border:none;border-radius:3px;cursor:pointer;">Lateral</button>
-                <button type="button" id="btnBotPidTabAng" class="btn-xs-tab" style="padding:2px 6px;font-size:0.68rem;background:transparent;color:#94a3b8;border:none;border-radius:3px;cursor:pointer;">Angular</button>
+                <button type="button" id="btnSyncBotFromCpp" class="btn-xs-clean" title="Extract and sync values from src/robot-config.cpp">🔄 Sync from C++</button>
+                <button type="button" id="btnSaveBotToCpp" class="btn-xs-clean" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);" title="Inject these values into src/robot-config.cpp">💾 Update C++</button>
+                <button type="button" id="btnOpenPidFromBot" class="btn-sm-pid-shortcut" title="Open PID Tuning Visualizer">🎛️ Tune PID</button>
               </div>
             </div>
-
-            <!-- Lateral PID Sub-card -->
-            <div id="botPidLatCard">
-              <div style="font-size:0.68rem;color:#94a3b8;margin-bottom:4px;"><code>lemlib::ControllerSettings lateral_controller</code> (Linear Movements)</div>
-              <div class="row" style="margin-bottom:4px;">
-                <label title="Proportional gain for distance error">kP (Linear)
-                  <input type="number" id="botLateralKp" step="0.1" value="8.0" min="0"/>
-                </label>
-                <label title="Integral gain">kI
-                  <input type="number" id="botLateralKi" step="0.005" value="0.0" min="0"/>
-                </label>
-                <label title="Derivative gain for damping">kD
-                  <input type="number" id="botLateralKd" step="0.5" value="30.0" min="0"/>
-                </label>
-                <label title="Anti-windup error clamp (inches)">Windup (in)
-                  <input type="number" id="botLateralWindup" step="0.5" value="3.0" min="0"/>
-                </label>
-              </div>
-              <div class="row" style="margin-bottom:4px;">
-                <label title="Small error range (in)">Small Err (in)
-                  <input type="number" id="botLateralSmallErr" step="0.1" value="1.0" min="0.1"/>
-                </label>
-                <label title="Small error timeout (ms)">Small Time (ms)
-                  <input type="number" id="botLateralSmallTime" step="25" value="100" min="0"/>
-                </label>
-                <label title="Large error range (in)">Large Err (in)
-                  <input type="number" id="botLateralLargeErr" step="0.5" value="3.0" min="0.5"/>
-                </label>
-                <label title="Large error timeout (ms)">Large Time (ms)
-                  <input type="number" id="botLateralLargeTime" step="50" value="500" min="0"/>
-                </label>
-              </div>
-              <div class="row">
-                <label title="Maximum acceleration / slew rate (0 = disabled)">Slew Rate
-                  <input type="number" id="botLateralSlew" step="1" value="0" min="0"/>
-                </label>
-              </div>
+            
+            <div id="botSyncStatusBadge" class="bot-sync-badge synced" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:4px 8px;font-size:0.72rem;color:#34d399;">
+              <span>⚡ Synced with <code>src/robot-config.cpp</code></span>
+              <span id="botSyncDetail" style="color:#94a3b8;font-size:0.68rem;">600 RPM · 3.25" Wheels</span>
             </div>
 
-            <!-- Angular PID Sub-card -->
-            <div id="botPidAngCard" style="display:none;">
-              <div style="font-size:0.68rem;color:#94a3b8;margin-bottom:4px;"><code>lemlib::ControllerSettings angular_controller</code> (Heading Turns)</div>
-              <div class="row" style="margin-bottom:4px;">
-                <label title="Proportional gain for heading error">kP (Angular)
-                  <input type="number" id="botAngularKp" step="0.1" value="2.0" min="0"/>
-                </label>
-                <label title="Integral gain">kI
-                  <input type="number" id="botAngularKi" step="0.005" value="0.0" min="0"/>
-                </label>
-                <label title="Derivative gain for damping">kD
-                  <input type="number" id="botAngularKd" step="0.5" value="10.0" min="0"/>
-                </label>
-                <label title="Anti-windup error clamp (degrees)">Windup (deg)
-                  <input type="number" id="botAngularWindup" step="0.5" value="3.0" min="0"/>
-                </label>
-              </div>
-              <div class="row" style="margin-bottom:4px;">
-                <label title="Small error range (degrees)">Small Err (deg)
-                  <input type="number" id="botAngularSmallErr" step="0.1" value="1.0" min="0.1"/>
-                </label>
-                <label title="Small error timeout (ms)">Small Time (ms)
-                  <input type="number" id="botAngularSmallTime" step="25" value="100" min="0"/>
-                </label>
-                <label title="Large error range (degrees)">Large Err (deg)
-                  <input type="number" id="botAngularLargeErr" step="0.5" value="3.0" min="0.5"/>
-                </label>
-                <label title="Large error timeout (ms)">Large Time (ms)
-                  <input type="number" id="botAngularLargeTime" step="50" value="500" min="0"/>
-                </label>
-              </div>
-              <div class="row">
-                <label title="Maximum angular acceleration / slew rate (0 = disabled)">Slew Rate
-                  <input type="number" id="botAngularSlew" step="1" value="0" min="0"/>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <!-- Tracking Wheels & Sensors -->
-          <div class="tracking-sensors-section" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-              <span style="font-size:0.75rem;font-weight:700;color:#a78bfa;">🎯 Tracking Wheels &amp; Odom Sensors</span>
-              <span style="font-size:0.68rem;color:#64748b;">lemlib::OdomSensors</span>
+            <p class="hint" style="margin-bottom:6px">Actual robot dimensions in inches scale accurately onto the 144&quot; field and drive all LemLib simulation calculations</p>
+            
+            <!-- Drivetrain & Dimensions -->
+            <div class="row">
+              <label>Track width (in)
+                <input type="number" id="trackWidth" step="0.1" value="12" min="1" title="Center-to-center distance between left and right wheels"/>
+              </label>
+              <label>Robot width (in)
+                <input type="number" id="robotW" step="0.1" value="14" min="1" title="Lateral width in actual inches (left-to-right)"/>
+              </label>
+              <label>Robot length (in)
+                <input type="number" id="robotL" step="0.1" value="14" min="1" title="Longitudinal length in actual inches (front-to-back)"/>
+              </label>
             </div>
             <div class="row">
-              <label title="Horizontal tracking wheel offset from center of rotation in inches (negative = behind/left)">Horiz Wheel Offset (in)
-                <input type="number" id="horizTrackerOffset" step="0.1" value="-2.5"/>
-              </label>
-              <label title="Horizontal tracking wheel diameter in inches">Wheel Diam (in)
-                <input type="number" id="horizTrackerDiam" step="0.05" value="2.0"/>
-              </label>
-              <label title="IMU Smart Port Number">IMU Smart Port
-                <input type="number" id="imuSensorPort" step="1" min="1" max="21" value="10"/>
-              </label>
-            </div>
-          </div>
-
-          <!-- Drive Curves & Drift Scalers -->
-          <div class="drift-scalers-box" id="driftScalersBox" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-              <span style="font-size:0.75rem;font-weight:700;color:#93c5fd;">🏎️ Drive Curves &amp; Drift Scalers</span>
-              <span style="font-size:0.68rem;color:#64748b;">moveToPose &amp; Kinematics</span>
-            </div>
-            <div class="row">
-              <label title="Simulates tile traction and lateral drift/slip (0.5 = high traction/crisp, 1.5 = high drift)">Lateral Drift Scaler
-                <input type="number" id="botLateralDrift" min="0.2" max="2.5" step="0.05" value="1.0" />
-              </label>
-              <label title="Angular turn curve and steering response exponent (0.5 = linear/snappy, 1.5 = progressive)">Turn Curve Scale
-                <input type="number" id="botTurnDrift" min="0.2" max="2.5" step="0.05" value="1.0" />
-              </label>
-              <label title="Default Boomerang carrot lead distance multiplier for moveToPose">Default Lead
-                <input type="number" id="botDefaultLead" min="0.1" max="1.0" step="0.05" value="0.6" />
-              </label>
-            </div>
-          </div>
-          <p class="hint" style="margin-top:4px;font-size:0.72rem;color:#8b9bb4">All simulation movements and code generators use these exact LemLib constants; edit anytime.</p>
-
-          <!-- Top-Down Robot Visual & Dimensions in Actual Inches -->
-          <div class="bot-visual-card" id="botVisualCard">
-            <div class="bot-visual-header">
-              <div class="bot-visual-title-wrap">
-                <span class="bot-visual-badge">Field Scaled</span>
-                <h3 class="bot-visual-title">📷 Top-Down Bot Picture</h3>
-              </div>
-              <button type="button" class="btn-bot-img-toggle active" id="btnToggleBotImg" title="Toggle robot picture visibility on field">
-                👁️ Picture: ON
-              </button>
-            </div>
-
-            <p class="bot-visual-desc">
-              Provide a top-down photo or CAD render of your bot. Enter dimensions in actual inches above; your bot is automatically scaled to match the 144&quot;&times;144&quot; field.
-            </p>
-
-            <div class="bot-img-drop-zone" id="botImgDropZone" title="Click or drag an image here to load your top-down bot">
-              <input type="file" id="botImgFileInput" accept="image/*" style="display:none;" />
-              
-              <div class="bot-img-preview-wrap" id="botImgPreviewWrap" style="display:none;">
-                <div class="bot-img-thumb-frame">
-                  <img id="botImgThumb" alt="Top-down Bot Preview" />
-                  <span class="bot-thumb-front-tag" id="botThumbFrontTag">FRONT ↑</span>
-                </div>
-                <div class="bot-thumb-info">
-                  <div class="bot-thumb-size" id="botThumbSize">14.0&quot; &times; 14.0&quot;</div>
-                  <div class="bot-thumb-scale" id="botThumbScale">Scaled to field</div>
-                </div>
-              </div>
-
-              <div class="bot-img-upload-content" id="botImgUploadContent">
-                <div class="bot-img-upload-icon">📷</div>
-                <div class="bot-img-upload-text">
-                  <strong>Click or Drag &amp; Drop</strong> top-down photo
-                  <span class="bot-img-upload-sub">PNG (transparent), JPG, SVG, or WebP</span>
-                </div>
-                <div class="bot-img-upload-btns">
-                  <button type="button" class="btn-img-action primary" id="btnUploadBotImg">Choose Image...</button>
-                  <button type="button" class="btn-img-action" id="btnPresetBotImg" title="Load sample VEX competition robot graphic">Sample Bot</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Image controls when active -->
-            <div class="bot-img-controls" id="botImgControls" style="display:none;">
-              <div class="bot-img-dimension-callout">
-                <span class="dim-icon">📐</span>
-                <span class="dim-text">Field Scale: <strong id="botDimLabel">14.0&quot; &times; 14.0&quot;</strong></span>
-                <label class="bot-ratio-lock-label" title="Keep proportional dimensions based on photo aspect ratio">
-                  <input type="checkbox" id="botLockRatio" />
-                  <span>Lock Ratio</span>
-                </label>
-              </div>
-
-              <div class="bot-img-row">
-                <label class="bot-img-field">Photo Front Direction:
-                  <select id="botImgOrientation" title="Which way does the front of your bot face in the original picture?">
-                    <option value="0">Front points UP (Top)</option>
-                    <option value="90">Front points RIGHT</option>
-                    <option value="180">Front points DOWN (Bottom)</option>
-                    <option value="270">Front points LEFT</option>
+              <label>Wheel diam (in)
+                <div style="display:flex;gap:4px;">
+                  <input type="number" id="wheelDiam" step="0.05" value="3.25" min="0.5" style="width:65px;"/>
+                  <select id="wheelDiamPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;flex:1;">
+                    <option value="3.25">3.25" (NEW_325)</option>
+                    <option value="2.75">2.75" (NEW_275)</option>
+                    <option value="2.0">2.00" (NEW_2)</option>
+                    <option value="4.0">4.00" (NEW_4)</option>
                   </select>
-                </label>
-                <div class="btn-group-rot">
-                  <button type="button" class="btn-icon-rot" id="btnBotRotCCW" title="Rotate front 90° counter-clockwise">↺ 90°</button>
-                  <button type="button" class="btn-icon-rot" id="btnBotRotCW" title="Rotate front 90° clockwise">↻ 90°</button>
+                </div>
+              </label>
+              <label>Drivetrain RPM
+                <div style="display:flex;gap:4px;">
+                  <input type="number" id="driveRpm" step="1" value="600" min="1" style="width:65px;"/>
+                  <select id="driveRpmPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;flex:1;">
+                    <option value="600">600 RPM (Blue 1:1)</option>
+                    <option value="450">450 RPM (Blue 36:48)</option>
+                    <option value="360">360 RPM (Green 36:60)</option>
+                    <option value="200">200 RPM (Green 1:1)</option>
+                    <option value="100">100 RPM (Red 1:1)</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+            <div class="row" style="margin-top:6px">
+              <label>Default max speed
+                <input type="number" id="defaultMaxSpeed" min="0" max="127" step="1" value="127"/>
+              </label>
+              <label>Default min speed
+                <input type="number" id="defaultMinSpeed" min="0" max="127" step="1" value="0"/>
+              </label>
+            </div>
+
+            <!-- LemLib PID Controllers Configuration (Direct in UI) -->
+            <div class="lemlib-pid-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:0.75rem;font-weight:700;color:#38bdf8;">🎛️ LemLib PID Controller Constants</span>
+                <div class="pid-ui-tab-toggle" style="display:flex;gap:2px;background:#0b0f19;padding:2px;border-radius:4px;">
+                  <button type="button" id="btnBotPidTabLat" class="btn-xs-tab active" style="padding:2px 6px;font-size:0.68rem;background:#0284c7;color:#fff;border:none;border-radius:3px;cursor:pointer;">Lateral</button>
+                  <button type="button" id="btnBotPidTabAng" class="btn-xs-tab" style="padding:2px 6px;font-size:0.68rem;background:transparent;color:#94a3b8;border:none;border-radius:3px;cursor:pointer;">Angular</button>
                 </div>
               </div>
 
-              <div class="bot-img-row sliders-row">
-                <label class="bot-slider-label">Opacity: <span id="botOpacityVal">100%</span>
-                  <input type="range" id="botImgOpacity" min="20" max="100" step="5" value="100" />
-                </label>
-                <label class="bot-checkbox-label" title="Draw bounding border and front heading marker on field">
-                  <input type="checkbox" id="botShowOutline" checked />
-                  <span>Heading &amp; Border</span>
-                </label>
+              <!-- Lateral PID Sub-card -->
+              <div id="botPidLatCard">
+                <div style="font-size:0.68rem;color:#94a3b8;margin-bottom:4px;"><code>lemlib::ControllerSettings lateral_controller</code> (Linear Movements)</div>
+                <div class="row" style="margin-bottom:4px;">
+                  <label title="Proportional gain for distance error">kP (Linear)
+                    <input type="number" id="botLateralKp" step="0.1" value="8.0" min="0"/>
+                  </label>
+                  <label title="Integral gain">kI
+                    <input type="number" id="botLateralKi" step="0.005" value="0.0" min="0"/>
+                  </label>
+                  <label title="Derivative gain for damping">kD
+                    <input type="number" id="botLateralKd" step="0.5" value="30.0" min="0"/>
+                  </label>
+                  <label title="Anti-windup error clamp (inches)">Windup (in)
+                    <input type="number" id="botLateralWindup" step="0.5" value="3.0" min="0"/>
+                  </label>
+                </div>
+                <div class="row" style="margin-bottom:4px;">
+                  <label title="Small error range (in)">Small Err (in)
+                    <input type="number" id="botLateralSmallErr" step="0.1" value="1.0" min="0.1"/>
+                  </label>
+                  <label title="Small error timeout (ms)">Small Time (ms)
+                    <input type="number" id="botLateralSmallTime" step="25" value="100" min="0"/>
+                  </label>
+                  <label title="Large error range (in)">Large Err (in)
+                    <input type="number" id="botLateralLargeErr" step="0.5" value="3.0" min="0.5"/>
+                  </label>
+                  <label title="Large error timeout (ms)">Large Time (ms)
+                    <input type="number" id="botLateralLargeTime" step="50" value="500" min="0"/>
+                  </label>
+                </div>
+                <div class="row">
+                  <label title="Maximum acceleration / slew rate (0 = disabled)">Slew Rate
+                    <input type="number" id="botLateralSlew" step="1" value="0" min="0"/>
+                  </label>
+                </div>
               </div>
 
-              <div class="bot-img-footer-row">
-                <button type="button" class="btn-sm-danger" id="btnClearBotImg" title="Clear image and revert to schematic box">Clear Picture</button>
-                <button type="button" class="btn-sm-subtle" id="btnChangeBotImg" title="Choose a different image file">Change Photo</button>
+              <!-- Angular PID Sub-card -->
+              <div id="botPidAngCard" style="display:none;">
+                <div style="font-size:0.68rem;color:#94a3b8;margin-bottom:4px;"><code>lemlib::ControllerSettings angular_controller</code> (Heading Turns)</div>
+                <div class="row" style="margin-bottom:4px;">
+                  <label title="Proportional gain for heading error">kP (Angular)
+                    <input type="number" id="botAngularKp" step="0.1" value="2.0" min="0"/>
+                  </label>
+                  <label title="Integral gain">kI
+                    <input type="number" id="botAngularKi" step="0.005" value="0.0" min="0"/>
+                  </label>
+                  <label title="Derivative gain for damping">kD
+                    <input type="number" id="botAngularKd" step="0.5" value="10.0" min="0"/>
+                  </label>
+                  <label title="Anti-windup error clamp (degrees)">Windup (deg)
+                    <input type="number" id="botAngularWindup" step="0.5" value="3.0" min="0"/>
+                  </label>
+                </div>
+                <div class="row" style="margin-bottom:4px;">
+                  <label title="Small error range (degrees)">Small Err (deg)
+                    <input type="number" id="botAngularSmallErr" step="0.1" value="1.0" min="0.1"/>
+                  </label>
+                  <label title="Small error timeout (ms)">Small Time (ms)
+                    <input type="number" id="botAngularSmallTime" step="25" value="100" min="0"/>
+                  </label>
+                  <label title="Large error range (degrees)">Large Err (deg)
+                    <input type="number" id="botAngularLargeErr" step="0.5" value="3.0" min="0.5"/>
+                  </label>
+                  <label title="Large error timeout (ms)">Large Time (ms)
+                    <input type="number" id="botAngularLargeTime" step="50" value="500" min="0"/>
+                  </label>
+                </div>
+                <div class="row">
+                  <label title="Maximum angular acceleration / slew rate (0 = disabled)">Slew Rate
+                    <input type="number" id="botAngularSlew" step="1" value="0" min="0"/>
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
 
-        <section class="code-section">
-          <h2>Generated LemLib Code</h2>
-          <div class="code-mode-row">
-            <label><input type="radio" name="codeMode" value="current" checked /> Current routine</label>
-            <label><input type="radio" name="codeMode" value="all" /> All routines (switch)</label>
-          </div>
-          <div class="code-indent-row">
-            <label for="codeIndentSelect">Code Indentation:</label>
-            <select id="codeIndentSelect" title="Select indentation level for the autonomous code">
-              <option value="2" selected>2 spaces (standard)</option>
-              <option value="4">4 spaces (PROS default)</option>
-              <option value="0">0 spaces (no indent)</option>
-              <option value="tab">1 tab (\t)</option>
-              <option value="custom">Custom spaces...</option>
-            </select>
-            <input type="number" id="codeIndentCustom" min="0" max="16" value="2" style="display:none; width:60px;" title="Custom space count" />
-          </div>
-          <div class="code-indent-row" style="margin-top:2px; margin-bottom:10px;">
-            <label for="codeCommentStyleSelect">Comment Style:</label>
-            <select id="codeCommentStyleSelect" title="Choose how move block comments appear in the output code">
-              <option value="inline" selected>Inline (// comment at end of line)</option>
-              <option value="above">Above (// comment on preceding line)</option>
-            </select>
-          </div>
-          <div style="display:flex;gap:6px;margin-bottom:6px;">
-            <button id="btnGenerate" class="primary" style="flex:1;">Generate Code</button>
-            <a id="btnCppTranslatorSide" href="translator.html" class="btn-cpp-translate-side" style="flex:1;text-decoration:none;display:flex;align-items:center;justify-content:center;" title="Open C++ Autonomous to Blocks Translator page">📥 C++ → Blocks</a>
-          </div>
-          <textarea id="codeOut" readonly spellcheck="false"></textarea>
-          <button id="btnCopy">Copy to Clipboard</button>
-        </section>
+            <!-- Tracking Wheels & Sensors -->
+            <div class="tracking-sensors-section" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:0.75rem;font-weight:700;color:#a78bfa;">🎯 Tracking Wheels &amp; Odom Sensors</span>
+                <span style="font-size:0.68rem;color:#64748b;">lemlib::OdomSensors</span>
+              </div>
+              <div class="row">
+                <label title="Horizontal tracking wheel offset from center of rotation in inches (negative = behind/left)">Horiz Wheel Offset (in)
+                  <input type="number" id="horizTrackerOffset" step="0.1" value="-2.5"/>
+                </label>
+                <label title="Horizontal tracking wheel diameter in inches">Wheel Diam (in)
+                  <input type="number" id="horizTrackerDiam" step="0.05" value="2.0"/>
+                </label>
+                <label title="IMU Smart Port Number">IMU Smart Port
+                  <input type="number" id="imuSensorPort" step="1" min="1" max="21" value="10"/>
+                </label>
+              </div>
+            </div>
+
+            <!-- Drive Curves & Drift Scalers -->
+            <div class="drift-scalers-box" id="driftScalersBox" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:0.75rem;font-weight:700;color:#93c5fd;">🏎️ Drive Curves &amp; Drift Scalers</span>
+                <span style="font-size:0.68rem;color:#64748b;">moveToPose &amp; Kinematics</span>
+              </div>
+              <div class="row">
+                <label title="Simulates tile traction and lateral drift/slip (0.5 = high traction/crisp, 1.5 = high drift)">Lateral Drift Scaler
+                  <input type="number" id="botLateralDrift" min="0.2" max="2.5" step="0.05" value="1.0" />
+                </label>
+                <label title="Angular turn curve and steering response exponent (0.5 = linear/snappy, 1.5 = progressive)">Turn Curve Scale
+                  <input type="number" id="botTurnDrift" min="0.2" max="2.5" step="0.05" value="1.0" />
+                </label>
+                <label title="Default Boomerang carrot lead distance multiplier for moveToPose">Default Lead
+                  <input type="number" id="botDefaultLead" min="0.1" max="1.0" step="0.05" value="0.6" />
+                </label>
+              </div>
+            </div>
+            <p class="hint" style="margin-top:4px;font-size:0.72rem;color:#8b9bb4">All simulation movements and code generators use these exact LemLib constants; edit anytime.</p>
+
+            <!-- Top-Down Robot Visual & Dimensions in Actual Inches -->
+            <div class="bot-visual-card" id="botVisualCard">
+              <div class="bot-visual-header">
+                <div class="bot-visual-title-wrap">
+                  <span class="bot-visual-badge">Field Scaled</span>
+                  <h3 class="bot-visual-title">📷 Top-Down Bot Picture</h3>
+                </div>
+                <button type="button" class="btn-bot-img-toggle active" id="btnToggleBotImg" title="Toggle robot picture visibility on field">
+                  👁️ Picture: ON
+                </button>
+              </div>
+
+              <p class="bot-visual-desc">
+                Provide a top-down photo or CAD render of your bot. Enter dimensions in actual inches above; your bot is automatically scaled to match the 144&quot;&times;144&quot; field.
+              </p>
+
+              <div class="bot-img-drop-zone" id="botImgDropZone" title="Click or drag an image here to load your top-down bot">
+                <input type="file" id="botImgFileInput" accept="image/*" style="display:none;" />
+                
+                <div class="bot-img-preview-wrap" id="botImgPreviewWrap" style="display:none;">
+                  <div class="bot-img-thumb-frame">
+                    <img id="botImgThumb" alt="Top-down Bot Preview" />
+                    <span class="bot-thumb-front-tag" id="botThumbFrontTag">FRONT ↑</span>
+                  </div>
+                  <div class="bot-thumb-info">
+                    <div class="bot-thumb-size" id="botThumbSize">14.0&quot; &times; 14.0&quot;</div>
+                    <div class="bot-thumb-scale" id="botThumbScale">Scaled to field</div>
+                  </div>
+                </div>
+
+                <div class="bot-img-upload-content" id="botImgUploadContent">
+                  <div class="bot-img-upload-icon">📷</div>
+                  <div class="bot-img-upload-text">
+                    <strong>Click or Drag &amp; Drop</strong> top-down photo
+                    <span class="bot-img-upload-sub">PNG (transparent), JPG, SVG, or WebP</span>
+                  </div>
+                  <div class="bot-img-upload-btns">
+                    <button type="button" class="btn-img-action primary" id="btnUploadBotImg">Choose Image...</button>
+                    <button type="button" class="btn-img-action" id="btnPresetBotImg" title="Load sample VEX competition robot graphic">Sample Bot</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Image controls when active -->
+              <div class="bot-img-controls" id="botImgControls" style="display:none;">
+                <div class="bot-img-dimension-callout">
+                  <span class="dim-icon">📐</span>
+                  <span class="dim-text">Field Scale: <strong id="botDimLabel">14.0&quot; &times; 14.0&quot;</strong></span>
+                  <label class="bot-ratio-lock-label" title="Keep proportional dimensions based on photo aspect ratio">
+                    <input type="checkbox" id="botLockRatio" />
+                    <span>Lock Ratio</span>
+                  </label>
+                </div>
+
+                <div class="bot-img-row">
+                  <label class="bot-img-field">Photo Front Direction:
+                    <select id="botImgOrientation" title="Which way does the front of your bot face in the original picture?">
+                      <option value="0">Front points UP (Top)</option>
+                      <option value="90">Front points RIGHT</option>
+                      <option value="180">Front points DOWN (Bottom)</option>
+                      <option value="270">Front points LEFT</option>
+                    </select>
+                  </label>
+                  <div class="btn-group-rot">
+                    <button type="button" class="btn-icon-rot" id="btnBotRotCCW" title="Rotate front 90° counter-clockwise">↺ 90°</button>
+                    <button type="button" class="btn-icon-rot" id="btnBotRotCW" title="Rotate front 90° clockwise">↻ 90°</button>
+                  </div>
+                </div>
+
+                <div class="bot-img-row sliders-row">
+                  <label class="bot-slider-label">Opacity: <span id="botOpacityVal">100%</span>
+                    <input type="range" id="botImgOpacity" min="20" max="100" step="5" value="100" />
+                  </label>
+                  <label class="bot-checkbox-label" title="Draw bounding border and front heading marker on field">
+                    <input type="checkbox" id="botShowOutline" checked />
+                    <span>Heading &amp; Border</span>
+                  </label>
+                </div>
+
+                <div class="bot-img-footer-row">
+                  <button type="button" class="btn-sm-danger" id="btnClearBotImg" title="Clear image and revert to schematic box">Clear Picture</button>
+                  <button type="button" class="btn-sm-subtle" id="btnChangeBotImg" title="Choose a different image file">Change Photo</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- TAB PANE 3: Generated LemLib C++ Code -->
+        <div class="planner-tab-pane" id="paneTabCode" style="display:none;">
+          <section class="code-section" style="margin-top:4px;">
+            <h2>Generated LemLib Code</h2>
+            <div class="code-mode-row">
+              <label><input type="radio" name="codeMode" value="current" checked /> Current routine</label>
+              <label><input type="radio" name="codeMode" value="all" /> All routines (switch)</label>
+            </div>
+            <div class="code-indent-row">
+              <label for="codeIndentSelect">Code Indentation:</label>
+              <select id="codeIndentSelect" title="Select indentation level for the autonomous code">
+                <option value="2" selected>2 spaces (standard)</option>
+                <option value="4">4 spaces (PROS default)</option>
+                <option value="0">0 spaces (no indent)</option>
+                <option value="tab">1 tab (\t)</option>
+                <option value="custom">Custom spaces...</option>
+              </select>
+              <input type="number" id="codeIndentCustom" min="0" max="16" value="2" style="display:none; width:60px;" title="Custom space count" />
+            </div>
+            <div class="code-indent-row" style="margin-top:2px; margin-bottom:10px;">
+              <label for="codeCommentStyleSelect">Comment Style:</label>
+              <select id="codeCommentStyleSelect" title="Choose how move block comments appear in the output code">
+                <option value="inline" selected>Inline (// comment at end of line)</option>
+                <option value="above">Above (// comment on preceding line)</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+              <button id="btnGenerate" class="primary" style="flex:1;">Generate Code</button>
+              <a id="btnCppTranslatorSide" href="translator.html" class="btn-cpp-translate-side" style="flex:1;text-decoration:none;display:flex;align-items:center;justify-content:center;" title="Open C++ Autonomous to Blocks Translator page">📥 C++ → Blocks</a>
+            </div>
+            <textarea id="codeOut" readonly spellcheck="false" style="min-height:380px;"></textarea>
+            <button id="btnCopy">Copy to Clipboard</button>
+          </section>
+        </div>
       </aside>
 
-      <!-- Canvas -->
-      <div class="canvas-wrap">
+      <!-- Simulation Field Canvas with Centerpiece Floating Playback HUD -->
+      <div class="canvas-wrap" id="canvasWrap">
+        <!-- Floating Interactive Simulation Control HUD -->
+        <div class="sim-floating-hud" id="simFloatingHud">
+          <div class="sim-hud-left">
+            <button type="button" id="btnSimField" class="btn-hud-play" title="Run 2D Autonomous Simulation (Kinematics & LemLib Profile)">
+              <span class="hud-btn-icon">▶</span> <span class="hud-btn-text">Simulate</span>
+            </button>
+            <button type="button" id="btnStopField" class="btn-hud-stop" title="Reset Simulation Robot Pose">
+              <span class="hud-btn-icon">⏹</span> Reset
+            </button>
+            <div class="sim-hud-speed-ctrl" title="Simulation Animation Speed Multiplier">
+              <span class="hud-speed-label">Speed:</span>
+              <input type="range" id="simSpeedField" min="0.25" max="3" step="0.25" value="1" />
+              <span id="speedLabelField" class="hud-speed-val">1×</span>
+            </div>
+          </div>
+          <div class="sim-hud-right">
+            <div class="sim-hud-chip chip-time" id="simHudTime" title="Live Elapsed & Total Path Duration">
+              ⏱ 0.00s / ~0.00s
+            </div>
+            <div class="sim-hud-chip chip-speed" id="simHudSpeed" title="Simulated Linear & Angular Velocity">
+              🏎️ 0.0 in/s
+            </div>
+            <div class="sim-hud-chip chip-coords" id="simHudCoords" title="Realtime Field Coordinates (X, Y, θ)">
+              📍 (-60.0", -60.0") θ=0°
+            </div>
+          </div>
+        </div>
+
         <canvas id="field" width="900" height="900"></canvas>
-        <div id="coords">X: 0.0  Y: 0.0</div>
+        <div id="coords">X: -60.0  Y: -60.0</div>
         <div id="timeEst">Est. time: —</div>
         <div id="legend">
           <span class="leg start"></span> Start
@@ -706,7 +751,7 @@
           <span class="leg selected"></span> Selected
         </div>
         <div id="helpTip">
-          Drag start robot or selected waypoint · Use + Add to create moves · <button type="button" id="linkHelpDocs" class="linkish" style="color:#93c5fd;text-decoration:underline;background:none;border:none;cursor:pointer;padding:0 2px;">View Help & Docs</button>
+          Drag start robot or waypoints on field · Use + Add to create moves · <button type="button" id="linkHelpDocs" class="linkish" style="color:#93c5fd;text-decoration:underline;background:none;border:none;cursor:pointer;padding:0 2px;">View Help &amp; Docs</button>
         </div>
       </div>
 
@@ -1754,15 +1799,15 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260921.k5"></script>
+  <script src="version.js?v=20260921.k6"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k5"></script>
+  <script src="firebase-config.js?v=20260921.k6"></script>
   <script src="v5-brain-serial.js"></script>
   <script src="project-manager.js"></script>
   <script src="cpp-parser.js?v=20260920.k16"></script>
-  <script src="app.js?v=20260921.k5"></script>
+  <script src="app.js?v=20260921.k6"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

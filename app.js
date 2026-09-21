@@ -1952,6 +1952,9 @@
     actionFlow.innerHTML = "";
     const poses = computePoses();
 
+    const countEl = document.getElementById("tabActionCount");
+    if (countEl) countEl.textContent = String(actions.length);
+
     // Top LemLib Bot Specs & PID summary banner in block interface
     const botBanner = document.createElement("div");
     botBanner.className = "action-flow-bot-banner";
@@ -1972,19 +1975,18 @@
     const tuneBtn = botBanner.querySelector("#btnQuickTunePidFromFlow");
     if (tuneBtn) {
       tuneBtn.addEventListener("click", () => {
-        const btnOpenBot = document.getElementById("btnOpenPidFromBot");
-        if (btnOpenBot) btnOpenBot.click();
+        const modal = document.getElementById("pidModal");
+        if (modal) {
+          modal.hidden = false;
+          modal.classList.add("open");
+        }
       });
     }
     const specsBtn = botBanner.querySelector("#btnQuickConfigBotFromFlow");
     if (specsBtn) {
       specsBtn.addEventListener("click", () => {
-        const botSec = document.getElementById("botSettings");
-        if (botSec) {
-          botSec.scrollIntoView({ behavior: "smooth" });
-          botSec.style.borderColor = "#38bdf8";
-          setTimeout(() => { botSec.style.borderColor = ""; }, 1500);
-        }
+        const tabBot = document.getElementById("tabBtnBot");
+        if (tabBot) tabBot.click();
       });
     }
     actionFlow.appendChild(botBanner);
@@ -2714,18 +2716,51 @@
 
   function updateTimeDisplay(elapsed, totalEst, currentVLin, currentOmegaDeg) {
     const el = document.getElementById("timeEst");
-    if (!el) return;
+    const hudTime = document.getElementById("simHudTime");
+    const hudSpeed = document.getElementById("simHudSpeed");
+    const hudCoords = document.getElementById("simHudCoords");
+    const btnSimF = document.getElementById("btnSimField");
+
     const asyncCount = actions.filter((a) => a.async).length;
     const asyncTag = asyncCount > 0 ? ` · ⚡ ${asyncCount} Multitask` : "";
+    
+    // Determine active robot pose for telemetry
+    let activeRobotPose = pose;
+    if (simRunning && simPath.length && simPath[simIdx]) {
+      activeRobotPose = simPath[simIdx];
+    }
+
+    if (hudCoords) {
+      hudCoords.textContent = `📍 (${activeRobotPose.x.toFixed(1)}", ${activeRobotPose.y.toFixed(1)}") θ=${Math.round(normalizeAngle(activeRobotPose.theta))}°`;
+    }
+
     if (elapsed != null && totalEst != null) {
       let speedText = "";
       if (currentVLin != null && currentOmegaDeg != null) {
         speedText = ` · ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`;
+        if (hudSpeed) {
+          hudSpeed.textContent = `🏎️ ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`;
+        }
       }
-      el.textContent = `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s${asyncTag}${speedText}`;
+      if (el) el.textContent = `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s${asyncTag}${speedText}`;
+      if (hudTime) hudTime.textContent = `⏱ ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s`;
     } else {
       const t = estimateTotalTime();
-      el.textContent = actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)${asyncTag}` : `Est. time: —`;
+      if (el) el.textContent = actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)${asyncTag}` : `Est. time: —`;
+      if (hudTime) hudTime.textContent = actions.length ? `⏱ ~${t.toFixed(2)}s total` : `⏱ 0.00s`;
+      if (hudSpeed) hudSpeed.textContent = `🏎️ 0.0 in/s`;
+    }
+
+    if (btnSimF) {
+      if (simRunning) {
+        btnSimF.classList.add("playing");
+        const txt = btnSimF.querySelector(".hud-btn-text");
+        if (txt) txt.textContent = "Pause";
+      } else {
+        btnSimF.classList.remove("playing");
+        const txt = btnSimF.querySelector(".hud-btn-text");
+        if (txt) txt.textContent = "Simulate";
+      }
     }
   }
 
@@ -2764,13 +2799,24 @@
   }
 
   function startSim() {
-    if (!actions.length) return;
+    if (!actions.length) {
+      showToast("⚠️ Add at least one movement action to simulate.");
+      return;
+    }
+    if (simRunning) {
+      // Pause
+      simRunning = false;
+      if (animId) cancelAnimationFrame(animId);
+      updateTimeDisplay();
+      return;
+    }
     buildSimPath();
     simRunning = true;
     simIdx = 0;
     const startTime = performance.now();
     const totalT = simPath.length ? simPath[simPath.length - 1].t : 0;
     const totalEst = estimateTotalTime();
+    updateTimeDisplay(0, totalEst, 0, 0);
 
     function frame(now) {
       if (!simRunning) return;
@@ -2787,7 +2833,7 @@
       if (elapsed < totalT + 0.15) animId = requestAnimationFrame(frame);
       else {
         simRunning = false;
-        updateTimeDisplay(totalT, totalEst);
+        updateTimeDisplay(totalT, totalEst, 0, 0);
         draw();
       }
     }
@@ -2797,6 +2843,8 @@
   function stopSim() {
     simRunning = false;
     if (animId) cancelAnimationFrame(animId);
+    simIdx = 0;
+    updateTimeDisplay();
     draw();
   }
 
@@ -3074,12 +3122,114 @@
     openClearModal();
   };
 
-  document.getElementById("btnSim").onclick = startSim;
-  document.getElementById("btnStop").onclick = stopSim;
-  document.getElementById("simSpeed").oninput = (e) => {
-    simSpeed = Number(e.target.value);
-    speedLabel.textContent = simSpeed + "×";
-  };
+  const btnSimHeader = document.getElementById("btnSim");
+  if (btnSimHeader) btnSimHeader.onclick = startSim;
+  const btnStopHeader = document.getElementById("btnStop");
+  if (btnStopHeader) btnStopHeader.onclick = stopSim;
+
+  const simSpeedInput = document.getElementById("simSpeed");
+  const simSpeedFieldInput = document.getElementById("simSpeedField");
+  const hudSpeedValEl = document.getElementById("hudSpeedVal");
+
+  function setSimSpeedValue(val) {
+    simSpeed = Number(val);
+    if (speedLabel) speedLabel.textContent = simSpeed + "×";
+    if (simSpeedInput) simSpeedInput.value = simSpeed;
+    if (simSpeedFieldInput) simSpeedFieldInput.value = simSpeed;
+    if (hudSpeedValEl) hudSpeedValEl.textContent = simSpeed + "×";
+  }
+
+  if (simSpeedInput) {
+    simSpeedInput.oninput = (e) => setSimSpeedValue(e.target.value);
+  }
+  if (simSpeedFieldInput) {
+    simSpeedFieldInput.oninput = (e) => setSimSpeedValue(e.target.value);
+  }
+
+  // Floating Simulation HUD Buttons
+  const btnSimField = document.getElementById("btnSimField");
+  if (btnSimField) btnSimField.onclick = startSim;
+  const btnStopField = document.getElementById("btnStopField");
+  if (btnStopField) btnStopField.onclick = stopSim;
+
+  // Segmented Tab Switcher for Left Sidebar (Routine, Bot & PID, C++ Code)
+  function wirePlannerTabsAndModes() {
+    const tabBtnFlowchart = document.getElementById("tabBtnFlowchart");
+    const tabBtnBot = document.getElementById("tabBtnBot");
+    const tabBtnCode = document.getElementById("tabBtnCode");
+
+    const paneFlowchart = document.getElementById("paneTabFlowchart");
+    const paneBot = document.getElementById("paneTabBot");
+    const paneCode = document.getElementById("paneTabCode");
+
+    function selectTab(tab) {
+      const allTabs = [tabBtnFlowchart, tabBtnBot, tabBtnCode];
+      const allPanes = [paneFlowchart, paneBot, paneCode];
+      allTabs.forEach((t) => { if (t) t.classList.remove("active"); });
+      allPanes.forEach((p) => { if (p) p.style.display = "none"; });
+
+      if (tab === "flowchart") {
+        if (tabBtnFlowchart) tabBtnFlowchart.classList.add("active");
+        if (paneFlowchart) paneFlowchart.style.display = "flex";
+      } else if (tab === "bot") {
+        if (tabBtnBot) tabBtnBot.classList.add("active");
+        if (paneBot) paneBot.style.display = "flex";
+        syncBotInputs();
+        syncBotVisualUI();
+      } else if (tab === "code") {
+        if (tabBtnCode) tabBtnCode.classList.add("active");
+        if (paneCode) paneCode.style.display = "flex";
+        generateCode();
+      }
+    }
+
+    if (tabBtnFlowchart) tabBtnFlowchart.onclick = () => selectTab("flowchart");
+    if (tabBtnBot) tabBtnBot.onclick = () => selectTab("bot");
+    if (tabBtnCode) tabBtnCode.onclick = () => selectTab("code");
+
+    // Header Mode Nav
+    const navPlanner = document.getElementById("navModePlanner");
+    const navPidTuner = document.getElementById("navModePidTuner");
+    const navBrain = document.getElementById("navModeBrain");
+
+    if (navPlanner) {
+      navPlanner.onclick = (e) => {
+        e.preventDefault();
+        showPlannerView();
+      };
+    }
+    if (navPidTuner) {
+      navPidTuner.onclick = (e) => {
+        e.preventDefault();
+        const modal = document.getElementById("pidModal");
+        if (modal) {
+          modal.hidden = false;
+          modal.classList.add("open");
+        }
+      };
+    }
+    if (navBrain) {
+      navBrain.onclick = (e) => {
+        e.preventDefault();
+        const modal = document.getElementById("brainModal");
+        if (modal) {
+          modal.hidden = false;
+          modal.classList.add("open");
+        }
+      };
+    }
+
+    const btnOpenPidBot = document.getElementById("btnOpenPidFromBot");
+    if (btnOpenPidBot) {
+      btnOpenPidBot.onclick = () => {
+        const modal = document.getElementById("pidModal");
+        if (modal) {
+          modal.hidden = false;
+          modal.classList.add("open");
+        }
+      };
+    }
+  }
 
   document.getElementById("btnGenerate").onclick = generateCode;
 
@@ -6512,8 +6662,13 @@ lemlib::ControllerSettings ${currentMode}_controller(
     updateStatusUI(window.V5BrainSerial.status);
   }
 
-  // Initialize Homepage Hub, Project Manager, Debug Panels, and Brain Controller
+  // Initialize Homepage Hub, Planner Tabs, Project Manager, Debug Panels, and Brain Controller
+  wirePlannerTabsAndModes();
+  wireBotVisualCard();
+  wireBotSettings();
+  syncBotInputs();
   wireHomepageHub();
+
   if (window.ProjectManager) {
     wireProjectWorkspace();
     wireLoadProjectModal();
@@ -6522,6 +6677,10 @@ lemlib::ControllerSettings ${currentMode}_controller(
   if (window.V5BrainSerial) {
     wireV5BrainUI();
   }
+
+  // Ensure simulation canvas is directly displayed and drawn on load
+  showPlannerView();
+  updateTimeDisplay();
 
   initFirebaseAuth();
 })();
