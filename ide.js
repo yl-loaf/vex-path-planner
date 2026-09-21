@@ -230,7 +230,22 @@
       if (match) pct = parseInt(match[1], 10);
     }
 
-    if (status === "saving") {
+    if (status === "pending") {
+      if (elAutosaveBadge) {
+        elAutosaveBadge.className = "ide-autosave-badge pending";
+        elAutosaveBadge.title = "Unsaved changes pending autosave...";
+      }
+      if (elAutosaveDot) elAutosaveDot.className = "autosave-dot pending";
+      if (elAutosaveText) elAutosaveText.textContent = "● Unsaved changes";
+      if (elAutosaveTimestamp) elAutosaveTimestamp.textContent = "Unsaved changes";
+
+      if (elSaveProgressPill && elSaveProgressText) {
+        elSaveProgressPill.hidden = false;
+        elSaveProgressPill.className = "ide-save-progress-pill pending";
+        elSaveProgressText.textContent = "● Unsaved changes";
+        if (elSaveProgressBarFill) elSaveProgressBarFill.style.width = "0%";
+      }
+    } else if (status === "saving") {
       const progSuffix = progressStr ? ` ${progressStr}` : "";
       if (elAutosaveBadge) {
         elAutosaveBadge.className = "ide-autosave-badge saving";
@@ -244,7 +259,7 @@
         elSaveProgressPill.hidden = false;
         elSaveProgressPill.className = "ide-save-progress-pill saving";
         elSaveProgressText.textContent = `⏳ ${progressStr || "Saving..."}`;
-        if (elSaveProgressBarFill) elSaveProgressBarFill.style.width = `${Math.max(8, pct)}%`;
+        if (elSaveProgressBarFill) elSaveProgressBarFill.style.width = `${Math.max(12, pct)}%`;
       }
     } else if (status === "synced") {
       const progSuffix = progressStr ? ` ${progressStr}` : "";
@@ -300,18 +315,13 @@
     if (!autosaveEnabled) return;
     if (autosaveTimer) clearTimeout(autosaveTimer);
 
-    if (window.ProjectManager) {
-      const totalBytes = window.ProjectManager.getProjectSizeBytes();
-      const initialProg = window.ProjectManager.formatSavingProgress(0, totalBytes);
-      updateAutosaveUI("saving", null, initialProg);
-    } else {
-      updateAutosaveUI("saving");
-    }
+    // Show pending status immediately while typing without displaying false "saving 0%"
+    updateAutosaveUI("pending");
 
     if (immediate) {
       performAutosave();
     } else {
-      autosaveTimer = setTimeout(performAutosave, 1200);
+      autosaveTimer = setTimeout(performAutosave, 1000);
     }
   }
 
@@ -323,25 +333,35 @@
       saveCurrentEditorState();
 
       const pm = window.ProjectManager;
-      const totalBytes = pm ? pm.getProjectSizeBytes() : 0;
+      if (!pm) return;
+
+      const hasChanges = pm.isDirty || (pm.changedFiles && pm.changedFiles.size > 0);
+      if (!hasChanges) {
+        updateAutosaveUI("ready", "✓ All changes saved");
+        return;
+      }
+
+      // ONLY save the changes!
+      const changedBytes = pm.getChangedSizeBytes() || 512;
+      const initialProg = pm.formatSavingProgress(Math.max(1, Math.round(changedBytes * 0.25)), changedBytes);
+      updateAutosaveUI("saving", null, initialProg);
 
       const onProgress = (curr, total, progStr) => {
         updateAutosaveUI("saving", null, progStr);
       };
 
-      if (pm) {
-        await pm.saveWithProgress(onProgress);
-      }
+      // Save changes locally
+      await pm.saveChangesOnly(onProgress);
 
       const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
       lastSaveTimestamp = timeStr;
-      const finalProgStr = pm ? pm.formatSavingProgress(totalBytes, totalBytes) : "";
+      const finalProgStr = pm.formatSavingProgress(changedBytes, changedBytes);
 
-      if (cloudUser && pm) {
+      if (cloudUser) {
         try {
           await pm.saveToCloud((curr, total, progStr) => {
             updateAutosaveUI("saving", null, progStr);
-          });
+          }, true);
           pm.markDirty(false);
           updateAutosaveUI("synced", null, finalProgStr);
         } catch (err) {
@@ -349,9 +369,7 @@
           updateAutosaveUI("ready", `✓ Saved ${finalProgStr}`, finalProgStr);
         }
       } else {
-        if (pm) {
-          pm.markDirty(false);
-        }
+        pm.markDirty(false);
         updateAutosaveUI("ready", `✓ Saved ${finalProgStr}`, finalProgStr);
       }
       renderProjectHeader();
@@ -1350,7 +1368,10 @@
         saveCurrentEditorState();
         const cloudStatus = document.getElementById("cloudStatus");
         const pm = window.ProjectManager;
-        const totalBytes = pm ? pm.getProjectSizeBytes() : 0;
+        if (!pm) return;
+
+        const hasChanges = pm.isDirty || (pm.changedFiles && pm.changedFiles.size > 0);
+        const saveBytes = hasChanges ? (pm.getChangedSizeBytes() || 512) : pm.getProjectSizeBytes();
 
         btnSaveCloud.disabled = true;
         const origBtnText = btnSaveCloud.innerHTML;
@@ -1363,20 +1384,20 @@
 
         try {
           if (cloudUser) {
-            await pm.saveToCloud(onProgress);
+            await pm.saveToCloud(onProgress, hasChanges);
             pm.markDirty(false);
             renderProjectHeader();
-            const finalStr = pm.formatSavingProgress(totalBytes, totalBytes);
+            const finalStr = pm.formatSavingProgress(saveBytes, saveBytes);
             if (cloudStatus) cloudStatus.textContent = `☁️ Synced ${finalStr}`;
             updateAutosaveUI("synced", null, finalStr);
             btnSaveCloud.innerHTML = `✓ Synced ${finalStr}`;
             setTimeout(() => { btnSaveCloud.innerHTML = origBtnText; btnSaveCloud.disabled = false; }, 2500);
             showToast(`✅ Cloud synced ${finalStr} successfully!`);
           } else {
-            await pm.saveWithProgress(onProgress);
+            await pm.saveChangesOnly(onProgress);
             pm.markDirty(false);
             renderProjectHeader();
-            const finalStr = pm.formatSavingProgress(totalBytes, totalBytes);
+            const finalStr = pm.formatSavingProgress(saveBytes, saveBytes);
             if (cloudStatus) cloudStatus.textContent = `💾 Saved ${finalStr}`;
             updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
             btnSaveCloud.innerHTML = `✓ Saved ${finalStr}`;
@@ -1384,10 +1405,10 @@
             showToast(`💾 Saved locally: ${finalStr} (Sign in with Google to sync to cloud)`);
           }
         } catch (e) {
-          await pm.saveWithProgress(onProgress);
+          await pm.saveChangesOnly(onProgress);
           pm.markDirty(false);
           renderProjectHeader();
-          const finalStr = pm.formatSavingProgress(totalBytes, totalBytes);
+          const finalStr = pm.formatSavingProgress(saveBytes, saveBytes);
           if (cloudStatus) cloudStatus.textContent = `💾 Saved ${finalStr}`;
           updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
           btnSaveCloud.innerHTML = `✓ Saved ${finalStr}`;
@@ -1459,7 +1480,7 @@
         };
 
         const totalBytes = ProjectManager.getProjectSizeBytes();
-        updateAutosaveUI("saving", null, ProjectManager.formatSavingProgress(0, totalBytes));
+        updateAutosaveUI("saving", null, ProjectManager.formatSavingProgress(Math.round(totalBytes * 0.20), totalBytes));
 
         await ProjectManager.saveWithProgress((curr, total, progStr) => {
           updateAutosaveUI("saving", null, progStr);

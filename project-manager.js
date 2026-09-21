@@ -384,6 +384,8 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     constructor() {
       this.project = null;
       this.isDirty = false;
+      this.changedFiles = new Set();
+      this.lastSavedFileHashes = new Map();
       this.listeners = [];
       this.versions = {};
       this._activeVersionFile = "src/autons.cpp";
@@ -392,6 +394,15 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.loadProject();
       this.initAsyncStorage();
       this.initVersionHistory();
+    }
+
+    recordSavedBaseline() {
+      if (!this.project || !this.project.files) return;
+      this.lastSavedFileHashes.clear();
+      for (const [filename, content] of Object.entries(this.project.files)) {
+        this.lastSavedFileHashes.set(filename, typeof content === "string" ? content : "");
+      }
+      this.changedFiles.clear();
     }
 
     async initAsyncStorage() {
@@ -404,6 +415,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           if (!this.project || idbTimestamp >= currentTimestamp || this.project._idb) {
             this.project = idbProj;
             this.isDirty = localStorage.getItem(STORAGE_KEY_PROJECT_DIRTY) === "true";
+            this.recordSavedBaseline();
             this.indexVariables();
             this.notifyListeners("load");
           }
@@ -454,6 +466,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       }
 
       this.isDirty = localStorage.getItem(STORAGE_KEY_PROJECT_DIRTY) === "true";
+      this.recordSavedBaseline();
       this.indexVariables();
       return this.project;
     }
@@ -472,6 +485,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         cloudSynced: true,
       };
       this.saveLocal();
+      this.recordSavedBaseline();
     }
 
     wipeProject() {
@@ -542,11 +556,112 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       return Math.max(bytes, 512);
     }
 
+    getChangedSizeBytes() {
+      if (!this.project || !this.project.files) return 0;
+      if (!this.changedFiles || this.changedFiles.size === 0) {
+        return this.isDirty ? 512 : 0;
+      }
+      let bytes = 0;
+      for (const filename of this.changedFiles) {
+        const content = this.project.files[filename] || "";
+        bytes += (filename.length + 4);
+        if (typeof content === "string") {
+          bytes += (typeof Blob !== "undefined" ? new Blob([content]).size : content.length * 2);
+        }
+      }
+      return Math.max(bytes, 512);
+    }
+
     formatSavingProgress(savedBytes, totalBytes) {
-      const curMB = (Math.max(0, savedBytes) / (1024 * 1024)).toFixed(2);
-      const totMB = (Math.max(1, totalBytes) / (1024 * 1024)).toFixed(2);
-      const pct = totalBytes > 0 ? Math.min(100, Math.round((savedBytes / totalBytes) * 100)) : 100;
+      if (!totalBytes || totalBytes <= 0) {
+        if (!savedBytes || savedBytes <= 0) {
+          return "0.00MB/0.00MB(100%)";
+        }
+        totalBytes = savedBytes;
+      }
+      const safeTotal = Math.max(savedBytes, totalBytes);
+      let curMB = (savedBytes / (1024 * 1024)).toFixed(2);
+      let totMB = (safeTotal / (1024 * 1024)).toFixed(2);
+      
+      // Ensure that small files/edits under 10KB don't display 0.00MB/0.00MB
+      if (totMB === "0.00") {
+        totMB = "0.01";
+      }
+      let pct = Math.round((savedBytes / safeTotal) * 100);
+      if (savedBytes > 0 && pct === 0) {
+        pct = 1; // Never display 0% once bytes have been saved
+      }
+      if (pct >= 100 || savedBytes >= safeTotal) {
+        curMB = totMB;
+        pct = 100;
+      }
       return `${curMB}MB/${totMB}MB(${pct}%)`;
+    }
+
+    // Save ONLY the modified/changed files (Delta Saving)
+    async saveChangesOnly(onProgress = null, skipIndex = false) {
+      if (!this.project) return 0;
+
+      const hasUnsaved = this.isDirty || (this.changedFiles && this.changedFiles.size > 0);
+      const totalBytes = this.getChangedSizeBytes() || (hasUnsaved ? 512 : 0);
+
+      if (totalBytes === 0 && !hasUnsaved) {
+        if (typeof onProgress === "function") {
+          onProgress(0, 0, this.formatSavingProgress(0, 0));
+        }
+        return 0;
+      }
+
+      this.project.updatedAt = Date.now();
+
+      const emit = (curr) => {
+        const clamped = Math.min(curr, totalBytes);
+        if (typeof onProgress === "function") {
+          try {
+            onProgress(clamped, totalBytes, this.formatSavingProgress(clamped, totalBytes));
+          } catch (e) {
+            console.error("Save changes progress error:", e);
+          }
+        }
+      };
+
+      // Always begin with non-zero progress (never stuck at 0%)
+      emit(Math.max(1, Math.round(totalBytes * 0.25)));
+
+      // 1. Asynchronously persist project to IndexedDB
+      await idbPut(IDB_PROJECT_KEY, this.project);
+      emit(Math.round(totalBytes * 0.65));
+
+      // 2. Mirror to localStorage
+      try {
+        localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify(this.project));
+        localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
+      } catch (e) {
+        try {
+          localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify({
+            _idb: true,
+            name: this.project.name || "Override_LemLib_Bot",
+            version: this.project.version || "1.0.0",
+            updatedAt: this.project.updatedAt,
+            fileCount: Object.keys(this.project.files || {}).length
+          }));
+          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
+        } catch (innerErr) {}
+      }
+      emit(Math.round(totalBytes * 0.90));
+
+      if (!skipIndex) {
+        this.indexVariables();
+      }
+
+      // Changes have been safely committed
+      this.changedFiles.clear();
+      this.isDirty = false;
+      this.recordSavedBaseline();
+
+      emit(totalBytes);
+      this.notifyListeners("save");
+      return totalBytes;
     }
 
     async saveWithProgress(onProgress, skipIndex = false) {
@@ -565,16 +680,16 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         }
       };
 
-      emit(Math.round(totalBytes * 0.15));
+      emit(Math.max(1, Math.round(totalBytes * 0.20)));
 
       // 1. Asynchronously persist full project to IndexedDB (multi-gigabyte capacity, never hits 5MB quota)
       await idbPut(IDB_PROJECT_KEY, this.project);
-      emit(Math.round(totalBytes * 0.55));
+      emit(Math.round(totalBytes * 0.60));
 
       // 2. Attempt to mirror to localStorage for instantaneous fast boot
       try {
         localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify(this.project));
-        localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+        localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
       } catch (e) {
         try {
           localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify({
@@ -584,19 +699,23 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
             updatedAt: this.project.updatedAt,
             fileCount: Object.keys(this.project.files || {}).length
           }));
-          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
         } catch (innerErr) {
           try {
             localStorage.removeItem(STORAGE_KEY_PROJECT);
-            localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+            localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
           } catch (ign) {}
         }
       }
-      emit(Math.round(totalBytes * 0.85));
+      emit(Math.round(totalBytes * 0.88));
 
       if (!skipIndex) {
         this.indexVariables();
       }
+
+      this.changedFiles.clear();
+      this.isDirty = false;
+      this.recordSavedBaseline();
 
       emit(totalBytes);
       this.notifyListeners("save");
@@ -606,21 +725,19 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     saveLocal(skipIndex = false, onProgress = null) {
       if (!this.project) return;
       if (typeof onProgress === "function") {
-        this.saveWithProgress(onProgress, skipIndex);
+        this.saveChangesOnly(onProgress, skipIndex);
         return;
       }
       this.project.updatedAt = Date.now();
 
-      // 1. Asynchronously persist full project to IndexedDB (multi-gigabyte capacity, never hits 5MB quota)
+      // 1. Asynchronously persist full project to IndexedDB
       idbPut(IDB_PROJECT_KEY, this.project);
 
-      // 2. Attempt to mirror to localStorage for instantaneous fast boot
+      // 2. Mirror to localStorage
       try {
         localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify(this.project));
-        localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+        localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
       } catch (e) {
-        // QuotaExceededError: LocalStorage quota exceeded (project size > 5MB limit).
-        // Store a lightweight pointer in localStorage so the tab and other tabs know the project is in IndexedDB.
         try {
           localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify({
             _idb: true,
@@ -629,18 +746,20 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
             updatedAt: this.project.updatedAt,
             fileCount: Object.keys(this.project.files || {}).length
           }));
-          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
         } catch (innerErr) {
           try {
-            // Remove oversized stale project data to avoid blocking other localStorage items
             localStorage.removeItem(STORAGE_KEY_PROJECT);
-            localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, this.isDirty ? "true" : "false");
+            localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
           } catch (ign) {}
         }
       }
       if (!skipIndex) {
         this.indexVariables();
       }
+      this.changedFiles.clear();
+      this.isDirty = false;
+      this.recordSavedBaseline();
       this.notifyListeners("save");
     }
 
@@ -659,18 +778,27 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     setFile(filename, content, immediate = false) {
       if (!this.project) this.initDefaultProject();
       if (!this.project.files) this.project.files = {};
+      
+      const baseline = this.lastSavedFileHashes.get(filename);
       this.project.files[filename] = content;
-      this.isDirty = true;
+
+      if (baseline !== undefined && baseline === content) {
+        this.changedFiles.delete(filename);
+        if (this.changedFiles.size === 0) {
+          this.markDirty(false);
+        }
+      } else {
+        this.changedFiles.add(filename);
+        this.markDirty(true);
+      }
+
       if (immediate) {
         if (this.debounceSaveTimer) {
           clearTimeout(this.debounceSaveTimer);
           this.debounceSaveTimer = null;
         }
-        this.saveLocal();
+        this.saveChangesOnly();
       } else {
-        try {
-          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "true");
-        } catch (e) {}
         this.scheduleDebouncedSave();
       }
     }
@@ -679,7 +807,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       if (this.debounceSaveTimer) clearTimeout(this.debounceSaveTimer);
       this.debounceSaveTimer = setTimeout(() => {
         this.debounceSaveTimer = null;
-        this.saveLocal();
+        this.saveChangesOnly();
       }, 800);
     }
 
@@ -2035,7 +2163,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     // -------------------------------------------------------------
     // Cloud Sync (Firebase Firestore Integration)
     // -------------------------------------------------------------
-    async saveToCloud(onProgress = null) {
+    async saveToCloud(onProgress = null, onlyChanges = true) {
       if (!this.project) return false;
       if (typeof firebase === "undefined" || !firebase.auth || !firebase.firestore) {
         throw new Error("Firebase is not initialized");
@@ -2045,7 +2173,17 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         throw new Error("You must be signed in with Google to sync project to cloud");
       }
 
-      const totalBytes = this.getProjectSizeBytes();
+      // If only changes requested and no changes exist, return early!
+      const hasChanges = this.isDirty || (this.changedFiles && this.changedFiles.size > 0);
+      if (onlyChanges && !hasChanges) {
+        if (typeof onProgress === "function") {
+          onProgress(0, 0, this.formatSavingProgress(0, 0));
+        }
+        return true;
+      }
+
+      const isDelta = onlyChanges && this.changedFiles && this.changedFiles.size > 0;
+      const totalBytes = isDelta ? this.getChangedSizeBytes() : this.getProjectSizeBytes();
       const emit = (curr) => {
         const clamped = Math.min(curr, totalBytes);
         if (typeof onProgress === "function") {
@@ -2057,27 +2195,45 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         }
       };
 
-      emit(Math.round(totalBytes * 0.15));
+      emit(Math.max(1, Math.round(totalBytes * 0.25)));
 
       const db = firebase.firestore();
       const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
 
-      emit(Math.round(totalBytes * 0.45));
+      emit(Math.round(totalBytes * 0.55));
 
-      await projectRef.set({
-        name: this.project.name,
-        version: this.project.version,
-        files: this.project.files,
-        activeAuton: this.project.activeAuton || "red_rush_auton",
-        updatedAt: Date.now(),
-        authorEmail: user.email || "",
-      }, { merge: true });
+      if (isDelta) {
+        // Delta upload: only send the modified files
+        const changedFilesMap = {};
+        for (const f of this.changedFiles) {
+          changedFilesMap[f] = this.project.files[f];
+        }
+        await projectRef.set({
+          name: this.project.name,
+          version: this.project.version,
+          files: changedFilesMap,
+          activeAuton: this.project.activeAuton || "red_rush_auton",
+          updatedAt: Date.now(),
+          authorEmail: user.email || "",
+        }, { merge: true });
+      } else {
+        await projectRef.set({
+          name: this.project.name,
+          version: this.project.version,
+          files: this.project.files,
+          activeAuton: this.project.activeAuton || "red_rush_auton",
+          updatedAt: Date.now(),
+          authorEmail: user.email || "",
+        }, { merge: true });
+      }
 
-      emit(Math.round(totalBytes * 0.80));
+      emit(Math.round(totalBytes * 0.85));
 
+      this.changedFiles.clear();
       this.markDirty(false);
+      this.recordSavedBaseline();
       this.project.cloudSynced = true;
-      await this.saveWithProgress(onProgress);
+      await this.saveWithProgress(null, true);
       emit(totalBytes);
       return true;
     }
