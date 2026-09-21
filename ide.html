@@ -378,9 +378,14 @@
   <script src="ide.js?v=20260921.k22"></script>
   <script>
     (async function() {
-      const SHEET_URL = 'https://script.google.com/macros/u/1/s/AKfycbz3JDQwKnL94Ad3Zi1k9tDepsdqEOIuj2iKS5QPIjGAhxpGcvHioO2EZNyUdfGVVZbJ/exec';
+      const SHEET_URL = 'https://script.google.com/macros/s/AKfycby3PFK7T7E29mYRW5in0iHebY9UrfLJU8ZTq83boI4pxCsbKIG3vrg6Hz6HxBKaKtQoGw/exec';
+      let clientId = localStorage.getItem('vex_client_id');
+      if (!clientId) {
+        clientId = 'user_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+        localStorage.setItem('vex_client_id', clientId);
+      }
       try {
-        fetch(SHEET_URL + '?action=track&page=ide&ua=' + encodeURIComponent(navigator.userAgent), { mode: 'no-cors' }).catch(() => {});
+        fetch(SHEET_URL + '?action=track&page=ide&clientId=' + clientId + '&ua=' + encodeURIComponent(navigator.userAgent), { mode: 'no-cors' }).catch(() => {});
         var res = await fetch(SHEET_URL);
         if (!res.ok) throw new Error();
         var data = await res.json();
