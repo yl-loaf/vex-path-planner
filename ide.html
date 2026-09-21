@@ -69,6 +69,8 @@
             <h3>PROJECT EXPLORER</h3>
             <div class="ide-sidebar-btns">
               <button type="button" id="btnIdeNewFile" title="Add new C++ source or header file">+ File</button>
+              <button type="button" id="btnIdeImportProject" title="Wipe & Import project JSON bundle">📂 Import</button>
+              <input type="file" id="ideProjectFileInput" accept=".json,.vpath" hidden />
             </div>
           </div>
           <div class="ide-file-tree" id="ideFileTree">
@@ -279,13 +281,66 @@
     </div>
   </div>
 
+  <!-- Wipe & Overwrite Project Security Challenge Modal -->
+  <div id="wipeChallengeModal" class="modal-overlay" hidden>
+    <div class="modal-box wipe-challenge-box" style="width: min(540px, 94vw); border: 2px solid #ef4444; background: #0f172a; border-radius: 12px; padding: 22px; color: #f8fafc; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+      <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #1e293b;padding-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.6rem;">⚠️</span>
+          <div>
+            <h3 style="color:#f87171;margin:0;font-size:1.15rem;">Destructive Action: Wipe &amp; Replace Project</h3>
+            <span style="font-size:0.75rem;color:#94a3b8;">Security Challenge Required Before Wiping</span>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="btnWipeChallengeCancel" style="background:none;border:none;color:#94a3b8;font-size:1.3rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-body" style="padding:0;margin-bottom:18px;">
+        <p style="margin-bottom:12px;font-size:0.92rem;line-height:1.5;color:#e2e8f0;">
+          You are about to <strong style="color:#ef4444;">permanently wipe and overwrite</strong> your current project workspace (<span id="wipeCurrentProjectName" style="color:#38bdf8;font-weight:600;">Override_LemLib_Bot</span>).
+        </p>
+
+        <div style="background:#1e1b4b;border:1px solid #4338ca;border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+          <div style="font-size:0.78rem;color:#a5b4fc;margin-bottom:4px;font-weight:600;letter-spacing:0.5px;">NEW PROJECT TO IMPORT:</div>
+          <div id="wipeTargetProjectName" style="font-size:0.95rem;color:#fff;font-weight:700;">Custom_Uploaded_Project.json</div>
+        </div>
+
+        <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 14px;">
+          <label style="display:block;font-size:0.85rem;color:#cbd5e1;margin-bottom:6px;font-weight:600;">
+            🔐 Security Verification Challenge:
+          </label>
+          <div style="font-size:0.82rem;color:#94a3b8;margin-bottom:10px;">
+            To unlock the project wipe operation, type the verification code below:
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <div id="wipeChallengeDisplay" style="background:#0f172a;border:1px dashed #ef4444;color:#f87171;font-family:monospace;font-size:1.15rem;font-weight:700;padding:8px 16px;border-radius:6px;letter-spacing:1.5px;user-select:none;">
+              WIPE-8492
+            </div>
+            <button type="button" id="btnRefreshWipeChallenge" class="btn-subtle" style="padding:8px 12px;font-size:0.8rem;" title="Get a new challenge code">🔄 Refresh Code</button>
+          </div>
+
+          <input type="text" id="wipeChallengeInput" placeholder="Type verification code here..." style="width:100%;padding:10px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;font-family:monospace;font-size:1rem;" autocomplete="off" />
+          <div id="wipeChallengeError" style="color:#f87171;font-size:0.8rem;margin-top:6px;display:none;">❌ Incorrect verification code. Please try again.</div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #1e293b;padding-top:14px;">
+        <button type="button" id="btnWipeBackupFirst" class="btn-subtle" style="font-size:0.82rem;padding:8px 12px;" title="Export current project before wiping">💾 Download Backup First</button>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="btnWipeChallengeAbort" class="btn-subtle" style="padding:8px 14px;">Cancel</button>
+          <button type="button" id="btnWipeConfirmAction" class="primary" style="background:#dc2626;border-color:#ef4444;opacity:0.5;cursor:not-allowed;" disabled>💥 Confirm Wipe &amp; Import</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Firebase Compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.ide3"></script>
-  <script src="v5-brain-serial.js?v=20260921.ide3"></script>
-  <script src="project-manager.js?v=20260921.ide3"></script>
-  <script src="ide.js?v=20260921.ide3"></script>
+  <script src="firebase-config.js?v=20260921.k18"></script>
+  <script src="v5-brain-serial.js?v=20260921.k18"></script>
+  <script src="project-manager.js?v=20260921.k18"></script>
+  <script src="ide.js?v=20260921.k18"></script>
 </body>
 </html>

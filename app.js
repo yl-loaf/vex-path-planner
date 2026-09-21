@@ -600,6 +600,7 @@
       let close = false;
       let settleSmallTimer = 0;
       let settleLargeTimer = 0;
+      let isSettled = false;
 
       while (t < timeoutS) {
         const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
@@ -633,8 +634,10 @@
           settleLargeTimer = 0;
         }
 
-        if (settleSmallTimer >= latSmallTime || settleLargeTimer >= latLargeTime) break;
-        if (earlyExitRange > 0 && dist < earlyExitRange) break;
+        if (settleSmallTimer >= latSmallTime || settleLargeTimer >= latLargeTime || (earlyExitRange > 0 && dist < earlyExitRange)) {
+          isSettled = true;
+          break;
+        }
 
         const alignCos = Math.cos((angError * Math.PI) / 180);
         const rawLatPid = latPid.update(dist, dt);
@@ -669,10 +672,14 @@
         points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg });
       }
 
-      // Settle cleanly to exact target pose
-      pose.x = target.x;
-      pose.y = target.y;
-      pose.theta = target.theta;
+      if (isSettled) {
+        pose.x = target.x;
+        pose.y = target.y;
+        pose.theta = target.theta;
+        if (points.length) {
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+        }
+      }
       return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: carrotPoint };
     }
 
@@ -683,6 +690,7 @@
       let close = false;
       let settleSmallTimer = 0;
       let settleLargeTimer = 0;
+      let isSettled = false;
 
       while (t < timeoutS) {
         const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
@@ -697,8 +705,10 @@
         if (dist < latLargeErr) settleLargeTimer += dt;
         else settleLargeTimer = 0;
 
-        if (settleSmallTimer >= latSmallTime || settleLargeTimer >= latLargeTime) break;
-        if (dist < 0.65 + earlyExitRange) break;
+        if (settleSmallTimer >= latSmallTime || settleLargeTimer >= latLargeTime || dist < 0.65 + earlyExitRange) {
+          isSettled = true;
+          break;
+        }
 
         const alignCos = Math.cos((angError * Math.PI) / 180);
         const rawLatPid = latPid.update(dist, dt);
@@ -732,8 +742,13 @@
         points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg });
       }
 
-      pose.x = target.x;
-      pose.y = target.y;
+      if (isSettled) {
+        pose.x = target.x;
+        pose.y = target.y;
+        if (points.length) {
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+        }
+      }
       return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: null };
     }
 
@@ -749,6 +764,7 @@
       const maxOmega = getMaxTurnRateDps(b);
       let settleSmallTimer = 0;
       let settleLargeTimer = 0;
+      let isSettled = false;
 
       while (t < timeoutS) {
         const angError = angleError(pose.theta, targetHeading);
@@ -757,8 +773,10 @@
         if (Math.abs(angError) < angLargeErr) settleLargeTimer += dt;
         else settleLargeTimer = 0;
 
-        if (settleSmallTimer >= angSmallTime || settleLargeTimer >= angLargeTime) break;
-        if (Math.abs(angError) < 1.0 + earlyExitRange) break;
+        if (settleSmallTimer >= angSmallTime || settleLargeTimer >= angLargeTime || Math.abs(angError) < 1.0 + earlyExitRange) {
+          isSettled = true;
+          break;
+        }
 
         const rawAngPid = angPid.update(angError, dt);
         let angPower = clamp(rawAngPid / 127, -maxSpeed, maxSpeed);
@@ -772,7 +790,12 @@
         points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg });
       }
 
-      pose.theta = targetHeading;
+      if (isSettled) {
+        pose.theta = targetHeading;
+        if (points.length) {
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+        }
+      }
       return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
     }
 
@@ -793,6 +816,7 @@
       let vDrive = 0;
       let settleSmallTimer = 0;
       let settleLargeTimer = 0;
+      let isSettled = false;
 
       while (t < timeoutS) {
         let targetHeading = pose.theta;
@@ -809,8 +833,10 @@
         if (Math.abs(angError) < angLargeErr) settleLargeTimer += dt;
         else settleLargeTimer = 0;
 
-        if (settleSmallTimer >= angSmallTime || settleLargeTimer >= angLargeTime) break;
-        if (Math.abs(angError) < 0.6 + earlyExitRange && t > 0.04) break;
+        if (settleSmallTimer >= angSmallTime || settleLargeTimer >= angLargeTime || (Math.abs(angError) < 0.6 + earlyExitRange && t > 0.04)) {
+          isSettled = true;
+          break;
+        }
 
         const rawAngPid = angPid.update(angError, dt);
         let pwr = clamp(rawAngPid / 127, -maxSpeed, maxSpeed);
@@ -831,20 +857,21 @@
         points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vDrive) / 2, omegaDeg: wDeg });
       }
 
-      // Exact geometry settlement to eliminate any discrete integration residual
-      let finalHeading = pose.theta;
-      if (action.type === "swingToHeading") {
-        finalHeading = action.theta;
-      } else {
-        finalHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
-        if (action.forwards === false) finalHeading = normalizeAngle(finalHeading + 180);
-      }
-      pose.theta = finalHeading;
-      const finalC = getCenter(finalHeading);
-      pose.x = finalC.x;
-      pose.y = finalC.y;
-      if (points.length) {
-        points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+      if (isSettled) {
+        let finalHeading = pose.theta;
+        if (action.type === "swingToHeading") {
+          finalHeading = action.theta;
+        } else {
+          finalHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
+          if (action.forwards === false) finalHeading = normalizeAngle(finalHeading + 180);
+        }
+        pose.theta = finalHeading;
+        const finalC = getCenter(finalHeading);
+        pose.x = finalC.x;
+        pose.y = finalC.y;
+        if (points.length) {
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+        }
       }
 
       return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
@@ -868,8 +895,8 @@
     const virtualAct = { ...action, timeout: 60000 };
     const sim = simulateAction(virtualAct, fromPose || { x: 0, y: 0, theta: 0 }, b);
     const simMs = Math.round(sim.duration * 1000);
-    const batteryClearanceMs = 100; // 100ms clearance for battery voltage sag
-    return Math.max(200, simMs + batteryClearanceMs);
+    const batteryClearanceMs = 250; // 250ms clearance for battery voltage sag and settling buffer
+    return Math.max(300, simMs + batteryClearanceMs);
   }
 
 
@@ -5940,7 +5967,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (!wrap) return;
     const rect = wrap.getBoundingClientRect();
     const hud = document.getElementById("simFloatingHud");
-    const hudHeight = hud ? hud.offsetHeight : 50;
+    const isDocked = hud && hud.classList.contains("is-docked");
+    const isMinimized = hud && hud.classList.contains("is-minimized");
+    const hudHeight = (hud && isDocked && !isMinimized) ? hud.offsetHeight : 0;
     const availW = Math.max(280, rect.width - 16);
     const availH = Math.max(280, window.innerHeight - 160 - hudHeight);
     const size = Math.min(availW, availH);
@@ -5949,6 +5978,108 @@ lemlib::ControllerSettings ${currentMode}_controller(
       canvas.style.height = size + "px";
     }
     draw();
+  }
+
+  function setupSimHudControls() {
+    const hud = document.getElementById("simFloatingHud");
+    if (!hud) return;
+
+    const btnDock = document.getElementById("btnHudDock");
+    const btnMin = document.getElementById("btnHudMinimize");
+    const handle = document.getElementById("hudDragHandle");
+
+    // Load saved preferences
+    const isDocked = localStorage.getItem("sim_hud_docked") === "true";
+    const isMinimized = localStorage.getItem("sim_hud_minimized") === "true";
+
+    if (isDocked) {
+      hud.classList.add("is-docked");
+      if (btnDock) btnDock.innerHTML = "🔓 Float on Field";
+    }
+    if (isMinimized) {
+      hud.classList.add("is-minimized");
+      if (btnMin) btnMin.textContent = "+";
+    }
+
+    if (btnDock) {
+      btnDock.onclick = (e) => {
+        e.stopPropagation();
+        const docked = hud.classList.toggle("is-docked");
+        btnDock.innerHTML = docked ? "🔓 Float on Field" : "📌 Dock Above";
+        localStorage.setItem("sim_hud_docked", docked ? "true" : "false");
+        if (docked) {
+          hud.style.top = "";
+          hud.style.left = "";
+        }
+        resizeCanvas();
+      };
+    }
+
+    if (btnMin) {
+      btnMin.onclick = (e) => {
+        e.stopPropagation();
+        const minned = hud.classList.toggle("is-minimized");
+        btnMin.textContent = minned ? "+" : "―";
+        localStorage.setItem("sim_hud_minimized", minned ? "true" : "false");
+        resizeCanvas();
+      };
+    }
+
+    // Draggable HUD handle
+    if (handle) {
+      let isDragging = false;
+      let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
+
+      const onMouseDown = (e) => {
+        if (hud.classList.contains("is-docked")) return;
+        isDragging = true;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startX = clientX;
+        startY = clientY;
+
+        const rect = hud.getBoundingClientRect();
+        const parentRect = hud.parentElement ? hud.parentElement.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+        initialLeft = rect.left - parentRect.left;
+        initialTop = rect.top - parentRect.top;
+
+        document.addEventListener("mousemove", onMouseMove);
+        document.addEventListener("mouseup", onMouseUp);
+        document.addEventListener("touchmove", onMouseMove, { passive: false });
+        document.addEventListener("touchend", onMouseUp);
+      };
+
+      const onMouseMove = (e) => {
+        if (!isDragging) return;
+        if (e.cancelable) e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+
+        const parentRect = hud.parentElement ? hud.parentElement.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+        const hudRect = hud.getBoundingClientRect();
+
+        let newLeft = Math.max(4, Math.min(parentRect.width - hudRect.width - 4, initialLeft + dx));
+        let newTop = Math.max(4, Math.min(parentRect.height - hudRect.height - 4, initialTop + dy));
+
+        hud.style.left = newLeft + "px";
+        hud.style.top = newTop + "px";
+        hud.style.right = "auto";
+      };
+
+      const onMouseUp = () => {
+        isDragging = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.removeEventListener("touchmove", onMouseMove);
+        document.removeEventListener("touchend", onMouseUp);
+      };
+
+      handle.addEventListener("mousedown", onMouseDown);
+      handle.addEventListener("touchstart", onMouseDown, { passive: true });
+    }
   }
 
   window.addEventListener("resize", resizeCanvas);
@@ -6219,37 +6350,41 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
     if (btnLoadDefault) {
       btnLoadDefault.onclick = () => {
-        if (window.ProjectManager) {
+        if (!window.ProjectManager) return;
+        window.promptWipeChallenge("Standard Competition Template", () => {
+          window.ProjectManager.wipeProject();
           window.ProjectManager.initDefaultProject("Override_LemLib_Bot");
           loadProjectAutonsIntoPlanner();
           updateProjectBanner();
           closeModal();
-          showToast("🚀 Default competition project loaded. Visual flowchart synced to src/autons.cpp");
-        }
+          showToast("🚀 Current workspace wiped clean! Standard template loaded.");
+        });
       };
     }
 
     if (btnFetchCloud) {
-      btnFetchCloud.onclick = async () => {
+      btnFetchCloud.onclick = () => {
         if (!window.ProjectManager) return;
-        try {
-          btnFetchCloud.disabled = true;
-          btnFetchCloud.textContent = "Fetching...";
-          const proj = await window.ProjectManager.loadFromCloud();
-          if (proj) {
-            loadProjectAutonsIntoPlanner();
-            updateProjectBanner();
-            closeModal();
-            showToast("☁️ Synced cloud project loaded successfully!");
-          } else {
-            showToast("No project found in cloud. Sync your current project first!");
+        window.promptWipeChallenge("Cloud Account Project", async () => {
+          try {
+            btnFetchCloud.disabled = true;
+            btnFetchCloud.textContent = "Fetching...";
+            const proj = await window.ProjectManager.loadFromCloud();
+            if (proj) {
+              loadProjectAutonsIntoPlanner();
+              updateProjectBanner();
+              closeModal();
+              showToast("☁️ Previous workspace wiped! Synced cloud project loaded.");
+            } else {
+              showToast("No project found in cloud. Sync your current project first!");
+            }
+          } catch (e) {
+            showToast(`⚠️ Cloud fetch failed: ${e.message}`);
+          } finally {
+            btnFetchCloud.disabled = false;
+            btnFetchCloud.textContent = "Fetch Cloud Project";
           }
-        } catch (e) {
-          showToast(`⚠️ Cloud fetch failed: ${e.message}`);
-        } finally {
-          btnFetchCloud.disabled = false;
-          btnFetchCloud.textContent = "Fetch Cloud Project";
-        }
+        });
       };
     }
 
@@ -6263,12 +6398,16 @@ lemlib::ControllerSettings ${currentMode}_controller(
           try {
             const data = JSON.parse(evt.target.result);
             if (data.files) {
-              window.ProjectManager.project = data;
-              window.ProjectManager.saveLocal();
-              loadProjectAutonsIntoPlanner();
-              updateProjectBanner();
-              closeModal();
-              showToast("📂 Project imported successfully!");
+              const targetName = file.name || (data.name ? `${data.name}.json` : "Imported Project");
+              window.promptWipeChallenge(targetName, () => {
+                window.ProjectManager.wipeProject();
+                window.ProjectManager.project = data;
+                window.ProjectManager.saveLocal();
+                loadProjectAutonsIntoPlanner();
+                updateProjectBanner();
+                closeModal();
+                showToast(`💥 Current workspace wiped! Imported "${targetName}" successfully.`);
+              });
             } else {
               showToast("Invalid project file: missing files map.");
             }
@@ -6757,6 +6896,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
   }
 
   // Initialize Homepage Hub, Planner Tabs, Project Manager, Debug Panels, and Brain Controller
+  setupSimHudControls();
   wirePlannerTabsAndModes();
   wireBotVisualCard();
   wireBotSettings();

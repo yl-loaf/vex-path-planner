@@ -351,6 +351,30 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.saveLocal();
     }
 
+    wipeProject() {
+      try {
+        localStorage.removeItem(STORAGE_KEY_PROJECT);
+        localStorage.removeItem(STORAGE_KEY_PROJECT_DIRTY);
+      } catch (e) {
+        console.error("Wipe storage error:", e);
+      }
+      this.project = null;
+      this.isDirty = false;
+      this.notifyListeners();
+    }
+
+    exportProjectJson() {
+      if (!this.project) return;
+      const json = JSON.stringify(this.project, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${this.project.name || "Override_LemLib_Project"}_backup.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     saveLocal() {
       if (!this.project) return;
       this.project.updatedAt = Date.now();
@@ -1211,4 +1235,123 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
   // Singleton Instance
   global.ProjectManager = new ProjectManager();
+
+  // Helper for Security Challenge Modal before project wiping
+  global.promptWipeChallenge = function(targetName, onConfirmed) {
+    const modal = document.getElementById("wipeChallengeModal");
+    if (!modal) {
+      if (confirm(`⚠️ Warning: Importing will wipe your current project workspace. Proceed?`)) {
+        onConfirmed();
+      }
+      return;
+    }
+
+    const currentNameEl = document.getElementById("wipeCurrentProjectName");
+    const targetNameEl = document.getElementById("wipeTargetProjectName");
+    const displayEl = document.getElementById("wipeChallengeDisplay");
+    const inputEl = document.getElementById("wipeChallengeInput");
+    const errorEl = document.getElementById("wipeChallengeError");
+    const btnConfirm = document.getElementById("btnWipeConfirmAction");
+    const btnRefresh = document.getElementById("btnRefreshWipeChallenge");
+    const btnBackup = document.getElementById("btnWipeBackupFirst");
+    const btnCancel = document.getElementById("btnWipeChallengeCancel");
+    const btnAbort = document.getElementById("btnWipeChallengeAbort");
+
+    if (currentNameEl) {
+      const curProjName = (global.ProjectManager && global.ProjectManager.project && global.ProjectManager.project.name) || "Current Project";
+      currentNameEl.textContent = curProjName;
+    }
+    if (targetNameEl) {
+      targetNameEl.textContent = targetName || "New Project Bundle";
+    }
+
+    let code = "WIPE-" + Math.floor(1000 + Math.random() * 9000);
+    if (displayEl) displayEl.textContent = code;
+
+    if (inputEl) {
+      inputEl.value = "";
+      inputEl.style.borderColor = "#475569";
+    }
+    if (errorEl) errorEl.style.display = "none";
+    if (btnConfirm) {
+      btnConfirm.disabled = true;
+      btnConfirm.style.opacity = "0.5";
+      btnConfirm.style.cursor = "not-allowed";
+    }
+
+    const closeModal = () => {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    };
+
+    const generateNewCode = () => {
+      code = "WIPE-" + Math.floor(1000 + Math.random() * 9000);
+      if (displayEl) displayEl.textContent = code;
+      if (inputEl) {
+        inputEl.value = "";
+        inputEl.focus();
+      }
+      if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.style.opacity = "0.5";
+        btnConfirm.style.cursor = "not-allowed";
+      }
+      if (errorEl) errorEl.style.display = "none";
+    };
+
+    if (btnRefresh) btnRefresh.onclick = generateNewCode;
+
+    if (inputEl) {
+      inputEl.oninput = () => {
+        const val = inputEl.value.trim().toUpperCase();
+        if (val === code) {
+          if (btnConfirm) {
+            btnConfirm.disabled = false;
+            btnConfirm.style.opacity = "1";
+            btnConfirm.style.cursor = "pointer";
+          }
+          if (errorEl) errorEl.style.display = "none";
+          inputEl.style.borderColor = "#22c55e";
+        } else {
+          if (btnConfirm) {
+            btnConfirm.disabled = true;
+            btnConfirm.style.opacity = "0.5";
+            btnConfirm.style.cursor = "not-allowed";
+          }
+          inputEl.style.borderColor = "#475569";
+        }
+      };
+    }
+
+    if (btnBackup) {
+      btnBackup.onclick = () => {
+        if (global.ProjectManager) {
+          global.ProjectManager.exportProjectJson();
+        }
+      };
+    }
+
+    if (btnCancel) btnCancel.onclick = closeModal;
+    if (btnAbort) btnAbort.onclick = closeModal;
+
+    if (btnConfirm) {
+      btnConfirm.onclick = () => {
+        const val = inputEl ? inputEl.value.trim().toUpperCase() : "";
+        if (val !== code) {
+          if (errorEl) errorEl.style.display = "block";
+          return;
+        }
+        closeModal();
+        if (typeof onConfirmed === "function") {
+          onConfirmed();
+        }
+      };
+    }
+
+    modal.hidden = false;
+    modal.classList.add("open");
+    setTimeout(() => {
+      if (inputEl) inputEl.focus();
+    }, 100);
+  };
 })(typeof window !== "undefined" ? window : global);

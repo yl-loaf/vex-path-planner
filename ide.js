@@ -424,6 +424,42 @@
       });
     }
 
+    const btnIdeImportProject = document.getElementById("btnIdeImportProject");
+    const ideProjectFileInput = document.getElementById("ideProjectFileInput");
+
+    if (btnIdeImportProject && ideProjectFileInput) {
+      btnIdeImportProject.onclick = () => ideProjectFileInput.click();
+      ideProjectFileInput.onchange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const data = JSON.parse(evt.target.result);
+            if (data.files) {
+              const targetName = file.name || (data.name ? `${data.name}.json` : "Imported Project");
+              window.promptWipeChallenge(targetName, () => {
+                ProjectManager.wipeProject();
+                ProjectManager.project = data;
+                ProjectManager.saveLocal();
+                renderProjectHeader();
+                renderFileTree();
+                renderTabs();
+                loadFile("src/autons.cpp");
+                renderSymbols();
+                alert(`💥 Workspace wiped clean and imported "${targetName}" successfully!`);
+              });
+            } else {
+              alert("Invalid project file: missing files map.");
+            }
+          } catch (err) {
+            alert("Failed to parse project JSON file.");
+          }
+        };
+        reader.readAsText(file);
+      };
+    }
+
     const btnDownloadCode = document.getElementById("btnDownloadCode");
     if (btnDownloadCode) {
       btnDownloadCode.addEventListener("click", () => {
