@@ -1031,13 +1031,13 @@
       saveStatus.textContent = "Save failed";
     }
 
-    if (window.ProjectManager) {
-      // Only sync into ProjectManager if the user has not edited raw C++ in IDE
-      if (window.ProjectManager.project?.lastAutonEditor !== "ide" && !window.ProjectManager.project?.rawCppPreserved) {
-        syncPlannerIntoProjectManager({ ask: false });
-      } else {
-        updateProjectBanner();
-      }
+    if (window.ProjectManager && window.ProjectManager.project) {
+      // Mark blocks as active editor since user is actively editing visual paths
+      window.ProjectManager.project.lastAutonEditor = "blocks";
+      window.ProjectManager.project.rawCppPreserved = false;
+      syncPlannerIntoProjectManager({ ask: false });
+    } else if (window.ProjectManager) {
+      updateProjectBanner();
     }
   }
 
@@ -3998,12 +3998,37 @@
     setCloudStatus("Loading…", "busy");
     try {
       const db = firebase.firestore();
+
+      // Check if user has an active full-project workspace in Firestore
+      const projRef = db.collection("users").doc(cloudUser.uid).collection("data").doc("active_project");
+      const projSnap = await projRef.get();
+      if (projSnap.exists) {
+        const cloudProj = projSnap.data();
+        const cloudTimestamp = cloudProj.updatedAt || 0;
+        const localTimestamp = window.ProjectManager?.project?.updatedAt || 0;
+        // Only adopt cloud project if it is strictly newer than local workspace
+        if (cloudTimestamp > localTimestamp) {
+          await window.ProjectManager.loadFromCloud();
+          loadProjectAutonsIntoPlanner(false, true);
+          updateProjectBanner();
+        } else {
+          console.log("Local project workspace is newer than cloud. Retaining local save.");
+        }
+        setCloudStatus("Synced", "ok");
+        return;
+      }
+
       const ref = db.collection("users").doc(cloudUser.uid).collection("data").doc("path");
       const snap = await ref.get();
       if (snap.exists) {
-        applyPathPayload(snap.data());
+        const pathData = snap.data();
+        const pathTime = pathData.updatedAt ? new Date(pathData.updatedAt).getTime() : 0;
+        const localTime = window.ProjectManager?.project?.updatedAt || 0;
+        if (!window.ProjectManager?.project || pathTime > localTime) {
+          applyPathPayload(pathData);
+          saveLocal();
+        }
         setCloudStatus("Synced", "ok");
-        saveLocal();
       } else {
         // First login: upload current local path
         await cloudSave(true);
@@ -4022,6 +4047,11 @@
       const db = firebase.firestore();
       const ref = db.collection("users").doc(cloudUser.uid).collection("data").doc("path");
       await ref.set(pathPayload(), { merge: true });
+
+      // Also ensure ProjectManager active_project is saved to cloud
+      if (window.ProjectManager && window.ProjectManager.project) {
+        await window.ProjectManager.saveToCloud(null, true);
+      }
       setCloudStatus("Synced", "ok");
     } catch (e) {
       console.error(e);
@@ -5849,8 +5879,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
   let isSyncingFromPlanner = false;
   window.isSyncingFromPlanner = false;
 
-  function syncPlannerIntoProjectManager(options = { ask: false }) {
-    if (!window.ProjectManager) return;
+  function syncPlannerIntoProjectManager(options = { ask: false, force: false }) {
+    if (!window.ProjectManager || !window.ProjectManager.project) return;
     try {
       isSyncingFromPlanner = true;
       window.isSyncingFromPlanner = true;
@@ -5858,13 +5888,11 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (options.ask) {
         promptMergeAutonCpp();
       } else {
-        // If the user's last edit was in the IDE, don't silently overwrite!
-        if (window.ProjectManager.project?.lastAutonEditor === "ide" || window.ProjectManager.project?.rawCppPreserved) {
-          console.log("🛡️ Preserving raw C++ code. Not silently replacing from visual blocks.");
-          updateProjectBanner();
-          return;
-        }
-        window.ProjectManager.updateAutonCppFromPlanner(paths, getIndentString());
+        const indent = typeof getIndentString === "function" ? getIndentString() : "    ";
+        window.ProjectManager.updateAutonCppFromPlanner(paths, indent, { mode: "replace", force: true });
+        window.ProjectManager.project.lastAutonEditor = "blocks";
+        window.ProjectManager.project.rawCppPreserved = false;
+        window.ProjectManager.saveLocal(true);
         updateProjectBanner();
       }
 
@@ -5877,7 +5905,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       setTimeout(() => {
         isSyncingFromPlanner = false;
         window.isSyncingFromPlanner = false;
-      }, 600);
+      }, 400);
     }
   }
 
@@ -5934,6 +5962,19 @@ lemlib::ControllerSettings ${currentMode}_controller(
       renderFlow();
       draw();
       generateCode();
+
+      // Persist to planner storage key so it never falls back to old stale routines!
+      const data = {
+        version: 2,
+        paths,
+        activePathId,
+        bot,
+        savedAt: new Date().toISOString(),
+      };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch (_) {}
+
       if (showNotification) {
         showToast(`📁 Synchronized ${newPaths.length} autonomous routine${newPaths.length === 1 ? '' : 's'} from src/autons.cpp`);
       }
@@ -6273,7 +6314,6 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
   function wireProjectWorkspace() {
     updateProjectBanner();
-    loadProjectAutonsIntoPlanner(false, true);
 
     // Banner Versions button
     const btnVersionsBanner = document.getElementById("btnVersionHistoryBanner");
@@ -6417,13 +6457,55 @@ lemlib::ControllerSettings ${currentMode}_controller(
             const data = JSON.parse(evt.target.result);
             if (data.files) {
               const targetName = file.name || (data.name ? `${data.name}.json` : "Imported Project");
-              window.promptWipeChallenge(targetName, () => {
+              window.promptWipeChallenge(targetName, async () => {
+                const totalBytes = Object.values(data.files).reduce((sum, content) => sum + (typeof content === "string" ? content.length : 0), 0);
+                const fileCount = Object.keys(data.files).length;
+                if (window.ImportProgressModal) {
+                  window.ImportProgressModal.show({
+                    title: "Importing Project Workspace",
+                    subtitle: `Importing "${targetName}" (${fileCount} files)`,
+                    totalBytes: totalBytes,
+                    totalFiles: fileCount
+                  });
+                  window.ImportProgressModal.update({
+                    phase: 2,
+                    pct: 35,
+                    currentBytes: Math.round(totalBytes * 0.35),
+                    totalBytes: totalBytes,
+                    message: "Parsing symbols & LemLib configurations..."
+                  });
+                }
                 window.ProjectManager.wipeProject();
                 window.ProjectManager.project = data;
-                window.ProjectManager.saveLocal();
+                if (window.ImportProgressModal) {
+                  window.ImportProgressModal.update({
+                    phase: 3,
+                    pct: 60,
+                    currentBytes: Math.round(totalBytes * 0.60),
+                    totalBytes: totalBytes,
+                    message: "Writing workspace to IndexedDB..."
+                  });
+                }
+                await window.ProjectManager.saveLocal();
+                if (window.ImportProgressModal) {
+                  window.ImportProgressModal.update({
+                    phase: 4,
+                    pct: 95,
+                    currentBytes: totalBytes,
+                    totalBytes: totalBytes,
+                    message: "Synchronizing autonomous routines into map..."
+                  });
+                }
                 loadProjectAutonsIntoPlanner(false, true);
                 updateProjectBanner();
                 closeModal();
+                if (window.ImportProgressModal) {
+                  window.ImportProgressModal.finish({
+                    bytesSynced: totalBytes,
+                    totalBytes: totalBytes,
+                    message: `✓ Successfully synced ${fileCount} files (${window.ProjectManager.formatBytes ? window.ProjectManager.formatBytes(totalBytes) : totalBytes + ' B'})`
+                  });
+                }
                 showToast(`💥 Current workspace wiped! Imported "${targetName}" successfully.`);
               });
             } else {
@@ -6926,31 +7008,55 @@ lemlib::ControllerSettings ${currentMode}_controller(
     wireLoadProjectModal();
     wireDebugPanel();
 
-    window.ProjectManager.addListener(() => {
-      if (!isSyncingFromPlanner) {
-        loadProjectAutonsIntoPlanner();
+    // UI state updates only - do NOT destructively replace user's planner paths on background events!
+    window.ProjectManager.addListener(async () => {
+      updateProjectBanner();
+    });
+
+    window.addEventListener("focus", async () => {
+      if (window.ProjectManager) {
+        await window.ProjectManager.initAsyncStorage();
         updateProjectBanner();
       }
     });
 
-    window.addEventListener("focus", () => {
-      if (window.ProjectManager) {
-        window.ProjectManager.loadProject();
-        if (!isSyncingFromPlanner) {
-          loadProjectAutonsIntoPlanner();
-          updateProjectBanner();
-        }
+    document.addEventListener("visibilitychange", async () => {
+      if (!document.hidden && window.ProjectManager) {
+        await window.ProjectManager.initAsyncStorage();
+        updateProjectBanner();
       }
     });
 
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden && window.ProjectManager) {
-        window.ProjectManager.loadProject();
-        if (!isSyncingFromPlanner) {
-          loadProjectAutonsIntoPlanner();
-          updateProjectBanner();
-        }
+    // Intelligent startup resolution: compare timestamps between Planner storage and ProjectManager
+    window.ProjectManager.whenReady().then(() => {
+      const proj = window.ProjectManager.project;
+      if (!proj) return;
+
+      const code = window.ProjectManager.getFile("src/autons.cpp");
+      const projUpdatedAt = Number(proj.updatedAt) || 0;
+      const rawPlanner = localStorage.getItem(STORAGE_KEY);
+      let plannerTime = 0;
+      if (rawPlanner) {
+        try {
+          const parsed = JSON.parse(rawPlanner);
+          if (parsed.savedAt) plannerTime = new Date(parsed.savedAt).getTime();
+        } catch (_) {}
       }
+
+      // If user last edited in IDE and IDE save is strictly newer than planner:
+      if (proj.lastAutonEditor === "ide" && projUpdatedAt > plannerTime && code && code.trim().length > 0) {
+        console.log("📥 Loading newer autonomous routines saved from IDE C++ editor...");
+        loadProjectAutonsIntoPlanner(false, false);
+      } else if (paths && paths.length > 0 && plannerTime >= projUpdatedAt) {
+        // Planner is newer or equal: sync planner into ProjectManager's src/autons.cpp so IDE has latest
+        console.log("📤 Planner routines are newer than IDE. Syncing into ProjectManager...");
+        syncPlannerIntoProjectManager({ ask: false, force: true });
+      } else if ((!paths || paths.length === 0) && code && code.trim().length > 0) {
+        // Planner has no paths yet: populate from src/autons.cpp
+        loadProjectAutonsIntoPlanner(false, false);
+      }
+
+      updateProjectBanner();
     });
   }
   if (window.V5BrainSerial) {

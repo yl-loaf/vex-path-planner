@@ -392,8 +392,15 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this._selectedVersionId = null;
       this._versionDiffActive = false;
       this.loadProject();
-      this.initAsyncStorage();
+      this.readyPromise = this.initAsyncStorage();
       this.initVersionHistory();
+    }
+
+    async whenReady() {
+      if (this.readyPromise) {
+        await this.readyPromise;
+      }
+      return this.project;
     }
 
     recordSavedBaseline() {
@@ -411,8 +418,15 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         if (idbProj && idbProj.files && Object.keys(idbProj.files).length > 0) {
           const currentTimestamp = this.project?.updatedAt || 0;
           const idbTimestamp = idbProj.updatedAt || 0;
-          // If IDB has a valid project and either we don't have one or IDB is at least as fresh
-          if (!this.project || idbTimestamp >= currentTimestamp || this.project._idb) {
+          // If IDB has a valid project and either we don't have one or IDB is strictly fresher
+          // or current in-memory project was just a placeholder (_idb) or missing files
+          const needsLoad = !this.project ||
+            this.project._idb ||
+            !this.project.files ||
+            Object.keys(this.project.files).length === 0 ||
+            (idbTimestamp > currentTimestamp && !this.isDirty);
+
+          if (needsLoad) {
             this.project = idbProj;
             this.isDirty = localStorage.getItem(STORAGE_KEY_PROJECT_DIRTY) === "true";
             this.recordSavedBaseline();
@@ -421,11 +435,12 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           }
         } else if (this.project && !this.project._idb) {
           // Sync existing project into IDB
-          idbPut(IDB_PROJECT_KEY, this.project);
+          await idbPut(IDB_PROJECT_KEY, this.project);
         }
       } catch (err) {
         console.warn("Async storage sync warning:", err);
       }
+      return this.project;
     }
 
     // Load active project from LocalStorage or initialize default
@@ -570,6 +585,13 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         }
       }
       return Math.max(bytes, 512);
+    }
+
+    formatBytes(bytes) {
+      if (!bytes || bytes <= 0) return "0 B";
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
     }
 
     formatSavingProgress(savedBytes, totalBytes) {
@@ -722,16 +744,15 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       return totalBytes;
     }
 
-    saveLocal(skipIndex = false, onProgress = null) {
+    async saveLocal(skipIndex = false, onProgress = null) {
       if (!this.project) return;
       if (typeof onProgress === "function") {
-        this.saveChangesOnly(onProgress, skipIndex);
-        return;
+        return this.saveChangesOnly(onProgress, skipIndex);
       }
       this.project.updatedAt = Date.now();
 
-      // 1. Asynchronously persist full project to IndexedDB
-      idbPut(IDB_PROJECT_KEY, this.project);
+      // 1. Asynchronously persist full project to IndexedDB and await
+      await idbPut(IDB_PROJECT_KEY, this.project);
 
       // 2. Mirror to localStorage
       try {
@@ -2238,7 +2259,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       return true;
     }
 
-    async loadFromCloud() {
+    async loadFromCloud(force = false) {
       if (typeof firebase === "undefined" || !firebase.auth || !firebase.firestore) {
         throw new Error("Firebase is not initialized");
       }
@@ -2253,16 +2274,25 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       if (snap.exists) {
         const data = snap.data();
+        const cloudTime = Number(data.updatedAt) || 0;
+        const localTime = Number(this.project?.updatedAt) || 0;
+
+        // Guard against stale cloud snapshots overwriting newer local work
+        if (!force && localTime > cloudTime) {
+          console.log(`[ProjectManager] Retaining newer local project workspace (local: ${localTime} vs cloud: ${cloudTime})`);
+          return null;
+        }
+
         this.project = {
           name: data.name || "Override_LemLib_Bot",
           version: data.version || "1.0.0",
           files: data.files || { ...DEFAULT_TEMPLATES },
           activeAuton: data.activeAuton || "red_rush_auton",
-          updatedAt: data.updatedAt || Date.now(),
+          updatedAt: cloudTime || Date.now(),
           cloudSynced: true,
         };
         this.markDirty(false);
-        this.saveLocal();
+        await this.saveLocal(false);
         return this.project;
       }
       return null;
@@ -2317,13 +2347,255 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
   };
 
   if (typeof window !== "undefined") {
-    window.addEventListener("storage", (e) => {
+    window.addEventListener("storage", async (e) => {
       if (e.key === STORAGE_KEY_PROJECT && global.ProjectManager) {
-        global.ProjectManager.loadProject();
-        global.ProjectManager.notifyListeners();
+        try {
+          const raw = e.newValue;
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          const currentTimestamp = global.ProjectManager.project?.updatedAt || 0;
+          const newTimestamp = parsed.updatedAt || 0;
+
+          // Only adopt cross-tab storage change if it is strictly newer and this window is not dirty
+          if (newTimestamp > currentTimestamp && !global.ProjectManager.isDirty) {
+            if (parsed._idb) {
+              await global.ProjectManager.initAsyncStorage();
+            } else {
+              global.ProjectManager.project = parsed;
+              global.ProjectManager.recordSavedBaseline();
+              global.ProjectManager.indexVariables();
+              global.ProjectManager.notifyListeners("load");
+            }
+          }
+        } catch (err) {
+          console.warn("Storage sync event warning:", err);
+        }
       }
     });
   }
+
+  // =========================================================================
+  // IMPORT LOADING SCREEN & BYTES SYNCED PROGRESS MODAL
+  // =========================================================================
+  const ImportProgressModal = {
+    modalEl: null,
+
+    _ensureDOM() {
+      if (this.modalEl && document.body.contains(this.modalEl)) return;
+      let existing = document.getElementById("importLoadingModal");
+      if (existing) {
+        this.modalEl = existing;
+        return;
+      }
+      const el = document.createElement("div");
+      el.id = "importLoadingModal";
+      el.className = "modal-overlay import-loading-overlay";
+      el.hidden = true;
+      el.innerHTML = `
+        <div class="import-loading-box" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+          <div class="import-loading-header">
+            <div class="import-spinner-wrap">
+              <div class="import-spinner-ring"></div>
+              <div class="import-spinner-core">⚡</div>
+            </div>
+            <div class="import-header-text">
+              <h3 id="importModalTitle" class="import-modal-title">Synchronizing Project Workspace</h3>
+              <p id="importModalSubtitle" class="import-modal-subtitle">Processing workspace files...</p>
+            </div>
+          </div>
+
+          <div class="import-sync-metric-panel">
+            <div class="import-metric-header">
+              <span class="import-metric-label">DATA SYNCHRONIZED</span>
+              <span id="importPercentBadge" class="import-pct-badge">0%</span>
+            </div>
+            <div class="import-metric-values">
+              <span id="importBytesSynced" class="import-bytes-main">0 KB</span>
+              <span class="import-bytes-divider">/</span>
+              <span id="importBytesTotal" class="import-bytes-total">0 KB</span>
+              <span id="importFileCounter" class="import-file-counter"></span>
+            </div>
+          </div>
+
+          <div class="import-progress-track">
+            <div id="importProgressBar" class="import-progress-bar" style="width: 0%;">
+              <div class="import-progress-shimmer"></div>
+            </div>
+          </div>
+
+          <div class="import-pipeline-steps">
+            <div id="importStep1" class="import-step-item active">
+              <span class="step-icon">⏳</span>
+              <span class="step-text">Extracting & validating source files</span>
+            </div>
+            <div id="importStep2" class="import-step-item">
+              <span class="step-icon">⚪</span>
+              <span class="step-text">Indexing C++ motor/sensor devices & LemLib symbols</span>
+            </div>
+            <div id="importStep3" class="import-step-item">
+              <span class="step-icon">⚪</span>
+              <span class="step-text">Committing files to persistent IndexedDB</span>
+            </div>
+            <div id="importStep4" class="import-step-item">
+              <span class="step-icon">⚪</span>
+              <span class="step-text">Finalizing workspace & autonomous routines</span>
+            </div>
+          </div>
+
+          <div class="import-current-action">
+            <span id="importStatusAction" class="import-status-action">Initializing import...</span>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(el);
+      this.modalEl = el;
+    },
+
+    show(opts = {}) {
+      const {
+        title = "Synchronizing Project Workspace",
+        subtitle = "Processing workspace files...",
+        totalBytes = 0,
+        totalFiles = 0
+      } = opts;
+
+      this._ensureDOM();
+      const titleEl = document.getElementById("importModalTitle");
+      const subtitleEl = document.getElementById("importModalSubtitle");
+      const bytesSyncedEl = document.getElementById("importBytesSynced");
+      const bytesTotalEl = document.getElementById("importBytesTotal");
+      const pctBadge = document.getElementById("importPercentBadge");
+      const progressBar = document.getElementById("importProgressBar");
+      const statusAction = document.getElementById("importStatusAction");
+      const fileCounter = document.getElementById("importFileCounter");
+
+      const formatFn = (global.ProjectManager && global.ProjectManager.formatBytes) ? 
+        (b) => global.ProjectManager.formatBytes(b) : 
+        (b) => `${(b / 1024).toFixed(1)} KB`;
+
+      if (titleEl) titleEl.textContent = title;
+      if (subtitleEl) subtitleEl.textContent = subtitle;
+      if (bytesSyncedEl) bytesSyncedEl.textContent = "0 B";
+      if (bytesTotalEl) bytesTotalEl.textContent = totalBytes > 0 ? formatFn(totalBytes) : "0 B";
+      if (pctBadge) pctBadge.textContent = "0%";
+      if (progressBar) progressBar.style.width = "0%";
+      if (statusAction) statusAction.textContent = "Preparing files for synchronization...";
+      if (fileCounter) fileCounter.textContent = totalFiles ? `(${totalFiles} files)` : "";
+
+      this._setStep(1, "active");
+      this._setStep(2, "");
+      this._setStep(3, "");
+      this._setStep(4, "");
+
+      this.modalEl.hidden = false;
+      this.modalEl.classList.add("open");
+    },
+
+    _setStep(stepNum, state) {
+      const el = document.getElementById(`importStep${stepNum}`);
+      if (!el) return;
+      el.className = `import-step-item ${state}`.trim();
+      const icon = el.querySelector(".step-icon");
+      if (icon) {
+        if (state === "done") icon.textContent = "✓";
+        else if (state === "active") icon.textContent = "⏳";
+        else icon.textContent = "⚪";
+      }
+    },
+
+    update(opts = {}) {
+      const {
+        phase = 1,
+        pct = 0,
+        currentBytes = 0,
+        totalBytes = 0,
+        message = "",
+        currentFile = ""
+      } = opts;
+
+      this._ensureDOM();
+      const bytesSyncedEl = document.getElementById("importBytesSynced");
+      const bytesTotalEl = document.getElementById("importBytesTotal");
+      const pctBadge = document.getElementById("importPercentBadge");
+      const progressBar = document.getElementById("importProgressBar");
+      const statusAction = document.getElementById("importStatusAction");
+
+      const clampedPct = Math.min(100, Math.max(0, Math.round(pct)));
+      if (progressBar) progressBar.style.width = `${clampedPct}%`;
+      if (pctBadge) pctBadge.textContent = `${clampedPct}%`;
+
+      const formatFn = (global.ProjectManager && global.ProjectManager.formatBytes) ? 
+        (b) => global.ProjectManager.formatBytes(b) : 
+        (b) => `${(b / 1024).toFixed(1)} KB`;
+
+      if (bytesSyncedEl) bytesSyncedEl.textContent = formatFn(currentBytes);
+      if (bytesTotalEl && totalBytes > 0) bytesTotalEl.textContent = formatFn(totalBytes);
+
+      if (message && statusAction) {
+        statusAction.textContent = currentFile ? `${message} (${currentFile})` : message;
+      }
+
+      if (phase === 1) {
+        this._setStep(1, "active");
+      } else if (phase > 1) {
+        this._setStep(1, "done");
+      }
+
+      if (phase === 2) {
+        this._setStep(2, "active");
+      } else if (phase > 2) {
+        this._setStep(2, "done");
+      }
+
+      if (phase === 3) {
+        this._setStep(3, "active");
+      } else if (phase > 3) {
+        this._setStep(3, "done");
+      }
+
+      if (phase === 4) {
+        this._setStep(4, "active");
+      }
+    },
+
+    finish(opts = {}) {
+      const {
+        bytesSynced = 0,
+        totalBytes = 0,
+        message = "✓ Synchronization complete!"
+      } = opts;
+
+      this._ensureDOM();
+      const finalBytes = Math.max(bytesSynced, totalBytes);
+      this.update({
+        phase: 4,
+        pct: 100,
+        currentBytes: finalBytes,
+        totalBytes: finalBytes,
+        message: message
+      });
+      this._setStep(1, "done");
+      this._setStep(2, "done");
+      this._setStep(3, "done");
+      this._setStep(4, "done");
+
+      const titleEl = document.getElementById("importModalTitle");
+      if (titleEl) titleEl.textContent = "Workspace Synchronized!";
+
+      setTimeout(() => {
+        this.hide();
+      }, 750);
+    },
+
+    hide() {
+      if (this.modalEl) {
+        this.modalEl.classList.remove("open");
+        this.modalEl.hidden = true;
+      }
+    }
+  };
+
+  global.ImportProgressModal = ImportProgressModal;
 
   // Helper for Security Challenge Modal before project wiping
   global.promptWipeChallenge = function(targetName, onConfirmed) {

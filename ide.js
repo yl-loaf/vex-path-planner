@@ -96,7 +96,7 @@
         cloudUser = user;
         updateAuthUI();
         if (user) {
-          ProjectManager.loadFromCloud().then((proj) => {
+          ProjectManager.loadFromCloud(false).then((proj) => {
             if (proj) {
               renderProjectHeader();
               renderFileTree();
@@ -1465,6 +1465,17 @@
         return;
       }
       window.promptWipeChallenge(`${projName} (${fileCount} files)`, async () => {
+        const totalBytes = Object.values(filesMap).reduce((sum, content) => sum + (typeof content === "string" ? content.length : 0), 0);
+
+        if (window.ImportProgressModal) {
+          window.ImportProgressModal.show({
+            title: "Importing Project Workspace",
+            subtitle: `Importing "${projName}" (${fileCount} files)`,
+            totalBytes: totalBytes,
+            totalFiles: fileCount
+          });
+        }
+
         ProjectManager.wipeProject();
         ProjectManager.project = {
           name: projName,
@@ -1479,12 +1490,54 @@
           cloudSynced: false
         };
 
-        const totalBytes = ProjectManager.getProjectSizeBytes();
+        if (window.ImportProgressModal) {
+          window.ImportProgressModal.update({
+            phase: 2,
+            pct: 25,
+            currentBytes: Math.round(totalBytes * 0.25),
+            totalBytes: totalBytes,
+            message: "Indexing C++ motor/sensor devices & LemLib symbols..."
+          });
+        }
+
+        ProjectManager.indexVariables();
+
+        if (window.ImportProgressModal) {
+          window.ImportProgressModal.update({
+            phase: 3,
+            pct: 45,
+            currentBytes: Math.round(totalBytes * 0.45),
+            totalBytes: totalBytes,
+            message: "Writing workspace files to IndexedDB..."
+          });
+        }
+
         updateAutosaveUI("saving", null, ProjectManager.formatSavingProgress(Math.round(totalBytes * 0.20), totalBytes));
 
         await ProjectManager.saveWithProgress((curr, total, progStr) => {
           updateAutosaveUI("saving", null, progStr);
+          if (window.ImportProgressModal) {
+            const progressBytes = Math.round(totalBytes * 0.45 + (curr / (total || 1)) * (totalBytes * 0.50));
+            const pct = Math.min(95, Math.round((progressBytes / totalBytes) * 100));
+            window.ImportProgressModal.update({
+              phase: 3,
+              pct: pct,
+              currentBytes: progressBytes,
+              totalBytes: totalBytes,
+              message: `Persisting to database: ${progStr}`
+            });
+          }
         });
+
+        if (window.ImportProgressModal) {
+          window.ImportProgressModal.update({
+            phase: 4,
+            pct: 98,
+            currentBytes: totalBytes,
+            totalBytes: totalBytes,
+            message: "Finalizing workspace & autonomous routines..."
+          });
+        }
 
         const finalStr = ProjectManager.formatSavingProgress(totalBytes, totalBytes);
         updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
@@ -1500,6 +1553,15 @@
 
         if (mainCpp) loadFile(mainCpp);
         renderSymbols();
+
+        if (window.ImportProgressModal) {
+          window.ImportProgressModal.finish({
+            bytesSynced: totalBytes,
+            totalBytes: totalBytes,
+            message: `✓ Synced ${fileCount} files (${finalStr})`
+          });
+        }
+
         showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}).`);
       });
     }
@@ -1524,7 +1586,19 @@
       const rootPrefix = rootFolder ? rootFolder + "/" : "";
       const filesMap = {};
 
-      for (const f of validFiles) {
+      const totalSize = validFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+      if (totalSize > 150 * 1024 && window.ImportProgressModal) {
+        window.ImportProgressModal.show({
+          title: "Reading Folder Contents",
+          subtitle: `Scanning ${validFiles.length} project files...`,
+          totalBytes: totalSize,
+          totalFiles: validFiles.length
+        });
+      }
+
+      let readBytes = 0;
+      for (let i = 0; i < validFiles.length; i++) {
+        const f = validFiles[i];
         try {
           const fullPath = (f.webkitRelativePath || f.name).replace(/\\/g, "/");
           let relPath = fullPath;
@@ -1541,9 +1615,26 @@
           });
 
           filesMap[relPath] = text;
+          readBytes += (f.size || text.length);
+
+          if (totalSize > 150 * 1024 && window.ImportProgressModal) {
+            const pct = Math.round((i / validFiles.length) * 100);
+            window.ImportProgressModal.update({
+              phase: 1,
+              pct: Math.min(95, pct),
+              currentBytes: readBytes,
+              totalBytes: totalSize,
+              message: "Reading folder files...",
+              currentFile: relPath
+            });
+          }
         } catch (e) {
           console.warn("Error reading file:", f.name, e);
         }
+      }
+
+      if (window.ImportProgressModal && totalSize > 150 * 1024) {
+        window.ImportProgressModal.hide();
       }
 
       applyNewImportedProject(rootFolder || "Imported_PROS_Project", filesMap);
@@ -1555,11 +1646,27 @@
         return;
       }
       try {
+        if (window.ImportProgressModal) {
+          window.ImportProgressModal.show({
+            title: "Unpacking ZIP Archive",
+            subtitle: `Extracting "${zipFile.name}"...`,
+            totalBytes: zipFile.size
+          });
+          window.ImportProgressModal.update({
+            phase: 1,
+            pct: 15,
+            currentBytes: Math.round(zipFile.size * 0.15),
+            totalBytes: zipFile.size,
+            message: "Decompressing ZIP archive..."
+          });
+        }
+
         const zip = await JSZip.loadAsync(zipFile);
         const filesMap = {};
         const entryPaths = Object.keys(zip.files).filter(p => !zip.files[p].dir && !isIgnoredFile(p));
 
         if (entryPaths.length === 0) {
+          if (window.ImportProgressModal) window.ImportProgressModal.hide();
           alert("No source files found in ZIP archive.");
           return;
         }
@@ -1572,7 +1679,9 @@
 
         const projName = commonPrefix ? commonPrefix.replace(/[\/\\]$/, "") : zipFile.name.replace(/\.zip$/i, "");
 
-        for (const path of entryPaths) {
+        let extractedBytes = Math.round(zipFile.size * 0.15);
+        for (let i = 0; i < entryPaths.length; i++) {
+          const path = entryPaths[i];
           const entry = zip.files[path];
           let relPath = path.replace(/\\/g, "/");
           if (commonPrefix && relPath.startsWith(commonPrefix)) {
@@ -1582,10 +1691,28 @@
 
           const text = await entry.async("string");
           filesMap[relPath] = text;
+          extractedBytes += (entry._data?.uncompressedSize || text.length);
+
+          if (window.ImportProgressModal) {
+            const pct = Math.min(95, Math.round(15 + (i / entryPaths.length) * 80));
+            window.ImportProgressModal.update({
+              phase: 1,
+              pct: pct,
+              currentBytes: Math.min(extractedBytes, zipFile.size),
+              totalBytes: zipFile.size,
+              message: "Extracting archive file...",
+              currentFile: relPath
+            });
+          }
+        }
+
+        if (window.ImportProgressModal) {
+          window.ImportProgressModal.hide();
         }
 
         applyNewImportedProject(projName, filesMap);
       } catch (err) {
+        if (window.ImportProgressModal) window.ImportProgressModal.hide();
         console.error("ZIP import error:", err);
         alert("Failed to parse ZIP folder: " + err.message);
       }
@@ -2064,7 +2191,7 @@
   // "prevent going back to the main site unless the project has been saved and synced"
   // -------------------------------------------------------------
   function wireNavGuard() {
-    const navigateToPlanner = () => {
+    const navigateToPlanner = async () => {
       saveCurrentEditorState();
       if (window.ProjectManager) {
         window.ProjectManager.createVersionSnapshot(
@@ -2075,8 +2202,9 @@
         if (window.ProjectManager.project) {
           window.ProjectManager.project.lastAutonEditor = "ide";
           window.ProjectManager.project.rawCppPreserved = true;
+          window.ProjectManager.project.updatedAt = Date.now();
         }
-        window.ProjectManager.saveLocal();
+        await window.ProjectManager.saveLocal();
         window.ProjectManager.markDirty(false);
       }
       window.location.href = "index.html";
