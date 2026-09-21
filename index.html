@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260921.k46" />
+  <link rel="stylesheet" href="style.css?v=20260921.k47" />
 </head>
 <body>
   <!-- =================================================================
@@ -1866,15 +1866,15 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260921.k46"></script>
+  <script src="version.js?v=20260921.k47"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k46"></script>
+  <script src="firebase-config.js?v=20260921.k47"></script>
   <script src="v5-brain-serial.js?v=20260921.k22"></script>
   <script src="project-manager.js?v=20260921.k22"></script>
   <script src="cpp-parser.js?v=20260921.k22"></script>
-  <script src="app.js?v=20260921.k46"></script>
+  <script src="app.js?v=20260921.k47"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
@@ -1899,6 +1899,38 @@ void autonomous() {
         };
       }
 
+      function fetchJsonp(url) {
+        return new Promise((resolve, reject) => {
+          const callbackName = 'jsonp_cb_' + Math.random().toString(36).substring(2, 9);
+          const script = document.createElement('script');
+          const separator = url.includes('?') ? '&' : '?';
+          script.src = url + separator + 'callback=' + callbackName;
+          
+          const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('JSONP timeout'));
+          }, 10000);
+
+          window[callbackName] = (data) => {
+            cleanup();
+            resolve(data);
+          };
+
+          script.onerror = () => {
+            cleanup();
+            reject(new Error('JSONP load error'));
+          };
+
+          function cleanup() {
+            clearTimeout(timer);
+            if (script.parentNode) script.parentNode.removeChild(script);
+            delete window[callbackName];
+          }
+
+          document.head.appendChild(script);
+        });
+      }
+
       // Fetch and update global visitor count badge
       async function updateGlobalVisitorBadge() {
         const SHEET_URL = 'https://script.google.com/macros/s/AKfycby3PFK7T7E29mYRW5in0iHebY9UrfLJU8ZTq83boI4pxCsbKIG3vrg6Hz6HxBKaKtQoGw/exec';
@@ -1908,12 +1940,11 @@ void autonomous() {
           localStorage.setItem('vex_client_id', clientId);
         }
         try {
-          // Track hit on load with unique client ID
-          fetch(SHEET_URL + '?action=track&page=home&clientId=' + clientId + '&ua=' + encodeURIComponent(navigator.userAgent), { mode: 'no-cors' }).catch(() => {});
+          // Track hit on load with unique client ID via image beacon
+          const img = new Image();
+          img.src = SHEET_URL + '?action=track&page=home&clientId=' + clientId + '&ua=' + encodeURIComponent(navigator.userAgent);
           
-          var res = await fetch(SHEET_URL);
-          if (!res.ok) throw new Error();
-          var data = await res.json();
+          const data = await fetchJsonp(SHEET_URL);
           var badge = document.getElementById('globalVisitorBadge');
           if (badge && data && data.totalViews !== undefined) {
             badge.textContent = data.totalViews.toLocaleString();

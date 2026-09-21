@@ -150,6 +150,7 @@ function doGet(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var params = e && e.parameter ? e.parameter : {};
   var action = params.action || 'get';
+  var callback = params.callback;
   
   if (action === 'track') {
     var page = params.page || 'home';
@@ -176,7 +177,7 @@ function doGet(e) {
     uniqueClients[rowClient] = true;
     
     if (recentVisitors.length < 25) {
-      recentVisitors.unshift({ timestamp: rowDate, page: rowPage, userAgent: rowUa, ip: 'Device ID: ' + rowClient.substring(0, 6) + '...' });
+      recentVisitors.unshift({ timestamp: rowDate, page: rowPage, userAgent: rowUa, ip: 'Device ID: ' + String(rowClient).substring(0, 6) + '...' });
     }
   }
   
@@ -187,7 +188,11 @@ function doGet(e) {
     visitors: recentVisitors 
   };
   
-  return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+  var jsonString = JSON.stringify(result);
+  if (callback) {
+    return ContentService.createTextOutput(callback + '(' + jsonString + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(jsonString).setMimeType(ContentService.MimeType.JSON);
 }
         </textarea>
       </details>
@@ -245,16 +250,56 @@ function doGet(e) {
   <script>
     const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycby3PFK7T7E29mYRW5in0iHebY9UrfLJU8ZTq83boI4pxCsbKIG3vrg6Hz6HxBKaKtQoGw/exec';
 
+    function fetchJsonp(url) {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'jsonp_cb_' + Math.random().toString(36).substring(2, 9);
+        const script = document.createElement('script');
+        const separator = url.includes('?') ? '&' : '?';
+        script.src = url + separator + 'callback=' + callbackName;
+        
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('JSONP timeout'));
+        }, 10000);
+
+        window[callbackName] = (data) => {
+          cleanup();
+          resolve(data);
+        };
+
+        script.onerror = () => {
+          cleanup();
+          reject(new Error('JSONP load error'));
+        };
+
+        function cleanup() {
+          clearTimeout(timer);
+          if (script.parentNode) script.parentNode.removeChild(script);
+          delete window[callbackName];
+        }
+
+        document.head.appendChild(script);
+      });
+    }
+
     async function fetchStats() {
       let data = null;
+      let clientId = localStorage.getItem('vex_client_id');
+      if (!clientId) {
+        clientId = 'user_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+        localStorage.setItem('vex_client_id', clientId);
+      }
+
+      // Track hit
+      try {
+        const img = new Image();
+        img.src = GOOGLE_SHEET_URL + '?action=track&page=stats&clientId=' + clientId + '&ua=' + encodeURIComponent(navigator.userAgent);
+      } catch (e) {}
 
       try {
-        const res = await fetch(GOOGLE_SHEET_URL);
-        if (res.ok) {
-          data = await res.json();
-        }
+        data = await fetchJsonp(GOOGLE_SHEET_URL);
       } catch (e) {
-        console.warn('Could not fetch from Google Sheet URL, trying backend/fallback...', e);
+        console.warn('Could not fetch JSONP from Google Sheet URL, trying backend/fallback...', e);
       }
 
       if (!data) {

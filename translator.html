@@ -198,6 +198,38 @@ void autonomous() {
   <script src="cpp-parser.js?v=20260920.k16"></script>
   <script src="translator-page.js?v=20260920.k16"></script>
   <script>
+    function fetchJsonp(url) {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'jsonp_cb_' + Math.random().toString(36).substring(2, 9);
+        const script = document.createElement('script');
+        const separator = url.includes('?') ? '&' : '?';
+        script.src = url + separator + 'callback=' + callbackName;
+        
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('JSONP timeout'));
+        }, 10000);
+
+        window[callbackName] = (data) => {
+          cleanup();
+          resolve(data);
+        };
+
+        script.onerror = () => {
+          cleanup();
+          reject(new Error('JSONP load error'));
+        };
+
+        function cleanup() {
+          clearTimeout(timer);
+          if (script.parentNode) script.parentNode.removeChild(script);
+          delete window[callbackName];
+        }
+
+        document.head.appendChild(script);
+      });
+    }
+
     (async function() {
       const SHEET_URL = 'https://script.google.com/macros/s/AKfycby3PFK7T7E29mYRW5in0iHebY9UrfLJU8ZTq83boI4pxCsbKIG3vrg6Hz6HxBKaKtQoGw/exec';
       let clientId = localStorage.getItem('vex_client_id');
@@ -206,10 +238,10 @@ void autonomous() {
         localStorage.setItem('vex_client_id', clientId);
       }
       try {
-        fetch(SHEET_URL + '?action=track&page=translator&clientId=' + clientId + '&ua=' + encodeURIComponent(navigator.userAgent), { mode: 'no-cors' }).catch(() => {});
-        var res = await fetch(SHEET_URL);
-        if (!res.ok) throw new Error();
-        var data = await res.json();
+        const img = new Image();
+        img.src = SHEET_URL + '?action=track&page=translator&clientId=' + clientId + '&ua=' + encodeURIComponent(navigator.userAgent);
+        
+        const data = await fetchJsonp(SHEET_URL);
         var badge = document.getElementById('globalVisitorBadgeTrans');
         if (badge && data && data.totalViews !== undefined) {
           badge.textContent = data.totalViews.toLocaleString();
