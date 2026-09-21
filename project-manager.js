@@ -2221,6 +2221,70 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       };
     }
 
+    async compressFiles(filesObj) {
+      if (!filesObj || typeof filesObj !== "object" || Object.keys(filesObj).length === 0) return null;
+      try {
+        const jsonStr = JSON.stringify(filesObj);
+        if (typeof CompressionStream !== "undefined") {
+          const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream("gzip"));
+          const response = new Response(stream);
+          const blob = await response.blob();
+          const arrayBuffer = await blob.arrayBuffer();
+          const uint8 = new Uint8Array(arrayBuffer);
+          let binary = "";
+          const len = uint8.byteLength;
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(uint8[i]);
+          }
+          return btoa(binary);
+        } else if (typeof JSZip !== "undefined") {
+          const zip = new JSZip();
+          for (const [path, content] of Object.entries(filesObj)) {
+            zip.file(path, content);
+          }
+          return await zip.generateAsync({ type: "base64", compression: "DEFLATE" });
+        }
+      } catch (err) {
+        console.warn("[ProjectManager] Compression error:", err);
+      }
+      return null;
+    }
+
+    async decompressFiles(compressedStr) {
+      if (!compressedStr || typeof compressedStr !== "string") return null;
+      try {
+        if (typeof DecompressionStream !== "undefined") {
+          try {
+            const binStr = atob(compressedStr);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) {
+              bytes[i] = binStr.charCodeAt(i);
+            }
+            const decompStream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+            const decompText = await new Response(decompStream).text();
+            const parsed = JSON.parse(decompText);
+            if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
+              return parsed;
+            }
+          } catch (_) {}
+        }
+        if (typeof JSZip !== "undefined") {
+          const zip = new JSZip();
+          const loadedZip = await zip.loadAsync(compressedStr, { base64: true });
+          const filesMap = {};
+          for (const [path, fileObj] of Object.entries(loadedZip.files)) {
+            if (!fileObj.dir) {
+              filesMap[path] = await fileObj.async("text");
+            }
+          }
+          if (Object.keys(filesMap).length > 0) return filesMap;
+        }
+      } catch (err) {
+        console.warn("[ProjectManager] Decompression error:", err);
+      }
+      return null;
+    }
+
     // -------------------------------------------------------------
     // Cloud Sync (Server & Firebase Firestore Dual-Cloud Integration)
     // -------------------------------------------------------------
@@ -2271,7 +2335,31 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       this.project.updatedAt = now;
       this.project.isDefault = false;
 
-      // 1. Primary Save: Persist to Server Cloud Store (No 1MB doc limits, works seamlessly across all devices)
+      // 1. Prepare clean files & compressed payload
+      const cleanFiles = this.cleanFilesForFirestore(this.project.files || {});
+      const compressedPayload = await this.compressFiles(cleanFiles);
+
+      // Primary source files (src/* and non-library headers)
+      const primaryFiles = {};
+      for (const [p, c] of Object.entries(cleanFiles)) {
+        if (p.startsWith("src/") || (p.startsWith("include/") && !p.startsWith("include/pros/") && !p.startsWith("include/lemlib/"))) {
+          primaryFiles[p] = c;
+        }
+      }
+      if (Object.keys(primaryFiles).length === 0) {
+        let sizeAccum = 0;
+        for (const [p, c] of Object.entries(cleanFiles)) {
+          if (sizeAccum + c.length < 50 * 1024) {
+            primaryFiles[p] = c;
+            sizeAccum += c.length;
+          }
+        }
+      }
+
+      const totalFilesJsonSize = JSON.stringify(cleanFiles).length;
+      const filesField = totalFilesJsonSize < 350 * 1024 ? cleanFiles : primaryFiles;
+
+      // 2. Persist to Server Cloud Store if available
       try {
         const resp = await fetch("/api/project", {
           method: "POST",
@@ -2284,52 +2372,39 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         });
         if (resp.ok) {
           console.log(`[ProjectManager] Saved project to server cloud store: "${this.project.name}"`);
-        } else {
-          console.warn("[ProjectManager] Server cloud store returned status:", resp.status);
         }
       } catch (srvErr) {
-        console.warn("[ProjectManager] Server cloud store sync warning:", srvErr);
+        // Non-blocking server save warning
       }
 
       emit(Math.round(totalBytes * 0.55));
 
-      // 2. Secondary Save: Firebase Firestore (if available and client authenticated)
+      // 3. Persist to Firebase Firestore
       if (typeof firebase !== "undefined" && firebase.firestore && user) {
         try {
           const db = firebase.firestore();
           const projectRef = db.collection("users").doc(user.uid).collection("data").doc("active_project");
 
-          if (isDelta) {
-            const changedFilesMap = {};
-            let changedSize = 0;
-            for (const f of this.changedFiles) {
-              if (this.project.files && this.project.files[f] !== undefined) {
-                changedFilesMap[f] = this.project.files[f];
-                changedSize += f.length + (this.project.files[f] ? this.project.files[f].length : 0);
-              }
-            }
+          const docPayload = {
+            name: this.project.name || "Override_LemLib_Bot",
+            version: this.project.version || "1.0.0",
+            target: this.project.target || "v5",
+            kernel: this.project.kernel || "4.1.0",
+            lemlibVersion: this.project.lemlibVersion || "0.5.4",
+            activeAuton: this.project.activeAuton || "red_rush_auton",
+            updatedAt: now,
+            authorEmail: user.email || email,
+            isDefault: false,
+            totalFiles: Object.keys(cleanFiles).length,
+            files: filesField
+          };
 
-            // If delta payload is small (< 500KB), perform direct merge
-            if (changedSize < 500 * 1024) {
-              await projectRef.set({
-                name: this.project.name,
-                version: this.project.version,
-                target: this.project.target || "v5",
-                kernel: this.project.kernel || "4.1.0",
-                lemlibVersion: this.project.lemlibVersion || "0.5.4",
-                files: changedFilesMap,
-                activeAuton: this.project.activeAuton || "red_rush_auton",
-                updatedAt: now,
-                authorEmail: user.email || email,
-                isDefault: false
-              }, { merge: true });
-            } else {
-              // Full chunked save if delta is large
-              await this._saveFirestoreChunks(projectRef, user, email, now);
-            }
-          } else {
-            await this._saveFirestoreChunks(projectRef, user, email, now);
+          if (compressedPayload) {
+            docPayload.compressedFiles = compressedPayload;
           }
+
+          await projectRef.set(docPayload);
+          console.log(`[ProjectManager] Firestore saved: "${this.project.name}" (${Object.keys(cleanFiles).length} files, compressed: ${Boolean(compressedPayload)})`);
         } catch (fsErr) {
           console.warn("[ProjectManager] Firestore save notice:", fsErr);
         }
@@ -2344,67 +2419,6 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       await this.saveLocal(false);
       emit(totalBytes);
       return true;
-    }
-
-    async _saveFirestoreChunks(projectRef, user, email, now) {
-      const cleanFiles = this.cleanFilesForFirestore(this.project.files);
-      const CHUNK_SIZE_LIMIT = 450 * 1024; // 450 KB per document (well below Firestore 1MB doc limit)
-      const chunks = [];
-      let currentChunk = {};
-      let currentChunkSize = 0;
-
-      for (const [path, content] of Object.entries(cleanFiles)) {
-        const itemSize = path.length + (typeof content === "string" ? content.length : 0);
-        if (currentChunkSize + itemSize > CHUNK_SIZE_LIMIT && Object.keys(currentChunk).length > 0) {
-          chunks.push(currentChunk);
-          currentChunk = {};
-          currentChunkSize = 0;
-        }
-        currentChunk[path] = content;
-        currentChunkSize += itemSize;
-      }
-      if (Object.keys(currentChunk).length > 0) {
-        chunks.push(currentChunk);
-      }
-
-      if (chunks.length <= 1) {
-        await projectRef.set({
-          name: this.project.name || "Override_LemLib_Bot",
-          version: this.project.version || "1.0.0",
-          target: this.project.target || "v5",
-          kernel: this.project.kernel || "4.1.0",
-          lemlibVersion: this.project.lemlibVersion || "0.5.4",
-          files: cleanFiles,
-          activeAuton: this.project.activeAuton || "red_rush_auton",
-          updatedAt: now,
-          authorEmail: user.email || email,
-          isDefault: false,
-          chunkCount: 0
-        });
-      } else {
-        await projectRef.set({
-          name: this.project.name || "Override_LemLib_Bot",
-          version: this.project.version || "1.0.0",
-          target: this.project.target || "v5",
-          kernel: this.project.kernel || "4.1.0",
-          lemlibVersion: this.project.lemlibVersion || "0.5.4",
-          activeAuton: this.project.activeAuton || "red_rush_auton",
-          updatedAt: now,
-          authorEmail: user.email || email,
-          isDefault: false,
-          chunkCount: chunks.length,
-          totalFiles: Object.keys(cleanFiles).length
-        });
-
-        const chunksCol = projectRef.collection("chunks");
-        for (let i = 0; i < chunks.length; i++) {
-          await chunksCol.doc(String(i)).set({
-            chunkIndex: i,
-            files: chunks[i],
-            updatedAt: now
-          });
-        }
-      }
     }
 
     async loadFromCloud(force = false) {
@@ -2441,7 +2455,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           }
         }
       } catch (err) {
-        console.warn("[ProjectManager] Server project load check warning:", err);
+        // Ignore server network errors
       }
 
       // 2. Check Firebase Firestore if signed in
@@ -2452,8 +2466,13 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           const snap = await projectRef.get();
           if (snap.exists) {
             const fsData = snap.data();
-            const chunkCount = Number(fsData.chunkCount) || 0;
-            if (chunkCount > 0) {
+            if (fsData.compressedFiles) {
+              const decompressed = await this.decompressFiles(fsData.compressedFiles);
+              if (decompressed && Object.keys(decompressed).length > 0) {
+                fsData.files = decompressed;
+              }
+            }
+            if ((!fsData.files || Object.keys(fsData.files).length === 0) && fsData.chunkCount) {
               try {
                 const chunksSnap = await projectRef.collection("chunks").get();
                 const combinedFiles = {};
@@ -2463,14 +2482,14 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
                     Object.assign(combinedFiles, cData.files);
                   }
                 });
-                fsData.files = combinedFiles;
-              } catch (chunkErr) {
-                console.warn("[ProjectManager] Error reading Firestore chunks:", chunkErr);
-              }
+                if (Object.keys(combinedFiles).length > 0) {
+                  fsData.files = combinedFiles;
+                }
+              } catch (_) {}
             }
             const fsTime = Number(fsData.updatedAt) || 0;
             const candTime = candidateData ? (Number(candidateData.updatedAt) || 0) : 0;
-            if (!candidateData || fsTime > candTime) {
+            if (!candidateData || fsTime > candTime || (fsData.files && Object.keys(fsData.files).length > 0)) {
               candidateData = fsData;
               candidateSource = "firestore";
             }
@@ -2484,6 +2503,18 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         return null;
       }
 
+      let filesMap = candidateData.files;
+      if (candidateData.compressedFiles && (!filesMap || Object.keys(filesMap).length <= Object.keys(DEFAULT_TEMPLATES).length)) {
+        const decompressed = await this.decompressFiles(candidateData.compressedFiles);
+        if (decompressed && Object.keys(decompressed).length > 0) {
+          filesMap = decompressed;
+        }
+      }
+
+      if (!filesMap || typeof filesMap !== "object" || Object.keys(filesMap).length === 0) {
+        filesMap = { ...DEFAULT_TEMPLATES };
+      }
+
       const cloudTime = Number(candidateData.updatedAt) || 0;
       const localTime = Number(this.project?.updatedAt) || 0;
       const isLocalDefault = this.isDefaultProject();
@@ -2494,10 +2525,6 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         console.log(`[ProjectManager] Retaining newer local project workspace (local: ${localTime} vs cloud: ${cloudTime})`);
         return null;
       }
-
-      const filesMap = (candidateData.files && typeof candidateData.files === "object")
-        ? candidateData.files
-        : { ...DEFAULT_TEMPLATES };
 
       this.project = {
         name: candidateData.name || "Override_LemLib_Bot",

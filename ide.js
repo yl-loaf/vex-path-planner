@@ -88,7 +88,36 @@
   // -------------------------------------------------------------
   // Firebase Auth
   // -------------------------------------------------------------
+  // Live Cloud Synchronization & Multi-Device Sync for IDE
+  // -------------------------------------------------------------
   let cloudIdeUnsub = null;
+
+  function syncIdeViewsWithProject() {
+    if (!window.ProjectManager || !window.ProjectManager.project || !window.ProjectManager.project.files) return;
+    const fileKeys = Object.keys(window.ProjectManager.project.files);
+    if (fileKeys.length === 0) return;
+
+    openTabs = openTabs.filter(f => fileKeys.includes(f));
+
+    if (!fileKeys.includes(activeFile)) {
+      if (fileKeys.includes("src/main.cpp")) {
+        activeFile = "src/main.cpp";
+      } else if (fileKeys.includes("src/autons.cpp")) {
+        activeFile = "src/autons.cpp";
+      } else {
+        activeFile = fileKeys[0];
+      }
+    }
+    if (!openTabs.includes(activeFile)) {
+      openTabs.push(activeFile);
+    }
+
+    renderProjectHeader();
+    renderFileTree();
+    renderTabs();
+    loadFile(activeFile);
+    renderSymbols();
+  }
 
   function subscribeToIdeCloud(uid) {
     if (cloudIdeUnsub) {
@@ -110,11 +139,7 @@
           console.log("[IDE CloudSync] Live project update from server detected, reloading...");
           ProjectManager.loadFromCloud(true).then((proj) => {
             if (proj) {
-              renderProjectHeader();
-              renderFileTree();
-              renderTabs();
-              loadFile(activeFile || "src/main.cpp");
-              renderSymbols();
+              syncIdeViewsWithProject();
               showToast(`☁️ Workspace updated from server ("${proj.name}")`, 3500);
             }
           });
@@ -138,11 +163,7 @@
             updateAuthUI(cachedUser);
             ProjectManager.loadFromCloud(false).then((proj) => {
               if (proj) {
-                renderProjectHeader();
-                renderFileTree();
-                renderTabs();
-                loadFile(activeFile);
-                renderSymbols();
+                syncIdeViewsWithProject();
               }
             }).catch(console.error);
           }
@@ -166,11 +187,7 @@
 
           ProjectManager.loadFromCloud(false).then((proj) => {
             if (proj) {
-              renderProjectHeader();
-              renderFileTree();
-              renderTabs();
-              loadFile(activeFile);
-              renderSymbols();
+              syncIdeViewsWithProject();
             }
           }).catch(console.error);
           subscribeToIdeCloud(user.uid);
@@ -187,11 +204,7 @@
         if (document.visibilityState === "visible" && hasUser && !ProjectManager.isDirty) {
           ProjectManager.loadFromCloud(false).then((proj) => {
             if (proj) {
-              renderProjectHeader();
-              renderFileTree();
-              renderTabs();
-              loadFile(activeFile);
-              renderSymbols();
+              syncIdeViewsWithProject();
             }
           }).catch(console.error);
         }
