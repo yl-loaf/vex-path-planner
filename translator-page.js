@@ -352,6 +352,9 @@
           if (isCustom) {
             badgeType = "custom";
             icon = "⚡";
+          } else if (a.type === "wait") {
+            badgeType = "wait";
+            icon = "📍";
           } else if (a.type.includes("turn")) {
             badgeType = "turn";
             icon = "🔄";
@@ -369,6 +372,18 @@
             detailsText = firstLine.length > 40 ? firstLine.slice(0, 38) + "…" : firstLine;
             if (a.customDuration > 0) detailsText += ` · Duration: ${a.customDuration}s`;
             else detailsText += " · Instant/Async Task";
+          } else if (a.type === "wait") {
+            const wType = a.waitType || "distance";
+            if (wType === "distance") {
+              titleText = `chassis.waitUntil(${a.waitDistance || 0}")`;
+              detailsText = `Triggers non-blocking event trigger at ${a.waitDistance || 0} inches into previous motion`;
+            } else if (wType === "done") {
+              titleText = "chassis.waitUntilDone()";
+              detailsText = "Waits for active chassis motion to complete before executing subsequent actions";
+            } else {
+              titleText = `pros::delay(${a.waitTime || 500}ms)`;
+              detailsText = `Pauses autonomous execution thread for ${a.waitTime || 500} milliseconds`;
+            }
           } else if (a.type === "moveToPoint") {
             titleText = `moveToPoint(${a.x}, ${a.y})`;
             detailsText = `Timeout: ${a.timeout}ms · Forwards: ${a.forwards !== false} · MaxSpeed: ${a.maxSpeed || 127}`;

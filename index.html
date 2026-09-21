@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260920.k15" />
+  <link rel="stylesheet" href="style.css?v=20260920.k17" />
 </head>
 <body>
   <div id="app">
@@ -29,6 +29,8 @@
           <a id="btnNewTab" href="#" target="_blank" class="new-tab-link" title="Open in new window (unrestricted popups & Google login)" style="display:none;">↗ New tab</a>
         </div>
         <a id="btnCppTranslator" href="translator.html" class="btn-cpp-translate" style="text-decoration:none;" title="Translate raw C++ LemLib auton code into visual blocks & map on a dedicated page">📥 C++ Translator</a>
+        <button id="btnPidTuner" type="button" class="btn-pid-nav" title="PID Tuning Visualizer: preview and tune kP, kI, kD gains with real-time response curves">🎛️ PID Tuner</button>
+        <button id="btnExportVideo" type="button" class="btn-video-nav" title="Export animated .mp4 video of your simulated autonomous routine">🎥 Export .mp4</button>
         <button id="btnImport" title="Import .vpath">Import</button>
         <button id="btnExport" title="Export .vpath">Export .vpath</button>
         <button id="btnClear" class="danger">Clear</button>
@@ -99,6 +101,7 @@
             <option value="turnToHeading">turnToHeading</option>
             <option value="swingToPoint">swingToPoint</option>
             <option value="swingToHeading">swingToHeading</option>
+            <option value="wait">📍 Wait / Event Trigger</option>
             <option value="custom">Custom Code</option>
           </select>
           <button id="btnAddAction" class="primary">+ Add</button>
@@ -106,7 +109,10 @@
 
 
         <section class="bot-settings" id="botSettings">
-          <h2>Bot Settings &amp; Dimensions</h2>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h2 style="margin-bottom:0;">Bot Settings &amp; Dimensions</h2>
+            <button type="button" id="btnOpenPidFromBot" class="btn-sm-pid-shortcut" title="Open PID Tuning Visualizer">🎛️ Tune PID</button>
+          </div>
           <p class="hint" style="margin-bottom:6px">Actual robot dimensions in inches scale accurately onto the 144&quot; field</p>
           <div class="row">
             <label>Track width (in)
@@ -134,6 +140,25 @@
             <label>Default min speed
               <input type="number" id="defaultMinSpeed" min="0" max="127" step="1" value="0"/>
             </label>
+          </div>
+
+          <!-- Drive Curves & Drift Scalers -->
+          <div class="drift-scalers-box" id="driftScalersBox" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:0.75rem;font-weight:700;color:#93c5fd;">🏎️ Drive Curves &amp; Drift Scalers</span>
+              <span style="font-size:0.68rem;color:#64748b;">moveToPose &amp; Kinematics</span>
+            </div>
+            <div class="row">
+              <label title="Simulates tile traction and lateral drift/slip (0.5 = high traction/crisp, 1.5 = high drift)">Lateral Drift Scaler
+                <input type="number" id="botLateralDrift" min="0.2" max="2.5" step="0.05" value="1.0" />
+              </label>
+              <label title="Angular turn curve and steering response exponent (0.5 = linear/snappy, 1.5 = progressive)">Turn Curve Scale
+                <input type="number" id="botTurnDrift" min="0.2" max="2.5" step="0.05" value="1.0" />
+              </label>
+              <label title="Default Boomerang carrot lead distance multiplier for moveToPose">Default Lead
+                <input type="number" id="botDefaultLead" min="0.1" max="1.0" step="0.05" value="0.6" />
+              </label>
+            </div>
           </div>
           <p class="hint" style="margin-top:4px;font-size:0.72rem;color:#8b9bb4">New moves use these defaults; edit any card to override per action.</p>
 
@@ -415,6 +440,246 @@ void autonomous() {
           <button type="button" id="cppTranslateCancelBtn">Cancel</button>
           <button type="button" id="cppTranslateApplyBtn" class="primary">🚀 Translate &amp; Apply to Visual Editor</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PID Tuning Visualizer Modal -->
+  <div id="pidModal" class="modal pid-modal" hidden>
+    <div class="modal-card pid-modal-card">
+      <div class="pid-modal-header">
+        <div class="pid-modal-title-wrap">
+          <span class="pid-badge">LemLib Controller Kinematics</span>
+          <h2>🎛️ LemLib PID Tuning Visualizer &amp; Step Response</h2>
+        </div>
+        <button type="button" id="pidModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="pid-modal-body">
+        <!-- Controller Selector Tabs -->
+        <div class="pid-tabs-row">
+          <button type="button" class="pid-tab-btn active" id="pidTabLateral" data-pid-mode="lateral">
+            🎯 Lateral Controller (Linear Motion PID)
+          </button>
+          <button type="button" class="pid-tab-btn" id="pidTabAngular" data-pid-mode="angular">
+            🧭 Angular Controller (Heading &amp; Turn PID)
+          </button>
+        </div>
+
+        <div class="pid-workspace-grid">
+          <!-- Graph & Diagnostics Column -->
+          <div class="pid-graph-column">
+            <div class="pid-graph-header">
+              <span class="pid-graph-title" id="pidGraphTitle">Step Response: 24.0" Lateral Drive Step</span>
+              <div class="pid-graph-legend">
+                <span class="legend-dot target-dot"></span> Setpoint
+                <span class="legend-dot response-dot"></span> Response $y(t)$
+                <span class="legend-dot band-dot"></span> Settling Band (±2%)
+              </div>
+            </div>
+
+            <div class="pid-canvas-wrapper">
+              <canvas id="pidGraphCanvas" width="620" height="300"></canvas>
+            </div>
+
+            <!-- KPI Metric Cards -->
+            <div class="pid-kpi-grid">
+              <div class="pid-kpi-card">
+                <span class="pid-kpi-val" id="pidKpiOvershoot">0.0%</span>
+                <span class="pid-kpi-label">Overshoot</span>
+              </div>
+              <div class="pid-kpi-card">
+                <span class="pid-kpi-val" id="pidKpiRise">0.38s</span>
+                <span class="pid-kpi-label">Rise Time ($T_r$)</span>
+              </div>
+              <div class="pid-kpi-card">
+                <span class="pid-kpi-val" id="pidKpiSettle">0.76s</span>
+                <span class="pid-kpi-label">Settling Time ($T_s$)</span>
+              </div>
+              <div class="pid-kpi-card">
+                <span class="pid-kpi-val" id="pidKpiError">0.00"</span>
+                <span class="pid-kpi-label">Steady Error</span>
+              </div>
+              <div class="pid-kpi-card full-width">
+                <span class="pid-kpi-label">Behavior Diagnosis:</span>
+                <span id="pidDampingBadge" class="pid-diagnosis-badge optimal">🎯 Optimal / Critically Damped</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Parameter Controls & Presets Column -->
+          <div class="pid-controls-column">
+            <div class="pid-presets-section">
+              <span class="pid-section-label">Tuning Presets:</span>
+              <div class="pid-preset-buttons">
+                <button type="button" class="btn-pid-preset" data-preset="stock">⚡ Stock LemLib</button>
+                <button type="button" class="btn-pid-preset" data-preset="critically_damped">🎯 Critically Damped</button>
+                <button type="button" class="btn-pid-preset" data-preset="aggressive">🚀 Aggressive (Fast)</button>
+                <button type="button" class="btn-pid-preset" data-preset="underdamped">🌊 Underdamped (Overshoot)</button>
+                <button type="button" class="btn-pid-preset" data-preset="sluggish">🐢 Overdamped (Sluggish)</button>
+              </div>
+            </div>
+
+            <div class="pid-sliders-form">
+              <!-- kP Gain -->
+              <div class="pid-slider-group">
+                <div class="pid-slider-header">
+                  <label for="pidKpInput"><strong>$k_P$ (Proportional Gain):</strong></label>
+                  <input type="number" id="pidKpInput" step="0.1" min="0" max="100" value="8.0" class="pid-num-input" />
+                </div>
+                <input type="range" id="pidKpSlider" min="0" max="40" step="0.1" value="8.0" class="pid-slider" />
+                <span class="pid-slider-hint">Controls primary drive power relative to distance/heading error.</span>
+              </div>
+
+              <!-- kI Gain -->
+              <div class="pid-slider-group">
+                <div class="pid-slider-header">
+                  <label for="pidKiInput"><strong>$k_I$ (Integral Gain):</strong></label>
+                  <input type="number" id="pidKiInput" step="0.01" min="0" max="10" value="0.0" class="pid-num-input" />
+                </div>
+                <input type="range" id="pidKiSlider" min="0" max="2" step="0.01" value="0.0" class="pid-slider" />
+                <span class="pid-slider-hint">Eliminates residual steady-state friction and gear drag.</span>
+              </div>
+
+              <!-- kD Gain -->
+              <div class="pid-slider-group">
+                <div class="pid-slider-header">
+                  <label for="pidKdInput"><strong>$k_D$ (Derivative Gain):</strong></label>
+                  <input type="number" id="pidKdInput" step="0.5" min="0" max="200" value="30.0" class="pid-num-input" />
+                </div>
+                <input type="range" id="pidKdSlider" min="0" max="100" step="0.5" value="30.0" class="pid-slider" />
+                <span class="pid-slider-hint">Dampens momentum and prevents robot overshoot.</span>
+              </div>
+
+              <!-- Advanced Settings Row -->
+              <div class="pid-adv-row">
+                <label>
+                  <span>Anti-Windup Range</span>
+                  <input type="number" id="pidWindupInput" step="0.5" min="0" max="50" value="3.0" />
+                </label>
+                <label>
+                  <span>Slew Rate ($mV/s$)</span>
+                  <input type="number" id="pidSlewInput" step="1" min="0" max="100" value="0" />
+                </label>
+                <label>
+                  <span>Step Amplitude</span>
+                  <input type="number" id="pidStepInput" step="1" min="5" max="72" value="24" />
+                </label>
+              </div>
+
+              <!-- Settling Thresholds -->
+              <div class="pid-adv-row" style="margin-top:6px;">
+                <label>
+                  <span>Small Error (range)</span>
+                  <input type="number" id="pidSmallErrInput" step="0.1" min="0.1" max="10" value="1.0" />
+                </label>
+                <label>
+                  <span>Small Timeout (ms)</span>
+                  <input type="number" id="pidSmallTimeInput" step="25" min="0" max="2000" value="100" />
+                </label>
+                <label>
+                  <span>Large Timeout (ms)</span>
+                  <input type="number" id="pidLargeTimeInput" step="50" min="0" max="3000" value="500" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LemLib C++ Export Code Preview -->
+        <div class="pid-code-box">
+          <div class="pid-code-header">
+            <span>LemLib C++ Controller Declaration (paste into <code>src/main.cpp</code>):</span>
+            <button type="button" id="btnCopyPidCode" class="btn-copy-pid">📋 Copy Controller Code</button>
+          </div>
+          <pre><code id="pidCodeOutput">// lemlib::ControllerSettings code will appear here</code></pre>
+        </div>
+      </div>
+
+      <div class="pid-modal-footer">
+        <button type="button" id="pidModalCloseBtn">Close</button>
+        <button type="button" id="btnApplyPidToSim" class="primary">🚀 Apply Tuning to Robot &amp; Path Simulator</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video (.mp4) Export Modal -->
+  <div id="videoExportModal" class="modal video-export-modal" hidden>
+    <div class="modal-card video-export-card">
+      <div class="video-modal-header">
+        <div class="video-title-wrap">
+          <span class="video-badge">Engineering Notebook &amp; Drive Team</span>
+          <h2>🎥 Export Autonomous Routine Video (.mp4)</h2>
+        </div>
+        <button type="button" id="videoModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="video-modal-body">
+        <p class="video-intro">
+          Generate an animated video of your simulated autonomous routine. The recording renders the 144" field, robot physics, motion trajectories, and realtime HUD overlays, and downloads as an <strong>.mp4</strong> video ready for your team's Engineering Notebook, Discord, or presentation slides.
+        </p>
+
+        <div class="video-options-grid">
+          <div class="video-opt-card">
+            <h4>🎬 Video Overlays &amp; HUD</h4>
+            <label class="checkbox-label">
+              <input type="checkbox" id="videoOptTimer" checked />
+              <span>Official 15s Autonomous Match Timer HUD</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="videoOptGauges" checked />
+              <span>Live Speedometer &amp; Turn Rate Gauges (in/s &amp; °/s)</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="videoOptBadges" checked />
+              <span>Active Action Name &amp; Event Trigger Badges</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="videoOptWatermark" checked />
+              <span>Routine Title &amp; Team Watermark</span>
+            </label>
+          </div>
+
+          <div class="video-opt-card">
+            <h4>⚙️ Rendering Parameters</h4>
+            <div class="row">
+              <label>Frame Rate
+                <select id="videoOptFps">
+                  <option value="60" selected>60 FPS (Ultra Smooth)</option>
+                  <option value="30">30 FPS (Standard)</option>
+                </select>
+              </label>
+              <label>Playback Speed
+                <select id="videoOptSpeed">
+                  <option value="1" selected>1.0× (Real-time 15s)</option>
+                  <option value="1.5">1.5× (Fast Preview)</option>
+                  <option value="0.75">0.75× (Detailed Kinematics)</option>
+                </select>
+              </label>
+            </div>
+            <div class="video-meta-summary" id="videoMetaSummary" style="margin-top:10px;font-size:0.8rem;color:#94a3b8;">
+              <span>Estimated Duration: <strong id="videoEstDur">~0.0s</strong></span> · 
+              <span>Estimated Frames: <strong id="videoEstFrames">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-time Recording Status Box -->
+        <div id="videoRecordingStatus" class="video-recording-status" hidden>
+          <div class="video-status-head">
+            <span id="videoStatusText">Recording simulation frames...</span>
+            <span id="videoPercentText">0%</span>
+          </div>
+          <div class="video-progress-track">
+            <div id="videoProgressBar" class="video-progress-fill" style="width:0%;"></div>
+          </div>
+          <p class="video-status-sub" id="videoStatusSub">Capturing frame 0 of 0 at 60 FPS...</p>
+        </div>
+      </div>
+
+      <div class="video-modal-footer">
+        <button type="button" id="videoModalCancelBtn">Cancel</button>
+        <button type="button" id="btnStartVideoExport" class="primary">🎬 Record &amp; Download .mp4 Video</button>
       </div>
     </div>
   </div>
@@ -705,13 +970,13 @@ void autonomous() {
       </div>
     </div>
   </div>
-  <script src="version.js?v=20260920.k16"></script>
+  <script src="version.js?v=20260920.k17"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260920.k16"></script>
+  <script src="firebase-config.js?v=20260920.k17"></script>
   <script src="cpp-parser.js?v=20260920.k16"></script>
-  <script src="app.js?v=20260920.k16"></script>
+  <script src="app.js?v=20260920.k17"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

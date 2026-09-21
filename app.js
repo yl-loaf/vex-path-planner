@@ -31,6 +31,19 @@
     driveRpm: 600,
     defaultMaxSpeed: 127,
     defaultMinSpeed: 0,
+    lateralDrift: 1.0,
+    turnDrift: 1.0,
+    defaultLead: 0.6,
+    lateralKp: 8.0,
+    lateralKi: 0.0,
+    lateralKd: 30.0,
+    lateralWindup: 3.0,
+    lateralSlew: 0,
+    angularKp: 3.0,
+    angularKi: 0.0,
+    angularKd: 20.0,
+    angularWindup: 3.0,
+    angularSlew: 0,
     botImage: null,
     botImageOrientation: 0, // 0: UP, 90: RIGHT, 180: DOWN, 270: LEFT
     botImageOpacity: 1.0,
@@ -272,17 +285,21 @@
       x: 0,
       y: 0,
       theta: 0,
-      lead: 0.6,
+      lead: bot.defaultLead != null ? bot.defaultLead : 0.6,
       timeout: 2000,
       forwards: true,
-      maxSpeed: bot.defaultMaxSpeed,
-      minSpeed: bot.defaultMinSpeed,
+      maxSpeed: bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127,
+      minSpeed: bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0,
       earlyExitRange: 0,
       lockedSide: "LEFT",
       async: false,
       offsetX: 0,
       offsetY: 0,
       offsetTheta: 0,
+      driftScaler: 1.0,
+      waitType: "distance",
+      distance: 12,
+      delayMs: 250,
       customCode: "",
       customDuration: 0,
       label: "",
@@ -494,8 +511,18 @@
       return { endPose: pose, path: points, duration: dur, carrot: null };
     }
 
+    if (action.type === "wait") {
+      const isTime = action.waitType === "time";
+      const dur = isTime ? Math.max(0, (action.delayMs != null ? action.delayMs : 250) / 1000) : 0;
+      if (dur > 0) {
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+      }
+      return { endPose: pose, path: points, duration: dur, carrot: null };
+    }
+
     if (action.type === "moveToPose") {
-      const lead = action.lead != null ? clamp(action.lead, 0, 1.0) : 0.6;
+      const lead = action.lead != null ? clamp(action.lead, 0, 1.0) : (b.defaultLead != null ? b.defaultLead : 0.6);
+      const drift = (action.driftScaler != null ? action.driftScaler : (b.lateralDrift != null ? b.lateralDrift : 1.0));
       const reversed = action.forwards === false;
       const target = { x: action.x, y: action.y, theta: action.theta };
       // When reversed, chassis rear approaches target along target.theta
@@ -537,7 +564,7 @@
         }
         if (reversed) latPower = -latPower;
 
-        let angPower = clamp(angError / 32, -maxSpeed, maxSpeed);
+        let angPower = clamp((angError / 32) * Math.max(0.2, drift), -maxSpeed, maxSpeed);
 
         // Desaturation / overturn prioritization
         const desat = lemlibDesaturate(latPower, angPower, maxSpeed);
@@ -565,6 +592,7 @@
     }
 
     if (action.type === "moveToPoint") {
+      const drift = (action.driftScaler != null ? action.driftScaler : (b.lateralDrift != null ? b.lateralDrift : 1.0));
       const reversed = action.forwards === false;
       const target = { x: action.x, y: action.y };
       let close = false;
@@ -589,7 +617,7 @@
         if (reversed) latPower = -latPower;
 
         // LemLib turns off angular steering when settling within 7.5 in
-        const angPower = close ? 0 : clamp(angError / 32, -maxSpeed, maxSpeed);
+        const angPower = close ? 0 : clamp((angError / 32) * Math.max(0.2, drift), -maxSpeed, maxSpeed);
 
         const desat = lemlibDesaturate(latPower, angPower, maxSpeed);
         const targetVLin = ((desat.left + desat.right) / 2) * vMax;
@@ -1372,6 +1400,7 @@
   // -- Flowchart UI -------------------------------------------------
   function badgeClass(type) {
     if (type === "custom") return "custom";
+    if (type === "wait") return "wait";
     if (isMove(type)) return "move";
     if (isTurn(type)) return "turn";
     if (isSwing(type)) return "swing";
@@ -1863,7 +1892,85 @@
       card.dataset.id = a.id;
 
       let body = "";
-      if (a.type === "custom") {
+      if (a.type === "wait") {
+        const mode = a.waitType || "distance";
+        const distVal = a.distance != null ? a.distance : 12;
+        const delayVal = a.delayMs != null ? a.delayMs : 250;
+
+        let paramSection = "";
+        if (mode === "distance") {
+          paramSection = `
+            <div class="wait-param-row">
+              <label>Trigger at distance along motion:
+                <input type="number" data-f="distance" min="0.5" max="144" step="0.5" value="${distVal}" />
+                <span class="calc-sub-hint">inches (chassis.waitUntil)</span>
+              </label>
+              <div class="wait-chips-row">
+                <span style="font-size:0.68rem;color:#64748b;">Presets:</span>
+                <button type="button" class="wait-chip ${distVal === 6 ? 'active' : ''}" data-act="set-wait-dist" data-dist="6">6"</button>
+                <button type="button" class="wait-chip ${distVal === 12 ? 'active' : ''}" data-act="set-wait-dist" data-dist="12">12" (Default)</button>
+                <button type="button" class="wait-chip ${distVal === 18 ? 'active' : ''}" data-act="set-wait-dist" data-dist="18">18"</button>
+                <button type="button" class="wait-chip ${distVal === 24 ? 'active' : ''}" data-act="set-wait-dist" data-dist="24">24"</button>
+                <button type="button" class="wait-chip ${distVal === 36 ? 'active' : ''}" data-act="set-wait-dist" data-dist="36">36"</button>
+              </div>
+              <div class="wait-hint-box">
+                💡 <strong>chassis.waitUntil(${distVal})</strong> triggers concurrent subsystem actions (e.g. clamp goal, spin intake) when the robot has travelled ${distVal}" into its movement, without interrupting chassis drive momentum.
+              </div>
+            </div>`;
+        } else if (mode === "done") {
+          paramSection = `
+            <div class="wait-param-row">
+              <div class="wait-hint-box">
+                ⏳ <strong>chassis.waitUntilDone()</strong> blocks execution until the preceding async movement has fully settled within tolerance before proceeding to the next step.
+              </div>
+            </div>`;
+        } else if (mode === "time") {
+          paramSection = `
+            <div class="wait-param-row">
+              <label>Delay duration:
+                <input type="number" data-f="delayMs" min="10" max="15000" step="25" value="${delayVal}" />
+                <span class="calc-sub-hint">ms (pros::delay)</span>
+              </label>
+              <div class="wait-chips-row">
+                <span style="font-size:0.68rem;color:#64748b;">Presets:</span>
+                <button type="button" class="wait-chip ${delayVal === 100 ? 'active' : ''}" data-act="set-wait-delay" data-ms="100">100ms</button>
+                <button type="button" class="wait-chip ${delayVal === 250 ? 'active' : ''}" data-act="set-wait-delay" data-ms="250">250ms</button>
+                <button type="button" class="wait-chip ${delayVal === 500 ? 'active' : ''}" data-act="set-wait-delay" data-ms="500">500ms</button>
+                <button type="button" class="wait-chip ${delayVal === 1000 ? 'active' : ''}" data-act="set-wait-delay" data-ms="1000">1.0s</button>
+              </div>
+              <div class="wait-hint-box">
+                ⏱️ <strong>pros::delay(${delayVal})</strong> pauses the current execution thread for ${delayVal} milliseconds.
+              </div>
+            </div>`;
+        }
+
+        body = `
+          <div class="wait-mode-selector">
+            <button type="button" class="wait-mode-btn ${mode === 'distance' ? 'active' : ''}" data-act="set-wait-mode" data-mode="distance">📏 Distance (${distVal}")</button>
+            <button type="button" class="wait-mode-btn ${mode === 'done' ? 'active' : ''}" data-act="set-wait-mode" data-mode="done">⏳ Wait Until Done</button>
+            <button type="button" class="wait-mode-btn ${mode === 'time' ? 'active' : ''}" data-act="set-wait-mode" data-mode="time">⏱️ PROS Delay (${delayVal}ms)</button>
+          </div>
+          ${paramSection}
+          <label class="wide" style="margin-top:8px;">Subsystem Action Code (optional, runs at trigger event)
+            <textarea data-f="customCode" rows="2" placeholder="// e.g. clamp.set_value(true); or intake.move(127);">${escapeHtml(a.customCode || '')}</textarea>
+          </label>
+          <div class="multitask-presets-row">
+            <span style="font-size:0.68rem;color:#94a3b8;align-self:center;">Snippets:</span>
+            <button type="button" class="snippet-chip" data-snip="clamp.set_value(true);">🦾 Clamp Goal</button>
+            <button type="button" class="snippet-chip" data-snip="clamp.set_value(false);">🔓 Release Clamp</button>
+            <button type="button" class="snippet-chip" data-snip="intake.move(127);">⚡ Intake On</button>
+            <button type="button" class="snippet-chip" data-snip="intake.move(0);">🛑 Intake Off</button>
+          </div>
+          <div class="move-comment-row">
+            <label class="move-comment-label">
+              <span class="move-comment-header">
+                <span class="move-comment-tag">💬 Event Comment</span>
+                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(cleanCommentText(a.label))}` : "e.g. // clamp mogo at 12 inches"}</span>
+              </span>
+              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label || '')}" placeholder="e.g. clamp mogo at 12 inches into drive"/>
+            </label>
+          </div>`;
+      } else if (a.type === "custom") {
         const durVal = a.customDuration != null ? Number(a.customDuration) : 0;
         body = `
           <label class="wide">Custom C++ (injected as-is)
@@ -1964,7 +2071,12 @@
           : "";
         const leadField = a.type === "moveToPose"
           ? `<label title="Boomerang carrot lead multiplier (default 0.6)">Lead
-               <input type="number" data-f="lead" min="0" max="1" step="0.05" value="${a.lead != null ? a.lead : 0.6}"/>
+               <input type="number" data-f="lead" min="0" max="1" step="0.05" value="${a.lead != null ? a.lead : (bot.defaultLead || 0.6)}"/>
+             </label>`
+          : "";
+        const driftField = isMove(a.type)
+          ? `<label title="LemLib drift scaler for drift/turn compensation">Drift Scaler
+               <input type="number" data-f="driftScaler" min="0" max="5" step="0.05" value="${a.driftScaler != null ? a.driftScaler : 1.0}"/>
              </label>`
           : "";
         const sideField = needsSide(a.type)
@@ -1981,6 +2093,7 @@
             ${pointFields}
             ${headField}
             ${leadField}
+            ${driftField}
             ${sideField}
           </div>
           <div class="speed-timeout-row">
@@ -2189,6 +2302,29 @@
             showToast(`⚡ Set timeout to ${calcT}ms (+100ms clearance for battery sag)`);
             return;
           }
+          if (act === "set-wait-mode") {
+            a.waitType = btn.dataset.mode;
+            markDirty();
+            renderFlow();
+            generateCode();
+            return;
+          }
+          if (act === "set-wait-dist") {
+            a.distance = Number(btn.dataset.dist);
+            markDirty();
+            renderFlow();
+            generateCode();
+            showToast(`📏 Set wait trigger distance to ${a.distance}"`);
+            return;
+          }
+          if (act === "set-wait-delay") {
+            a.delayMs = Number(btn.dataset.ms);
+            markDirty();
+            renderFlow();
+            generateCode();
+            showToast(`⏱️ Set delay duration to ${a.delayMs}ms`);
+            return;
+          }
           if (act === "set-dur") {
             a.customDuration = Number(btn.dataset.dur);
             markDirty();
@@ -2280,6 +2416,27 @@
         }
         continue;
       }
+      if (a.type === "wait") {
+        if (cleanComment && commentStyle === "above") {
+          code += `${ind}// ${cleanComment}\n`;
+        }
+        const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
+        if (a.waitType === "distance") {
+          code += `${ind}chassis.waitUntil(${a.distance != null ? a.distance : 12});${commentSuffix}\n`;
+        } else if (a.waitType === "done") {
+          code += `${ind}chassis.waitUntilDone();${commentSuffix}\n`;
+        } else if (a.waitType === "time") {
+          code += `${ind}pros::delay(${a.delayMs != null ? a.delayMs : 250});${commentSuffix}\n`;
+        }
+        if (a.customCode && a.customCode.trim()) {
+          const lines = a.customCode.trim().split("\n");
+          for (const line of lines) {
+            if (line.trim().length === 0) code += "\n";
+            else code += `${ind}${line}\n`;
+          }
+        }
+        continue;
+      }
       const px = a.x + (a.offsetX || 0);
       const py = a.y + (a.offsetY || 0);
       const pt = a.theta + (a.offsetTheta || 0);
@@ -2287,6 +2444,9 @@
       if (!a.forwards) params.push(".forwards = false");
       if (a.type === "moveToPose" && a.lead != null && Number(a.lead) !== 0.6) {
         params.push(`.lead = ${Number(a.lead)}`);
+      }
+      if (a.driftScaler != null && Number(a.driftScaler) !== 1.0) {
+        params.push(`.horizontalDrift = ${Number(a.driftScaler)}`);
       }
       const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
       const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
@@ -3178,6 +3338,9 @@
     if (el("driveRpm")) el("driveRpm").value = bot.driveRpm;
     if (el("defaultMaxSpeed")) el("defaultMaxSpeed").value = bot.defaultMaxSpeed;
     if (el("defaultMinSpeed")) el("defaultMinSpeed").value = bot.defaultMinSpeed;
+    if (el("botLateralDrift")) el("botLateralDrift").value = bot.lateralDrift != null ? bot.lateralDrift : 1.0;
+    if (el("botTurnDrift")) el("botTurnDrift").value = bot.turnDrift != null ? bot.turnDrift : 1.0;
+    if (el("botDefaultLead")) el("botDefaultLead").value = bot.defaultLead != null ? bot.defaultLead : 0.6;
     initBotImageElement();
     syncBotVisualUI();
   }
@@ -3191,6 +3354,9 @@
       driveRpm: "driveRpm",
       defaultMaxSpeed: "defaultMaxSpeed",
       defaultMinSpeed: "defaultMinSpeed",
+      lateralDrift: "botLateralDrift",
+      turnDrift: "botTurnDrift",
+      defaultLead: "botDefaultLead",
     };
     Object.entries(map).forEach(([key, id]) => {
       const el = document.getElementById(id);
@@ -3199,6 +3365,14 @@
         let v = Number(el.value);
         if (key === "defaultMaxSpeed" || key === "defaultMinSpeed") {
           v = Math.max(0, Math.min(127, isNaN(v) ? bot[key] : v));
+          el.value = v;
+        }
+        if (key === "defaultLead") {
+          v = Math.max(0, Math.min(1.0, isNaN(v) ? bot[key] : v));
+          el.value = v;
+        }
+        if (key === "lateralDrift" || key === "turnDrift") {
+          v = Math.max(0.1, Math.min(5.0, isNaN(v) ? bot[key] : v));
           el.value = v;
         }
         bot[key] = isNaN(v) ? bot[key] : v;
@@ -3966,6 +4140,885 @@
     });
   }
 
+  // -- PID Tuning Visualizer Modal -----------------------------------
+  function wirePidModal() {
+    const modal = document.getElementById("pidModal");
+    const btnOpenHead = document.getElementById("btnPidTuner");
+    const btnOpenBot = document.getElementById("btnOpenPidFromBot");
+    const btnClose = document.getElementById("pidModalClose");
+    const btnCloseFooter = document.getElementById("pidModalCloseBtn");
+    const btnApply = document.getElementById("btnApplyPidToSim");
+    const btnCopyCode = document.getElementById("btnCopyPidCode");
+    const canvas = document.getElementById("pidGraphCanvas");
+
+    if (!modal || !canvas) return;
+
+    let currentMode = "lateral"; // "lateral" or "angular"
+    const state = {
+      lateral: {
+        kp: bot.lateralKp != null ? bot.lateralKp : 8.0,
+        ki: bot.lateralKi != null ? bot.lateralKi : 0.0,
+        kd: bot.lateralKd != null ? bot.lateralKd : 30.0,
+        windup: bot.lateralWindup != null ? bot.lateralWindup : 3.0,
+        slew: bot.lateralSlew != null ? bot.lateralSlew : 0,
+        step: 24.0,
+        smallErr: 1.0,
+        smallTime: 100,
+        largeTime: 500,
+      },
+      angular: {
+        kp: bot.angularKp != null ? bot.angularKp : 2.0,
+        ki: bot.angularKi != null ? bot.angularKi : 0.0,
+        kd: bot.angularKd != null ? bot.angularKd : 10.0,
+        windup: bot.angularWindup != null ? bot.angularWindup : 3.0,
+        slew: bot.angularSlew != null ? bot.angularSlew : 0,
+        step: 90.0,
+        smallErr: 1.0,
+        smallTime: 100,
+        largeTime: 500,
+      }
+    };
+
+    function openModal() {
+      // Refresh current bot values
+      if (bot.lateralKp != null) state.lateral.kp = bot.lateralKp;
+      if (bot.lateralKi != null) state.lateral.ki = bot.lateralKi;
+      if (bot.lateralKd != null) state.lateral.kd = bot.lateralKd;
+      if (bot.lateralWindup != null) state.lateral.windup = bot.lateralWindup;
+      if (bot.lateralSlew != null) state.lateral.slew = bot.lateralSlew;
+
+      if (bot.angularKp != null) state.angular.kp = bot.angularKp;
+      if (bot.angularKi != null) state.angular.ki = bot.angularKi;
+      if (bot.angularKd != null) state.angular.kd = bot.angularKd;
+      if (bot.angularWindup != null) state.angular.windup = bot.angularWindup;
+      if (bot.angularSlew != null) state.angular.slew = bot.angularSlew;
+
+      syncInputsFromState();
+      modal.hidden = false;
+      modal.classList.add("open");
+      updateGraphAndDiagnosis();
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    function syncInputsFromState() {
+      const cur = state[currentMode];
+      const el = (id) => document.getElementById(id);
+
+      if (el("pidKpInput")) el("pidKpInput").value = cur.kp;
+      if (el("pidKpSlider")) el("pidKpSlider").value = cur.kp;
+      if (el("pidKiInput")) el("pidKiInput").value = cur.ki;
+      if (el("pidKiSlider")) el("pidKiSlider").value = cur.ki;
+      if (el("pidKdInput")) el("pidKdInput").value = cur.kd;
+      if (el("pidKdSlider")) el("pidKdSlider").value = cur.kd;
+      if (el("pidWindupInput")) el("pidWindupInput").value = cur.windup;
+      if (el("pidSlewInput")) el("pidSlewInput").value = cur.slew;
+      if (el("pidStepInput")) el("pidStepInput").value = cur.step;
+      if (el("pidSmallErrInput")) el("pidSmallErrInput").value = cur.smallErr;
+      if (el("pidSmallTimeInput")) el("pidSmallTimeInput").value = cur.smallTime;
+      if (el("pidLargeTimeInput")) el("pidLargeTimeInput").value = cur.largeTime;
+
+      const titleEl = document.getElementById("pidGraphTitle");
+      if (titleEl) {
+        titleEl.textContent = currentMode === "lateral"
+          ? `Step Response: ${cur.step}" Linear Distance Step`
+          : `Step Response: ${cur.step}° Angular Heading Step`;
+      }
+
+      document.querySelectorAll(".pid-tab-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.pidMode === currentMode);
+      });
+
+      updateCodeOutput();
+    }
+
+    function updateCodeOutput() {
+      const cur = state[currentMode];
+      const codeEl = document.getElementById("pidCodeOutput");
+      if (!codeEl) return;
+
+      const unitComment = currentMode === "lateral" ? "inches" : "degrees";
+      const code = `// lemlib::ControllerSettings for ${currentMode} motion
+lemlib::ControllerSettings ${currentMode}_controller(
+    ${cur.kp.toFixed(2)}, // proportional gain (kP)
+    ${cur.ki.toFixed(3)}, // integral gain (kI)
+    ${cur.kd.toFixed(2)}, // derivative gain (kD)
+    ${cur.windup.toFixed(1)}, // anti windup range
+    ${cur.smallErr.toFixed(1)}, // small error range, in ${unitComment}
+    ${Math.round(cur.smallTime)}, // small error range timeout, in ms
+    ${(cur.smallErr * 3).toFixed(1)}, // large error range, in ${unitComment}
+    ${Math.round(cur.largeTime)}, // large error range timeout, in ms
+    ${Math.round(cur.slew)} // maximum acceleration (slew rate)
+);`;
+      codeEl.textContent = code;
+    }
+
+    function simulatePidStep(params) {
+      const { kp, ki, kd, windup, slew, step, smallErr } = params;
+      const dt = 0.005; // 5ms discrete simulation loop
+      const totalTime = 2.5; // 2.5s window
+      const steps = Math.round(totalTime / dt);
+
+      let position = 0;
+      let velocity = 0;
+      let prevError = step;
+      let integral = 0;
+      let prevOutput = 0;
+
+      const points = [];
+      let rise10 = null;
+      let rise90 = null;
+      let peakPos = 0;
+      let settleTime = null;
+
+      // Dynamic system constants for robot inertia & drag
+      const mass = currentMode === "lateral" ? 6.5 : 0.09; // kg or kg*m^2
+      const drag = currentMode === "lateral" ? 18.0 : 1.2; // friction & back-EMF
+      const maxPower = 127.0;
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i * dt;
+        const error = step - position;
+
+        // Integral with anti-windup clamping
+        if (Math.abs(error) < windup && windup > 0) {
+          integral += error * dt;
+        } else if (windup > 0) {
+          integral = 0;
+        }
+
+        // Derivative on error
+        const derivative = (error - prevError) / dt;
+
+        // Raw PID output
+        let output = kp * error + ki * integral + kd * derivative;
+
+        // Slew rate limiting
+        if (slew > 0) {
+          const maxDelta = slew * dt * 5.0;
+          if (Math.abs(output - prevOutput) > maxDelta) {
+            output = prevOutput + Math.sign(output - prevOutput) * maxDelta;
+          }
+        }
+        output = Math.max(-maxPower, Math.min(maxPower, output));
+        prevOutput = output;
+        prevError = error;
+
+        // Physical acceleration on robot chassis
+        const force = (output / 127.0) * (currentMode === "lateral" ? 180.0 : 900.0);
+        const acceleration = (force - drag * velocity) / mass;
+        velocity += acceleration * dt;
+        position += velocity * dt;
+
+        points.push({ t, y: position, target: step, error });
+
+        if (position > peakPos) peakPos = position;
+        if (rise10 === null && position >= 0.1 * step) rise10 = t;
+        if (rise90 === null && position >= 0.9 * step) rise90 = t;
+
+        // Track settling
+        if (Math.abs(step - position) <= smallErr) {
+          if (settleTime === null) settleTime = t;
+        } else {
+          settleTime = null; // unset if it bounces out
+        }
+      }
+
+      const overshoot = Math.max(0, ((peakPos - step) / step) * 100);
+      const riseTime = (rise10 !== null && rise90 !== null) ? Math.max(0.01, rise90 - rise10) : (totalTime);
+      const finalSettle = settleTime !== null ? settleTime : totalTime;
+      const steadyError = Math.abs(step - points[points.length - 1].y);
+
+      return {
+        points,
+        overshoot,
+        riseTime,
+        settleTime: finalSettle,
+        steadyError,
+      };
+    }
+
+    function updateGraphAndDiagnosis() {
+      const cur = state[currentMode];
+      const sim = simulatePidStep(cur);
+
+      // Render KPIs
+      const elOvershoot = document.getElementById("pidKpiOvershoot");
+      const elRise = document.getElementById("pidKpiRise");
+      const elSettle = document.getElementById("pidKpiSettle");
+      const elError = document.getElementById("pidKpiError");
+      const elBadge = document.getElementById("pidDampingBadge");
+
+      if (elOvershoot) elOvershoot.textContent = `${sim.overshoot.toFixed(1)}%`;
+      if (elRise) elRise.textContent = `${sim.riseTime.toFixed(2)}s`;
+      if (elSettle) elSettle.textContent = `${sim.settleTime.toFixed(2)}s`;
+      if (elError) {
+        elError.textContent = currentMode === "lateral"
+          ? `${sim.steadyError.toFixed(2)}"`
+          : `${sim.steadyError.toFixed(1)}°`;
+      }
+
+      if (elBadge) {
+        if (sim.overshoot > 20) {
+          elBadge.className = "pid-diagnosis-badge underdamped";
+          elBadge.textContent = "🌊 Underdamped (High Overshoot & Oscillation)";
+        } else if (sim.overshoot > 5) {
+          elBadge.className = "pid-diagnosis-badge underdamped";
+          elBadge.textContent = "⚡ Slightly Underdamped (Minor Ringing)";
+        } else if (sim.riseTime > 0.9 || sim.settleTime > 1.6) {
+          elBadge.className = "pid-diagnosis-badge sluggish";
+          elBadge.textContent = "🐢 Overdamped (Sluggish / Low Power)";
+        } else {
+          elBadge.className = "pid-diagnosis-badge optimal";
+          elBadge.textContent = "🎯 Optimal / Critically Damped";
+        }
+      }
+
+      // Draw canvas response
+      drawPidCanvas(sim, cur.step, cur.smallErr);
+      updateCodeOutput();
+    }
+
+    function drawPidCanvas(sim, step, smallErr) {
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Background
+      ctx.fillStyle = "#090d16";
+      ctx.fillRect(0, 0, w, h);
+
+      const padL = 48;
+      const padR = 24;
+      const padT = 24;
+      const padB = 32;
+      const graphW = w - padL - padR;
+      const graphH = h - padT - padB;
+
+      const maxVal = Math.max(step * 1.35, 1);
+      const totalT = 2.5;
+
+      const toX = (t) => padL + (t / totalT) * graphW;
+      const toY = (v) => padT + graphH - (v / maxVal) * graphH;
+
+      // Draw Grid
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let t = 0; t <= totalT; t += 0.5) {
+        const x = toX(t);
+        ctx.moveTo(x, padT);
+        ctx.lineTo(x, padT + graphH);
+      }
+      for (let v = 0; v <= maxVal; v += step / 2) {
+        const y = toY(v);
+        ctx.moveTo(padL, y);
+        ctx.lineTo(padL + graphW, y);
+      }
+      ctx.stroke();
+
+      // Axis Labels
+      ctx.fillStyle = "#64748b";
+      ctx.font = "10px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      for (let t = 0; t <= totalT; t += 0.5) {
+        ctx.fillText(`${t.toFixed(1)}s`, toX(t), h - 14);
+      }
+      ctx.textAlign = "right";
+      for (let v = 0; v <= maxVal; v += step / 2) {
+        ctx.fillText(`${v.toFixed(0)}`, padL - 6, toY(v) + 3);
+      }
+
+      // Settling Band (± smallErr)
+      const bandTop = toY(step + smallErr);
+      const bandBot = toY(step - smallErr);
+      ctx.fillStyle = "rgba(34, 197, 94, 0.08)";
+      ctx.fillRect(padL, bandTop, graphW, bandBot - bandTop);
+
+      // Target Line (dashed emerald)
+      const targetY = toY(step);
+      ctx.strokeStyle = "#22c55e";
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(padL, targetY);
+      ctx.lineTo(padL + graphW, targetY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Response Curve y(t) (cyan glowing stroke)
+      if (sim.points && sim.points.length > 0) {
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        sim.points.forEach((pt, idx) => {
+          const x = toX(pt.t);
+          const y = toY(pt.y);
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Subtle gradient area below curve
+        const grad = ctx.createLinearGradient(0, padT, 0, padT + graphH);
+        grad.addColorStop(0, "rgba(56, 189, 248, 0.2)");
+        grad.addColorStop(1, "rgba(56, 189, 248, 0.0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(toX(0), toY(0));
+        sim.points.forEach((pt) => ctx.lineTo(toX(pt.t), toY(pt.y)));
+        ctx.lineTo(toX(totalT), toY(0));
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // Tab Switching
+    document.querySelectorAll(".pid-tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentMode = btn.dataset.pidMode || "lateral";
+        syncInputsFromState();
+        updateGraphAndDiagnosis();
+      });
+    });
+
+    // Dual input / slider bindings
+    const pairs = [
+      ["pidKpInput", "pidKpSlider", "kp", (v) => Math.max(0, Number(v))],
+      ["pidKiInput", "pidKiSlider", "ki", (v) => Math.max(0, Number(v))],
+      ["pidKdInput", "pidKdSlider", "kd", (v) => Math.max(0, Number(v))],
+      ["pidWindupInput", null, "windup", (v) => Math.max(0, Number(v))],
+      ["pidSlewInput", null, "slew", (v) => Math.max(0, Number(v))],
+      ["pidStepInput", null, "step", (v) => Math.max(1, Number(v))],
+      ["pidSmallErrInput", null, "smallErr", (v) => Math.max(0.1, Number(v))],
+      ["pidSmallTimeInput", null, "smallTime", (v) => Math.max(0, Number(v))],
+      ["pidLargeTimeInput", null, "largeTime", (v) => Math.max(0, Number(v))],
+    ];
+
+    pairs.forEach(([numId, slideId, key, sanitize]) => {
+      const numEl = document.getElementById(numId);
+      const slideEl = slideId ? document.getElementById(slideId) : null;
+
+      if (numEl) {
+        numEl.addEventListener("input", () => {
+          const val = sanitize(numEl.value);
+          state[currentMode][key] = val;
+          if (slideEl) slideEl.value = val;
+          updateGraphAndDiagnosis();
+        });
+      }
+      if (slideEl) {
+        slideEl.addEventListener("input", () => {
+          const val = sanitize(slideEl.value);
+          state[currentMode][key] = val;
+          if (numEl) numEl.value = val;
+          updateGraphAndDiagnosis();
+        });
+      }
+    });
+
+    // Preset Buttons
+    const presets = {
+      stock: {
+        lateral: { kp: 8.0, ki: 0.0, kd: 30.0, windup: 3.0, slew: 0 },
+        angular: { kp: 2.0, ki: 0.0, kd: 10.0, windup: 3.0, slew: 0 }
+      },
+      critically_damped: {
+        lateral: { kp: 10.5, ki: 0.02, kd: 44.0, windup: 3.0, slew: 0 },
+        angular: { kp: 2.8, ki: 0.01, kd: 14.0, windup: 3.0, slew: 0 }
+      },
+      aggressive: {
+        lateral: { kp: 18.0, ki: 0.05, kd: 36.0, windup: 2.0, slew: 20 },
+        angular: { kp: 4.2, ki: 0.05, kd: 12.0, windup: 2.0, slew: 20 }
+      },
+      underdamped: {
+        lateral: { kp: 26.0, ki: 0.0, kd: 10.0, windup: 0, slew: 0 },
+        angular: { kp: 6.0, ki: 0.0, kd: 4.0, windup: 0, slew: 0 }
+      },
+      sluggish: {
+        lateral: { kp: 3.2, ki: 0.0, kd: 65.0, windup: 5.0, slew: 0 },
+        angular: { kp: 0.9, ki: 0.0, kd: 20.0, windup: 5.0, slew: 0 }
+      }
+    };
+
+    document.querySelectorAll(".btn-pid-preset").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const presetKey = btn.dataset.preset;
+        if (presets[presetKey] && presets[presetKey][currentMode]) {
+          const p = presets[presetKey][currentMode];
+          Object.assign(state[currentMode], p);
+          syncInputsFromState();
+          updateGraphAndDiagnosis();
+          showToast(`🎯 Applied ${btn.textContent.trim()} preset`);
+        }
+      });
+    });
+
+    // Copy C++ Code
+    if (btnCopyCode) {
+      btnCopyCode.addEventListener("click", () => {
+        const codeEl = document.getElementById("pidCodeOutput");
+        if (codeEl && navigator.clipboard) {
+          navigator.clipboard.writeText(codeEl.textContent);
+          showToast("📋 Controller declaration copied to clipboard!");
+        }
+      });
+    }
+
+    // Apply to Robot & Simulator
+    if (btnApply) {
+      btnApply.addEventListener("click", () => {
+        const cur = state[currentMode];
+        if (currentMode === "lateral") {
+          bot.lateralKp = cur.kp;
+          bot.lateralKi = cur.ki;
+          bot.lateralKd = cur.kd;
+          bot.lateralWindup = cur.windup;
+          bot.lateralSlew = cur.slew;
+        } else {
+          bot.angularKp = cur.kp;
+          bot.angularKi = cur.ki;
+          bot.angularKd = cur.kd;
+          bot.angularWindup = cur.windup;
+          bot.angularSlew = cur.slew;
+        }
+
+        markDirty();
+        renderFlow();
+        draw();
+        updateTimeDisplay();
+        closeModal();
+        showToast(`🚀 Applied ${currentMode} PID gains to bot and autonomous simulator!`);
+      });
+    }
+
+    if (btnOpenHead) btnOpenHead.onclick = openModal;
+    if (btnOpenBot) btnOpenBot.onclick = openModal;
+    if (btnClose) btnClose.onclick = closeModal;
+    if (btnCloseFooter) btnCloseFooter.onclick = closeModal;
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeModal();
+    });
+  }
+
+  // -- Video (.mp4) Export Modal --------------------------------------
+  function wireVideoExportModal() {
+    const modal = document.getElementById("videoExportModal");
+    const btnOpen = document.getElementById("btnExportVideo");
+    const btnClose = document.getElementById("videoModalClose");
+    const btnCancel = document.getElementById("videoModalCancelBtn");
+    const btnStart = document.getElementById("btnStartVideoExport");
+
+    const optTimer = document.getElementById("videoOptTimer");
+    const optGauges = document.getElementById("videoOptGauges");
+    const optBadges = document.getElementById("videoOptBadges");
+    const optWatermark = document.getElementById("videoOptWatermark");
+    const optFps = document.getElementById("videoOptFps");
+    const optSpeed = document.getElementById("videoOptSpeed");
+
+    const estDurEl = document.getElementById("videoEstDur");
+    const estFramesEl = document.getElementById("videoEstFrames");
+    const statusBox = document.getElementById("videoRecordingStatus");
+    const statusText = document.getElementById("videoStatusText");
+    const percentText = document.getElementById("videoPercentText");
+    const progressBar = document.getElementById("videoProgressBar");
+    const statusSub = document.getElementById("videoStatusSub");
+
+    if (!modal) return;
+
+    function openModal() {
+      updateSummary();
+      if (statusBox) statusBox.hidden = true;
+      modal.hidden = false;
+      modal.classList.add("open");
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    function updateSummary() {
+      const fps = Number(optFps?.value || 60);
+      const speed = Number(optSpeed?.value || 1.0);
+      const poses = computePoses();
+      let totalSimTime = 0;
+
+      actions.forEach((a, idx) => {
+        const fromPose = poses[idx] || { x: pose.x, y: pose.y, theta: pose.theta };
+        totalSimTime += estimateActionTime(a, fromPose);
+      });
+
+      const videoDuration = totalSimTime / speed;
+      const totalFrames = Math.max(1, Math.round(videoDuration * fps));
+
+      if (estDurEl) estDurEl.textContent = `~${videoDuration.toFixed(1)}s`;
+      if (estFramesEl) estFramesEl.textContent = `${totalFrames} frames`;
+    }
+
+    if (optFps) optFps.onchange = updateSummary;
+    if (optSpeed) optSpeed.onchange = updateSummary;
+
+    async function recordRoutineVideo() {
+      if (!actions || actions.length === 0) {
+        showToast("⚠️ Autonomous routine is empty. Add movement actions first.");
+        return;
+      }
+
+      const fps = Number(optFps?.value || 60);
+      const speed = Number(optSpeed?.value || 1.0);
+      const includeTimer = optTimer ? optTimer.checked : true;
+      const includeGauges = optGauges ? optGauges.checked : true;
+      const includeBadges = optBadges ? optBadges.checked : true;
+      const includeWatermark = optWatermark ? optWatermark.checked : true;
+
+      // Pre-compute complete simulation trajectory
+      const simFrames = [];
+      const poses = computePoses();
+      let curP = { ...pose };
+      let cumulativeTime = 0;
+
+      actions.forEach((act, actIdx) => {
+        const startPose = { ...curP };
+        const simRes = simulateAction(act, startPose, bot);
+        const subPoints = simRes.points || [{ ...startPose, vLin: 0, vAng: 0, dt: 0.01 }];
+
+        subPoints.forEach((p) => {
+          simFrames.push({
+            ...p,
+            actIdx,
+            act,
+            matchTime: cumulativeTime + (p.t || 0),
+          });
+        });
+
+        if (subPoints.length > 0) {
+          curP = { ...subPoints[subPoints.length - 1] };
+          cumulativeTime += simRes.duration;
+        }
+      });
+
+      if (simFrames.length === 0) {
+        showToast("⚠️ No movement data generated for recording.");
+        return;
+      }
+
+      // Show recording UI
+      if (statusBox) statusBox.hidden = false;
+      if (btnStart) btnStart.disabled = true;
+
+      const vCanvas = document.createElement("canvas");
+      vCanvas.width = 900;
+      vCanvas.height = 900;
+      const vCtx = vCanvas.getContext("2d");
+
+      // Setup MediaRecorder
+      const stream = vCanvas.captureStream(fps);
+      let mimeType = "video/webm";
+      if (MediaRecorder.isTypeSupported("video/mp4;codecs=avc1")) mimeType = "video/mp4;codecs=avc1";
+      else if (MediaRecorder.isTypeSupported("video/mp4")) mimeType = "video/mp4";
+      else if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) mimeType = "video/webm;codecs=vp9";
+
+      let recorder;
+      try {
+        recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 6000000 });
+      } catch (err) {
+        recorder = new MediaRecorder(stream);
+      }
+
+      const chunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const activeName = activePath() ? activePath().name.replace(/[^a-zA-Z0-9_-]/g, "_") : "autonomous";
+        const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+        a.href = url;
+        a.download = `${activeName}_routine_simulation.${ext}`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        if (statusBox) statusBox.hidden = true;
+        if (btnStart) btnStart.disabled = false;
+        closeModal();
+        showToast(`🎥 Autonomous simulation video exported successfully (${ext.toUpperCase()})!`);
+      };
+
+      recorder.start();
+
+      // Render frames
+      const totalSteps = simFrames.length;
+      const frameSkip = Math.max(1, Math.round((0.01 * fps) / speed));
+      const targetFrames = Math.ceil(totalSteps / frameSkip);
+      let frameCount = 0;
+
+      for (let i = 0; i < totalSteps; i += frameSkip) {
+        const frameData = simFrames[i];
+        renderRecordingFrame(vCtx, frameData, {
+          includeTimer,
+          includeGauges,
+          includeBadges,
+          includeWatermark,
+          allActions: actions,
+          totalDuration: cumulativeTime,
+        });
+
+        frameCount++;
+        const pct = Math.min(100, Math.round((frameCount / targetFrames) * 100));
+
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (percentText) percentText.textContent = `${pct}%`;
+        if (statusSub) statusSub.textContent = `Rendering frame ${frameCount} of ${targetFrames} (${fps} FPS)...`;
+
+        // Yield to browser event loop
+        await new Promise((r) => setTimeout(r, 1000 / fps));
+      }
+
+      // Add small buffer at end
+      for (let j = 0; j < 15; j++) {
+        await new Promise((r) => setTimeout(r, 1000 / fps));
+      }
+
+      recorder.stop();
+    }
+
+    function renderRecordingFrame(ctx, frame, opts) {
+      const W = 900;
+      const H = 900;
+      const HALF = 72;
+      const INCH_PX = W / 144.0;
+
+      const fToC = (x, y) => ({
+        cx: (x + HALF) * INCH_PX,
+        cy: (HALF - y) * INCH_PX,
+      });
+
+      // 1. Draw Field Background
+      ctx.fillStyle = "#1e2430";
+      ctx.fillRect(0, 0, W, H);
+
+      // Soft grid
+      ctx.strokeStyle = "#2d3748";
+      ctx.lineWidth = 1;
+      const tileSize = 24 * INCH_PX;
+      for (let gx = 0; gx <= W; gx += tileSize) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, H);
+        ctx.stroke();
+      }
+      for (let gy = 0; gy <= H; gy += tileSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(W, gy);
+        ctx.stroke();
+      }
+
+      // Center Origin cross
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.4)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(W / 2, 0);
+      ctx.lineTo(W / 2, H);
+      ctx.moveTo(0, H / 2);
+      ctx.lineTo(W, H / 2);
+      ctx.stroke();
+
+      // Field Perimeter border
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, W - 4, H - 4);
+
+      // 2. Draw Planned Path Waypoints
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      const startP = fToC(pose.x, pose.y);
+      ctx.moveTo(startP.cx, startP.cy);
+      opts.allActions.forEach((act) => {
+        if (act.x != null && act.y != null) {
+          const cp = fToC(act.x, act.y);
+          ctx.lineTo(cp.cx, cp.cy);
+        }
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 3. Draw Robot Chassis
+      const cp = fToC(frame.x, frame.y);
+      const rad = ((90 - frame.theta) * Math.PI) / 180;
+      const rW = (bot.robotW || 14) * INCH_PX;
+      const rL = (bot.robotL || 14) * INCH_PX;
+
+      ctx.save();
+      ctx.translate(cp.cx, cp.cy);
+      ctx.rotate(rad);
+
+      // Bot Box
+      ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 3;
+      ctx.fillRect(-rW / 2, -rL / 2, rW, rL);
+      ctx.strokeRect(-rW / 2, -rL / 2, rW, rL);
+
+      // Front Heading Arrow
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      ctx.moveTo(0, -rL / 2 - 12);
+      ctx.lineTo(7, -rL / 2 + 2);
+      ctx.lineTo(-7, -rL / 2 + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Heading line
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -rL / 2);
+      ctx.stroke();
+
+      ctx.restore();
+
+      // 4. Live Velocity Vector
+      const vLin = frame.vLin || 0;
+      if (Math.abs(vLin) > 1) {
+        const vLen = Math.min(50, Math.abs(vLin) * 0.7);
+        const sRad = ((90 - frame.theta) * Math.PI) / 180;
+        const dir = vLin >= 0 ? 1 : -1;
+        ctx.strokeStyle = "#facc15";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cp.cx, cp.cy);
+        ctx.lineTo(cp.cx + Math.cos(sRad) * vLen * dir, cp.cy + Math.sin(sRad) * vLen * dir);
+        ctx.stroke();
+      }
+
+      // 5. Overlays
+      // TOP LEFT: Watermark & Match Clock HUD
+      if (opts.includeWatermark) {
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.strokeStyle = "#334155";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(16, 16, 320, 72, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#38bdf8";
+        ctx.font = "bold 15px Inter, system-ui, sans-serif";
+        ctx.fillText(activePath()?.name || "Autonomous Routine", 30, 42);
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "11px Inter, system-ui, sans-serif";
+        ctx.fillText("LemLib Kinematics · VEX V5 Competition", 30, 62);
+        ctx.fillText(`Bot: ${bot.robotW}" × ${bot.robotL}" · ${bot.driveRpm} RPM`, 30, 76);
+      }
+
+      // TOP RIGHT: Official Match Timer HUD
+      if (opts.includeTimer) {
+        const matchSec = Math.min(15.0, frame.matchTime || 0);
+        const timeStr = `00:${matchSec < 10 ? '0' : ''}${matchSec.toFixed(1)} / 00:15.0`;
+
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.strokeStyle = "#334155";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(W - 276, 16, 260, 68, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#facc15";
+        ctx.font = "bold 11px Inter, system-ui, sans-serif";
+        ctx.fillText("⏱️ VEX AUTONOMOUS TIMER", W - 258, 38);
+
+        ctx.fillStyle = matchSec >= 14.5 ? "#ef4444" : "#ffffff";
+        ctx.font = "bold 19px monospace";
+        ctx.fillText(timeStr, W - 258, 64);
+      }
+
+      // BOTTOM LEFT: Telemetry Speedometer & Gyro
+      if (opts.includeGauges) {
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.strokeStyle = "#334155";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(16, H - 96, 340, 80, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "bold 10px Inter, system-ui, sans-serif";
+        ctx.fillText("📊 LIVE KINEMATIC TELEMETRY", 30, H - 76);
+
+        ctx.fillStyle = "#38bdf8";
+        ctx.font = "bold 13px Inter, system-ui, sans-serif";
+        ctx.fillText(`Linear Speed: ${Math.abs(frame.vLin || 0).toFixed(1)} in/s`, 30, H - 54);
+
+        ctx.fillStyle = "#c084fc";
+        ctx.fillText(`Turn Rate: ${Math.abs(frame.vAng || 0).toFixed(1)} °/s`, 30, H - 34);
+
+        ctx.fillStyle = "#34d399";
+        ctx.fillText(`Pose: (${frame.x.toFixed(1)}", ${frame.y.toFixed(1)}", ${frame.theta.toFixed(1)}°)`, 30, H - 14);
+      }
+
+      // BOTTOM RIGHT: Active Action Badge
+      if (opts.includeBadges && frame.act) {
+        const act = frame.act;
+        let actDesc = `${frame.actIdx + 1}. ${act.type}`;
+        if (act.type === "moveToPoint" || act.type === "moveToPose") {
+          actDesc += ` (${act.x}", ${act.y}")`;
+        }
+
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(W - 320, H - 84, 304, 68, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#38bdf8";
+        ctx.font = "bold 11px Inter, system-ui, sans-serif";
+        ctx.fillText("⚡ ACTIVE ACTION", W - 304, H - 64);
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "bold 13px Inter, system-ui, sans-serif";
+        ctx.fillText(actDesc, W - 304, H - 42);
+
+        if (act.label) {
+          ctx.fillStyle = "#94a3b8";
+          ctx.font = "11px Inter, system-ui, sans-serif";
+          ctx.fillText(`// ${act.label}`, W - 304, H - 24);
+        }
+      }
+    }
+
+    if (btnOpen) btnOpen.onclick = openModal;
+    if (btnClose) btnClose.onclick = closeModal;
+    if (btnCancel) btnCancel.onclick = closeModal;
+    if (btnStart) btnStart.onclick = recordRoutineVideo;
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeModal();
+    });
+  }
+
 
 // -- Init ---------------------------------------------------------
   wireBotSettings();
@@ -4010,6 +5063,8 @@
   wireHelpModal();
   wireFlowchartModal();
   wireCppTranslateModal();
+  wirePidModal();
+  wireVideoExportModal();
   loadLocal();
   syncPathSelect();
   syncStartInputs();

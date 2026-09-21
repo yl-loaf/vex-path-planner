@@ -83,6 +83,9 @@
     const leadM = rawParamsStr.match(/\.lead\s*=\s*([-\d.]+)/i);
     if (leadM) res.lead = parseFloat(leadM[1]);
 
+    const driftM = rawParamsStr.match(/\.(?:horizontalDrift|driftScaler|drift)\s*=\s*([-\d.]+)/i);
+    if (driftM) res.driftScaler = parseFloat(driftM[1]);
+
     const asyncM = rawParamsStr.match(/\.async\s*=\s*(true|false)/i);
     if (asyncM) res.async = asyncM[1].toLowerCase() === "true";
 
@@ -129,6 +132,11 @@
       customCode: "",
       customDuration: 0,
       label: "",
+      // Wait / Event Trigger properties
+      waitType: "distance", // "distance" | "done" | "time"
+      distance: 12,
+      delayMs: 250,
+      driftScaler: 1.0,
     };
   }
 
@@ -477,6 +485,48 @@
         if (act.async) act.showFlowchart = true;
         actions.push(act);
         log.push(`Parsed swingToHeading(${act.theta}°, ${act.lockedSide}) timeout: ${act.timeout}ms`);
+        continue;
+      }
+
+      // chassis.waitUntil(distance) - Distance-based event trigger
+      const waitDistMatch = line.match(/chassis\.waitUntil\s*\(\s*([-\d.]+)\s*\)/i);
+      if (waitDistMatch) {
+        flushCustomBlock();
+        const dist = parseFloat(waitDistMatch[1]) || 12;
+        const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+        act.waitType = "distance";
+        act.distance = dist;
+        act.async = true;
+        act.showFlowchart = true;
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        } else {
+          act.label = `Trigger @ ${dist}" into motion`;
+        }
+        actions.push(act);
+        log.push(`Parsed distance trigger: chassis.waitUntil(${dist}) -> "${act.label}"`);
+        continue;
+      }
+
+      // chassis.waitUntilDone() - Chassis settle sync point
+      const waitDoneMatch = line.match(/chassis\.waitUntilDone\s*\(\s*\)/i);
+      if (waitDoneMatch) {
+        flushCustomBlock();
+        const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+        act.waitType = "done";
+        act.async = false;
+        act.showFlowchart = true;
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        } else {
+          act.label = "Wait until chassis settles";
+        }
+        actions.push(act);
+        log.push(`Parsed sync point: chassis.waitUntilDone()`);
         continue;
       }
 
