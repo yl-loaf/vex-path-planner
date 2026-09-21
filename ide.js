@@ -1955,6 +1955,29 @@
     });
   }
 
+  function showToast(message, type = "success") {
+    let container = document.getElementById("ideToastContainer");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "ideToastContainer";
+      container.style.cssText = "position:fixed;bottom:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;";
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement("div");
+    toast.style.cssText = `background:${type === 'error' ? '#dc2626' : '#1e293b'};color:#fff;padding:10px 16px;border-radius:8px;font-size:0.85rem;box-shadow:0 10px 25px rgba(0,0,0,0.5);border:1px solid ${type === 'error' ? '#ef4444' : '#334155'};pointer-events:auto;transition:all 0.3s ease;opacity:0;transform:translateY(10px);`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = "1";
+      toast.style.transform = "translateY(0)";
+    }, 10);
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(10px)";
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
+  }
+
   // Run on DOM Ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
