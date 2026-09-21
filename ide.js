@@ -61,45 +61,49 @@
   // Firebase Auth
   // -------------------------------------------------------------
   function initAuth() {
-    if (typeof firebase === "undefined" || !firebase.auth) return;
+    try {
+      if (typeof firebase === "undefined" || !firebase.apps || !firebase.apps.length || !firebase.auth) return;
 
-    firebase.auth().onAuthStateChanged((user) => {
-      cloudUser = user;
-      updateAuthUI();
-      if (user) {
-        ProjectManager.loadFromCloud().then((proj) => {
-          if (proj) {
-            renderProjectHeader();
-            renderFileTree();
-            renderTabs();
-            loadFile(activeFile);
-            renderSymbols();
-          }
-        }).catch(console.error);
+      firebase.auth().onAuthStateChanged((user) => {
+        cloudUser = user;
+        updateAuthUI();
+        if (user) {
+          ProjectManager.loadFromCloud().then((proj) => {
+            if (proj) {
+              renderProjectHeader();
+              renderFileTree();
+              renderTabs();
+              loadFile(activeFile);
+              renderSymbols();
+            }
+          }).catch(console.error);
+        }
+      });
+
+      const btnSignIn = document.getElementById("btnGoogleSignIn");
+      const btnSignOut = document.getElementById("btnSignOut");
+      const btnSwitch = document.getElementById("btnSwitchAccount");
+
+      if (btnSignIn) {
+        btnSignIn.onclick = () => {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          firebase.auth().signInWithPopup(provider).catch(alert);
+        };
       }
-    });
-
-    const btnSignIn = document.getElementById("btnGoogleSignIn");
-    const btnSignOut = document.getElementById("btnSignOut");
-    const btnSwitch = document.getElementById("btnSwitchAccount");
-
-    if (btnSignIn) {
-      btnSignIn.onclick = () => {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        firebase.auth().signInWithPopup(provider).catch(alert);
-      };
-    }
-    if (btnSignOut) {
-      btnSignOut.onclick = () => {
-        firebase.auth().signOut().catch(alert);
-      };
-    }
-    if (btnSwitch) {
-      btnSwitch.onclick = () => {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: "select_account" });
-        firebase.auth().signInWithPopup(provider).catch(alert);
-      };
+      if (btnSignOut) {
+        btnSignOut.onclick = () => {
+          firebase.auth().signOut().catch(alert);
+        };
+      }
+      if (btnSwitch) {
+        btnSwitch.onclick = () => {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: "select_account" });
+          firebase.auth().signInWithPopup(provider).catch(alert);
+        };
+      }
+    } catch (e) {
+      console.warn("IDE Auth init skipped or failed:", e);
     }
   }
 

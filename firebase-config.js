@@ -1,5 +1,5 @@
 // Firebase web config for VEX Path Planner
-// Loaded before app.js (compat SDK from CDN)
+// Loaded before app.js and ide.js (compat SDK from CDN)
 window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyBkuohuTTM78VwGqXZARPV39lE-Iy4ldIY",
   authDomain: "vex-path-planner.firebaseapp.com",
@@ -12,3 +12,14 @@ window.FIREBASE_CONFIG = {
 
 // Set true so Google sign-in + cloud path sync are active
 window.FIREBASE_ENABLED = true;
+
+// Auto-initialize default Firebase App if compat SDK is present
+if (typeof firebase !== "undefined" && firebase.initializeApp) {
+  try {
+    if (!firebase.apps || !firebase.apps.length) {
+      firebase.initializeApp(window.FIREBASE_CONFIG);
+    }
+  } catch (e) {
+    console.warn("Firebase initialization warning:", e);
+  }
+}
