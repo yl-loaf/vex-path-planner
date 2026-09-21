@@ -5955,6 +5955,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (homeView) homeView.style.display = "none";
     if (appView) {
       appView.style.display = "flex";
+      appView.style.flexDirection = "column";
       // Trigger canvas resize and redraw
       setTimeout(() => {
         if (typeof resizeCanvas === "function") resizeCanvas();

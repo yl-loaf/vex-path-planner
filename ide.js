@@ -420,13 +420,31 @@
       });
     }
 
+    const btnDownloadCode = document.getElementById("btnDownloadCode");
+    if (btnDownloadCode) {
+      btnDownloadCode.addEventListener("click", () => {
+        saveCurrentEditorState();
+        const choices = prompt(
+          `Select download format:\n1 = Active File (${activeFile})\n2 = Full Multi-File Project (.json bundle)`,
+          "1"
+        );
+        if (choices === "1") {
+          window.ProjectManager.downloadFile(activeFile);
+        } else if (choices === "2") {
+          window.ProjectManager.exportProjectJson();
+        }
+      });
+    }
+
     if (btnClearLogs) {
       btnClearLogs.addEventListener("click", () => {
         if (elBuildConsole) elBuildConsole.textContent = "";
       });
     }
 
-    // V5 Brain Connection & Telemetry Wiring in IDE
+    // -------------------------------------------------------------
+    // V5 Brain Serial Driver & Telemetry Scanner Modal Wiring
+    // -------------------------------------------------------------
     const btnConnectBrain = document.getElementById("btnConnectBrain");
     const ideBrainDot = document.getElementById("ideBrainDot");
     const ideBrainText = document.getElementById("ideBrainText");
@@ -434,56 +452,177 @@
     const ideBrainStatus = document.getElementById("ideBrainStatus");
     const btnUploadToBrain = document.getElementById("btnUploadToBrain");
 
+    const brainModal = document.getElementById("brainModal");
+    const brainModalClose = document.getElementById("brainModalClose");
+    const btnBrainModalDone = document.getElementById("btnBrainModalDone");
+    const btnModalConnect = document.getElementById("btnModalConnectBrain");
+    const btnModalDisconnect = document.getElementById("btnModalDisconnectBrain");
+    const modalBrainDot = document.getElementById("modalBrainDot");
+    const modalBrainName = document.getElementById("modalBrainName");
+    const modalBrainSubtext = document.getElementById("modalBrainSubtext");
+    const modalBattPct = document.getElementById("modalBattPct");
+    const modalBattFill = document.getElementById("modalBattFill");
+    const modalBattMv = document.getElementById("modalBattMv");
+    const modalBattTemp = document.getElementById("modalBattTemp");
+    const modalSmartportsGrid = document.getElementById("modalSmartportsGrid");
+    const modalSlotSelect = document.getElementById("modalSlotSelect");
+    const btnModalUploadAuton = document.getElementById("btnModalUploadAuton");
+    const btnModalRunProgram = document.getElementById("btnModalRunProgram");
+    const btnModalStopProgram = document.getElementById("btnModalStopProgram");
+    const modalUploadProgressWrap = document.getElementById("modalUploadProgressWrap");
+    const modalUploadProgressLabel = document.getElementById("modalUploadProgressLabel");
+    const modalUploadProgressBar = document.getElementById("modalUploadProgressBar");
+
+    function openBrainModal() {
+      if (!brainModal) return;
+      brainModal.hidden = false;
+      brainModal.classList.add("open");
+      renderModalSmartports();
+    }
+
+    function closeBrainModal() {
+      if (!brainModal) return;
+      brainModal.hidden = true;
+      brainModal.classList.remove("open");
+    }
+
+    if (btnConnectBrain) btnConnectBrain.addEventListener("click", openBrainModal);
+    if (ideBrainStatus) ideBrainStatus.addEventListener("click", openBrainModal);
+    if (brainModalClose) brainModalClose.addEventListener("click", closeBrainModal);
+    if (btnBrainModalDone) btnBrainModalDone.addEventListener("click", closeBrainModal);
+    if (brainModal) {
+      brainModal.addEventListener("click", (e) => {
+        if (e.target === brainModal) closeBrainModal();
+      });
+    }
+
+    if (btnModalConnect) {
+      btnModalConnect.addEventListener("click", async () => {
+        if (!window.V5BrainSerial) return;
+        btnModalConnect.disabled = true;
+        btnModalConnect.textContent = "⏳ Connecting...";
+        await window.V5BrainSerial.connect();
+        btnModalConnect.disabled = false;
+        btnModalConnect.textContent = "🔌 Connect via USB Serial";
+      });
+    }
+
+    if (btnModalDisconnect) {
+      btnModalDisconnect.addEventListener("click", async () => {
+        if (!window.V5BrainSerial) return;
+        await window.V5BrainSerial.disconnect();
+      });
+    }
+
+    if (btnModalRunProgram) {
+      btnModalRunProgram.addEventListener("click", () => {
+        if (!window.V5BrainSerial) return;
+        const slot = parseInt(modalSlotSelect?.value || "1", 10);
+        window.V5BrainSerial.startProgram(slot);
+      });
+    }
+
+    if (btnModalStopProgram) {
+      btnModalStopProgram.addEventListener("click", () => {
+        if (!window.V5BrainSerial) return;
+        window.V5BrainSerial.stopProgram();
+      });
+    }
+
+    async function handleFlashUpload() {
+      if (!window.V5BrainSerial) return;
+      if (!window.V5BrainSerial.isConnected) {
+        openBrainModal();
+        const ok = await window.V5BrainSerial.connect();
+        if (!ok) return;
+      }
+
+      openBrainModal();
+      const slot = parseInt(modalSlotSelect?.value || "1", 10);
+      const projName = window.ProjectManager?.project?.name || "Override_Project";
+
+      if (modalUploadProgressWrap) modalUploadProgressWrap.style.display = "block";
+      if (btnUploadToBrain) {
+        btnUploadToBrain.disabled = true;
+        btnUploadToBrain.textContent = "⏳ Flashing...";
+      }
+      if (btnModalUploadAuton) btnModalUploadAuton.disabled = true;
+
+      try {
+        await window.V5BrainSerial.uploadToSlot(slot, projName, (pct) => {
+          if (modalUploadProgressLabel) modalUploadProgressLabel.textContent = `Uploading to Slot ${slot}... ${pct}%`;
+          if (modalUploadProgressBar) modalUploadProgressBar.style.width = `${pct}%`;
+          if (btnUploadToBrain) btnUploadToBrain.textContent = `⏳ Flashing ${pct}%`;
+        });
+        alert(`🚀 Successfully flashed code to VEX V5 Brain (Slot ${slot})!`);
+      } catch (e) {
+        alert(`❌ Flash failed: ${e.message}`);
+      } finally {
+        if (modalUploadProgressWrap) modalUploadProgressWrap.style.display = "none";
+        if (btnUploadToBrain) {
+          btnUploadToBrain.disabled = false;
+          btnUploadToBrain.textContent = "🚀 Flash to Brain";
+        }
+        if (btnModalUploadAuton) btnModalUploadAuton.disabled = false;
+      }
+    }
+
+    if (btnUploadToBrain) btnUploadToBrain.addEventListener("click", handleFlashUpload);
+    if (btnModalUploadAuton) btnModalUploadAuton.addEventListener("click", handleFlashUpload);
+
+    function renderModalSmartports() {
+      if (!modalSmartportsGrid || !window.V5BrainSerial) return;
+      const ports = window.V5BrainSerial.status?.smartPorts || {};
+      modalSmartportsGrid.innerHTML = "";
+
+      for (let i = 1; i <= 21; i++) {
+        const dev = ports[i];
+        const card = document.createElement("div");
+        card.className = `smartport-item ${dev ? "active" : ""}`;
+
+        if (dev) {
+          card.innerHTML = `
+            <div class="smartport-num">Port ${i}</div>
+            <div class="smartport-type">${dev.type}</div>
+            <div class="smartport-val">${dev.name} (${dev.status})</div>
+          `;
+        } else {
+          card.innerHTML = `
+            <div class="smartport-num">Port ${i}</div>
+            <div class="smartport-type" style="color:#64748b;">Unassigned</div>
+            <div class="smartport-val" style="color:#475569;">Empty</div>
+          `;
+        }
+        modalSmartportsGrid.appendChild(card);
+      }
+    }
+
     function updateIdeBrainUI(status) {
       const isConn = status && status.connected;
+
       if (btnConnectBrain) {
         btnConnectBrain.classList.toggle("connected", isConn);
         btnConnectBrain.textContent = isConn ? `🔌 ${status.name}` : "🔌 Connect Brain";
       }
-      if (ideBrainDot) {
-        ideBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
-      }
-      if (ideBrainText) {
-        ideBrainText.textContent = isConn ? `Brain: ${status.name} (Slot ${status.activeSlot})` : "Brain: Disconnected";
-      }
+      if (ideBrainDot) ideBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
+      if (ideBrainText) ideBrainText.textContent = isConn ? `Brain: ${status.name} (Slot ${status.activeSlot})` : "Brain: Disconnected";
       if (ideBrainBatt) {
         ideBrainBatt.hidden = !isConn;
         if (isConn) ideBrainBatt.textContent = `⚡ ${status.batteryPct}%`;
       }
-    }
 
-    if (btnConnectBrain) {
-      btnConnectBrain.addEventListener("click", async () => {
-        if (!window.V5BrainSerial) return;
-        if (window.V5BrainSerial.isConnected) {
-          await window.V5BrainSerial.disconnect();
-        } else {
-          await window.V5BrainSerial.connect();
-        }
-      });
-    }
+      if (modalBrainDot) modalBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
+      if (modalBrainName) modalBrainName.textContent = isConn ? `Brain: ${status.name}` : "Brain: Disconnected";
+      if (modalBrainSubtext) modalBrainSubtext.textContent = isConn ? `Connected via USB CDC (Slot ${status.activeSlot} Active)` : "Plug in VEX V5 USB cable to connect Web Serial CDC port";
+      if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-block";
+      if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-block" : "none";
 
-    if (btnUploadToBrain) {
-      btnUploadToBrain.addEventListener("click", async () => {
-        if (!window.V5BrainSerial) return;
-        if (!window.V5BrainSerial.isConnected) {
-          const ok = await window.V5BrainSerial.connect();
-          if (!ok) return;
-        }
-        try {
-          btnUploadToBrain.disabled = true;
-          btnUploadToBrain.textContent = "⏳ Flashing...";
-          await window.V5BrainSerial.uploadToSlot(1, ProjectManager.project?.name || "Override_Project", (pct) => {
-            btnUploadToBrain.textContent = `⏳ Flashing ${pct}%`;
-          });
-          alert("🚀 Successfully flashed compiled project to VEX V5 Brain (Slot 1)!");
-        } catch (e) {
-          alert(`❌ Flash failed: ${e.message}`);
-        } finally {
-          btnUploadToBrain.disabled = false;
-          btnUploadToBrain.textContent = "🚀 Flash to Brain";
-        }
-      });
+      if (modalBattPct) modalBattPct.textContent = `${status.batteryPct}%`;
+      if (modalBattFill) modalBattFill.style.width = `${status.batteryPct}%`;
+      if (modalBattMv) modalBattMv.textContent = `${(status.batteryMv / 1000).toFixed(2)} V`;
+      if (modalBattTemp) modalBattTemp.textContent = `${status.batteryTempC} °C`;
+
+      renderModalSmartports();
     }
 
     if (window.V5BrainSerial) {

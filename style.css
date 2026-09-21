@@ -24,7 +24,15 @@ body {
   line-height: 1.4;
 }
 
-#app { max-width: 1480px; margin: 0 auto; padding: 10px 14px 20px; }
+#app {
+  max-width: 1480px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
 header {
   display: flex;

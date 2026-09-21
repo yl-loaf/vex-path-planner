@@ -1169,6 +1169,34 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       return null;
     }
 
+    downloadFile(filename) {
+      if (!this.project || !this.project.files || !this.project.files[filename]) return;
+      const content = this.project.files[filename];
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename.includes("/") ? filename.split("/").pop() : filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    exportProjectJson() {
+      if (!this.project) return;
+      const jsonStr = JSON.stringify(this.project, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${this.project.name || "Override_LemLib_Project"}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     // Event listener subscription
     addListener(fn) {
       if (typeof fn === "function") this.listeners.push(fn);

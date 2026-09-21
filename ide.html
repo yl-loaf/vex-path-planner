@@ -37,6 +37,9 @@
         <button type="button" id="btnUploadToBrain" class="btn-ide-upload" title="Upload compiled PROS binary to VEX V5 Brain slot">
           🚀 Flash to Brain
         </button>
+        <button type="button" id="btnDownloadCode" class="btn-ide-save-cloud" style="background:#0284c7;border-color:#38bdf8;" title="Download active file or export full PROS project">
+          📥 Download Code
+        </button>
         <button type="button" id="btnSaveCloudProject" class="btn-ide-save-cloud" title="Save and synchronize complete project to cloud">
           ☁️ Save &amp; Sync Project
         </button>
@@ -174,6 +177,104 @@
           <button type="button" id="btnNavGuardDiscard" class="btn-danger-outline">Discard &amp; Return</button>
           <button type="button" id="btnNavGuardSaveAndReturn" class="primary">💾 Save &amp; Sync (Then Return)</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VEX V5 Brain Telemetry, Serial Port Scanner & Upload Modal -->
+  <div id="brainModal" class="modal brain-modal" hidden>
+    <div class="modal-card brain-modal-card">
+      <div class="modal-header">
+        <div class="brain-modal-title-wrap">
+          <span class="brain-badge">VEX V5 HARDWARE</span>
+          <h2>🧠 VEX V5 Brain Dashboard &amp; Serial Port Scanner</h2>
+        </div>
+        <button type="button" id="brainModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body brain-modal-body">
+        <!-- Top Status Banner inside modal -->
+        <div class="brain-top-banner">
+          <div class="brain-conn-status">
+            <span class="brain-status-dot disconnected" id="modalBrainDot"></span>
+            <div>
+              <strong id="modalBrainName" style="font-size:1.05rem;color:#f8fafc;">Brain: Disconnected</strong>
+              <div id="modalBrainSubtext" style="font-size:0.75rem;color:#94a3b8;">Plug in VEX V5 USB cable to connect Web Serial CDC port</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button type="button" id="btnModalConnectBrain" class="primary" style="padding:6px 14px;font-size:0.82rem;">🔌 Connect via USB Serial</button>
+            <button type="button" id="btnModalDisconnectBrain" class="btn-danger-outline" style="padding:6px 12px;font-size:0.82rem;display:none;">Disconnect</button>
+          </div>
+        </div>
+
+        <!-- Telemetry Cards Grid -->
+        <div class="brain-telemetry-grid">
+          <!-- Battery Gauge Card -->
+          <div class="brain-gauge-card">
+            <div class="gauge-card-title">🔋 Main 12.8V Battery</div>
+            <div class="gauge-card-hero" id="modalBattPct">94%</div>
+            <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalBattFill" style="width:94%;"></div></div>
+            <div class="gauge-card-meta">
+              <span>Voltage: <strong id="modalBattMv">12.45 V</strong></span>
+              <span>Temp: <strong id="modalBattTemp">28 °C</strong></span>
+            </div>
+          </div>
+
+          <!-- Kernel & Radio Card -->
+          <div class="brain-gauge-card">
+            <div class="gauge-card-title">📡 Link &amp; VEXos Kernel</div>
+            <div class="gauge-card-meta-list">
+              <div class="gauge-meta-row"><span>Firmware:</span><strong id="modalFirmware">VEXos 1.1.4</strong></div>
+              <div class="gauge-meta-row"><span>Radio:</span><strong id="modalRadio">VEXnet 2.0 (-58 dBm)</strong></div>
+              <div class="gauge-meta-row"><span>Controller:</span><strong id="modalController" style="color:#22c55e;">Paired &amp; Active</strong></div>
+              <div class="gauge-meta-row"><span>System Port:</span><strong style="color:#38bdf8;">CDC Port 1 (115200)</strong></div>
+            </div>
+          </div>
+
+          <!-- Active Slot & Quick Controls Card -->
+          <div class="brain-gauge-card">
+            <div class="gauge-card-title">⚡ Flash &amp; Program Control</div>
+            <div style="margin-bottom:8px;">
+              <label for="modalSlotSelect" style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:4px;">Target Memory Slot:</label>
+              <select id="modalSlotSelect" class="debug-slot-select" style="width:100%;">
+                <option value="1">Slot 1: Override_Auton (146 KB)</option>
+                <option value="2">Slot 2: Skills_60s_Run (142 KB)</option>
+                <option value="3">Slot 3: Solo_AWP_Blue (138 KB)</option>
+                <option value="4">Slot 4: [Empty Slot]</option>
+                <option value="5">Slot 5: [Empty Slot]</option>
+                <option value="6">Slot 6: [Empty Slot]</option>
+                <option value="7">Slot 7: [Empty Slot]</option>
+                <option value="8">Slot 8: [Empty Slot]</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button type="button" id="btnModalUploadAuton" class="primary" style="flex:1;font-size:0.78rem;padding:7px;">⚡ Flash Current Code</button>
+              <button type="button" id="btnModalRunProgram" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">▶ Run</button>
+              <button type="button" id="btnModalStopProgram" style="background:#dc2626;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">⏹ Stop</button>
+            </div>
+            <div id="modalUploadProgressWrap" style="margin-top:6px;display:none;">
+              <div style="font-size:0.70rem;color:#38bdf8;margin-bottom:2px;" id="modalUploadProgressLabel">Uploading... 0%</div>
+              <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalUploadProgressBar" style="width:0%;background:#38bdf8;"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Smart Port Telemetry Section -->
+        <div class="brain-smartports-section">
+          <div class="smartports-header">
+            <h4>🔌 Smart Ports &amp; Device Bus Scanner (21 Ports)</h4>
+            <span style="font-size:0.72rem;color:#94a3b8;">Live hardware diagnostics &amp; motor temps</span>
+          </div>
+          <div class="smartports-grid" id="modalSmartportsGrid">
+            <!-- Dynamically populated from V5BrainSerial -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:0.75rem;color:#64748b;">Supports Web Serial API on Chrome, Edge, Opera, and VEX CDC adapters.</span>
+        <button type="button" id="btnBrainModalDone" class="primary">Done</button>
       </div>
     </div>
   </div>
