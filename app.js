@@ -3014,6 +3014,7 @@
       } else {
         a.x = Number(x.toFixed(1));
         a.y = Number(y.toFixed(1));
+        coordsEl.textContent = `X: ${a.x.toFixed(1)}  Y: ${a.y.toFixed(1)}`;
         markDirty();
         renderFlow();
         draw();
