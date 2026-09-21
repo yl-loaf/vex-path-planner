@@ -404,7 +404,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       URL.revokeObjectURL(url);
     }
 
-    saveLocal() {
+    saveLocal(skipIndex = false) {
       if (!this.project) return;
       this.project.updatedAt = Date.now();
       try {
@@ -413,26 +413,49 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       } catch (e) {
         console.error("Storage error:", e);
       }
-      this.indexVariables();
-      this.notifyListeners();
+      if (!skipIndex) {
+        this.indexVariables();
+      }
+      this.notifyListeners("save");
     }
 
     markDirty(dirty = true) {
       this.isDirty = dirty;
-      localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, dirty ? "true" : "false");
-      this.notifyListeners();
+      try {
+        localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, dirty ? "true" : "false");
+      } catch (e) {}
+      this.notifyListeners("dirty");
     }
 
     getFile(filename) {
       return this.project?.files?.[filename] || "";
     }
 
-    setFile(filename, content) {
+    setFile(filename, content, immediate = false) {
       if (!this.project) this.initDefaultProject();
       if (!this.project.files) this.project.files = {};
       this.project.files[filename] = content;
-      this.markDirty(true);
-      this.saveLocal();
+      this.isDirty = true;
+      if (immediate) {
+        if (this.debounceSaveTimer) {
+          clearTimeout(this.debounceSaveTimer);
+          this.debounceSaveTimer = null;
+        }
+        this.saveLocal();
+      } else {
+        try {
+          localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "true");
+        } catch (e) {}
+        this.scheduleDebouncedSave();
+      }
+    }
+
+    scheduleDebouncedSave() {
+      if (this.debounceSaveTimer) clearTimeout(this.debounceSaveTimer);
+      this.debounceSaveTimer = setTimeout(() => {
+        this.debounceSaveTimer = null;
+        this.saveLocal();
+      }, 800);
     }
 
     deleteFile(filename) {
@@ -1366,9 +1389,9 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       if (typeof fn === "function") this.listeners.push(fn);
     }
 
-    notifyListeners() {
+    notifyListeners(reason = "update") {
       this.listeners.forEach(fn => {
-        try { fn(this); } catch (e) { console.error(e); }
+        try { fn(this, reason); } catch (e) { console.error(e); }
       });
     }
   }

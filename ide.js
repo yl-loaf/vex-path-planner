@@ -66,9 +66,11 @@
     wireEditor();
     wireNavGuard();
 
-    ProjectManager.addListener(() => {
+    ProjectManager.addListener((pm, reason) => {
       renderProjectHeader();
-      renderSymbols();
+      if (reason !== "dirty") {
+        renderSymbols();
+      }
       if (activeFile && elCodeEditor) {
         const latest = ProjectManager.getFile(activeFile);
         if (latest !== elCodeEditor.value) {
@@ -451,7 +453,7 @@
         }
         return;
       }
-      window.ProjectManager.setFile(activeFile, elCodeEditor.value);
+      window.ProjectManager.setFile(activeFile, elCodeEditor.value, true);
     }
   }
 
@@ -487,6 +489,7 @@
     const content = ProjectManager.getFile(filename);
     if (elCodeEditor) elCodeEditor.value = content;
     if (elCurrentFile) elCurrentFile.textContent = filename;
+    lastLineCount = -1;
     updateLineNumbers();
     updateCursorAndCharCount();
     renderSyntaxHighlight();
@@ -494,7 +497,7 @@
 
   function renderSymbols() {
     if (!elSymbolsTree) return;
-    const sym = ProjectManager.indexVariables();
+    const sym = ProjectManager.symbols || ProjectManager.indexVariables();
     elSymbolsTree.innerHTML = "";
 
     let total = sym.motors.length + sym.pistons.length + sym.sensors.length + sym.functions.length;
@@ -810,7 +813,7 @@
 
   function getDynamicProjectItems() {
     if (!window.ProjectManager) return [];
-    const sym = window.ProjectManager.indexVariables();
+    const sym = window.ProjectManager.symbols || window.ProjectManager.indexVariables();
     const items = [];
 
     sym.motors.forEach(m => {
@@ -1095,9 +1098,12 @@
   // -------------------------------------------------------------
   // Code Editor Logic & Line Numbers
   // -------------------------------------------------------------
+  let lastLineCount = -1;
   function updateLineNumbers() {
     if (!elLineNumbers || !elCodeEditor) return;
     const lines = elCodeEditor.value.split("\n").length;
+    if (lines === lastLineCount) return;
+    lastLineCount = lines;
     let html = "";
     for (let i = 1; i <= lines; i++) {
       html += `<div>${i}</div>`;
@@ -1117,14 +1123,32 @@
     if (elCharCount) elCharCount.textContent = `${text.length} chars · ${text.split("\n").length} lines`;
   }
 
+  let highlightRaf = null;
+  function scheduleSyntaxHighlight() {
+    if (highlightRaf) return;
+    highlightRaf = requestAnimationFrame(() => {
+      highlightRaf = null;
+      renderSyntaxHighlight();
+    });
+  }
+
   function onEditorChange() {
     const val = elCodeEditor.value;
-    ProjectManager.setFile(activeFile, val);
-    ProjectManager.markDirty(true);
+    ProjectManager.setFile(activeFile, val, false);
+    if (elDirtyBadge) elDirtyBadge.hidden = false;
     updateLineNumbers();
     updateCursorAndCharCount();
-    renderSyntaxHighlight();
+    scheduleSyntaxHighlight();
     triggerAutosave(false);
+  }
+
+  let intelInputTimer = null;
+  function debouncedUpdateIntelliSense() {
+    if (intelInputTimer) clearTimeout(intelInputTimer);
+    intelInputTimer = setTimeout(() => {
+      intelInputTimer = null;
+      updateIntelliSense();
+    }, 60);
   }
 
   function wireEditor() {
@@ -1132,13 +1156,13 @@
 
     elCodeEditor.addEventListener("input", () => {
       onEditorChange();
-      updateIntelliSense();
+      debouncedUpdateIntelliSense();
     });
 
     elCodeEditor.addEventListener("keyup", (e) => {
       updateCursorAndCharCount();
       if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
-        updateIntelliSense();
+        debouncedUpdateIntelliSense();
       }
     });
 
