@@ -385,8 +385,13 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.project = null;
       this.isDirty = false;
       this.listeners = [];
+      this.versions = {};
+      this._activeVersionFile = "src/autons.cpp";
+      this._selectedVersionId = null;
+      this._versionDiffActive = false;
       this.loadProject();
       this.initAsyncStorage();
+      this.initVersionHistory();
     }
 
     async initAsyncStorage() {
@@ -677,6 +682,483 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         this.saveLocal();
       }, 800);
     }
+
+    // -------------------------------------------------------------
+    // Versioning, Snapshots & Raw C++ Protection Engine
+    // -------------------------------------------------------------
+    async initVersionHistory() {
+      try {
+        const stored = await idbGet("file_versions_history");
+        if (stored && typeof stored === "object") {
+          this.versions = stored;
+        } else {
+          this.versions = {};
+        }
+      } catch (e) {
+        this.versions = {};
+      }
+
+      // If src/autons.cpp exists and has no version snapshot yet, create initial baseline snapshot
+      const autonsCode = this.getFile("src/autons.cpp");
+      if (autonsCode && (!this.versions["src/autons.cpp"] || this.versions["src/autons.cpp"].length === 0)) {
+        this.createVersionSnapshot("src/autons.cpp", "initial", "Initial Baseline C++ Auton", autonsCode);
+      }
+      this.updateVersionCountBadges();
+      this.wireVersionHistoryUI();
+    }
+
+    createVersionSnapshot(fileName = "src/autons.cpp", source = "manual", label = "", explicitContent = null) {
+      if (!fileName) fileName = "src/autons.cpp";
+      const content = explicitContent !== null ? explicitContent : this.getFile(fileName);
+      if (!content || typeof content !== "string" || content.trim().length === 0) return null;
+
+      if (!this.versions) this.versions = {};
+      if (!this.versions[fileName]) this.versions[fileName] = [];
+
+      const list = this.versions[fileName];
+      // Avoid duplicate consecutive identical snapshots
+      if (list.length > 0 && list[0].content === content && source !== "manual") {
+        return list[0];
+      }
+
+      const now = Date.now();
+      const timeStr = new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const dateStr = new Date(now).toLocaleDateString([], { month: "short", day: "numeric" });
+
+      let defaultLabel = "Version Snapshot";
+      if (source === "ide") defaultLabel = "Raw C++ Code Edit in IDE";
+      else if (source === "before_blocks_sync") defaultLabel = "Preserved Raw C++ before Blocks Sync";
+      else if (source === "blocks_merge") defaultLabel = "Blocks Merge & Overwrite";
+      else if (source === "blocks_append") defaultLabel = "Blocks Append Routine";
+      else if (source === "restore") defaultLabel = "Backup before Version Restore";
+      else if (source === "manual") defaultLabel = "Manual Checkpoint";
+      else if (source === "initial") defaultLabel = "Initial Workspace Baseline";
+
+      const snapshot = {
+        id: "v_" + now + "_" + Math.random().toString(36).substring(2, 7),
+        fileName,
+        content,
+        timestamp: now,
+        dateStr: `${dateStr} · ${timeStr}`,
+        source,
+        label: label || defaultLabel,
+        linesCount: content.split("\n").length,
+        sizeBytes: typeof Blob !== "undefined" ? new Blob([content]).size : content.length
+      };
+
+      list.unshift(snapshot);
+      if (list.length > 60) list.length = 60;
+
+      // Persist to IndexedDB asynchronously
+      idbPut("file_versions_history", this.versions).catch(() => {});
+
+      if (source === "ide" || source === "manual") {
+        if (this.project) {
+          this.project.lastAutonEditor = "ide";
+          this.project.rawCppPreserved = true;
+        }
+      }
+
+      this.notifyListeners("version_created", snapshot);
+      this.updateVersionCountBadges();
+      return snapshot;
+    }
+
+    getVersionHistory(fileName = "src/autons.cpp") {
+      if (!this.versions) this.versions = {};
+      return this.versions[fileName] || [];
+    }
+
+    restoreVersion(versionId, fileName = "src/autons.cpp") {
+      const list = this.getVersionHistory(fileName);
+      const target = list.find(v => v.id === versionId);
+      if (!target) {
+        throw new Error("Version snapshot not found: " + versionId);
+      }
+
+      // Auto-backup current state first so no state can ever be lost
+      this.createVersionSnapshot(fileName, "restore", `Auto-Backup before Restoring (${target.label})`);
+
+      // Overwrite file with target snapshot content
+      this.setFile(fileName, target.content, true);
+      if (this.project) {
+        this.project.lastAutonEditor = "ide";
+        this.project.rawCppPreserved = true;
+      }
+      this.markDirty(true);
+
+      this.notifyListeners("version_restored", target);
+      this.updateVersionCountBadges();
+      return target;
+    }
+
+    deleteVersion(versionId, fileName = "src/autons.cpp") {
+      const list = this.getVersionHistory(fileName);
+      const idx = list.findIndex(v => v.id === versionId);
+      if (idx !== -1) {
+        list.splice(idx, 1);
+        idbPut("file_versions_history", this.versions).catch(() => {});
+        this.notifyListeners("version_deleted", { versionId, fileName });
+        this.updateVersionCountBadges();
+        return true;
+      }
+      return false;
+    }
+
+    clearVersionHistory(fileName = "src/autons.cpp") {
+      if (this.versions && this.versions[fileName]) {
+        this.versions[fileName] = [];
+        idbPut("file_versions_history", this.versions).catch(() => {});
+        this.notifyListeners("version_cleared", { fileName });
+        this.updateVersionCountBadges();
+      }
+    }
+
+    diffLines(currentText, snapshotText) {
+      const linesA = (currentText || "").split("\n");
+      const linesB = (snapshotText || "").split("\n");
+      const diff = [];
+      const maxLines = Math.max(linesA.length, linesB.length);
+      for (let i = 0; i < maxLines; i++) {
+        const a = linesA[i];
+        const b = linesB[i];
+        if (a === undefined) {
+          diff.push({ type: "added_in_snapshot", lineNum: i + 1, text: b });
+        } else if (b === undefined) {
+          diff.push({ type: "removed_in_snapshot", lineNum: i + 1, text: a });
+        } else if (a === b) {
+          diff.push({ type: "same", lineNum: i + 1, text: b });
+        } else {
+          diff.push({ type: "changed_in_snapshot", lineNum: i + 1, text: b, origText: a });
+        }
+      }
+      return diff;
+    }
+
+    updateVersionCountBadges() {
+      const list = this.getVersionHistory(this._activeVersionFile || "src/autons.cpp");
+      const count = list.length;
+      const ideBadge = document.getElementById("ideVersionCount");
+      const bannerBadge = document.getElementById("bannerVersionCount");
+      if (ideBadge) ideBadge.textContent = String(count);
+      if (bannerBadge) bannerBadge.textContent = String(count);
+    }
+
+    openVersionHistoryModal(targetFile = "src/autons.cpp", selectVersionId = null) {
+      const modal = document.getElementById("versionHistoryModal");
+      if (!modal) return;
+
+      const fileSelect = document.getElementById("versionFileSelect");
+      if (fileSelect && this.project?.files) {
+        fileSelect.innerHTML = "";
+        const fileNames = Object.keys(this.project.files).sort();
+        const sorted = ["src/autons.cpp", ...fileNames.filter(f => f !== "src/autons.cpp")];
+        sorted.forEach(fname => {
+          if (this.project.files[fname] !== undefined) {
+            const opt = document.createElement("option");
+            opt.value = fname;
+            opt.textContent = fname + (fname === "src/autons.cpp" ? " (Autonomous Routines)" : "");
+            if (fname === targetFile) opt.selected = true;
+            fileSelect.appendChild(opt);
+          }
+        });
+      }
+
+      this._activeVersionFile = targetFile;
+      this._selectedVersionId = selectVersionId;
+      this._versionDiffActive = false;
+
+      this.renderVersionHistoryList(targetFile);
+      modal.hidden = false;
+      modal.classList.add("open");
+    }
+
+    closeVersionHistoryModal() {
+      const modal = document.getElementById("versionHistoryModal");
+      if (modal) {
+        modal.hidden = true;
+        modal.classList.remove("open");
+      }
+    }
+
+    renderVersionHistoryList(targetFile) {
+      const list = this.getVersionHistory(targetFile);
+      const container = document.getElementById("versionListContainer");
+      const countBadge = document.getElementById("versionListCountBadge");
+      const statsPill = document.getElementById("versionStatsPill");
+      const currentCode = this.getFile(targetFile) || "";
+
+      if (countBadge) countBadge.textContent = String(list.length);
+      if (statsPill) statsPill.textContent = `${list.length} snapshot${list.length === 1 ? '' : 's'} for ${targetFile}`;
+
+      if (!container) return;
+      container.innerHTML = "";
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div style="padding:28px 16px;text-align:center;color:#64748b;font-size:0.85rem;">
+            <div style="font-size:1.8rem;margin-bottom:8px;">📜</div>
+            No versions saved for this file yet.<br/>
+            Click <strong>+ Save Version</strong> to create your first checkpoint.
+          </div>
+        `;
+        this.renderVersionPreview(null, currentCode);
+        return;
+      }
+
+      if (!this._selectedVersionId || !list.some(v => v.id === this._selectedVersionId)) {
+        this._selectedVersionId = list[0].id;
+      }
+
+      list.forEach((v) => {
+        const isSelected = v.id === this._selectedVersionId;
+        const isCurrent = v.content === currentCode;
+
+        let sourceClass = "source-ide";
+        let sourceIcon = "💻";
+        let sourceName = "IDE C++";
+
+        if (v.source === "before_blocks_sync") {
+          sourceClass = "source-sync";
+          sourceIcon = "🛡️";
+          sourceName = "Pre-Sync Backup";
+        } else if (v.source === "blocks_merge") {
+          sourceClass = "source-merge";
+          sourceIcon = "🔀";
+          sourceName = "Blocks Overwrite";
+        } else if (v.source === "blocks_append") {
+          sourceClass = "source-merge";
+          sourceIcon = "➕";
+          sourceName = "Blocks Append";
+        } else if (v.source === "restore") {
+          sourceClass = "source-restore";
+          sourceIcon = "⏮️";
+          sourceName = "Restored Backup";
+        } else if (v.source === "manual") {
+          sourceClass = "source-manual";
+          sourceIcon = "💾";
+          sourceName = "Checkpoint";
+        } else if (v.source === "initial") {
+          sourceClass = "source-initial";
+          sourceIcon = "🏁";
+          sourceName = "Baseline";
+        }
+
+        const card = document.createElement("div");
+        card.className = `version-item-card ${isSelected ? 'selected' : ''} ${isCurrent ? 'current-active' : ''}`;
+        card.innerHTML = `
+          <div class="version-item-top">
+            <span class="version-source-pill ${sourceClass}">${sourceIcon} ${sourceName}</span>
+            <span class="version-date">${v.dateStr}</span>
+          </div>
+          <div class="version-item-label">${v.label || 'Saved Version'}</div>
+          <div class="version-item-footer">
+            <span>${v.linesCount} lines · ${(v.sizeBytes / 1024).toFixed(1)} KB</span>
+            ${isCurrent ? '<span class="version-active-tag">CURRENT ACTIVE</span>' : ''}
+          </div>
+        `;
+
+        card.onclick = () => {
+          this._selectedVersionId = v.id;
+          this.renderVersionHistoryList(targetFile);
+        };
+
+        container.appendChild(card);
+      });
+
+      const selected = list.find(v => v.id === this._selectedVersionId) || list[0];
+      this.renderVersionPreview(selected, currentCode);
+    }
+
+    renderVersionPreview(version, currentCode) {
+      const titleEl = document.getElementById("versionPreviewTitle");
+      const metaEl = document.getElementById("versionPreviewMeta");
+      const codeView = document.getElementById("versionCodeView");
+      const btnDiff = document.getElementById("btnToggleDiffView");
+      const btnRestore = document.getElementById("btnRestoreVersionCode");
+      const btnCopy = document.getElementById("btnCopyVersionCode");
+      const btnDownload = document.getElementById("btnDownloadVersionCode");
+      const btnDelete = document.getElementById("btnDeleteVersionSnapshot");
+
+      if (!version) {
+        if (titleEl) titleEl.textContent = "No Version Selected";
+        if (metaEl) metaEl.textContent = "--";
+        if (codeView) codeView.textContent = "// No version selected";
+        if (btnRestore) btnRestore.disabled = true;
+        if (btnCopy) btnCopy.disabled = true;
+        if (btnDownload) btnDownload.disabled = true;
+        if (btnDelete) btnDelete.disabled = true;
+        return;
+      }
+
+      if (btnRestore) btnRestore.disabled = false;
+      if (btnCopy) btnCopy.disabled = false;
+      if (btnDownload) btnDownload.disabled = false;
+      if (btnDelete) btnDelete.disabled = false;
+
+      if (titleEl) titleEl.textContent = version.label || "Version Snapshot";
+      if (metaEl) {
+        const isCurrent = version.content === currentCode;
+        metaEl.textContent = `${version.linesCount} lines · ${(version.sizeBytes / 1024).toFixed(1)} KB · ${version.dateStr}${isCurrent ? ' (Matching Active)' : ''}`;
+      }
+
+      if (btnDiff) {
+        btnDiff.textContent = this._versionDiffActive ? "📄 Show Raw Code" : "🔍 Compare Diff";
+      }
+
+      if (!codeView) return;
+
+      if (this._versionDiffActive) {
+        const diff = this.diffLines(currentCode, version.content);
+        let html = "";
+        diff.forEach(item => {
+          const esc = (item.text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          if (item.type === "added_in_snapshot") {
+            html += `<div class="diff-line diff-added" style="background:rgba(16,185,129,0.18);color:#6ee7b7;"><span class="diff-prefix">+</span> ${esc}</div>`;
+          } else if (item.type === "removed_in_snapshot") {
+            html += `<div class="diff-line diff-removed" style="background:rgba(239,68,68,0.18);color:#fca5a5;"><span class="diff-prefix">-</span> ${esc}</div>`;
+          } else if (item.type === "changed_in_snapshot") {
+            const origEsc = (item.origText || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            html += `<div class="diff-line diff-removed" style="background:rgba(239,68,68,0.18);color:#fca5a5;"><span class="diff-prefix">-</span> ${origEsc}</div>`;
+            html += `<div class="diff-line diff-added" style="background:rgba(16,185,129,0.18);color:#6ee7b7;"><span class="diff-prefix">+</span> ${esc}</div>`;
+          } else {
+            html += `<div class="diff-line" style="color:#94a3b8;"><span class="diff-prefix" style="color:#475569;"> </span> ${esc}</div>`;
+          }
+        });
+        codeView.innerHTML = html || `<div style="color:#64748b;">No code differences.</div>`;
+      } else {
+        codeView.textContent = version.content;
+      }
+    }
+
+    wireVersionHistoryUI() {
+      if (this._uiWired) return;
+      this._uiWired = true;
+
+      const modal = document.getElementById("versionHistoryModal");
+      if (!modal) return;
+
+      const btnClose = document.getElementById("btnVersionModalClose");
+      const btnDone = document.getElementById("btnVersionModalDone");
+      const fileSelect = document.getElementById("versionFileSelect");
+      const btnCreate = document.getElementById("btnCreateCheckpoint");
+      const inputLabel = document.getElementById("inputNewCheckpointLabel");
+      const btnDiff = document.getElementById("btnToggleDiffView");
+      const btnRestore = document.getElementById("btnRestoreVersionCode");
+      const btnCopy = document.getElementById("btnCopyVersionCode");
+      const btnDownload = document.getElementById("btnDownloadVersionCode");
+      const btnDelete = document.getElementById("btnDeleteVersionSnapshot");
+
+      const closeHandler = () => this.closeVersionHistoryModal();
+      if (btnClose) btnClose.onclick = closeHandler;
+      if (btnDone) btnDone.onclick = closeHandler;
+
+      if (fileSelect) {
+        fileSelect.onchange = () => {
+          this._activeVersionFile = fileSelect.value;
+          this._selectedVersionId = null;
+          this.renderVersionHistoryList(this._activeVersionFile);
+        };
+      }
+
+      if (btnCreate) {
+        btnCreate.onclick = () => {
+          const lbl = inputLabel ? inputLabel.value.trim() : "";
+          const target = this._activeVersionFile || "src/autons.cpp";
+          const snap = this.createVersionSnapshot(target, "manual", lbl || "Manual Checkpoint");
+          if (inputLabel) inputLabel.value = "";
+          if (snap) {
+            this._selectedVersionId = snap.id;
+            this.renderVersionHistoryList(target);
+            if (typeof showToast === "function") {
+              showToast(`✅ Created version checkpoint: "${snap.label}"`);
+            }
+          }
+        };
+      }
+
+      if (btnDiff) {
+        btnDiff.onclick = () => {
+          this._versionDiffActive = !this._versionDiffActive;
+          const currentCode = this.getFile(this._activeVersionFile || "src/autons.cpp") || "";
+          const list = this.getVersionHistory(this._activeVersionFile || "src/autons.cpp");
+          const selected = list.find(v => v.id === this._selectedVersionId);
+          this.renderVersionPreview(selected, currentCode);
+        };
+      }
+
+      if (btnCopy) {
+        btnCopy.onclick = () => {
+          const list = this.getVersionHistory(this._activeVersionFile || "src/autons.cpp");
+          const selected = list.find(v => v.id === this._selectedVersionId);
+          if (selected && selected.content) {
+            navigator.clipboard.writeText(selected.content).then(() => {
+              if (typeof showToast === "function") showToast("📋 Code copied to clipboard!");
+            });
+          }
+        };
+      }
+
+      if (btnDownload) {
+        btnDownload.onclick = () => {
+          const list = this.getVersionHistory(this._activeVersionFile || "src/autons.cpp");
+          const selected = list.find(v => v.id === this._selectedVersionId);
+          if (selected && selected.content) {
+            const fname = (this._activeVersionFile || "autons.cpp").split("/").pop();
+            const blob = new Blob([selected.content], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `version_${selected.id}_${fname}`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        };
+      }
+
+      if (btnDelete) {
+        btnDelete.onclick = () => {
+          if (!this._selectedVersionId) return;
+          if (confirm("Are you sure you want to delete this version snapshot?")) {
+            this.deleteVersion(this._selectedVersionId, this._activeVersionFile || "src/autons.cpp");
+            this._selectedVersionId = null;
+            this.renderVersionHistoryList(this._activeVersionFile || "src/autons.cpp");
+          }
+        };
+      }
+
+      if (btnRestore) {
+        btnRestore.onclick = () => {
+          if (!this._selectedVersionId) return;
+          const list = this.getVersionHistory(this._activeVersionFile || "src/autons.cpp");
+          const selected = list.find(v => v.id === this._selectedVersionId);
+          if (!selected) return;
+
+          if (confirm(`Restore version "${selected.label}" (${selected.dateStr})?\n\nYour current code will be automatically backed up first.`)) {
+            const restored = this.restoreVersion(selected.id, this._activeVersionFile || "src/autons.cpp");
+            
+            // If IDE editor active, update its textarea/editor
+            if (typeof window.refreshIdeEditorIfActive === "function") {
+              window.refreshIdeEditorIfActive(this._activeVersionFile || "src/autons.cpp");
+            }
+
+            // If in planner, update banner & reload paths safely
+            if (typeof updateProjectBanner === "function") {
+              updateProjectBanner();
+            }
+            if (typeof loadProjectAutonsIntoPlanner === "function") {
+              loadProjectAutonsIntoPlanner(false, true);
+            }
+
+            this.closeVersionHistoryModal();
+            if (typeof showToast === "function") {
+              showToast(`✅ Restored version: "${restored.label}" (Previous code backed up)`);
+            }
+          }
+        };
+      }
+    }
+
 
     deleteFile(filename) {
       if (this.project?.files?.[filename]) {
@@ -1315,17 +1797,29 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     // Smart Merge of visual planner paths into src/autons.cpp
-    mergePlannerIntoAutonCpp(plannerPaths, mode = "replace", indent = "    ") {
+    mergePlannerIntoAutonCpp(plannerPaths, mode = "replace", indent = "    ", options = {}) {
       if (mode === "keep") return this.getFile("src/autons.cpp");
+
+      const existing = this.getFile("src/autons.cpp") || "";
+      if (existing.trim().length > 0) {
+        this.createVersionSnapshot(
+          "src/autons.cpp",
+          mode === "replace" ? "blocks_merge" : "blocks_append",
+          `Preserved Raw C++ before Blocks ${mode === "replace" ? "Replace" : "Append"}`
+        );
+      }
 
       const generated = this.generateAutonCppCode(plannerPaths, indent);
       if (mode === "replace") {
         this.setFile("src/autons.cpp", generated);
+        if (this.project) {
+          this.project.lastAutonEditor = "blocks";
+          this.project.rawCppPreserved = false;
+        }
         return generated;
       }
 
       if (mode === "append") {
-        const existing = this.getFile("src/autons.cpp") || "";
         const existingRoutines = this.getAutonRoutines();
         const existingNames = new Set(existingRoutines.map(r => r.name.toLowerCase()));
 
@@ -1366,15 +1860,38 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
         const merged = existing + (appendBodies ? "\n" + appendBodies : "");
         this.setFile("src/autons.cpp", merged);
+        if (this.project) {
+          this.project.lastAutonEditor = "blocks";
+          this.project.rawCppPreserved = false;
+        }
         return merged;
       }
 
       return generated;
     }
 
-    // Synchronize visual planner paths into src/autons.cpp
-    updateAutonCppFromPlanner(plannerPaths, indent = "    ") {
-      return this.mergePlannerIntoAutonCpp(plannerPaths, "replace", indent);
+    // Synchronize visual planner paths into src/autons.cpp safely
+    updateAutonCppFromPlanner(plannerPaths, indent = "    ", options = {}) {
+      const existing = this.getFile("src/autons.cpp") || "";
+      const hasDiff = this.hasCodeDifference(plannerPaths, indent);
+
+      if (hasDiff && existing.trim().length > 0) {
+        // ALWAYS snapshot raw C++ before any sync or replacement
+        this.createVersionSnapshot(
+          "src/autons.cpp",
+          "before_blocks_sync",
+          "Preserved Raw C++ (Before Blocks Sync)"
+        );
+
+        // Safeguard: do not silently overwrite raw C++ if last editor was the IDE and not forced
+        if (!options.force && (this.project?.lastAutonEditor === "ide" || this.project?.rawCppPreserved)) {
+          console.log("🛡️ Preserving raw C++ code from IDE; version snapshotted. Not overwriting automatically.");
+          if (this.project) this.project.rawCppPreserved = true;
+          return existing;
+        }
+      }
+
+      return this.mergePlannerIntoAutonCpp(plannerPaths, options.mode || "replace", indent, options);
     }
 
     // -------------------------------------------------------------
@@ -1637,6 +2154,11 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
   // Singleton Instance
   global.ProjectManager = new ProjectManager();
+  global.openVersionHistoryModal = function(file, verId) {
+    if (global.ProjectManager) {
+      global.ProjectManager.openVersionHistoryModal(file, verId);
+    }
+  };
 
   if (typeof window !== "undefined") {
     window.addEventListener("storage", (e) => {

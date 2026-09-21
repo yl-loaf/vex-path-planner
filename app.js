@@ -1006,10 +1006,6 @@
     try { generateCode(); } catch (_) {}
     try { scheduleCloudSave(); } catch (_) {}
     try { scheduleHistoryPush(); } catch (_) {}
-
-    if (window.ProjectManager) {
-      syncPlannerIntoProjectManager({ ask: false });
-    }
   }
 
   function saveLocal() {
@@ -1036,7 +1032,12 @@
     }
 
     if (window.ProjectManager) {
-      syncPlannerIntoProjectManager({ ask: false });
+      // Only sync into ProjectManager if the user has not edited raw C++ in IDE
+      if (window.ProjectManager.project?.lastAutonEditor !== "ide" && !window.ProjectManager.project?.rawCppPreserved) {
+        syncPlannerIntoProjectManager({ ask: false });
+      } else {
+        updateProjectBanner();
+      }
     }
   }
 
@@ -5702,6 +5703,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
     const bannerName = document.getElementById("bannerProjectName");
     const bannerVarCount = document.getElementById("bannerVariableCount");
     const headerBadge = document.getElementById("headerProjectBadge");
+    const rawBadge = document.getElementById("bannerRawBadge");
+
     if (bannerName && proj) {
       bannerName.textContent = proj.name || "Override_LemLib_Bot";
     }
@@ -5712,6 +5715,18 @@ lemlib::ControllerSettings ${currentMode}_controller(
       const syms = window.ProjectManager.symbols;
       const totalCount = (syms.motors?.length || 0) + (syms.pistons?.length || 0) + (syms.sensors?.length || 0) + (syms.functions?.length || 0);
       bannerVarCount.textContent = `${totalCount} device${totalCount === 1 ? '' : 's'} indexed`;
+    }
+    if (rawBadge && proj) {
+      const isIdePreserved = proj.lastAutonEditor === "ide" || proj.rawCppPreserved;
+      rawBadge.style.display = isIdePreserved ? "inline-flex" : "none";
+      rawBadge.onclick = () => {
+        if (typeof window.openVersionHistoryModal === "function") {
+          window.openVersionHistoryModal("src/autons.cpp");
+        }
+      };
+    }
+    if (typeof window.ProjectManager.updateVersionCountBadges === "function") {
+      window.ProjectManager.updateVersionCountBadges();
     }
     updateHomepageStats();
   }
@@ -5735,7 +5750,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
       // If user chose to remember session choice
       if (_autoMergeSessionChoice) {
-        window.ProjectManager.mergePlannerIntoAutonCpp(paths, _autoMergeSessionChoice, indent);
+        window.ProjectManager.createVersionSnapshot("src/autons.cpp", "blocks_merge", `Preserved Raw C++ before Auto-${_autoMergeSessionChoice}`);
+        window.ProjectManager.mergePlannerIntoAutonCpp(paths, _autoMergeSessionChoice, indent, { force: true });
         updateProjectBanner();
         resolve(true);
         return;
@@ -5747,6 +5763,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       const btnKeep = document.getElementById("btnMergeKeep");
       const btnAppend = document.getElementById("btnMergeAppend");
       const btnOverwrite = document.getElementById("btnMergeOverwrite");
+      const btnViewHist = document.getElementById("btnMergeViewHistory");
       const newPreview = document.getElementById("mergeNewCodePreview");
       const existingPreview = document.getElementById("mergeExistingCodePreview");
       const newBadge = document.getElementById("mergeNewRoutinesBadge");
@@ -5777,6 +5794,15 @@ lemlib::ControllerSettings ${currentMode}_controller(
         if (btnKeep) btnKeep.onclick = null;
         if (btnAppend) btnAppend.onclick = null;
         if (btnOverwrite) btnOverwrite.onclick = null;
+        if (btnViewHist) btnViewHist.onclick = null;
+      }
+
+      if (btnViewHist) {
+        btnViewHist.onclick = () => {
+          if (typeof window.openVersionHistoryModal === "function") {
+            window.openVersionHistoryModal("src/autons.cpp");
+          }
+        };
       }
 
       if (btnClose) {
@@ -5789,7 +5815,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (btnKeep) {
         btnKeep.onclick = () => {
           cleanup();
-          showToast("Kept existing src/autons.cpp (No changes made)");
+          showToast("🛡️ Kept existing raw C++ src/autons.cpp (No changes made)");
           resolve(false);
         };
       }
@@ -5797,10 +5823,11 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (btnAppend) {
         btnAppend.onclick = () => {
           if (chkRemember && chkRemember.checked) _autoMergeSessionChoice = "append";
-          window.ProjectManager.mergePlannerIntoAutonCpp(paths, "append", indent);
+          window.ProjectManager.createVersionSnapshot("src/autons.cpp", "blocks_append", "Preserved Raw C++ before Blocks Append");
+          window.ProjectManager.mergePlannerIntoAutonCpp(paths, "append", indent, { force: true });
           updateProjectBanner();
           cleanup();
-          showToast("➕ Appended visual routine into src/autons.cpp");
+          showToast("➕ Appended visual routine into src/autons.cpp (Previous raw C++ backed up)");
           resolve(true);
         };
       }
@@ -5808,10 +5835,11 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (btnOverwrite) {
         btnOverwrite.onclick = () => {
           if (chkRemember && chkRemember.checked) _autoMergeSessionChoice = "replace";
-          window.ProjectManager.mergePlannerIntoAutonCpp(paths, "replace", indent);
+          window.ProjectManager.createVersionSnapshot("src/autons.cpp", "blocks_merge", "Preserved Raw C++ before Blocks Overwrite");
+          window.ProjectManager.mergePlannerIntoAutonCpp(paths, "replace", indent, { force: true });
           updateProjectBanner();
           cleanup();
-          showToast("✅ Merged & overwritten src/autons.cpp from visual blocks");
+          showToast("✅ Merged into src/autons.cpp (Previous raw C++ backed up in Versions)");
           resolve(true);
         };
       }
@@ -5830,6 +5858,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (options.ask) {
         promptMergeAutonCpp();
       } else {
+        // If the user's last edit was in the IDE, don't silently overwrite!
+        if (window.ProjectManager.project?.lastAutonEditor === "ide" || window.ProjectManager.project?.rawCppPreserved) {
+          console.log("🛡️ Preserving raw C++ code. Not silently replacing from visual blocks.");
+          updateProjectBanner();
+          return;
+        }
         window.ProjectManager.updateAutonCppFromPlanner(paths, getIndentString());
         updateProjectBanner();
       }
@@ -5849,6 +5883,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
   function loadProjectAutonsIntoPlanner(showNotification = false, force = false) {
     if (!window.ProjectManager || isSyncingFromPlanner) return;
+
+    // Make sure current raw C++ is protected by an auto-snapshot
+    const autonsCode = window.ProjectManager.getFile("src/autons.cpp");
+    if (autonsCode && autonsCode.trim().length > 0) {
+      window.ProjectManager.createVersionSnapshot("src/autons.cpp", "ide", "Raw C++ Code from IDE");
+    }
 
     const indent = typeof getIndentString === "function" ? getIndentString() : "    ";
     if (!force && !window.ProjectManager.hasCodeDifference(paths, indent)) {
@@ -6235,6 +6275,16 @@ lemlib::ControllerSettings ${currentMode}_controller(
     updateProjectBanner();
     loadProjectAutonsIntoPlanner(false, true);
 
+    // Banner Versions button
+    const btnVersionsBanner = document.getElementById("btnVersionHistoryBanner");
+    if (btnVersionsBanner) {
+      btnVersionsBanner.onclick = () => {
+        if (typeof window.openVersionHistoryModal === "function") {
+          window.openVersionHistoryModal("src/autons.cpp");
+        }
+      };
+    }
+
     // Banner Cloud Sync button
     const btnSyncCloud = document.getElementById("btnSyncProjectToCloud");
     if (btnSyncCloud) {
@@ -6242,7 +6292,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
         try {
           btnSyncCloud.disabled = true;
           btnSyncCloud.textContent = "⏳ Syncing...";
-          syncPlannerIntoProjectManager();
+          if (window.ProjectManager.project?.lastAutonEditor !== "ide" && !window.ProjectManager.project?.rawCppPreserved) {
+            syncPlannerIntoProjectManager();
+          }
           let finalStr = "";
           await window.ProjectManager.saveToCloud((curr, total, progStr) => {
             btnSyncCloud.textContent = `⏳ ${progStr}`;
@@ -6262,7 +6314,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
     const btnCompileBanner = document.getElementById("btnCompileProjectBanner");
     if (btnCompileBanner) {
       btnCompileBanner.onclick = () => {
-        syncPlannerIntoProjectManager();
+        if (window.ProjectManager.project?.lastAutonEditor !== "ide" && !window.ProjectManager.project?.rawCppPreserved) {
+          syncPlannerIntoProjectManager();
+        }
         const res = window.ProjectManager.compileProject();
         if (res.success) {
           showToast(`⚡ Project compiled clean in ${res.elapsed}s (pros make)`);

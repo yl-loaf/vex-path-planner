@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PROS & LemLib C++ IDE · VEX V5 Path Planner</title>
   <meta name="description" content="Dedicated multi-file C++ coding IDE for VEX V5 robotics with LemLib, full project compiler, and cloud persistence." />
-  <link rel="stylesheet" href="style.css?v=20260921.k57" />
+  <link rel="stylesheet" href="style.css?v=20260921.k58" />
 </head>
 <body class="ide-page-body">
   <div id="app" class="ide-app-container">
@@ -43,6 +43,9 @@
         </button>
         <button type="button" id="btnDownloadCode" class="btn-ide-save-cloud" style="background:#0284c7;border-color:#38bdf8;" title="Download active file or export full PROS project">
           📥 Download Code
+        </button>
+        <button type="button" id="btnVersionHistoryIDE" class="btn-ide-versions" title="View Code Version History, Backups &amp; Snapshots">
+          📜 Versions (<span id="ideVersionCount">0</span>)
         </button>
         <button type="button" id="btnSaveCloudProject" class="btn-ide-save-cloud" title="Save and synchronize complete project to cloud">
           ☁️ Save &amp; Sync Project
@@ -372,16 +375,108 @@
     </div>
   </div>
 
+  <!-- =================================================================
+       FILE VERSION HISTORY & RAW C++ BACKUPS MODAL
+       ================================================================= -->
+  <div id="versionHistoryModal" class="modal-backdrop" hidden>
+    <div class="modal-card version-history-modal-card">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.3rem;">📜</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">File Version History &amp; Backups</h3>
+            <p style="margin:0;font-size:0.75rem;color:#94a3b8;">Preserves raw C++ code from being overwritten by visual blocks. 1-click restore anytime.</p>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <select id="versionFileSelect" class="version-file-select" title="Select project file to view version history">
+            <option value="src/autons.cpp" selected>src/autons.cpp (Autonomous Routines)</option>
+          </select>
+          <button type="button" id="btnVersionModalClose" class="modal-close" title="Close">✕</button>
+        </div>
+      </div>
+
+      <div class="modal-body version-history-body">
+        <!-- Top Toolbar -->
+        <div class="version-toolbar">
+          <div class="version-toolbar-left">
+            <span class="version-guard-pill">🛡️ Auto-Backup Active</span>
+            <span class="version-stats-pill" id="versionStatsPill">0 versions saved</span>
+          </div>
+          <div class="version-toolbar-right">
+            <input type="text" id="inputNewCheckpointLabel" placeholder="Checkpoint name (e.g., Working Autonomous Tuning)..." class="version-name-input" />
+            <button type="button" id="btnCreateCheckpoint" class="btn-create-checkpoint" title="Create a manual snapshot of current file code">+ Save Version</button>
+          </div>
+        </div>
+
+        <!-- 2-Column Split: Snapshot List | Code & Diff Preview -->
+        <div class="version-history-grid">
+          <!-- Left Column: Version Snapshots List -->
+          <div class="version-list-col">
+            <div class="version-col-header">
+              <span>Saved Snapshots</span>
+              <span id="versionListCountBadge" class="version-tag-badge">0</span>
+            </div>
+            <div class="version-list-scroll" id="versionListContainer">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Right Column: Version Detail & Code Preview -->
+          <div class="version-preview-col">
+            <div class="version-preview-header">
+              <div class="version-preview-meta">
+                <strong id="versionPreviewTitle">Select a version</strong>
+                <span id="versionPreviewMeta" class="version-meta-tag">--</span>
+              </div>
+              <div class="version-preview-actions">
+                <button type="button" id="btnToggleDiffView" class="btn-version-action subtle" title="Toggle line-by-line comparison with current active workspace code">
+                  🔍 Compare Diff
+                </button>
+                <button type="button" id="btnCopyVersionCode" class="btn-version-action subtle" title="Copy version code to clipboard">
+                  📋 Copy
+                </button>
+                <button type="button" id="btnDownloadVersionCode" class="btn-version-action subtle" title="Download version as file">
+                  📥 Download
+                </button>
+                <button type="button" id="btnDeleteVersionSnapshot" class="btn-version-action danger" title="Delete this version snapshot">
+                  🗑️
+                </button>
+                <button type="button" id="btnRestoreVersionCode" class="btn-version-restore" title="Restore this exact version into your project workspace (auto-backs up current state first)">
+                  ⏮️ Restore Version
+                </button>
+              </div>
+            </div>
+
+            <!-- Code or Diff Container -->
+            <div class="version-code-wrap">
+              <pre class="version-code-view" id="versionCodeView">// Select a version from the left panel to inspect</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;background:#09111e;padding:12px 18px;border-top:1px solid #1e293b;">
+        <span style="font-size:0.75rem;color:#64748b;">
+          💡 Tip: You can restore any previous version of your C++ code at any time without losing any work.
+        </span>
+        <button type="button" id="btnVersionModalDone" class="btn-subtle" style="padding:7px 16px;font-size:0.8rem;">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k57"></script>
-  <script src="v5-brain-serial.js?v=20260921.k57"></script>
-  <script src="project-manager.js?v=20260921.k57"></script>
-  <script src="ide.js?v=20260921.k57"></script>
+  <script src="firebase-config.js?v=20260921.k58"></script>
+  <script src="v5-brain-serial.js?v=20260921.k58"></script>
+  <script src="project-manager.js?v=20260921.k58"></script>
+  <script src="ide.js?v=20260921.k58"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {

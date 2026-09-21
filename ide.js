@@ -519,6 +519,10 @@
         return;
       }
       window.ProjectManager.setFile(activeFile, elCodeEditor.value, false);
+      if (window.ProjectManager.project) {
+        window.ProjectManager.project.lastAutonEditor = "ide";
+        window.ProjectManager.project.rawCppPreserved = true;
+      }
       if (window.ProjectManager.debounceSaveTimer) {
         clearTimeout(window.ProjectManager.debounceSaveTimer);
         window.ProjectManager.debounceSaveTimer = null;
@@ -526,6 +530,16 @@
       window.ProjectManager.saveLocal();
     }
   }
+
+  // Global helper for version restores
+  window.refreshIdeEditorIfActive = function(filename) {
+    if (filename === activeFile && elCodeEditor && window.ProjectManager) {
+      elCodeEditor.value = window.ProjectManager.getFile(filename) || "";
+      updateLineNumbers();
+      updateCursorAndCharCount();
+      scheduleSyntaxHighlight();
+    }
+  };
 
   function switchToFile(filename) {
     saveCurrentEditorState();
@@ -1205,6 +1219,10 @@
   function onEditorChange() {
     const val = elCodeEditor.value;
     ProjectManager.setFile(activeFile, val, false);
+    if (ProjectManager.project) {
+      ProjectManager.project.lastAutonEditor = "ide";
+      ProjectManager.project.rawCppPreserved = true;
+    }
     if (elDirtyBadge) elDirtyBadge.hidden = false;
     updateLineNumbers();
     updateCursorAndCharCount();
@@ -1733,6 +1751,16 @@
       });
     }
 
+    const btnVersionsIDE = document.getElementById("btnVersionHistoryIDE");
+    if (btnVersionsIDE) {
+      btnVersionsIDE.addEventListener("click", () => {
+        saveCurrentEditorState();
+        if (window.ProjectManager) {
+          window.ProjectManager.openVersionHistoryModal(activeFile);
+        }
+      });
+    }
+
     if (btnClearLogs) {
       btnClearLogs.addEventListener("click", () => {
         if (elBuildConsole) elBuildConsole.textContent = "";
@@ -2018,6 +2046,15 @@
     const navigateToPlanner = () => {
       saveCurrentEditorState();
       if (window.ProjectManager) {
+        window.ProjectManager.createVersionSnapshot(
+          activeFile || "src/autons.cpp",
+          "ide",
+          `Preserved Raw C++ before visiting Planner (${activeFile || "src/autons.cpp"})`
+        );
+        if (window.ProjectManager.project) {
+          window.ProjectManager.project.lastAutonEditor = "ide";
+          window.ProjectManager.project.rawCppPreserved = true;
+        }
         window.ProjectManager.saveLocal();
         window.ProjectManager.markDirty(false);
       }
