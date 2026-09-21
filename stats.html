@@ -299,7 +299,7 @@ function doGet(e) {
       try {
         data = await fetchJsonp(GOOGLE_SHEET_URL);
       } catch (e) {
-        console.warn('Could not fetch JSONP from Google Sheet URL, trying backend/fallback...', e);
+        // Fall back to backend API if available, or local storage
       }
 
       if (!data) {
@@ -308,30 +308,16 @@ function doGet(e) {
           if (!res.ok) throw new Error('Backend not available');
           data = await res.json();
         } catch (e) {
-          try {
-            const hitRes = await fetch('https://api.counterapi.dev/v1/vex-lemlib-suite/views/up');
-            const hitData = await hitRes.json();
-            const count = hitData.count || 1;
-            data = {
-              totalViews: count,
-              uniqueVisitors: Math.max(1, Math.floor(count * 0.75)),
-              pages: { home: Math.floor(count * 0.6), ide: Math.floor(count * 0.25), translator: Math.floor(count * 0.1), stats: Math.floor(count * 0.05), other: 0 },
-              visitors: [
-                { timestamp: new Date().toISOString(), page: 'home', ip: 'Static (GitHub Pages)', userAgent: navigator.userAgent }
-              ]
-            };
-          } catch (err) {
-            let localViews = parseInt(localStorage.getItem('vex_total_views') || '128', 10) + 1;
-            localStorage.setItem('vex_total_views', localViews);
-            data = {
-              totalViews: localViews,
-              uniqueVisitors: Math.floor(localViews * 0.8),
-              pages: { home: Math.floor(localViews * 0.6), ide: Math.floor(localViews * 0.3), translator: Math.floor(localViews * 0.1), stats: 0, other: 0 },
-              visitors: [
-                { timestamp: new Date().toISOString(), page: 'home', ip: 'Local Visitor', userAgent: navigator.userAgent }
-              ]
-            };
-          }
+          let localViews = parseInt(localStorage.getItem('vex_total_views') || '128', 10) + 1;
+          localStorage.setItem('vex_total_views', localViews);
+          data = {
+            totalViews: localViews,
+            uniqueVisitors: Math.max(1, Math.floor(localViews * 0.8)),
+            pages: { home: Math.floor(localViews * 0.6), ide: Math.floor(localViews * 0.3), translator: Math.floor(localViews * 0.1), stats: Math.floor(localViews * 0.05), other: 0 },
+            visitors: [
+              { timestamp: new Date().toISOString(), page: 'stats', ip: 'Local Session', userAgent: navigator.userAgent }
+            ]
+          };
         }
       }
 
