@@ -526,14 +526,14 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       const clean = {};
       for (const [path, content] of Object.entries(files)) {
         if (!path || typeof content !== "string") continue;
-        // Skip huge files (> 400KB) to prevent Firestore 1MB document limit breach
-        if (content.length > 400 * 1024) {
-          console.warn(`[ProjectManager] Skipping oversized file for cloud sync: ${path} (${content.length} bytes)`);
-          continue;
-        }
         // Skip binary content if present
         if (content.indexOf("\0") !== -1) {
           console.warn(`[ProjectManager] Skipping binary file for cloud sync: ${path}`);
+          continue;
+        }
+        // Skip single files larger than 2MB
+        if (content.length > 2 * 1024 * 1024) {
+          console.warn(`[ProjectManager] Skipping oversized file for cloud sync: ${path} (${content.length} bytes)`);
           continue;
         }
         clean[path] = content;
@@ -2301,40 +2301,37 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
           if (isDelta) {
             const changedFilesMap = {};
+            let changedSize = 0;
             for (const f of this.changedFiles) {
               if (this.project.files && this.project.files[f] !== undefined) {
                 changedFilesMap[f] = this.project.files[f];
+                changedSize += f.length + (this.project.files[f] ? this.project.files[f].length : 0);
               }
             }
-            await projectRef.set({
-              name: this.project.name,
-              version: this.project.version,
-              target: this.project.target || "v5",
-              kernel: this.project.kernel || "4.1.0",
-              lemlibVersion: this.project.lemlibVersion || "0.5.4",
-              files: changedFilesMap,
-              activeAuton: this.project.activeAuton || "red_rush_auton",
-              updatedAt: now,
-              authorEmail: user.email || email,
-              isDefault: false
-            }, { merge: true });
+
+            // If delta payload is small (< 500KB), perform direct merge
+            if (changedSize < 500 * 1024) {
+              await projectRef.set({
+                name: this.project.name,
+                version: this.project.version,
+                target: this.project.target || "v5",
+                kernel: this.project.kernel || "4.1.0",
+                lemlibVersion: this.project.lemlibVersion || "0.5.4",
+                files: changedFilesMap,
+                activeAuton: this.project.activeAuton || "red_rush_auton",
+                updatedAt: now,
+                authorEmail: user.email || email,
+                isDefault: false
+              }, { merge: true });
+            } else {
+              // Full chunked save if delta is large
+              await this._saveFirestoreChunks(projectRef, user, email, now);
+            }
           } else {
-            const cleanFiles = this.cleanFilesForFirestore(this.project.files);
-            await projectRef.set({
-              name: this.project.name || "Override_LemLib_Bot",
-              version: this.project.version || "1.0.0",
-              target: this.project.target || "v5",
-              kernel: this.project.kernel || "4.1.0",
-              lemlibVersion: this.project.lemlibVersion || "0.5.4",
-              files: cleanFiles,
-              activeAuton: this.project.activeAuton || "red_rush_auton",
-              updatedAt: now,
-              authorEmail: user.email || email,
-              isDefault: false
-            });
+            await this._saveFirestoreChunks(projectRef, user, email, now);
           }
         } catch (fsErr) {
-          console.warn("[ProjectManager] Firestore save warning (server backup is active):", fsErr);
+          console.warn("[ProjectManager] Firestore save notice:", fsErr);
         }
       }
 
@@ -2347,6 +2344,67 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       await this.saveLocal(false);
       emit(totalBytes);
       return true;
+    }
+
+    async _saveFirestoreChunks(projectRef, user, email, now) {
+      const cleanFiles = this.cleanFilesForFirestore(this.project.files);
+      const CHUNK_SIZE_LIMIT = 450 * 1024; // 450 KB per document (well below Firestore 1MB doc limit)
+      const chunks = [];
+      let currentChunk = {};
+      let currentChunkSize = 0;
+
+      for (const [path, content] of Object.entries(cleanFiles)) {
+        const itemSize = path.length + (typeof content === "string" ? content.length : 0);
+        if (currentChunkSize + itemSize > CHUNK_SIZE_LIMIT && Object.keys(currentChunk).length > 0) {
+          chunks.push(currentChunk);
+          currentChunk = {};
+          currentChunkSize = 0;
+        }
+        currentChunk[path] = content;
+        currentChunkSize += itemSize;
+      }
+      if (Object.keys(currentChunk).length > 0) {
+        chunks.push(currentChunk);
+      }
+
+      if (chunks.length <= 1) {
+        await projectRef.set({
+          name: this.project.name || "Override_LemLib_Bot",
+          version: this.project.version || "1.0.0",
+          target: this.project.target || "v5",
+          kernel: this.project.kernel || "4.1.0",
+          lemlibVersion: this.project.lemlibVersion || "0.5.4",
+          files: cleanFiles,
+          activeAuton: this.project.activeAuton || "red_rush_auton",
+          updatedAt: now,
+          authorEmail: user.email || email,
+          isDefault: false,
+          chunkCount: 0
+        });
+      } else {
+        await projectRef.set({
+          name: this.project.name || "Override_LemLib_Bot",
+          version: this.project.version || "1.0.0",
+          target: this.project.target || "v5",
+          kernel: this.project.kernel || "4.1.0",
+          lemlibVersion: this.project.lemlibVersion || "0.5.4",
+          activeAuton: this.project.activeAuton || "red_rush_auton",
+          updatedAt: now,
+          authorEmail: user.email || email,
+          isDefault: false,
+          chunkCount: chunks.length,
+          totalFiles: Object.keys(cleanFiles).length
+        });
+
+        const chunksCol = projectRef.collection("chunks");
+        for (let i = 0; i < chunks.length; i++) {
+          await chunksCol.doc(String(i)).set({
+            chunkIndex: i,
+            files: chunks[i],
+            updatedAt: now
+          });
+        }
+      }
     }
 
     async loadFromCloud(force = false) {
@@ -2394,6 +2452,22 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           const snap = await projectRef.get();
           if (snap.exists) {
             const fsData = snap.data();
+            const chunkCount = Number(fsData.chunkCount) || 0;
+            if (chunkCount > 0) {
+              try {
+                const chunksSnap = await projectRef.collection("chunks").get();
+                const combinedFiles = {};
+                chunksSnap.forEach((cDoc) => {
+                  const cData = cDoc.data();
+                  if (cData && cData.files) {
+                    Object.assign(combinedFiles, cData.files);
+                  }
+                });
+                fsData.files = combinedFiles;
+              } catch (chunkErr) {
+                console.warn("[ProjectManager] Error reading Firestore chunks:", chunkErr);
+              }
+            }
             const fsTime = Number(fsData.updatedAt) || 0;
             const candTime = candidateData ? (Number(candidateData.updatedAt) || 0) : 0;
             if (!candidateData || fsTime > candTime) {
