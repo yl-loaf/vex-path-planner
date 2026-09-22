@@ -2498,7 +2498,12 @@
 
       card.addEventListener("click", (e) => {
         if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("textarea")) return;
-        selectedId = a.id;
+        const clickedHeader = e.target.closest(".card-title");
+        if (clickedHeader && selectedId === a.id) {
+          selectedId = null; // collapse
+        } else {
+          selectedId = a.id; // expand
+        }
         renderFlow();
         draw();
       });
