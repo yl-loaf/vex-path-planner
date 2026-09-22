@@ -392,6 +392,9 @@
           } else if (a.type === "ifElse") {
             badgeType = "control";
             icon = "🔀";
+          } else if (a.type === "loop") {
+            badgeType = "control";
+            icon = "🔁";
           } else if (a.type.includes("turn")) {
             badgeType = "turn";
             icon = "🔄";
@@ -424,6 +427,18 @@
           } else if (a.type === "ifElse") {
             titleText = `if (${a.condition || 'true'}) { ${a.thenLabel || 'Move forward'} } else { ${a.elseLabel || 'Move backwards'} }`;
             detailsText = `If true: ${a.thenLabel || 'Move forward'} · Else: ${a.elseLabel || 'Move backwards'} · C-Block Conditional`;
+          } else if (a.type === "loop") {
+            const mode = a.loopMode || "until";
+            if (mode === "until") {
+              titleText = `while (!(${a.condition || '!limit_switch.get_value()'})) { ... }`;
+              detailsText = `Loops until condition ${a.condition || '!limit_switch.get_value()'} becomes true (C++ loop until)`;
+            } else if (mode === "for") {
+              titleText = `for (int i = 0; i < ${a.times || 5}; i++) { ... }`;
+              detailsText = `Loops for ${a.times || 5} iterations consecutively (C++ for loop)`;
+            } else {
+              titleText = `while (true) { ... }`;
+              detailsText = `Loops infinitely (forever loop C++)`;
+            }
           } else if (a.type === "moveToPoint") {
             titleText = `moveToPoint(${a.x}, ${a.y})`;
             detailsText = `Timeout: ${a.timeout}ms · Forwards: ${a.forwards !== false} · MaxSpeed: ${a.maxSpeed || 127}`;

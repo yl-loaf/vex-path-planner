@@ -341,6 +341,31 @@
         async: false,
       };
     }
+    if (type === "loop") {
+      const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+      const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+      return {
+        id: uid(),
+        type: "loop",
+        loopMode: "until", // "until", "for", "forever"
+        condition: "!limit_switch.get_value()",
+        times: 5,
+        loopLabel: "Move forward",
+        loopCode: "chassis.moveToPoint(24, 24, 2000);",
+        loopAction: {
+          type: "moveToPoint",
+          x: 24,
+          y: 24,
+          timeout: 2000,
+          forwards: true,
+          maxSpeed: defMax,
+          minSpeed: defMin,
+          earlyExitRange: 0,
+        },
+        label: "",
+        async: false,
+      };
+    }
     return {
       id: uid(),
       type,
@@ -644,6 +669,26 @@
           y: isElse ? (fromPose.y - 24) : (fromPose.y + 24),
           timeout: 2000,
           forwards: !isElse,
+        };
+      }
+      return simulateAction({ ...branchAct, id: action.id }, fromPose, customBot);
+    }
+
+    if (action.type === "loop") {
+      let branchAct = action.loopAction;
+      if (!branchAct) {
+        const code = action.loopCode;
+        if (window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
+          branchAct = window.CppTranslator.parseStatementToAction(code, b.defaultMaxSpeed || 127, b.defaultMinSpeed || 0);
+        }
+      }
+      if (!branchAct) {
+        branchAct = {
+          type: "moveToPoint",
+          x: fromPose.x + 24,
+          y: fromPose.y + 24,
+          timeout: 2000,
+          forwards: true,
         };
       }
       return simulateAction({ ...branchAct, id: action.id }, fromPose, customBot);
@@ -1800,6 +1845,27 @@
         async: !!act.async
       };
     }
+    if (act.type === "ifElse") {
+      return {
+        title: `${stepNum}. If / Else`,
+        sub: act.condition ? `if (${act.condition.slice(0,18)})` : "Conditional",
+        type: "ifElse",
+        async: !!act.async
+      };
+    }
+    if (act.type === "loop") {
+      const mode = act.loopMode || "until";
+      let subText = "Loop";
+      if (mode === "until") subText = `until (${act.condition ? act.condition.slice(0, 14) : ""})`;
+      else if (mode === "for") subText = `for ${act.times || 5} times`;
+      else subText = "forever";
+      return {
+        title: `${stepNum}. Loop`,
+        sub: subText,
+        type: "loop",
+        async: !!act.async
+      };
+    }
     const coords = (act.x != null && act.y != null) ? `(${act.x}", ${act.y}")` : "";
     return {
       title: `${stepNum}. ${act.type}`,
@@ -2016,8 +2082,9 @@
 
       if (item.type === "single") {
         const details = getActionDetails(item.act, item.idx);
-        const strokeColor = item.act.type === "custom" ? "#06b6d4" : item.act.type.startsWith("swing") ? "#a855f7" : "#3b82f6";
-        const bgColor = item.act.type === "custom" ? "#083344" : item.act.type.startsWith("swing") ? "#3b0764" : "#172554";
+        const isControl = item.act.type === "ifElse" || item.act.type === "loop";
+        const strokeColor = isControl ? "#fbbf24" : (item.act.type === "custom" ? "#06b6d4" : item.act.type.startsWith("swing") ? "#a855f7" : "#3b82f6");
+        const bgColor = isControl ? "#78350f" : (item.act.type === "custom" ? "#083344" : item.act.type.startsWith("swing") ? "#3b0764" : "#172554");
         svgRows += `
           <g>
             <rect x="85" y="${curY}" width="250" height="46" rx="8" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.8"/>
@@ -2244,8 +2311,8 @@
 
       let catClass = "cat-motion";
       if (a.type === "moveToPoint" || a.type === "moveToPose") catClass = "cat-motion";
-      else if (a.type === "turnToPoint" || a.type === "turnToHeading" || a.type === "swingToPoint" || a.type === "swingToHeading") catClass = "cat-turn";
-      else if (a.type === "wait" || a.type === "ifElse") catClass = "cat-control";
+      if (a.type === "turnToPoint" || a.type === "turnToHeading" || a.type === "swingToPoint" || a.type === "swingToHeading") catClass = "cat-turn";
+      else if (a.type === "wait" || a.type === "ifElse" || a.type === "loop") catClass = "cat-control";
       else if (a.type === "custom") {
         if (/clamp|intake|conveyor|flywheel|piston|motor/i.test(a.customCode || "")) catClass = "cat-subsystem";
         else catClass = "cat-custom";
@@ -2257,6 +2324,7 @@
         (a.id === selectedId ? " selected" : " collapsed") +
         (a.type === "custom" ? " custom-type" : "") +
         (a.type === "ifElse" ? " if-else-card" : "") +
+        (a.type === "loop" ? " loop-card" : "") +
         (a.async ? " multitask-active" : "");
       card.dataset.id = a.id;
 
@@ -2341,6 +2409,78 @@
                 <span class="move-comment-preview">${a.label ? `// ${escapeHtml(cleanCommentText(a.label))}` : "e.g. // alliance decision"}</span>
               </span>
               <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label || '')}" placeholder="e.g. alliance color check or stake decision"/>
+            </label>
+          </div>`;
+      } else if (a.type === "loop") {
+        const mode = a.loopMode || "until";
+        body = `
+          <div class="scratch-loop-container">
+            <div class="scratch-loop-header">
+              <span class="scratch-keyword">loop</span>
+              <select data-f="loopMode" class="scratch-loop-mode-select">
+                <option value="until" ${mode === "until" ? "selected" : ""}>until</option>
+                <option value="for" ${mode === "for" ? "selected" : ""}>for n times</option>
+                <option value="forever" ${mode === "forever" ? "selected" : ""}>forever</option>
+              </select>
+
+              ${mode === "until" ? `
+              <div class="scratch-condition-slot" title="C++ boolean expression condition to stop the loop when true">
+                <span class="scratch-hex-point">◀</span>
+                <input type="text" data-f="condition" class="scratch-condition-input" value="${escapeHtml(a.condition || '!limit_switch.get_value()')}" placeholder="!limit_switch.get_value()" />
+                <span class="scratch-hex-point">▶</span>
+              </div>
+              ` : ""}
+
+              ${mode === "for" ? `
+              <div class="scratch-times-slot" title="Number of iterations for the loop">
+                <input type="number" data-f="times" class="scratch-times-input" value="${a.times != null ? a.times : 5}" min="1" step="1" />
+                <span class="scratch-times-suffix">times</span>
+              </div>
+              ` : ""}
+
+              ${mode === "forever" ? `
+              <span class="scratch-loop-infinite-label">(infinite 🔄)</span>
+              ` : ""}
+            </div>
+
+            ${mode === "until" ? `
+            <div class="scratch-cond-presets">
+              <span class="scratch-preset-lbl">Presets:</span>
+              <button type="button" class="cond-chip ${a.condition === '!limit_switch.get_value()' ? 'active' : ''}" data-act="set-loop-cond" data-cond="!limit_switch.get_value()">!limit_switch.get_value()</button>
+              <button type="button" class="cond-chip ${a.condition === 'sonar.distance(inches) < 10' ? 'active' : ''}" data-act="set-loop-cond" data-cond="sonar.distance(inches) < 10">sonar &lt; 10"</button>
+              <button type="button" class="cond-chip ${a.condition === 'optical.get_hue() > 200' ? 'active' : ''}" data-act="set-loop-cond" data-cond="optical.get_hue() > 200">hue &gt; 200</button>
+            </div>
+            ` : ""}
+
+            <!-- LOOP BODY ARM -->
+            <div class="scratch-c-arm">
+              <div class="scratch-branch-header loop-header">
+                <span class="scratch-branch-badge">🔄 Repeat Body:</span>
+                <input type="text" data-f="loopLabel" class="scratch-branch-title-input" value="${escapeHtml(a.loopLabel || 'Move forward')}" placeholder="Move forward" />
+              </div>
+              <div class="scratch-branch-content">
+                <label class="scratch-sub-label">C++ Statement / Motion:
+                  <textarea data-f="loopCode" rows="2" class="scratch-code-textarea" placeholder="chassis.moveToPoint(24, 24, 2000);">${escapeHtml(a.loopCode || 'chassis.moveToPoint(24, 24, 2000);')}</textarea>
+                </label>
+                <div class="scratch-preset-actions">
+                  <span class="scratch-preset-lbl">Actions:</span>
+                  <button type="button" class="snip-btn" data-act="set-loop-preset" data-preset="moveForward">🔵 Move Forward</button>
+                  <button type="button" class="snip-btn" data-act="set-loop-preset" data-preset="turn90">🟣 Turn 90°</button>
+                  <button type="button" class="snip-btn" data-act="set-loop-preset" data-preset="clampOn">🟢 Clamp Goal</button>
+                  <button type="button" class="snip-btn" data-act="set-loop-preset" data-preset="intakeOn">🟢 Intake On</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="scratch-block-cap"></div>
+          </div>
+          <div class="move-comment-row">
+            <label class="move-comment-label">
+              <span class="move-comment-header">
+                <span class="move-comment-tag">💬 Loop Comment (C++ code)</span>
+                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(cleanCommentText(a.label))}` : "e.g. // wait until limit switch triggered"}</span>
+              </span>
+              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label || '')}" placeholder="e.g. sensor wait loop"/>
             </label>
           </div>`;
       } else if (a.type === "wait") {
@@ -2769,7 +2909,14 @@
               if (a.activeSimBranch === "else") draw();
               generateCode();
             }
-            if (f === "condition" || f === "thenLabel" || f === "elseLabel") {
+            if (f === "loopCode") {
+              if (window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
+                a.loopAction = window.CppTranslator.parseStatementToAction(el.value, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0);
+              }
+              draw();
+              generateCode();
+            }
+            if (f === "condition" || f === "thenLabel" || f === "elseLabel" || f === "loopLabel" || f === "times") {
               generateCode();
             }
             if (f === "customCode") {
@@ -2789,6 +2936,10 @@
               const detectedIf = window.CppTranslator && typeof window.CppTranslator.parseIfElseFromCode === "function"
                 ? window.CppTranslator.parseIfElseFromCode(el.value, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0)
                 : null;
+              const detectedLoop = window.CppTranslator && typeof window.CppTranslator.parseLoopFromCode === "function"
+                ? window.CppTranslator.parseLoopFromCode(el.value, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0)
+                : null;
+
               let bannerEl = card.querySelector(".custom-if-detected-banner");
               if (detectedIf) {
                 if (!bannerEl) {
@@ -2835,6 +2986,49 @@
                     showToast("✨ Converted custom C++ code to Scratch If-Else block!");
                   };
                 }
+              } else if (detectedLoop) {
+                if (!bannerEl) {
+                  bannerEl = document.createElement("div");
+                  bannerEl.className = "custom-if-detected-banner";
+                  const labelWide = card.querySelector("label.wide");
+                  if (labelWide) labelWide.parentNode.insertBefore(bannerEl, labelWide);
+                }
+                const modeLbl = detectedLoop.loopMode === "for" ? `for ${detectedLoop.times} times` : (detectedLoop.loopMode === "forever" ? "forever" : `until ${detectedLoop.condition}`);
+                bannerEl.innerHTML = `
+                  <div class="if-detected-info">
+                    <span class="if-detected-icon">✨</span>
+                    <div class="if-detected-text">
+                      <div class="if-detected-title-row">
+                        <span class="if-detected-title" style="color: #fb923c;">Detected C++ Loop!</span>
+                        <span class="if-detected-cond-badge" style="background: rgba(249,115,22,0.25); border-color: #FF7B00; color: #f97316;">${escapeHtml(modeLbl)}</span>
+                      </div>
+                      <div class="if-detected-branches">
+                        <span class="if-detected-branch-item">🔄 Repeat: <strong>${escapeHtml(detectedLoop.loopLabel)}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-convert-to-scratch" style="background: linear-gradient(135deg, #FF7B00 0%, #ea580c 100%); box-shadow: 0 2px 8px rgba(234, 88, 12, 0.35);" data-act="convert-custom-to-loop" data-idx="${idx}" title="Convert this custom code block into a visual Scratch Loop block">
+                    ⚡ Convert to Loop Block
+                  </button>
+                `;
+                const btnConv = bannerEl.querySelector('[data-act="convert-custom-to-loop"]');
+                if (btnConv) {
+                  btnConv.onclick = (e) => {
+                    e.stopPropagation();
+                    a.type = "loop";
+                    a.loopMode = detectedLoop.loopMode;
+                    a.condition = detectedLoop.condition;
+                    a.times = detectedLoop.times;
+                    a.loopCode = detectedLoop.loopCode;
+                    a.loopAction = detectedLoop.loopAction;
+                    a.loopLabel = detectedLoop.loopLabel;
+                    markDirty();
+                    renderFlow();
+                    draw();
+                    generateCode();
+                    showToast("✨ Converted custom C++ code to Scratch Loop block!");
+                  };
+                }
               } else if (bannerEl) {
                 bannerEl.remove();
               }
@@ -2866,6 +3060,26 @@
               draw();
               generateCode();
               showToast("✨ Converted custom C++ code to Scratch If-Else block!");
+            }
+            return;
+          }
+          if (act === "convert-custom-to-loop") {
+            const detected = window.CppTranslator && typeof window.CppTranslator.parseLoopFromCode === "function"
+              ? window.CppTranslator.parseLoopFromCode(a.customCode, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0)
+              : null;
+            if (detected) {
+              a.type = "loop";
+              a.loopMode = detected.loopMode;
+              a.condition = detected.condition;
+              a.times = detected.times;
+              a.loopCode = detected.loopCode;
+              a.loopAction = detected.loopAction;
+              a.loopLabel = detected.loopLabel;
+              markDirty();
+              renderFlow();
+              draw();
+              generateCode();
+              showToast("✨ Converted custom C++ code to Scratch Loop block!");
             }
             return;
           }
@@ -2939,6 +3153,41 @@
               a.elseLabel = "Intake Off";
               a.elseCode = "intake.move(0);";
               a.elseAction = { type: "custom", customCode: "intake.move(0);", customDuration: 0 };
+            }
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            updateTimeDisplay();
+            return;
+          }
+
+          if (act === "set-loop-cond") {
+            a.condition = btn.dataset.cond;
+            markDirty();
+            renderFlow();
+            generateCode();
+            return;
+          }
+
+          if (act === "set-loop-preset") {
+            const p = btn.dataset.preset;
+            if (p === "moveForward") {
+              a.loopLabel = "Move forward";
+              a.loopCode = "chassis.moveToPoint(24, 24, 2000);";
+              a.loopAction = { type: "moveToPoint", x: 24, y: 24, timeout: 2000, forwards: true };
+            } else if (p === "turn90") {
+              a.loopLabel = "Turn to 90°";
+              a.loopCode = "chassis.turnToHeading(90, 1500);";
+              a.loopAction = { type: "turnToHeading", theta: 90, timeout: 1500 };
+            } else if (p === "clampOn") {
+              a.loopLabel = "Clamp Goal";
+              a.loopCode = "clamp.set_value(true);\npros::delay(100);";
+              a.loopAction = { type: "custom", customCode: "clamp.set_value(true);\npros::delay(100);", customDuration: 0.1 };
+            } else if (p === "intakeOn") {
+              a.loopLabel = "Intake On";
+              a.loopCode = "intake.move(127);";
+              a.loopAction = { type: "custom", customCode: "intake.move(127);", customDuration: 0 };
             }
             markDirty();
             renderFlow();
@@ -3100,6 +3349,34 @@
         const elseCode = (a.elseCode != null && a.elseCode !== "") ? a.elseCode : (a.elseAction ? "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});" : "");
         const elseLines = elseCode.split("\n");
         for (const line of elseLines) {
+          if (line.trim().length === 0) code += "\n";
+          else code += `${ind}${ind}${line}\n`;
+        }
+        code += `${ind}}\n`;
+        continue;
+      }
+      if (a.type === "loop") {
+        const mode = a.loopMode || "until";
+        const cond = (a.condition || "!limit_switch.get_value()").trim();
+        const loopCode = (a.loopCode != null && a.loopCode !== "") ? a.loopCode : (a.loopAction ? "chassis.moveToPoint(24, 24, 2000);" : "chassis.moveToPoint(24, 24, 2000);");
+
+        if (cleanComment && commentStyle === "above") {
+          code += `${ind}// ${cleanComment}\n`;
+        }
+        const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
+
+        if (mode === "until") {
+          // Loop until cond translates to while (!(cond)) in C++
+          code += `${ind}while (!(${cond})) {${commentSuffix}\n`;
+        } else if (mode === "for") {
+          const tCount = a.times != null ? a.times : 5;
+          code += `${ind}for (int i = 0; i < ${tCount}; i++) {${commentSuffix}\n`;
+        } else {
+          code += `${ind}while (true) {${commentSuffix}\n`;
+        }
+
+        const lines = loopCode.split("\n");
+        for (const line of lines) {
           if (line.trim().length === 0) code += "\n";
           else code += `${ind}${ind}${line}\n`;
         }

@@ -7782,6 +7782,85 @@ kbd {
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5);
 }
 
+/* Scratch Loop Block Styles */
+.action-card.loop-card {
+  border-color: #FF7B00 !important;
+  background: linear-gradient(145deg, rgba(255, 123, 0, 0.16) 0%, rgba(15, 23, 42, 0.98) 100%) !important;
+  box-shadow: 0 4px 16px rgba(255, 123, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.scratch-loop-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1.5px solid rgba(255, 123, 0, 0.4);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 4px;
+}
+
+.scratch-loop-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.scratch-loop-mode-select {
+  background: #090d16 !important;
+  border: 1.5px solid #FF7B00 !important;
+  border-radius: 8px !important;
+  color: #fb923c !important;
+  font-family: "SF Pro Rounded", "Comic Neue", -apple-system, BlinkMacSystemFont, sans-serif !important;
+  font-size: 0.85rem !important;
+  font-weight: 800 !important;
+  padding: 3px 20px 3px 8px !important;
+  cursor: pointer;
+}
+
+.scratch-times-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #090d16;
+  border: 1.5px solid #FF7B00;
+  border-radius: 12px;
+  padding: 2px 8px;
+}
+
+.scratch-times-input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #38bdf8 !important;
+  font-family: ui-monospace, monospace !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  width: 45px !important;
+  text-align: center !important;
+  padding: 0 !important;
+}
+
+.scratch-times-suffix {
+  color: #FF7B00;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.scratch-loop-infinite-label {
+  color: #fb923c;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.scratch-branch-header.loop-header .scratch-branch-badge {
+  background: rgba(249, 115, 22, 0.2);
+  border: 1px solid #FF7B00;
+  color: #f97316;
+}
+
 
 
 

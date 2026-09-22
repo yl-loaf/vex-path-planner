@@ -125,6 +125,14 @@
       }
     }
 
+    // Check if statement contains a while or for loop
+    if (/^(while|for)\s*\(/i.test(line)) {
+      const loopAct = parseLoopFromCode(line, defaultMaxSpeed, defaultMinSpeed);
+      if (loopAct) {
+        return loopAct;
+      }
+    }
+
     // moveToPoint
     const mtPointMatch = line.match(/chassis\.moveToPoint\s*\(([^;]+)\)/i);
     if (mtPointMatch) {
@@ -440,6 +448,148 @@
     return act;
   }
 
+  // Comprehensive C++ loop detector for custom code
+  function parseLoopFromCode(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
+    if (!codeStr || typeof codeStr !== "string") return null;
+    const trimmed = codeStr.trim();
+    if (!trimmed) return null;
+
+    // 1. Check for standard while loop: while (...) { ... }
+    const whileMatch = trimmed.match(/(?:^|\n|\r|\s|;)while\s*\(/i);
+    if (whileMatch) {
+      const startIdx = whileMatch.index + whileMatch[0].toLowerCase().indexOf("while");
+      const sub = trimmed.slice(startIdx);
+      const openParen = sub.indexOf("(");
+      if (openParen !== -1) {
+        let parenDepth = 1;
+        let closeParen = -1;
+        for (let k = openParen + 1; k < sub.length; k++) {
+          if (sub[k] === "(") parenDepth++;
+          else if (sub[k] === ")") {
+            parenDepth--;
+            if (parenDepth === 0) {
+              closeParen = k;
+              break;
+            }
+          }
+        }
+        if (closeParen !== -1) {
+          let condition = sub.slice(openParen + 1, closeParen).trim() || "true";
+          let rem = sub.slice(closeParen + 1).trim();
+          let loopCode = "";
+
+          if (rem.startsWith("{")) {
+            let braceDepth = 1;
+            let closeBrace = -1;
+            for (let k = 1; k < rem.length; k++) {
+              if (rem[k] === "{") braceDepth++;
+              else if (rem[k] === "}") {
+                braceDepth--;
+                if (braceDepth === 0) {
+                  closeBrace = k;
+                  break;
+                }
+              }
+            }
+            if (closeBrace !== -1) {
+              loopCode = rem.slice(1, closeBrace).trim();
+            } else {
+              loopCode = rem.slice(1).trim();
+            }
+          } else {
+            loopCode = rem.trim();
+          }
+
+          const act = createDefaultAction("loop", defaultMaxSpeed, defaultMinSpeed);
+          // If condition is while(!(limit_switch.get_value())), strip !() to make it "limit_switch.get_value()"
+          if (condition.startsWith("!(") && condition.endsWith(")")) {
+            act.loopMode = "until";
+            act.condition = condition.slice(2, -1).trim();
+          } else if (condition.startsWith("!") && !condition.startsWith("!(")) {
+            act.loopMode = "until";
+            act.condition = condition.slice(1).trim();
+          } else if (condition === "true") {
+            act.loopMode = "forever";
+            act.condition = "true";
+          } else {
+            act.loopMode = "until";
+            act.condition = "!(" + condition + ")"; // loop until not
+          }
+          act.times = 5;
+          act.loopCode = loopCode || "chassis.moveToPoint(24, 24, 2000);";
+          if (act.loopCode && !act.loopCode.endsWith(";") && !act.loopCode.endsWith("}")) act.loopCode += ";";
+          act.loopAction = parseStatementToAction(act.loopCode, defaultMaxSpeed, defaultMinSpeed);
+          act.loopLabel = getActionHumanLabel(act.loopAction, act.loopCode);
+          return act;
+        }
+      }
+    }
+
+    // 2. Check for standard for loop: for (int i = 0; i < 5; i++) { ... }
+    const forMatch = trimmed.match(/(?:^|\n|\r|\s|;)for\s*\(/i);
+    if (forMatch) {
+      const startIdx = forMatch.index + forMatch[0].toLowerCase().indexOf("for");
+      const sub = trimmed.slice(startIdx);
+      const openParen = sub.indexOf("(");
+      if (openParen !== -1) {
+        let parenDepth = 1;
+        let closeParen = -1;
+        for (let k = openParen + 1; k < sub.length; k++) {
+          if (sub[k] === "(") parenDepth++;
+          else if (sub[k] === ")") {
+            parenDepth--;
+            if (parenDepth === 0) {
+              closeParen = k;
+              break;
+            }
+          }
+        }
+        if (closeParen !== -1) {
+          const initCondInc = sub.slice(openParen + 1, closeParen).trim();
+          let rem = sub.slice(closeParen + 1).trim();
+          let loopCode = "";
+
+          if (rem.startsWith("{")) {
+            let braceDepth = 1;
+            let closeBrace = -1;
+            for (let k = 1; k < rem.length; k++) {
+              if (rem[k] === "{") braceDepth++;
+              else if (rem[k] === "}") {
+                braceDepth--;
+                if (braceDepth === 0) {
+                  closeBrace = k;
+                  break;
+                }
+              }
+            }
+            if (closeBrace !== -1) {
+              loopCode = rem.slice(1, closeBrace).trim();
+            } else {
+              loopCode = rem.slice(1).trim();
+            }
+          } else {
+            loopCode = rem.trim();
+          }
+
+          const act = createDefaultAction("loop", defaultMaxSpeed, defaultMinSpeed);
+          act.loopMode = "for";
+          act.condition = "!limit_switch.get_value()";
+          let tVal = 5;
+          const matchLt = initCondInc.match(/<\s*(\d+)/);
+          if (matchLt) tVal = parseInt(matchLt[1], 10) || 5;
+          act.times = tVal;
+          act.loopCode = loopCode || "chassis.moveToPoint(24, 24, 2000);";
+          if (act.loopCode && !act.loopCode.endsWith(";") && !act.loopCode.endsWith("}")) act.loopCode += ";";
+          act.loopAction = parseStatementToAction(act.loopCode, defaultMaxSpeed, defaultMinSpeed);
+          act.loopLabel = getActionHumanLabel(act.loopAction, act.loopCode);
+          return act;
+        }
+      }
+    }
+
+    return null;
+  }
+
   // Human-readable action label helper
   function getActionHumanLabel(act, defaultCode = "") {
     if (!act) {
@@ -623,6 +773,24 @@
         }
         actions.push(detectedIf);
         log.push(`Auto-detected if loop in custom code block: if (${detectedIf.condition}) then "${detectedIf.thenLabel}" else "${detectedIf.elseLabel}"`);
+        pendingCustomLines = [];
+        return;
+      }
+
+      // Check if custom code block contains a while or for loop
+      const detectedLoop = parseLoopFromCode(fullCode, defaultMaxSpeed, defaultMinSpeed);
+      if (detectedLoop) {
+        if (pendingComments.length > 0) {
+          detectedLoop.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        } else {
+          const cMatch = fullCode.match(/\/\/\s*(.+)$/m);
+          if (cMatch) {
+            detectedLoop.label = cleanCommentText(cMatch[1]);
+          }
+        }
+        actions.push(detectedLoop);
+        log.push(`Auto-detected loop in custom code block: mode ${detectedLoop.loopMode}, condition ${detectedLoop.condition}`);
         pendingCustomLines = [];
         return;
       }
@@ -1394,6 +1562,7 @@ void autonomous() {
     parseStatementToAction,
     tryParseTernary,
     parseIfElseFromCode,
+    parseLoopFromCode,
     SAMPLE_ROUTINES,
   };
 });
