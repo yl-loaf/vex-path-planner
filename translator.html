@@ -7,7 +7,7 @@
   <meta name="description" content="Translate raw C++ autonomous routines into visual blocks, multitask concurrency flows, and field trajectories for VEX V5 LemLib." />
   <meta property="og:title" content="C++ Auton to Blocks Translator · VEX V5 LemLib" />
   <meta property="og:description" content="Parse raw C++ autonomous code into visual blocks, synchronized with the user profile and auton slots." />
-  <link rel="stylesheet" href="style.css?v=20260921.k69" />
+  <link rel="stylesheet" href="style.css?v=20260922.k4" />
 </head>
 <body class="translator-page-body">
   <div id="app" class="translator-app-container">
@@ -190,15 +190,15 @@ void autonomous() {
   <div id="toastNotification" class="toast-notify"></div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260921.k69"></script>
+  <script src="version.js?v=20260922.k4"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260921.k69"></script>
-  <script src="session-guard.js?v=20260921.k63"></script>
-  <script src="cpp-parser.js?v=20260920.k16"></script>
-  <script src="translator-page.js?v=20260920.k16"></script>
-  <script src="tutorial.js?v=20260921.t1"></script>
+  <script src="firebase-config.js?v=20260922.k4"></script>
+  <script src="session-guard.js?v=20260922.k4"></script>
+  <script src="cpp-parser.js?v=20260922.k4"></script>
+  <script src="translator-page.js?v=20260922.k4"></script>
+  <script src="tutorial.js?v=20260922.k4"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {
@@ -250,12 +250,17 @@ void autonomous() {
         }
       } catch(e) {
         try {
-          var res = await fetch(window.getApiUrl ? window.getApiUrl('/api/stats') : '/api/stats');
-          if (!res.ok) throw new Error();
-          var data = await res.json();
-          var badge = document.getElementById('globalVisitorBadgeTrans');
-          if (badge && data && data.totalViews !== undefined) {
-            badge.textContent = data.totalViews.toLocaleString();
+          var statsUrl = window.getApiUrl ? window.getApiUrl('/api/stats') : '/api/stats';
+          if (statsUrl) {
+            var res = await fetch(statsUrl);
+            if (!res.ok) throw new Error();
+            var data = await res.json();
+            var badge = document.getElementById('globalVisitorBadgeTrans');
+            if (badge && data && data.totalViews !== undefined) {
+              badge.textContent = data.totalViews.toLocaleString();
+            }
+          } else {
+            throw new Error('Static host - fallback to local counter');
           }
         } catch (err) {
           var badge = document.getElementById('globalVisitorBadgeTrans');

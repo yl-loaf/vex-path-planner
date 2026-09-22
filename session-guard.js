@@ -18,8 +18,7 @@
     if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
       return path;
     }
-    const backendBase = "https://ais-pre-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
-    return backendBase + path;
+    return null;
   }
 
   let currentUser = null; // { uid, email, displayName }
@@ -429,8 +428,10 @@
   // Server Registration & Heartbeat
   async function registerWithServer(forceTakeover = false) {
     if (!currentUser) return { success: true };
+    const url = getApiUrl("/api/session/register");
+    if (!url) return { success: true, conflict: false };
     try {
-      const resp = await fetch(getApiUrl("/api/session/register"), {
+      const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -445,15 +446,16 @@
       if (!resp.ok) throw new Error("Server returned " + resp.status);
       return await resp.json();
     } catch (err) {
-      console.warn("[SessionGuard] Server register warning:", err);
       return { success: true, conflict: false }; // fallback gracefully
     }
   }
 
   async function sendHeartbeat() {
     if (!currentUser || instanceStatus !== "ACTIVE") return;
+    const url = getApiUrl("/api/session/heartbeat");
+    if (!url) return;
     try {
-      const resp = await fetch(getApiUrl("/api/session/heartbeat"), {
+      const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

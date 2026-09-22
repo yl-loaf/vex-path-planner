@@ -17,8 +17,7 @@
     if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
       return path;
     }
-    const backendBase = "https://ais-pre-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
-    return backendBase + path;
+    return null;
   }
 
   function openProjectDB() {
@@ -2408,18 +2407,21 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       // 2. Persist to Server Cloud Store if available
       try {
-        const payloadProject = { ...this.project, versions: this.versions || {} };
-        const resp = await fetch(getApiUrl("/api/project"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            uid: uid,
-            email: email,
-            project: payloadProject
-          })
-        });
-        if (resp.ok) {
-          console.log(`[ProjectManager] Saved project to server cloud store: "${this.project.name}"`);
+        const srvUrl = getApiUrl("/api/project");
+        if (srvUrl) {
+          const payloadProject = { ...this.project, versions: this.versions || {} };
+          const resp = await fetch(srvUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              uid: uid,
+              email: email,
+              project: payloadProject
+            })
+          });
+          if (resp.ok) {
+            console.log(`[ProjectManager] Saved project to server cloud store: "${this.project.name}"`);
+          }
         }
       } catch (srvErr) {
         // Non-blocking server save warning
@@ -2554,12 +2556,15 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         const params = new URLSearchParams();
         if (uid) params.set("uid", uid);
         if (email) params.set("email", email);
-        const resp = await fetch(getApiUrl(`/api/project?${params.toString()}`));
-        if (resp.ok) {
-          const json = await resp.json();
-          if (json.exists && json.project) {
-            candidateData = json.project;
-            candidateSource = "server";
+        const srvUrl = getApiUrl(`/api/project?${params.toString()}`);
+        if (srvUrl) {
+          const resp = await fetch(srvUrl);
+          if (resp.ok) {
+            const json = await resp.json();
+            if (json.exists && json.project) {
+              candidateData = json.project;
+              candidateSource = "server";
+            }
           }
         }
       } catch (err) {

@@ -316,9 +316,14 @@ function doGet(e) {
 
       if (!data) {
         try {
-          const res = await fetch(getApiUrl('/api/stats'));
-          if (!res.ok) throw new Error('Backend not available');
-          data = await res.json();
+          const statsUrl = getApiUrl('/api/stats');
+          if (statsUrl) {
+            const res = await fetch(statsUrl);
+            if (!res.ok) throw new Error('Backend not available');
+            data = await res.json();
+          } else {
+            throw new Error('Static host - fallback to local analytics');
+          }
         } catch (e) {
           let localViews = parseInt(localStorage.getItem('vex_total_views') || '128', 10) + 1;
           localStorage.setItem('vex_total_views', localViews);

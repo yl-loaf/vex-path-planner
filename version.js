@@ -1,2 +1,2 @@
 // Auto-displayed build; bump this when you deploy
-window.APP_BUILD = "20260922.k3";
+window.APP_BUILD = "20260922.k5";

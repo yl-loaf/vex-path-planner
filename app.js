@@ -3954,8 +3954,7 @@
     if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
       return path;
     }
-    const backendBase = "https://ais-pre-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
-    return backendBase + path;
+    return null;
   }
 
   function setCloudStatus(text, cls) {
@@ -4031,16 +4030,19 @@
         const params = new URLSearchParams();
         if (uid) params.set("uid", uid);
         if (email) params.set("email", email);
-        const res = await fetch(getApiUrl(`/api/project/status?${params.toString()}`));
-        if (res.ok) {
-          const st = await res.json();
-          if (st.exists) {
-            const serverTime = Number(st.updatedAt) || 0;
-            const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
-            const localTime = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
-            if (serverTime > localTime || isLocalDefault) {
-              console.log("[CloudSync] Periodic server check detected newer project. Reloading...");
-              await cloudLoad(true);
+        const srvUrl = getApiUrl(`/api/project/status?${params.toString()}`);
+        if (srvUrl) {
+          const res = await fetch(srvUrl);
+          if (res.ok) {
+            const st = await res.json();
+            if (st.exists) {
+              const serverTime = Number(st.updatedAt) || 0;
+              const isLocalDefault = window.ProjectManager?.isDefaultProject ? window.ProjectManager.isDefaultProject() : false;
+              const localTime = isLocalDefault ? 0 : (window.ProjectManager?.project?.updatedAt || 0);
+              if (serverTime > localTime || isLocalDefault) {
+                console.log("[CloudSync] Periodic server check detected newer project. Reloading...");
+                await cloudLoad(true);
+              }
             }
           }
         }
@@ -4114,13 +4116,16 @@
         const params = new URLSearchParams();
         if (uid) params.set("uid", uid);
         if (email) params.set("email", email);
-        const srvRes = await fetch(getApiUrl(`/api/project?${params.toString()}`));
-        if (srvRes.ok) {
-          const srvData = await srvRes.json();
-          if (srvData.exists && srvData.pathPayload) {
-            applyPathPayload(srvData.pathPayload);
-            saveLocal();
-            pathLoaded = true;
+        const srvUrl = getApiUrl(`/api/project?${params.toString()}`);
+        if (srvUrl) {
+          const srvRes = await fetch(srvUrl);
+          if (srvRes.ok) {
+            const srvData = await srvRes.json();
+            if (srvData.exists && srvData.pathPayload) {
+              applyPathPayload(srvData.pathPayload);
+              saveLocal();
+              pathLoaded = true;
+            }
           }
         }
       } catch (err) {
@@ -4193,16 +4198,19 @@
 
       // 2. Save path to server cloud store
       try {
-        await fetch(getApiUrl("/api/project"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            uid: activeUser.uid,
-            email: activeUser.email || "",
-            project: window.ProjectManager?.project || null,
-            pathPayload: payload
-          })
-        });
+        const srvUrl = getApiUrl("/api/project");
+        if (srvUrl) {
+          await fetch(srvUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              uid: activeUser.uid,
+              email: activeUser.email || "",
+              project: window.ProjectManager?.project || null,
+              pathPayload: payload
+            })
+          });
+        }
       } catch (srvErr) {
         console.warn("Server cloud path save warning:", srvErr);
       }

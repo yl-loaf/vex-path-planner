@@ -19,8 +19,9 @@ window.getApiUrl = function(path) {
   if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
     return path;
   }
-  const backendBase = "https://ais-pre-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
-  return backendBase + path;
+  // On third-party static hosts (e.g. GitHub Pages), Cloud Run server endpoints are restricted by origin policies.
+  // Return null so clients cleanly bypass server fetch and rely 100% on Firebase Firestore directly.
+  return null;
 };
 
 // Auto-initialize default Firebase App if compat SDK is present
