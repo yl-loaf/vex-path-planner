@@ -869,12 +869,17 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
 
     scheduleGoogleDriveAutosave() {
       if (typeof window === "undefined" || !window.GoogleDriveSync) return;
+      // CRITICAL: Only autosave if user has actually made edits AND project is not the untouched default!
+      if (!this.project || this.project.isDefault || !this._hasUserEdited) {
+        return;
+      }
+
       if (this._gdriveDebounceTimer) clearTimeout(this._gdriveDebounceTimer);
       this._gdriveDebounceTimer = setTimeout(async () => {
         try {
-          if (this.project && window.GoogleDriveSync) {
+          if (this.project && !this.project.isDefault && this._hasUserEdited && window.GoogleDriveSync) {
             await window.GoogleDriveSync.saveProject(this.project);
-            console.log(`[GoogleDriveAutosave] Auto-synced '${this.project.name}' to Google Drive.`);
+            console.log(`[GoogleDriveAutosave] Auto-synced user project '${this.project.name}' to Google Drive.`);
           }
         } catch (e) {
           console.warn("[GoogleDriveAutosave] Background sync notice:", e.message);
@@ -884,6 +889,12 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
 
     markDirty(dirty = true) {
       this.isDirty = dirty;
+      if (dirty) {
+        this._hasUserEdited = true;
+        if (this.project) {
+          this.project.isDefault = false;
+        }
+      }
       try {
         localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, dirty ? "true" : "false");
       } catch (e) {}

@@ -515,7 +515,7 @@
       const pm = window.ProjectManager;
       if (!pm) return;
 
-      const hasChanges = pm.isDirty || (pm.changedFiles && pm.changedFiles.size > 0);
+      const hasChanges = (pm.isDirty || (pm.changedFiles && pm.changedFiles.size > 0)) && pm._hasUserEdited && !pm.project.isDefault;
       if (!hasChanges) {
         updateAutosaveUI("ready", "✓ All changes saved");
         return;
