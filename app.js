@@ -2170,7 +2170,7 @@
       const card = document.createElement("div");
       card.className =
         `action-card block-card ${catClass}` +
-        (a.id === selectedId ? " selected" : "") +
+        (a.id === selectedId ? " selected" : " collapsed") +
         (a.type === "custom" ? " custom-type" : "") +
         (a.async ? " multitask-active" : "");
       card.dataset.id = a.id;
@@ -2465,14 +2465,30 @@
           </div>`;
       }
 
+      let summaryText = "";
+      if (a.type === "moveToPoint") summaryText = `(${a.x}, ${a.y})`;
+      else if (a.type === "moveToPose") summaryText = `(${a.x}, ${a.y}, ${a.theta}°)`;
+      else if (a.type === "turnToPoint" || a.type === "swingToPoint") summaryText = `to (${a.x}, ${a.y})`;
+      else if (a.type === "turnToHeading" || a.type === "swingToHeading") summaryText = `to ${a.theta}°`;
+      else if (a.type === "wait") {
+        const mode = a.waitType || "distance";
+        if (mode === "distance") summaryText = `${a.distance != null ? a.distance : 12}" dist`;
+        else if (mode === "done") summaryText = "until done";
+        else if (mode === "time") summaryText = `${a.delayMs != null ? a.delayMs : 250}ms`;
+      } else if (a.type === "custom") {
+        const firstLine = (a.customCode || "").trim().split("\n")[0];
+        summaryText = firstLine ? (firstLine.length > 25 ? firstLine.substring(0, 22) + "..." : firstLine) : "C++ Code";
+      }
+
       const cleanLbl = cleanCommentText(a.label);
       card.innerHTML = `
-        <div class="card-title">
+        <div class="card-title" style="cursor: pointer; user-select: none;">
           <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type}</span>
-          ${a.async ? '<span class="badge multitask-badge" title="Multitasking / Async: Non-blocking action running concurrently with the next step">⚡ MULTITASK</span>' : ""}
+          ${summaryText ? `<span class="collapsed-summary-badge">${escapeHtml(summaryText)}</span>` : ""}
+          ${a.async ? '<span class="badge multitask-badge" title="Multitasking: Runs concurrently">⚡ Async</span>' : ""}
           ${a.forwards === false && a.type !== "custom" ? '<span class="badge reverse">REV</span>' : ""}
           <span class="hint-inline ${cleanLbl ? "has-comment" : ""}">${cleanLbl ? `// ${escapeHtml(cleanLbl)}` : ""}</span>
-          <div style="margin-left:auto;display:flex;gap:2px">
+          <div style="margin-left:auto;display:flex;align-items:center;gap:4px">
             <button class="icon" data-act="up" title="Move up">↑</button>
             <button class="icon" data-act="down" title="Move down">↓</button>
             <button class="icon" data-act="del" title="Delete">×</button>
@@ -6154,7 +6170,19 @@ lemlib::ControllerSettings ${currentMode}_controller(
       const remote = m[1];
       const local = window.APP_BUILD || "";
       if (remote && local && remote !== local) {
+        // Prevent infinite reload loop: do not auto-prompt if prompted or reloaded recently in this tab session
+        if (!manual) {
+          const lastPrompt = Number(sessionStorage.getItem("lemlib_last_update_prompt_at") || 0);
+          if (Date.now() - lastPrompt < 60000) {
+            console.log("[Update] Soft update check bypassed to prevent infinite reload loop.");
+            return;
+          }
+        }
+
         if (confirm("A newer build is available (" + remote + ").\\nReload now?")) {
+          try {
+            sessionStorage.setItem("lemlib_last_update_prompt_at", Date.now().toString());
+          } catch (_) {}
           location.reload(true);
         }
       } else if (manual) {
@@ -7759,7 +7787,71 @@ lemlib::ControllerSettings ${currentMode}_controller(
     wireV5BrainUI();
   }
 
+  function initMainSplitter() {
+    const splitter = document.getElementById("mainSplitter");
+    const panel = document.querySelector(".panel.flowchart-panel");
+    if (!splitter || !panel) return;
+
+    // Load saved width from localStorage if exists
+    const savedWidth = localStorage.getItem("lemlib_panel_width");
+    if (savedWidth) {
+      panel.style.width = savedWidth + "px";
+    }
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    splitter.addEventListener("mousedown", (e) => {
+      isDragging = true;
+      startX = e.clientX;
+      startWidth = panel.offsetWidth;
+      splitter.classList.add("dragging");
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.body.style.webkitUserSelect = "none";
+      
+      // Prevent canvas/iframes from intercepting mouse events during drag
+      document.querySelectorAll("canvas, iframe").forEach(el => el.style.pointerEvents = "none");
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!isDragging) return;
+      const deltaX = e.clientX - startX;
+      let newWidth = startWidth + deltaX;
+      
+      // Enforce bounds
+      const minW = 280;
+      const maxW = Math.min(800, window.innerWidth * 0.6);
+      if (newWidth < minW) newWidth = minW;
+      if (newWidth > maxW) newWidth = maxW;
+
+      panel.style.width = newWidth + "px";
+      
+      // Trigger canvas resize and redrawing
+      if (typeof resizeCanvas === "function") {
+        resizeCanvas();
+      }
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (!isDragging) return;
+      isDragging = false;
+      splitter.classList.remove("dragging");
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.body.style.webkitUserSelect = "";
+      
+      // Restore pointer events
+      document.querySelectorAll("canvas, iframe").forEach(el => el.style.pointerEvents = "");
+      
+      // Save width
+      localStorage.setItem("lemlib_panel_width", panel.offsetWidth);
+    });
+  }
+
   // Ensure simulation canvas is directly displayed and drawn on load
+  initMainSplitter();
   showPlannerView();
   updateTimeDisplay();
 
