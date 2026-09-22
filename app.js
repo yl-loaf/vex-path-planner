@@ -6102,7 +6102,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (btnKeep) {
         btnKeep.onclick = () => {
           cleanup();
-          showToast("🛡️ Kept existing raw C++ src/autons.cpp (No changes made)");
+          loadProjectAutonsIntoPlanner(true, true);
+          showToast("🛡️ Loaded raw C++ code into visual planner canvas");
           resolve(false);
         };
       }
@@ -7348,7 +7349,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       }
     });
 
-    // Intelligent startup resolution: compare timestamps between Planner storage and ProjectManager
+    // Intelligent startup resolution: compare timestamps and raw C++ code between Planner storage and ProjectManager
     window.ProjectManager.whenReady().then(() => {
       const proj = window.ProjectManager.project;
       if (!proj) return;
@@ -7364,17 +7365,25 @@ lemlib::ControllerSettings ${currentMode}_controller(
         } catch (_) {}
       }
 
-      // If user last edited in IDE and IDE save is strictly newer than planner:
-      if (proj.lastAutonEditor === "ide" && projUpdatedAt > plannerTime && code && code.trim().length > 0) {
-        console.log("📥 Loading newer autonomous routines saved from IDE C++ editor...");
-        loadProjectAutonsIntoPlanner(false, false);
-      } else if (paths && paths.length > 0 && plannerTime >= projUpdatedAt) {
-        // Planner is newer or equal: sync planner into ProjectManager's src/autons.cpp so IDE has latest
-        console.log("📤 Planner routines are newer than IDE. Syncing into ProjectManager...");
+      const indent = typeof getIndentString === "function" ? getIndentString() : "    ";
+      const hasDiff = window.ProjectManager.hasCodeDifference(paths, indent);
+
+      // Protect raw C++ code: IF code exists in src/autons.cpp and differs from visual blocks:
+      if (code && code.trim().length > 0) {
+        if (hasDiff) {
+          if (proj.importedProject || proj.lastAutonEditor === "ide" || proj.rawCppPreserved) {
+            console.log("📥 Loading autonomous routines from imported/IDE C++ code (src/autons.cpp)...");
+            loadProjectAutonsIntoPlanner(false, true);
+          } else {
+            console.log("⚠️ Conflict detected between visual blocks and src/autons.cpp. Prompting user...");
+            promptMergeAutonCpp();
+          }
+        } else if (!paths || paths.length === 0) {
+          loadProjectAutonsIntoPlanner(false, false);
+        }
+      } else if (paths && paths.length > 0) {
+        // Planner has routines, but src/autons.cpp is empty: safely sync planner into autons.cpp
         syncPlannerIntoProjectManager({ ask: false, force: true });
-      } else if ((!paths || paths.length === 0) && code && code.trim().length > 0) {
-        // Planner has no paths yet: populate from src/autons.cpp
-        loadProjectAutonsIntoPlanner(false, false);
       }
 
       updateProjectBanner();
