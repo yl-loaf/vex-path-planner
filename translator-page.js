@@ -389,6 +389,9 @@
           } else if (a.type === "wait") {
             badgeType = "wait";
             icon = "📍";
+          } else if (a.type === "ifElse") {
+            badgeType = "control";
+            icon = "🔀";
           } else if (a.type.includes("turn")) {
             badgeType = "turn";
             icon = "🔄";
@@ -418,6 +421,9 @@
               titleText = `pros::delay(${a.waitTime || 500}ms)`;
               detailsText = `Pauses autonomous execution thread for ${a.waitTime || 500} milliseconds`;
             }
+          } else if (a.type === "ifElse") {
+            titleText = `if (${a.condition || 'true'}) { ${a.thenLabel || 'Move forward'} } else { ${a.elseLabel || 'Move backwards'} }`;
+            detailsText = `If true: ${a.thenLabel || 'Move forward'} · Else: ${a.elseLabel || 'Move backwards'} · C-Block Conditional`;
           } else if (a.type === "moveToPoint") {
             titleText = `moveToPoint(${a.x}, ${a.y})`;
             detailsText = `Timeout: ${a.timeout}ms · Forwards: ${a.forwards !== false} · MaxSpeed: ${a.maxSpeed || 127}`;

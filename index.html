@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260922.k41" />
+  <link rel="stylesheet" href="style.css?v=20260922.k47" />
 </head>
 <body>
   <!-- =================================================================
@@ -391,6 +391,7 @@
               <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToPoint">🟣 turnToPoint(x, y)</button>
               <button type="button" class="palette-block-btn btn-turn" data-act-type="swingToHeading">🟣 swingToHeading(θ)</button>
               <button type="button" class="palette-block-btn btn-control" data-act-type="wait">🟡 wait / delay</button>
+              <button type="button" class="palette-block-btn btn-control" data-act-type="ifElse">🟡 If / Else (Scratch)</button>
               <button type="button" class="palette-block-btn btn-subsystem" data-snip-add="clamp.set_value(true);">🟢 clamp goal</button>
               <button type="button" class="palette-block-btn btn-subsystem" data-snip-add="intake.move(127);">🟢 intake on</button>
               <button type="button" class="palette-block-btn btn-custom" data-act-type="custom">🔴 custom C++</button>
@@ -430,6 +431,7 @@
               <option value="swingToPoint">swingToPoint</option>
               <option value="swingToHeading">swingToHeading</option>
               <option value="wait">📍 Wait / Event Trigger</option>
+              <option value="ifElse">🔀 if / else (Scratch Block)</option>
               <option value="custom">Custom Code</option>
             </select>
             <button id="btnAddAction" class="primary">+ Add</button>
@@ -2033,19 +2035,19 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260922.k41"></script>
+  <script src="version.js?v=20260922.k47"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260922.k41"></script>
-  <script src="google-drive-sync.js?v=20260922.k41"></script>
-  <script src="session-guard.js?v=20260922.k41"></script>
-  <script src="v5-brain-serial.js?v=20260922.k41"></script>
-  <script src="project-manager.js?v=20260922.k41"></script>
-  <script src="cpp-parser.js?v=20260922.k41"></script>
-  <script src="app.js?v=20260922.k41"></script>
-  <script src="tutorial.js?v=20260922.k41"></script>
+  <script src="firebase-config.js?v=20260922.k47"></script>
+  <script src="google-drive-sync.js?v=20260922.k47"></script>
+  <script src="session-guard.js?v=20260922.k47"></script>
+  <script src="v5-brain-serial.js?v=20260922.k47"></script>
+  <script src="project-manager.js?v=20260922.k47"></script>
+  <script src="cpp-parser.js?v=20260922.k47"></script>
+  <script src="app.js?v=20260922.k47"></script>
+  <script src="tutorial.js?v=20260922.k47"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

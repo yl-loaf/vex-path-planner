@@ -7,7 +7,7 @@
   } else {
     root.CppTranslator = factory();
   }
-})(typeof self !== "undefined" ? self : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : (typeof self !== "undefined" ? self : this), function () {
   "use strict";
 
   // Safe comma splitter that preserves braces {}, parens (), brackets [], and string literals
@@ -111,7 +111,409 @@
     return "a" + Math.random().toString(36).slice(2, 9);
   }
 
+  // Parse a single C++ statement line into a LemLib action object or custom action
+  function parseStatementToAction(stmtStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
+    if (!stmtStr) return null;
+    const line = stmtStr.trim().replace(/;$/, "").trim();
+    if (!line) return null;
+
+    // Check if statement contains an if-else loop or ternary
+    if (/^if\s*\(/i.test(line) || tryParseTernary(line)) {
+      const ifElseAct = parseIfElseFromCode(line, defaultMaxSpeed, defaultMinSpeed);
+      if (ifElseAct) {
+        return ifElseAct;
+      }
+    }
+
+    // moveToPoint
+    const mtPointMatch = line.match(/chassis\.moveToPoint\s*\(([^;]+)\)/i);
+    if (mtPointMatch) {
+      const args = splitCppArgsSafe(mtPointMatch[1]);
+      const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+      act.x = parseFloat(args[0]) || 0;
+      act.y = parseFloat(args[1]) || 0;
+      act.timeout = parseInt(args[2], 10) || 2000;
+      let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+      if (structParamStr) {
+        const p = parseLemlibStructParams(structParamStr);
+        act.forwards = p.forwards;
+        if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+        if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+        if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+        if (p.async) act.async = true;
+      }
+      if (args[args.length - 1]?.trim().toLowerCase() === "true") act.async = true;
+      return act;
+    }
+
+    // moveToPose
+    const mtPoseMatch = line.match(/chassis\.moveToPose\s*\(([^;]+)\)/i);
+    if (mtPoseMatch) {
+      const args = splitCppArgsSafe(mtPoseMatch[1]);
+      const act = createDefaultAction("moveToPose", defaultMaxSpeed, defaultMinSpeed);
+      act.x = parseFloat(args[0]) || 0;
+      act.y = parseFloat(args[1]) || 0;
+      act.theta = parseFloat(args[2]) || 0;
+      act.timeout = parseInt(args[3], 10) || 2500;
+      let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+      if (structParamStr) {
+        const p = parseLemlibStructParams(structParamStr);
+        act.forwards = p.forwards;
+        if (p.lead != null) act.lead = p.lead;
+        if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+        if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+        if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+        if (p.async) act.async = true;
+      }
+      if (args[args.length - 1]?.trim().toLowerCase() === "true") act.async = true;
+      return act;
+    }
+
+    // turnToPoint
+    const ttPointMatch = line.match(/chassis\.turnToPoint\s*\(([^;]+)\)/i);
+    if (ttPointMatch) {
+      const args = splitCppArgsSafe(ttPointMatch[1]);
+      const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
+      act.x = parseFloat(args[0]) || 0;
+      act.y = parseFloat(args[1]) || 0;
+      act.timeout = parseInt(args[2], 10) || 1500;
+      let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+      if (structParamStr) {
+        const p = parseLemlibStructParams(structParamStr);
+        act.forwards = p.forwards;
+        if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+        if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+        if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+        if (p.async) act.async = true;
+      }
+      if (args[args.length - 1]?.trim().toLowerCase() === "true") act.async = true;
+      return act;
+    }
+
+    // turnToHeading
+    const ttHeadingMatch = line.match(/chassis\.turnToHeading\s*\(([^;]+)\)/i);
+    if (ttHeadingMatch) {
+      const args = splitCppArgsSafe(ttHeadingMatch[1]);
+      const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
+      act.theta = parseFloat(args[0]) || 0;
+      act.timeout = parseInt(args[1], 10) || 1500;
+      let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+      if (structParamStr) {
+        const p = parseLemlibStructParams(structParamStr);
+        if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+        if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+        if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+        if (p.async) act.async = true;
+      }
+      if (args[args.length - 1]?.trim().toLowerCase() === "true") act.async = true;
+      return act;
+    }
+
+    // swingToPoint
+    const swPointMatch = line.match(/chassis\.swingToPoint\s*\(([^;]+)\)/i);
+    if (swPointMatch) {
+      const args = splitCppArgsSafe(swPointMatch[1]);
+      const act = createDefaultAction("swingToPoint", defaultMaxSpeed, defaultMinSpeed);
+      act.x = parseFloat(args[0]) || 0;
+      act.y = parseFloat(args[1]) || 0;
+      act.lockedSide = parseDriveSideEnum(args[2]);
+      act.timeout = parseInt(args[3], 10) || 2000;
+      return act;
+    }
+
+    // swingToHeading
+    const swHeadingMatch = line.match(/chassis\.swingToHeading\s*\(([^;]+)\)/i);
+    if (swHeadingMatch) {
+      const args = splitCppArgsSafe(swHeadingMatch[1]);
+      const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
+      act.theta = parseFloat(args[0]) || 0;
+      act.lockedSide = parseDriveSideEnum(args[1]);
+      act.timeout = parseInt(args[2], 10) || 2000;
+      return act;
+    }
+
+    // waitUntil distance
+    const waitDistMatch = line.match(/chassis\.waitUntil\s*\(\s*([-\d.]+)\s*\)/i);
+    if (waitDistMatch) {
+      const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+      act.waitType = "distance";
+      act.distance = parseFloat(waitDistMatch[1]) || 12;
+      return act;
+    }
+
+    // waitUntilDone
+    if (/chassis\.waitUntilDone\s*\(\s*\)/i.test(line)) {
+      const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+      act.waitType = "done";
+      return act;
+    }
+
+    // pros::delay
+    const delayMatch = line.match(/(?:pros::)?delay\s*\(\s*(\d+)\s*\)/i);
+    if (delayMatch) {
+      const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+      act.waitType = "time";
+      act.delayMs = parseInt(delayMatch[1], 10) || 250;
+      return act;
+    }
+
+    // Auto-detect if-loop or ternary in custom code statement
+    const ifElseAct = parseIfElseFromCode(line, defaultMaxSpeed, defaultMinSpeed);
+    if (ifElseAct) {
+      return ifElseAct;
+    }
+
+    // Default custom action
+    const act = createDefaultAction("custom", defaultMaxSpeed, defaultMinSpeed);
+    act.customCode = line + ";";
+    return act;
+  }
+
+  // Detect and extract C++ ternary expressions: condition ? expr_if_true : expr_if_false;
+  function tryParseTernary(line) {
+    if (!line || !line.includes("?") || !line.includes(":")) return null;
+    let parenDepth = 0;
+    let braceDepth = 0;
+    let inString = false;
+    let stringChar = "";
+    let questionIndex = -1;
+    let colonIndex = -1;
+
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inString) {
+        if (c === stringChar && line[i - 1] !== "\\") inString = false;
+        continue;
+      }
+      if (c === '"' || c === "'") {
+        inString = true;
+        stringChar = c;
+      } else if (c === "(") {
+        parenDepth++;
+      } else if (c === ")") {
+        if (parenDepth > 0) parenDepth--;
+      } else if (c === "{" || c === "<") {
+        braceDepth++;
+      } else if (c === "}" || c === ">") {
+        if (braceDepth > 0) braceDepth--;
+      } else if (c === "?" && parenDepth === 0 && braceDepth === 0 && questionIndex === -1) {
+        questionIndex = i;
+      } else if (c === ":" && parenDepth === 0 && braceDepth === 0 && questionIndex !== -1) {
+        // Guard against C++ namespace '::'
+        if (line[i - 1] === ":" || line[i + 1] === ":") {
+          continue;
+        }
+        colonIndex = i;
+        break;
+      }
+    }
+
+    if (questionIndex !== -1 && colonIndex !== -1 && colonIndex > questionIndex) {
+      const condition = line.slice(0, questionIndex).trim().replace(/^\(/, "").replace(/\)$/, "").trim();
+      const thenExpr = line.slice(questionIndex + 1, colonIndex).trim().replace(/;$/, "").trim();
+      const elseExpr = line.slice(colonIndex + 1).trim().replace(/;$/, "").trim();
+      if (condition && thenExpr && elseExpr) {
+        return { condition, thenExpr, elseExpr };
+      }
+    }
+    return null;
+  }
+
+  // Comprehensive C++ if-else loop & ternary detector for custom code
+  function parseIfElseFromCode(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
+    if (!codeStr || typeof codeStr !== "string") return null;
+    const trimmed = codeStr.trim();
+    if (!trimmed) return null;
+
+    // 1. Check ternary expression: condition ? expr_if_true : expr_if_false;
+    const ternary = tryParseTernary(trimmed);
+    if (ternary) {
+      const act = createDefaultAction("ifElse", defaultMaxSpeed, defaultMinSpeed);
+      act.condition = ternary.condition;
+      act.thenCode = ternary.thenExpr + (ternary.thenExpr.endsWith(";") ? "" : ";");
+      act.elseCode = ternary.elseExpr + (ternary.elseExpr.endsWith(";") ? "" : ";");
+      act.thenAction = parseStatementToAction(ternary.thenExpr, defaultMaxSpeed, defaultMinSpeed);
+      act.elseAction = parseStatementToAction(ternary.elseExpr, defaultMaxSpeed, defaultMinSpeed);
+      act.thenLabel = getActionHumanLabel(act.thenAction, ternary.thenExpr);
+      act.elseLabel = getActionHumanLabel(act.elseAction, ternary.elseExpr);
+      act.isTernary = true;
+      return act;
+    }
+
+    // 2. Check for C++ if statement: if (...) { ... } [else { ... }]
+    const ifMatch = trimmed.match(/(?:^|\n|\r|\s|;)if\s*\(/i);
+    if (!ifMatch) return null;
+    const startIdx = ifMatch.index + ifMatch[0].toLowerCase().indexOf("if");
+    const sub = trimmed.slice(startIdx);
+
+    const openParen = sub.indexOf("(");
+    if (openParen === -1) return null;
+
+    let parenDepth = 1;
+    let closeParen = -1;
+    for (let k = openParen + 1; k < sub.length; k++) {
+      if (sub[k] === "(") parenDepth++;
+      else if (sub[k] === ")") {
+        parenDepth--;
+        if (parenDepth === 0) {
+          closeParen = k;
+          break;
+        }
+      }
+    }
+    if (closeParen === -1) return null;
+
+    const condition = sub.slice(openParen + 1, closeParen).trim() || "true";
+    let rem = sub.slice(closeParen + 1).trim();
+
+    let thenCode = "";
+    let elseCode = "";
+
+    if (rem.startsWith("{")) {
+      let braceDepth = 1;
+      let closeBrace = -1;
+      for (let k = 1; k < rem.length; k++) {
+        if (rem[k] === "{") braceDepth++;
+        else if (rem[k] === "}") {
+          braceDepth--;
+          if (braceDepth === 0) {
+            closeBrace = k;
+            break;
+          }
+        }
+      }
+      if (closeBrace !== -1) {
+        thenCode = rem.slice(1, closeBrace).trim();
+        rem = rem.slice(closeBrace + 1).trim();
+      } else {
+        thenCode = rem.slice(1).trim();
+        rem = "";
+      }
+    } else {
+      const elseMatch = rem.match(/\belse\b/i);
+      if (elseMatch) {
+        thenCode = rem.slice(0, elseMatch.index).trim();
+        rem = rem.slice(elseMatch.index);
+      } else {
+        thenCode = rem.trim();
+        rem = "";
+      }
+    }
+
+    if (/^else\b/i.test(rem)) {
+      rem = rem.replace(/^else\s*/i, "").trim();
+      if (rem.startsWith("{")) {
+        let braceDepth = 1;
+        let closeBrace = -1;
+        for (let k = 1; k < rem.length; k++) {
+          if (rem[k] === "{") braceDepth++;
+          else if (rem[k] === "}") {
+            braceDepth--;
+            if (braceDepth === 0) {
+              closeBrace = k;
+              break;
+            }
+          }
+        }
+        if (closeBrace !== -1) {
+          elseCode = rem.slice(1, closeBrace).trim();
+        } else {
+          elseCode = rem.slice(1).trim();
+        }
+      } else {
+        elseCode = rem.trim();
+      }
+    }
+
+    const act = createDefaultAction("ifElse", defaultMaxSpeed, defaultMinSpeed);
+    act.condition = condition;
+    act.thenCode = thenCode || "chassis.moveToPoint(24, 24, 2000);";
+    act.elseCode = elseCode || (elseCode === "" ? "" : "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});");
+    if (act.thenCode && !act.thenCode.endsWith(";") && !act.thenCode.endsWith("}")) act.thenCode += ";";
+    if (act.elseCode && !act.elseCode.endsWith(";") && !act.elseCode.endsWith("}")) act.elseCode += ";";
+
+    act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
+    act.elseAction = act.elseCode ? parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed) : null;
+    act.thenLabel = getActionHumanLabel(act.thenAction, act.thenCode);
+    act.elseLabel = act.elseAction ? getActionHumanLabel(act.elseAction, act.elseCode) : (act.elseCode ? "Custom Action" : "No Action");
+    act.isTernary = false;
+    return act;
+  }
+
+  // Human-readable action label helper
+  function getActionHumanLabel(act, defaultCode = "") {
+    if (!act) {
+      if (/clamp/i.test(defaultCode)) return defaultCode.includes("false") ? "Release Clamp" : "Clamp Goal";
+      if (/intake/i.test(defaultCode)) return defaultCode.includes("0") ? "Intake Off" : "Intake On";
+      return defaultCode.split("\n")[0] || "Custom Action";
+    }
+    if (act.type === "moveToPoint") {
+      return act.forwards !== false ? "Move forward" : "Move backwards";
+    }
+    if (act.type === "moveToPose") {
+      return act.forwards !== false ? "Move forward (Pose)" : "Move backwards (Pose)";
+    }
+    if (act.type === "turnToHeading") {
+      return `Turn to ${act.theta}°`;
+    }
+    if (act.type === "turnToPoint") {
+      return `Turn to (${act.x}, ${act.y})`;
+    }
+    if (act.type === "swingToHeading") {
+      return `Swing to ${act.theta}° (${act.lockedSide || 'LEFT'})`;
+    }
+    if (act.type === "swingToPoint") {
+      return `Swing to (${act.x}, ${act.y})`;
+    }
+    if (act.type === "wait") {
+      return act.waitType === "distance" ? `Wait ${act.distance}"` : (act.waitType === "done" ? "Wait Until Done" : `Delay ${act.delayMs}ms`);
+    }
+    if (act.type === "custom") {
+      const code = act.customCode || "";
+      if (/clamp.*true/i.test(code)) return "Clamp Goal";
+      if (/clamp.*false/i.test(code)) return "Release Clamp";
+      if (/intake.*0/i.test(code)) return "Intake Off";
+      if (/intake/i.test(code)) return "Intake On";
+      return code.split("\n")[0] || "Custom Action";
+    }
+    return act.type;
+  }
+
   function createDefaultAction(type, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
+    if (type === "ifElse") {
+      return {
+        id: uid(),
+        type: "ifElse",
+        condition: "true",
+        thenLabel: "Move forward",
+        elseLabel: "Move backwards",
+        thenCode: "chassis.moveToPoint(24, 24, 2000);",
+        elseCode: "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});",
+        thenAction: {
+          type: "moveToPoint",
+          x: 24,
+          y: 24,
+          timeout: 2000,
+          forwards: true,
+          maxSpeed: defaultMaxSpeed,
+          minSpeed: defaultMinSpeed,
+          earlyExitRange: 0,
+        },
+        elseAction: {
+          type: "moveToPoint",
+          x: -24,
+          y: -24,
+          timeout: 2000,
+          forwards: false,
+          maxSpeed: defaultMaxSpeed,
+          minSpeed: defaultMinSpeed,
+          earlyExitRange: 0,
+        },
+        activeSimBranch: "then",
+        label: "",
+        async: false,
+      };
+    }
     return {
       id: uid(),
       type,
@@ -207,6 +609,24 @@
         return;
       }
 
+      // Check if custom code block contains an if-else loop or ternary
+      const detectedIf = parseIfElseFromCode(fullCode, defaultMaxSpeed, defaultMinSpeed);
+      if (detectedIf) {
+        if (pendingComments.length > 0) {
+          detectedIf.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        } else {
+          const cMatch = fullCode.match(/\/\/\s*(.+)$/m);
+          if (cMatch) {
+            detectedIf.label = cleanCommentText(cMatch[1]);
+          }
+        }
+        actions.push(detectedIf);
+        log.push(`Auto-detected if loop in custom code block: if (${detectedIf.condition}) then "${detectedIf.thenLabel}" else "${detectedIf.elseLabel}"`);
+        pendingCustomLines = [];
+        return;
+      }
+
       const customAct = createDefaultAction("custom", defaultMaxSpeed, defaultMinSpeed);
       customAct.customCode = fullCode;
 
@@ -285,6 +705,226 @@
         };
         log.push(`Found start pose: chassis.setPose(${detectedStartPose.x}, ${detectedStartPose.y}, ${detectedStartPose.theta}°)`);
         pendingComments = [];
+        continue;
+      }
+
+      // Check for C++ ternary conditional: condition ? expression_if_true : expression_if_false;
+      const ternary = tryParseTernary(line);
+      if (ternary) {
+        flushCustomBlock();
+        const act = createDefaultAction("ifElse", defaultMaxSpeed, defaultMinSpeed);
+        act.condition = ternary.condition;
+        act.thenCode = ternary.thenExpr + (!ternary.thenExpr.endsWith(";") ? ";" : "");
+        act.elseCode = ternary.elseExpr + (!ternary.elseExpr.endsWith(";") ? ";" : "");
+        act.thenAction = parseStatementToAction(ternary.thenExpr, defaultMaxSpeed, defaultMinSpeed);
+        act.elseAction = parseStatementToAction(ternary.elseExpr, defaultMaxSpeed, defaultMinSpeed);
+        act.thenLabel = getActionHumanLabel(act.thenAction, ternary.thenExpr);
+        act.elseLabel = getActionHumanLabel(act.elseAction, ternary.elseExpr);
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        actions.push(act);
+        log.push(`Parsed ternary conditional: "${ternary.condition}" ? "${act.thenLabel}" : "${act.elseLabel}"`);
+        continue;
+      }
+
+      // Check for C++ if (...) loops / conditionals
+      if (/^if\s*\(/i.test(line)) {
+        flushCustomBlock();
+        // Extract condition between if ( and matching )
+        const openParenIdx = line.indexOf("(");
+        let parenDepth = 1;
+        let closeParenIdx = -1;
+        for (let k = openParenIdx + 1; k < line.length; k++) {
+          if (line[k] === "(") parenDepth++;
+          else if (line[k] === ")") {
+            parenDepth--;
+            if (parenDepth === 0) {
+              closeParenIdx = k;
+              break;
+            }
+          }
+        }
+
+        let condition = "true";
+        if (closeParenIdx !== -1) {
+          condition = line.slice(openParenIdx + 1, closeParenIdx).trim();
+        }
+
+        let remaining = closeParenIdx !== -1 ? line.slice(closeParenIdx + 1).trim() : "";
+        let thenLines = [];
+        let elseLines = [];
+
+        // Collect then-block
+        if (remaining.startsWith("{")) {
+          let curBlock = remaining.slice(1).trim();
+          let braceDepth = 1;
+          if (curBlock.includes("}")) {
+            const closeIdx = curBlock.lastIndexOf("}");
+            thenLines.push(curBlock.slice(0, closeIdx).trim());
+            remaining = curBlock.slice(closeIdx + 1).trim();
+            braceDepth = 0;
+          } else {
+            if (curBlock) thenLines.push(curBlock);
+            idx++;
+            while (idx < cleanedLines.length) {
+              const nextL = cleanedLines[idx].text;
+              for (let c = 0; c < nextL.length; c++) {
+                if (nextL[c] === "{") braceDepth++;
+                else if (nextL[c] === "}") {
+                  braceDepth--;
+                  if (braceDepth === 0) {
+                    const beforeBrace = nextL.slice(0, c).trim();
+                    if (beforeBrace) thenLines.push(beforeBrace);
+                    remaining = nextL.slice(c + 1).trim();
+                    break;
+                  }
+                }
+              }
+              if (braceDepth === 0) break;
+              thenLines.push(nextL);
+              idx++;
+            }
+          }
+        } else if (remaining.length > 0) {
+          thenLines.push(remaining);
+          remaining = "";
+        } else {
+          idx++;
+          if (idx < cleanedLines.length) {
+            const nextL = cleanedLines[idx].text;
+            if (nextL.startsWith("{")) {
+              let curBlock = nextL.slice(1).trim();
+              let braceDepth = 1;
+              if (curBlock.includes("}")) {
+                const closeIdx = curBlock.lastIndexOf("}");
+                thenLines.push(curBlock.slice(0, closeIdx).trim());
+                remaining = curBlock.slice(closeIdx + 1).trim();
+              } else {
+                if (curBlock) thenLines.push(curBlock);
+                idx++;
+                while (idx < cleanedLines.length) {
+                  const innerL = cleanedLines[idx].text;
+                  for (let c = 0; c < innerL.length; c++) {
+                    if (innerL[c] === "{") braceDepth++;
+                    else if (innerL[c] === "}") {
+                      braceDepth--;
+                      if (braceDepth === 0) {
+                        const beforeBrace = innerL.slice(0, c).trim();
+                        if (beforeBrace) thenLines.push(beforeBrace);
+                        remaining = innerL.slice(c + 1).trim();
+                        break;
+                      }
+                    }
+                  }
+                  if (braceDepth === 0) break;
+                  thenLines.push(innerL);
+                  idx++;
+                }
+              }
+            } else {
+              thenLines.push(nextL);
+            }
+          }
+        }
+
+        // Now check for else
+        let hasElse = false;
+        let elseRemaining = remaining;
+        if (/^else\b/i.test(elseRemaining)) {
+          hasElse = true;
+          elseRemaining = elseRemaining.replace(/^else\s*/i, "").trim();
+        } else if (idx + 1 < cleanedLines.length && /^else\b/i.test(cleanedLines[idx + 1].text)) {
+          hasElse = true;
+          idx++;
+          elseRemaining = cleanedLines[idx].text.replace(/^else\s*/i, "").trim();
+        }
+
+        if (hasElse) {
+          if (elseRemaining.startsWith("{")) {
+            let curBlock = elseRemaining.slice(1).trim();
+            let braceDepth = 1;
+            if (curBlock.includes("}")) {
+              const closeIdx = curBlock.lastIndexOf("}");
+              elseLines.push(curBlock.slice(0, closeIdx).trim());
+            } else {
+              if (curBlock) elseLines.push(curBlock);
+              idx++;
+              while (idx < cleanedLines.length) {
+                const nextL = cleanedLines[idx].text;
+                for (let c = 0; c < nextL.length; c++) {
+                  if (nextL[c] === "{") braceDepth++;
+                  else if (nextL[c] === "}") {
+                    braceDepth--;
+                    if (braceDepth === 0) {
+                      const beforeBrace = nextL.slice(0, c).trim();
+                      if (beforeBrace) elseLines.push(beforeBrace);
+                      break;
+                    }
+                  }
+                }
+                if (braceDepth === 0) break;
+                elseLines.push(nextL);
+                idx++;
+              }
+            }
+          } else if (elseRemaining.length > 0) {
+            elseLines.push(elseRemaining);
+          } else if (idx + 1 < cleanedLines.length) {
+            idx++;
+            const nextL = cleanedLines[idx].text;
+            if (nextL.startsWith("{")) {
+              let curBlock = nextL.slice(1).trim();
+              let braceDepth = 1;
+              if (curBlock.includes("}")) {
+                const closeIdx = curBlock.lastIndexOf("}");
+                elseLines.push(curBlock.slice(0, closeIdx).trim());
+              } else {
+                if (curBlock) elseLines.push(curBlock);
+                idx++;
+                while (idx < cleanedLines.length) {
+                  const innerL = cleanedLines[idx].text;
+                  for (let c = 0; c < innerL.length; c++) {
+                    if (innerL[c] === "{") braceDepth++;
+                    else if (innerL[c] === "}") {
+                      braceDepth--;
+                      if (braceDepth === 0) {
+                        const beforeBrace = innerL.slice(0, c).trim();
+                        if (beforeBrace) elseLines.push(beforeBrace);
+                        break;
+                      }
+                    }
+                  }
+                  if (braceDepth === 0) break;
+                  elseLines.push(innerL);
+                  idx++;
+                }
+              }
+            } else {
+              elseLines.push(nextL);
+            }
+          }
+        }
+
+        const act = createDefaultAction("ifElse", defaultMaxSpeed, defaultMinSpeed);
+        act.condition = condition;
+        act.thenCode = thenLines.filter(Boolean).join("\n").trim() || "chassis.moveToPoint(24, 24, 2000);";
+        act.elseCode = elseLines.filter(Boolean).join("\n").trim() || "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});";
+        act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
+        act.elseAction = parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed);
+        act.thenLabel = getActionHumanLabel(act.thenAction, act.thenCode);
+        act.elseLabel = getActionHumanLabel(act.elseAction, act.elseCode);
+
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+
+        actions.push(act);
+        log.push(`Parsed if-else block: if (${condition}) then "${act.thenLabel}" else "${act.elseLabel}"`);
         continue;
       }
 
@@ -552,11 +1192,13 @@
 
     let motionsCount = 0;
     let customCount = 0;
+    let controlCount = 0;
     let asyncCount = 0;
     let commentsCount = 0;
 
     actions.forEach((a) => {
       if (a.type === "custom") customCount++;
+      else if (a.type === "ifElse") controlCount++;
       else motionsCount++;
       if (a.async) asyncCount++;
       if (a.label) commentsCount++;
@@ -570,6 +1212,7 @@
       stats: {
         motionsCount,
         customCount,
+        controlCount,
         asyncCount,
         commentsCount,
       },
@@ -723,6 +1366,21 @@ void skillsAuton() {
   chassis.turnToHeading(180, 1400); // turn to wall
   chassis.moveToPoint(48, -48, 2000, {.forwards = false, .maxSpeed = 100}); // reverse to stake
 }`,
+
+    conditional_scratch: `// Autonomous: Scratch-Style Conditional Loops
+void autonomous() {
+  chassis.setPose(0, -60, 0);
+
+  // If true move forward else move backwards
+  if (true) {
+    chassis.moveToPoint(24, 24, 2000);
+  } else {
+    chassis.moveToPoint(-24, -24, 2000, {.forwards = false});
+  }
+
+  // Ternary decision check
+  isRedAlliance ? chassis.moveToPoint(48, 0, 1800) : chassis.moveToPoint(-48, 0, 1800);
+}`,
   };
 
   return {
@@ -733,6 +1391,9 @@ void skillsAuton() {
     parseCppAuton,
     createDefaultAction,
     parseLemlibRobotConfig,
+    parseStatementToAction,
+    tryParseTernary,
+    parseIfElseFromCode,
     SAMPLE_ROUTINES,
   };
 });

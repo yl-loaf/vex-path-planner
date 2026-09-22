@@ -305,6 +305,42 @@
   }
 
   function defaultAction(type) {
+    if (type === "ifElse") {
+      const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+      const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+      return {
+        id: uid(),
+        type: "ifElse",
+        condition: "true",
+        thenLabel: "Move forward",
+        elseLabel: "Move backwards",
+        thenCode: "chassis.moveToPoint(24, 24, 2000);",
+        elseCode: "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});",
+        thenAction: {
+          type: "moveToPoint",
+          x: 24,
+          y: 24,
+          timeout: 2000,
+          forwards: true,
+          maxSpeed: defMax,
+          minSpeed: defMin,
+          earlyExitRange: 0,
+        },
+        elseAction: {
+          type: "moveToPoint",
+          x: -24,
+          y: -24,
+          timeout: 2000,
+          forwards: false,
+          maxSpeed: defMax,
+          minSpeed: defMin,
+          earlyExitRange: 0,
+        },
+        activeSimBranch: "then",
+        label: "",
+        async: false,
+      };
+    }
     return {
       id: uid(),
       type,
@@ -592,6 +628,27 @@
       return { endPose: pose, path: points, duration: dur, carrot: null };
     }
 
+    if (action.type === "ifElse") {
+      const isElse = action.activeSimBranch === "else";
+      let branchAct = isElse ? action.elseAction : action.thenAction;
+      if (!branchAct) {
+        const code = isElse ? action.elseCode : action.thenCode;
+        if (window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
+          branchAct = window.CppTranslator.parseStatementToAction(code, b.defaultMaxSpeed || 127, b.defaultMinSpeed || 0);
+        }
+      }
+      if (!branchAct) {
+        branchAct = {
+          type: "moveToPoint",
+          x: isElse ? (fromPose.x - 24) : (fromPose.x + 24),
+          y: isElse ? (fromPose.y - 24) : (fromPose.y + 24),
+          timeout: 2000,
+          forwards: !isElse,
+        };
+      }
+      return simulateAction({ ...branchAct, id: action.id }, fromPose, customBot);
+    }
+
     if (action.type === "moveToPose") {
       const lead = action.lead != null ? clamp(action.lead, 0, 1.0) : (b.defaultLead != null ? b.defaultLead : 0.6);
       const drift = (action.driftScaler != null ? action.driftScaler : (b.lateralDrift != null ? b.lateralDrift : 1.0));
@@ -665,6 +722,14 @@
         vLin += ((targetVLin - vLin) / tau) * dt;
         omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
 
+        // Smooth physical settling decay to prevent high-frequency numeric PID shaking
+        if (dist < 1.0) {
+          vLin *= 0.75;
+        }
+        if (Math.abs(angError) < 1.5) {
+          omegaDeg *= 0.75;
+        }
+
         const midTheta = normalizeAngle(pose.theta + (omegaDeg * dt) / 2);
         const rad = (midTheta * Math.PI) / 180;
         pose.x += Math.sin(rad) * vLin * dt;
@@ -732,6 +797,14 @@
         vLin += ((targetVLin - vLin) / tau) * dt;
         omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
 
+        // Smooth physical settling decay to prevent high-frequency numeric PID shaking
+        if (dist < 1.0) {
+          vLin *= 0.75;
+        }
+        if (Math.abs(angError) < 1.5) {
+          omegaDeg *= 0.75;
+        }
+
         const midTheta = normalizeAngle(pose.theta + (omegaDeg * dt) / 2);
         const rad = (midTheta * Math.PI) / 180;
         pose.x += Math.sin(rad) * vLin * dt;
@@ -782,6 +855,11 @@
 
         const targetOmega = angPower * maxOmega;
         omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
+
+        // Smooth physical settling decay to prevent high-frequency numeric PID shaking
+        if (Math.abs(angError) < 1.0) {
+          omegaDeg *= 0.75;
+        }
 
         pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
         t += dt;
@@ -841,6 +919,11 @@
 
         const targetVDrive = pwr * vMax;
         vDrive += ((targetVDrive - vDrive) / tau) * dt;
+
+        // Smooth physical settling decay to prevent high-frequency numeric PID shaking
+        if (Math.abs(angError) < 1.0) {
+          vDrive *= 0.75;
+        }
 
         // Driven wheel turns around stationary locked wheel:
         const wDeg = (vDrive / trackWidth) * (180 / Math.PI);
@@ -1606,6 +1689,7 @@
 
   // -- Flowchart UI -------------------------------------------------
   function badgeClass(type) {
+    if (type === "ifElse") return "control";
     if (type === "custom") return "custom";
     if (type === "wait") return "wait";
     if (isMove(type)) return "move";
@@ -2161,7 +2245,7 @@
       let catClass = "cat-motion";
       if (a.type === "moveToPoint" || a.type === "moveToPose") catClass = "cat-motion";
       else if (a.type === "turnToPoint" || a.type === "turnToHeading" || a.type === "swingToPoint" || a.type === "swingToHeading") catClass = "cat-turn";
-      else if (a.type === "wait") catClass = "cat-control";
+      else if (a.type === "wait" || a.type === "ifElse") catClass = "cat-control";
       else if (a.type === "custom") {
         if (/clamp|intake|conveyor|flywheel|piston|motor/i.test(a.customCode || "")) catClass = "cat-subsystem";
         else catClass = "cat-custom";
@@ -2172,11 +2256,94 @@
         `action-card block-card ${catClass}` +
         (a.id === selectedId ? " selected" : " collapsed") +
         (a.type === "custom" ? " custom-type" : "") +
+        (a.type === "ifElse" ? " if-else-card" : "") +
         (a.async ? " multitask-active" : "");
       card.dataset.id = a.id;
 
       let body = "";
-      if (a.type === "wait") {
+      if (a.type === "ifElse") {
+        const isElseSim = a.activeSimBranch === "else";
+        body = `
+          <div class="scratch-if-container">
+            <div class="scratch-if-header">
+              <span class="scratch-keyword">if</span>
+              <div class="scratch-condition-slot" title="C++ boolean condition expression">
+                <span class="scratch-hex-point">◀</span>
+                <input type="text" data-f="condition" class="scratch-condition-input" value="${escapeHtml(a.condition || 'true')}" placeholder="true, isRed, etc." />
+                <span class="scratch-hex-point">▶</span>
+              </div>
+              <span class="scratch-keyword">then</span>
+              <div class="scratch-sim-toggle" title="Select which conditional branch simulates on the 2D field">
+                <span class="scratch-sim-label">Simulate:</span>
+                <button type="button" class="scratch-sim-btn ${!isElseSim ? 'active' : ''}" data-act="set-sim-branch" data-branch="then">✓ Then</button>
+                <button type="button" class="scratch-sim-btn ${isElseSim ? 'active' : ''}" data-act="set-sim-branch" data-branch="else">Else</button>
+              </div>
+            </div>
+            <div class="scratch-cond-presets">
+              <span class="scratch-preset-lbl">Presets:</span>
+              <button type="button" class="cond-chip ${(a.condition === 'true' || !a.condition) ? 'active' : ''}" data-act="set-condition" data-cond="true">true</button>
+              <button type="button" class="cond-chip ${a.condition === 'isRed' ? 'active' : ''}" data-act="set-condition" data-cond="isRed">isRed</button>
+              <button type="button" class="cond-chip ${a.condition === 'ringDetected' ? 'active' : ''}" data-act="set-condition" data-cond="ringDetected">ringDetected</button>
+              <button type="button" class="cond-chip ${a.condition === 'dist < 10' ? 'active' : ''}" data-act="set-condition" data-cond="dist < 10">dist &lt; 10</button>
+            </div>
+
+            <!-- THEN ARM (If true, move forward...) -->
+            <div class="scratch-c-arm">
+              <div class="scratch-branch-header then-header">
+                <span class="scratch-branch-badge">🟢 If true,</span>
+                <input type="text" data-f="thenLabel" class="scratch-branch-title-input" value="${escapeHtml(a.thenLabel || 'Move forward')}" placeholder="Move forward" />
+              </div>
+              <div class="scratch-branch-content">
+                <label class="scratch-sub-label">C++ Statement / Motion:
+                  <textarea data-f="thenCode" rows="2" class="scratch-code-textarea" placeholder="chassis.moveToPoint(24, 24, 2000);">${escapeHtml(a.thenCode || 'chassis.moveToPoint(24, 24, 2000);')}</textarea>
+                </label>
+                <div class="scratch-preset-actions">
+                  <span class="scratch-preset-lbl">Actions:</span>
+                  <button type="button" class="snip-btn" data-act="set-then-preset" data-preset="moveForward">🔵 Move Forward</button>
+                  <button type="button" class="snip-btn" data-act="set-then-preset" data-preset="turn90">🟣 Turn 90°</button>
+                  <button type="button" class="snip-btn" data-act="set-then-preset" data-preset="clampOn">🟢 Clamp Goal</button>
+                  <button type="button" class="snip-btn" data-act="set-then-preset" data-preset="intakeOn">🟢 Intake On</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ELSE DIVIDER BAR -->
+            <div class="scratch-else-bar">
+              <span class="scratch-keyword">else</span>
+            </div>
+
+            <!-- ELSE ARM (Else, move backwards...) -->
+            <div class="scratch-c-arm">
+              <div class="scratch-branch-header else-header">
+                <span class="scratch-branch-badge">🟠 Else,</span>
+                <input type="text" data-f="elseLabel" class="scratch-branch-title-input" value="${escapeHtml(a.elseLabel || 'Move backwards')}" placeholder="Move backwards" />
+              </div>
+              <div class="scratch-branch-content">
+                <label class="scratch-sub-label">C++ Statement / Motion:
+                  <textarea data-f="elseCode" rows="2" class="scratch-code-textarea" placeholder="chassis.moveToPoint(-24, -24, 2000, {.forwards = false});">${escapeHtml(a.elseCode || 'chassis.moveToPoint(-24, -24, 2000, {.forwards = false});')}</textarea>
+                </label>
+                <div class="scratch-preset-actions">
+                  <span class="scratch-preset-lbl">Actions:</span>
+                  <button type="button" class="snip-btn" data-act="set-else-preset" data-preset="moveBackwards">🔵 Move Backwards</button>
+                  <button type="button" class="snip-btn" data-act="set-else-preset" data-preset="turnNeg90">🟣 Turn -90°</button>
+                  <button type="button" class="snip-btn" data-act="set-else-preset" data-preset="clampOff">🔓 Release Clamp</button>
+                  <button type="button" class="snip-btn" data-act="set-else-preset" data-preset="intakeOff">🛑 Intake Off</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="scratch-block-cap"></div>
+          </div>
+          <div class="move-comment-row">
+            <label class="move-comment-label">
+              <span class="move-comment-header">
+                <span class="move-comment-tag">💬 Decision Comment (C++ code)</span>
+                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(cleanCommentText(a.label))}` : "e.g. // alliance decision"}</span>
+              </span>
+              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label || '')}" placeholder="e.g. alliance color check or stake decision"/>
+            </label>
+          </div>`;
+      } else if (a.type === "wait") {
         const mode = a.waitType || "distance";
         const distVal = a.distance != null ? a.distance : 12;
         const delayVal = a.delayMs != null ? a.delayMs : 250;
@@ -2256,15 +2423,39 @@
           </div>`;
       } else if (a.type === "custom") {
         const durVal = a.customDuration != null ? Number(a.customDuration) : 0;
+        const detectedIf = window.CppTranslator && typeof window.CppTranslator.parseIfElseFromCode === "function"
+          ? window.CppTranslator.parseIfElseFromCode(a.customCode, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0)
+          : null;
         body = `
+          ${detectedIf ? `
+          <div class="custom-if-detected-banner" id="banner-if-detect-${idx}">
+            <div class="if-detected-info">
+              <span class="if-detected-icon">✨</span>
+              <div class="if-detected-text">
+                <div class="if-detected-title-row">
+                  <span class="if-detected-title">Detected C++ If-Else Loop!</span>
+                  <span class="if-detected-cond-badge">if (${escapeHtml(detectedIf.condition)})</span>
+                </div>
+                <div class="if-detected-branches">
+                  <span class="if-detected-branch-item">🟢 Then: <strong>${escapeHtml(detectedIf.thenLabel)}</strong></span>
+                  <span class="if-detected-branch-item">🟠 Else: <strong>${escapeHtml(detectedIf.elseLabel)}</strong></span>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn-convert-to-scratch" data-act="convert-custom-to-if" data-idx="${idx}" title="Convert this custom code block into a visual Scratch If-Else block">
+              ⚡ Convert to Scratch Block
+            </button>
+          </div>` : ""}
           <label class="wide">Custom C++ (injected as-is)
-            <textarea data-f="customCode" rows="3" placeholder="// e.g. intake.move(127); or chassis.waitUntil(12);">${escapeHtml(a.customCode)}</textarea>
+            <textarea data-f="customCode" rows="3" placeholder="// e.g. intake.move(127); or if (isRed) { ... }">${escapeHtml(a.customCode)}</textarea>
           </label>
           <div class="multitask-presets-row">
             <span style="font-size:0.68rem;color:#94a3b8;align-self:center;">Snippets:</span>
             <button type="button" class="snippet-chip" data-snip="intake.move(127);">⚡ Intake On</button>
             <button type="button" class="snippet-chip" data-snip="intake.move(0);">🛑 Intake Off</button>
             <button type="button" class="snippet-chip" data-snip="clamp.set_value(true);">🦾 Clamp</button>
+            <button type="button" class="snippet-chip" data-snip="if (isRed) {\n  chassis.moveToPoint(24, 24, 2000);\n} else {\n  chassis.moveToPoint(-24, -24, 2000, {.forwards = false});\n}">🔀 If-Else Loop</button>
+            <button type="button" class="snippet-chip" data-snip="isRed ? chassis.moveToPoint(24, 24, 2000) : chassis.moveToPoint(-24, -24, 2000);">⚡ Ternary (? :)</button>
             <button type="button" class="snippet-chip" data-snip="chassis.waitUntil(12);">⏱️ Wait 12"</button>
             <button type="button" class="snippet-chip" data-snip="chassis.waitUntilDone();">⏳ Wait Done</button>
           </div>
@@ -2466,7 +2657,8 @@
       }
 
       let summaryText = "";
-      if (a.type === "moveToPoint") summaryText = `(${a.x}, ${a.y})`;
+      if (a.type === "ifElse") summaryText = `if (${a.condition || 'true'}) ${a.thenLabel || 'Move forward'} : ${a.elseLabel || 'Move backwards'}`;
+      else if (a.type === "moveToPoint") summaryText = `(${a.x}, ${a.y})`;
       else if (a.type === "moveToPose") summaryText = `(${a.x}, ${a.y}, ${a.theta}°)`;
       else if (a.type === "turnToPoint" || a.type === "swingToPoint") summaryText = `to (${a.x}, ${a.y})`;
       else if (a.type === "turnToHeading" || a.type === "swingToHeading") summaryText = `to ${a.theta}°`;
@@ -2483,10 +2675,10 @@
       const cleanLbl = cleanCommentText(a.label);
       card.innerHTML = `
         <div class="card-title" style="cursor: pointer; user-select: none;">
-          <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type}</span>
+          <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type === 'ifElse' ? 'if / else' : a.type}</span>
           ${summaryText ? `<span class="collapsed-summary-badge">${escapeHtml(summaryText)}</span>` : ""}
           ${a.async ? '<span class="badge multitask-badge" title="Multitasking: Runs concurrently">⚡ Async</span>' : ""}
-          ${a.forwards === false && a.type !== "custom" ? '<span class="badge reverse">REV</span>' : ""}
+          ${a.forwards === false && a.type !== "custom" && a.type !== "ifElse" ? '<span class="badge reverse">REV</span>' : ""}
           <span class="hint-inline ${cleanLbl ? "has-comment" : ""}">${cleanLbl ? `// ${escapeHtml(cleanLbl)}` : ""}</span>
           <div style="margin-left:auto;display:flex;align-items:center;gap:4px">
             <button class="icon" data-act="up" title="Move up">↑</button>
@@ -2519,6 +2711,7 @@
             a.customCode = ta.value;
             markDirty();
             generateCode();
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
           }
         });
       });
@@ -2562,6 +2755,23 @@
             if (f === "customDuration") {
               updateTimeDisplay();
             }
+            if (f === "thenCode") {
+              if (window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
+                a.thenAction = window.CppTranslator.parseStatementToAction(el.value, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0);
+              }
+              if (a.activeSimBranch !== "else") draw();
+              generateCode();
+            }
+            if (f === "elseCode") {
+              if (window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
+                a.elseAction = window.CppTranslator.parseStatementToAction(el.value, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0);
+              }
+              if (a.activeSimBranch === "else") draw();
+              generateCode();
+            }
+            if (f === "condition" || f === "thenLabel" || f === "elseLabel") {
+              generateCode();
+            }
             if (f === "customCode") {
               const snipText =
                 (el.value || "")
@@ -2574,6 +2784,60 @@
                 subTaskEl.textContent =
                   snipText.length > 22 ? snipText.slice(0, 20) + "…" : snipText;
               }
+
+              // Real-time detection of if-loop or ternary in custom code
+              const detectedIf = window.CppTranslator && typeof window.CppTranslator.parseIfElseFromCode === "function"
+                ? window.CppTranslator.parseIfElseFromCode(el.value, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0)
+                : null;
+              let bannerEl = card.querySelector(".custom-if-detected-banner");
+              if (detectedIf) {
+                if (!bannerEl) {
+                  bannerEl = document.createElement("div");
+                  bannerEl.className = "custom-if-detected-banner";
+                  const labelWide = card.querySelector("label.wide");
+                  if (labelWide) labelWide.parentNode.insertBefore(bannerEl, labelWide);
+                }
+                bannerEl.innerHTML = `
+                  <div class="if-detected-info">
+                    <span class="if-detected-icon">✨</span>
+                    <div class="if-detected-text">
+                      <div class="if-detected-title-row">
+                        <span class="if-detected-title">Detected C++ If-Else Loop!</span>
+                        <span class="if-detected-cond-badge">if (${escapeHtml(detectedIf.condition)})</span>
+                      </div>
+                      <div class="if-detected-branches">
+                        <span class="if-detected-branch-item">🟢 Then: <strong>${escapeHtml(detectedIf.thenLabel)}</strong></span>
+                        <span class="if-detected-branch-item">🟠 Else: <strong>${escapeHtml(detectedIf.elseLabel)}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-convert-to-scratch" data-act="convert-custom-to-if" data-idx="${idx}" title="Convert this custom code block into a visual Scratch If-Else block">
+                    ⚡ Convert to Scratch Block
+                  </button>
+                `;
+                const btnConv = bannerEl.querySelector('[data-act="convert-custom-to-if"]');
+                if (btnConv) {
+                  btnConv.onclick = (e) => {
+                    e.stopPropagation();
+                    a.type = "ifElse";
+                    a.condition = detectedIf.condition;
+                    a.thenCode = detectedIf.thenCode;
+                    a.elseCode = detectedIf.elseCode;
+                    a.thenAction = detectedIf.thenAction;
+                    a.elseAction = detectedIf.elseAction;
+                    a.thenLabel = detectedIf.thenLabel;
+                    a.elseLabel = detectedIf.elseLabel;
+                    a.activeSimBranch = "then";
+                    markDirty();
+                    renderFlow();
+                    draw();
+                    generateCode();
+                    showToast("✨ Converted custom C++ code to Scratch If-Else block!");
+                  };
+                }
+              } else if (bannerEl) {
+                bannerEl.remove();
+              }
             }
           }
         });
@@ -2583,6 +2847,28 @@
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           const act = btn.dataset.act;
+          if (act === "convert-custom-to-if") {
+            const detected = window.CppTranslator && typeof window.CppTranslator.parseIfElseFromCode === "function"
+              ? window.CppTranslator.parseIfElseFromCode(a.customCode, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0)
+              : null;
+            if (detected) {
+              a.type = "ifElse";
+              a.condition = detected.condition;
+              a.thenCode = detected.thenCode;
+              a.elseCode = detected.elseCode;
+              a.thenAction = detected.thenAction;
+              a.elseAction = detected.elseAction;
+              a.thenLabel = detected.thenLabel;
+              a.elseLabel = detected.elseLabel;
+              a.activeSimBranch = "then";
+              markDirty();
+              renderFlow();
+              draw();
+              generateCode();
+              showToast("✨ Converted custom C++ code to Scratch If-Else block!");
+            }
+            return;
+          }
           if (act === "toggle-flowchart") {
             a.showFlowchart = !a.showFlowchart;
             renderFlow();
@@ -2590,6 +2876,75 @@
           }
           if (act === "enlarge-flowchart") {
             openFlowchartModal(a, idx);
+            return;
+          }
+
+          if (act === "set-sim-branch") {
+            a.activeSimBranch = btn.dataset.branch;
+            markDirty();
+            renderFlow();
+            draw();
+            updateTimeDisplay();
+            showToast(`🔀 Simulating ${a.activeSimBranch === 'else' ? 'Else (False)' : 'Then (True)'} branch on 2D field`);
+            return;
+          }
+          if (act === "set-condition") {
+            a.condition = btn.dataset.cond;
+            markDirty();
+            renderFlow();
+            generateCode();
+            return;
+          }
+          if (act === "set-then-preset") {
+            const p = btn.dataset.preset;
+            if (p === "moveForward") {
+              a.thenLabel = "Move forward";
+              a.thenCode = "chassis.moveToPoint(24, 24, 2000);";
+              a.thenAction = { type: "moveToPoint", x: 24, y: 24, timeout: 2000, forwards: true };
+            } else if (p === "turn90") {
+              a.thenLabel = "Turn to 90°";
+              a.thenCode = "chassis.turnToHeading(90, 1500);";
+              a.thenAction = { type: "turnToHeading", theta: 90, timeout: 1500 };
+            } else if (p === "clampOn") {
+              a.thenLabel = "Clamp Goal";
+              a.thenCode = "clamp.set_value(true);\npros::delay(100);";
+              a.thenAction = { type: "custom", customCode: "clamp.set_value(true);\npros::delay(100);", customDuration: 0.1 };
+            } else if (p === "intakeOn") {
+              a.thenLabel = "Intake On";
+              a.thenCode = "intake.move(127);";
+              a.thenAction = { type: "custom", customCode: "intake.move(127);", customDuration: 0 };
+            }
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            updateTimeDisplay();
+            return;
+          }
+          if (act === "set-else-preset") {
+            const p = btn.dataset.preset;
+            if (p === "moveBackwards") {
+              a.elseLabel = "Move backwards";
+              a.elseCode = "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});";
+              a.elseAction = { type: "moveToPoint", x: -24, y: -24, timeout: 2000, forwards: false };
+            } else if (p === "turnNeg90") {
+              a.elseLabel = "Turn to 270°";
+              a.elseCode = "chassis.turnToHeading(270, 1500);";
+              a.elseAction = { type: "turnToHeading", theta: 270, timeout: 1500 };
+            } else if (p === "clampOff") {
+              a.elseLabel = "Release Clamp";
+              a.elseCode = "clamp.set_value(false);\npros::delay(100);";
+              a.elseAction = { type: "custom", customCode: "clamp.set_value(false);\npros::delay(100);", customDuration: 0.1 };
+            } else if (p === "intakeOff") {
+              a.elseLabel = "Intake Off";
+              a.elseCode = "intake.move(0);";
+              a.elseAction = { type: "custom", customCode: "intake.move(0);", customDuration: 0 };
+            }
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            updateTimeDisplay();
             return;
           }
 
@@ -2726,6 +3081,29 @@
             else code += `${ind}${line}\n`;
           }
         }
+        continue;
+      }
+      if (a.type === "ifElse") {
+        const cond = (a.condition || "true").trim();
+        if (cleanComment && commentStyle === "above") {
+          code += `${ind}// ${cleanComment}\n`;
+        }
+        const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
+        code += `${ind}if (${cond}) {${commentSuffix}\n`;
+        const thenCode = (a.thenCode != null && a.thenCode !== "") ? a.thenCode : (a.thenAction ? "chassis.moveToPoint(24, 24, 2000);" : "");
+        const thenLines = thenCode.split("\n");
+        for (const line of thenLines) {
+          if (line.trim().length === 0) code += "\n";
+          else code += `${ind}${ind}${line}\n`;
+        }
+        code += `${ind}} else {\n`;
+        const elseCode = (a.elseCode != null && a.elseCode !== "") ? a.elseCode : (a.elseAction ? "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});" : "");
+        const elseLines = elseCode.split("\n");
+        for (const line of elseLines) {
+          if (line.trim().length === 0) code += "\n";
+          else code += `${ind}${ind}${line}\n`;
+        }
+        code += `${ind}}\n`;
         continue;
       }
       const px = a.x + (a.offsetX || 0);
@@ -3437,11 +3815,38 @@
       a.y = Number(last.y.toFixed(1));
     }
     if (needsHeading(type)) a.theta = last.theta;
+    if (type === "ifElse") {
+      const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+      const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+      a.thenAction = {
+        type: "moveToPoint",
+        x: Number((last.x + 24).toFixed(1)),
+        y: Number((last.y + 24).toFixed(1)),
+        timeout: 2000,
+        forwards: true,
+        maxSpeed: defMax,
+        minSpeed: defMin,
+        earlyExitRange: 0,
+      };
+      a.thenCode = `chassis.moveToPoint(${a.thenAction.x}, ${a.thenAction.y}, 2000);`;
+      a.elseAction = {
+        type: "moveToPoint",
+        x: Number((last.x - 24).toFixed(1)),
+        y: Number((last.y - 24).toFixed(1)),
+        timeout: 2000,
+        forwards: false,
+        maxSpeed: defMax,
+        minSpeed: defMin,
+        earlyExitRange: 0,
+      };
+      a.elseCode = `chassis.moveToPoint(${a.elseAction.x}, ${a.elseAction.y}, 2000, {.forwards = false});`;
+    }
     actions.push(a);
     selectedId = a.id;
     markDirty();
     renderFlow();
     draw();
+    generateCode();
   };
 
   // Block Palette Event Handler
@@ -3461,6 +3866,32 @@
           a.y = Number(last.y.toFixed(1));
         }
         if (needsHeading(type)) a.theta = last.theta;
+        if (type === "ifElse") {
+          const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+          const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+          a.thenAction = {
+            type: "moveToPoint",
+            x: Number((last.x + 24).toFixed(1)),
+            y: Number((last.y + 24).toFixed(1)),
+            timeout: 2000,
+            forwards: true,
+            maxSpeed: defMax,
+            minSpeed: defMin,
+            earlyExitRange: 0,
+          };
+          a.thenCode = `chassis.moveToPoint(${a.thenAction.x}, ${a.thenAction.y}, 2000);`;
+          a.elseAction = {
+            type: "moveToPoint",
+            x: Number((last.x - 24).toFixed(1)),
+            y: Number((last.y - 24).toFixed(1)),
+            timeout: 2000,
+            forwards: false,
+            maxSpeed: defMax,
+            minSpeed: defMin,
+            earlyExitRange: 0,
+          };
+          a.elseCode = `chassis.moveToPoint(${a.elseAction.x}, ${a.elseAction.y}, 2000, {.forwards = false});`;
+        }
         actions.push(a);
         selectedId = a.id;
         markDirty();

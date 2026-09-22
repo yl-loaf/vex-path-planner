@@ -7414,6 +7414,375 @@ kbd {
   white-space: nowrap;
 }
 
+/* ==========================================================================
+   Scratch-Style Conditional Blocks (If / Else Loops)
+   ========================================================================== */
+.action-card.if-else-card {
+  border-color: #FFAB19 !important;
+  background: linear-gradient(145deg, rgba(255, 171, 25, 0.16) 0%, rgba(15, 23, 42, 0.98) 100%) !important;
+  box-shadow: 0 4px 16px rgba(255, 171, 25, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.scratch-if-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1.5px solid rgba(255, 171, 25, 0.4);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 4px;
+}
+
+.scratch-if-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.scratch-keyword {
+  font-family: "SF Pro Rounded", "Comic Neue", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #FFD166;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.scratch-condition-slot {
+  display: inline-flex;
+  align-items: center;
+  background: #090d16;
+  border: 1.5px solid #FFAB19;
+  border-radius: 16px;
+  padding: 2px 8px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.scratch-hex-point {
+  color: #FFAB19;
+  font-size: 0.7rem;
+  user-select: none;
+}
+
+.scratch-condition-input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #38bdf8 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  min-width: 140px;
+  text-align: center !important;
+  padding: 2px 6px !important;
+}
+
+.scratch-condition-input:focus {
+  outline: none !important;
+  color: #ffffff !important;
+}
+
+.scratch-sim-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scratch-sim-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-right: 2px;
+}
+
+.scratch-sim-btn {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.scratch-sim-btn.active {
+  background: #38bdf8;
+  border-color: #38bdf8;
+  color: #090d16;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.scratch-cond-presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 2px;
+}
+
+.scratch-preset-lbl {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.cond-chip {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(255, 171, 25, 0.3);
+  color: #fde047;
+  font-family: monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.cond-chip:hover, .cond-chip.active {
+  background: #FFAB19;
+  color: #090d16;
+  border-color: #FFAB19;
+}
+
+/* Scratch C-Block Inset Arm */
+.scratch-c-arm {
+  border-left: 10px solid #FFAB19;
+  background: rgba(15, 23, 42, 0.7);
+  border-radius: 0 10px 10px 0;
+  padding: 8px 12px;
+  margin: 2px 0 2px 6px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scratch-branch-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scratch-branch-badge {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.scratch-branch-header.then-header .scratch-branch-badge {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid #10b981;
+  color: #34d399;
+}
+
+.scratch-branch-header.else-header .scratch-branch-badge {
+  background: rgba(249, 115, 22, 0.2);
+  border: 1px solid #f97316;
+  color: #fb923c;
+}
+
+.scratch-branch-title-input {
+  background: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+  flex: 1;
+}
+
+.scratch-branch-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scratch-sub-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.scratch-code-textarea {
+  background: #090d16 !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  color: #a5f3fc !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 0.78rem !important;
+  line-height: 1.4 !important;
+  padding: 6px 10px !important;
+  resize: vertical;
+}
+
+.scratch-code-textarea:focus {
+  outline: none;
+  border-color: #38bdf8 !important;
+}
+
+.scratch-preset-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.scratch-preset-actions .snip-btn {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.scratch-preset-actions .snip-btn:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.scratch-else-bar {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px 4px 10px;
+  background: rgba(255, 171, 25, 0.25);
+  border-left: 10px solid #FFAB19;
+  border-radius: 0 6px 6px 0;
+  margin: 2px 0 2px 6px;
+}
+
+.scratch-block-cap {
+  height: 6px;
+  background: #FFAB19;
+  border-radius: 0 0 6px 6px;
+  margin-top: 2px;
+}
+
+/* Custom Code If-Loop Auto-Detection Banner */
+.custom-if-detected-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(255, 171, 25, 0.22) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1.5px solid #FFAB19;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 14px rgba(255, 171, 25, 0.15);
+  animation: ifBannerPulse 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ifBannerPulse {
+  0% { transform: scale(0.98); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.if-detected-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.if-detected-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px #FFAB19);
+}
+
+.if-detected-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.if-detected-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #f8fafc;
+}
+
+.if-detected-title {
+  font-weight: 800;
+  color: #FFD166;
+  letter-spacing: 0.2px;
+}
+
+.if-detected-cond-badge {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 209, 102, 0.4);
+  color: #fef08a;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.if-detected-branches {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.if-detected-branch-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-convert-to-scratch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #FFAB19 0%, #d97706 100%);
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+  transition: all 0.15s ease;
+}
+
+.btn-convert-to-scratch:hover {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5);
+}
+
+
 
 
 
