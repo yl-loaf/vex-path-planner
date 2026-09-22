@@ -512,6 +512,9 @@
 
     // Save to local storage
     saveLocal();
+    try {
+      localStorage.setItem("lemlib_translator_just_saved", "true");
+    } catch (_) {}
 
     // If cloud connected, save to cloud
     if (cloudReady && cloudUser) {

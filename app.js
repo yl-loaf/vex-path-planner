@@ -7405,15 +7405,34 @@ lemlib::ControllerSettings ${currentMode}_controller(
     wireLoadProjectModal();
     wireDebugPanel();
 
+    function checkAndSyncExternalChanges(showNotification = true) {
+      if (!window.ProjectManager || !window.ProjectManager.project || isSyncingFromPlanner) return;
+      const proj = window.ProjectManager.project;
+      const code = window.ProjectManager.getFile("src/autons.cpp");
+      if (!code || !code.trim()) return;
+
+      const indent = typeof getIndentString === "function" ? getIndentString() : "    ";
+      const hasDiff = window.ProjectManager.hasCodeDifference(paths, indent);
+      
+      if (hasDiff && (proj.lastAutonEditor === "ide" || proj.rawCppPreserved)) {
+        console.log("🔄 External IDE changes or restored version detected. Synchronizing Visual Planner blocks...");
+        loadProjectAutonsIntoPlanner(showNotification, true);
+      }
+    }
+
     // UI state updates only - do NOT destructively replace user's planner paths on background events!
-    window.ProjectManager.addListener(async () => {
+    window.ProjectManager.addListener(async (pm, reason) => {
       updateProjectBanner();
+      if (reason === "load" || reason === "version_restored" || reason === "file_restored") {
+        checkAndSyncExternalChanges(true);
+      }
     });
 
     window.addEventListener("focus", async () => {
       if (window.ProjectManager) {
         await window.ProjectManager.initAsyncStorage();
         updateProjectBanner();
+        checkAndSyncExternalChanges(false);
       }
     });
 
@@ -7421,6 +7440,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (!document.hidden && window.ProjectManager) {
         await window.ProjectManager.initAsyncStorage();
         updateProjectBanner();
+        checkAndSyncExternalChanges(false);
       }
     });
 
@@ -7428,6 +7448,21 @@ lemlib::ControllerSettings ${currentMode}_controller(
     window.ProjectManager.whenReady().then(() => {
       const proj = window.ProjectManager.project;
       if (!proj) return;
+
+      // Check if we just did a translation on translator.html
+      const justSavedByTranslator = localStorage.getItem("lemlib_translator_just_saved") === "true";
+      if (justSavedByTranslator) {
+        localStorage.removeItem("lemlib_translator_just_saved");
+        console.log("🚀 Detected fresh translation from Translator. Synchronizing to project...");
+        proj.lastAutonEditor = "blocks";
+        proj.rawCppPreserved = false;
+        syncPlannerIntoProjectManager({ ask: false, force: true });
+        updateProjectBanner();
+        if (typeof showToast === "function") {
+          showToast("✓ Translation successfully loaded and synchronized with Visual Planner & Flowchart!");
+        }
+        return;
+      }
 
       const code = window.ProjectManager.getFile("src/autons.cpp");
       const projUpdatedAt = Number(proj.updatedAt) || 0;

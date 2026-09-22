@@ -1040,12 +1040,13 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.createVersionSnapshot(fileName, "restore", `Auto-Backup before Restoring (${target.label})`);
 
       // Overwrite file with target snapshot content
-      this.setFile(fileName, target.content, true);
+      this.setFile(fileName, target.content, false);
       if (this.project) {
         this.project.lastAutonEditor = "ide";
         this.project.rawCppPreserved = true;
       }
       this.markDirty(true);
+      this.saveLocal().catch(() => {});
 
       this.notifyListeners("version_restored", target);
       this.updateVersionCountBadges();
