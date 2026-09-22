@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260922.k21" />
+  <link rel="stylesheet" href="style.css?v=20260922.k26" />
 </head>
 <body>
   <!-- =================================================================
@@ -370,6 +370,33 @@
             </div>
           </div>
 
+          <!-- Pinned Block Palette Toolbar -->
+          <div class="palette-bar">
+            <div class="palette-header">
+              <span class="palette-title">
+                <span>🧩</span> Block Palette
+              </span>
+              <div class="category-chips">
+                <button type="button" class="cat-chip cat-motion" data-cat="motion">🔵 Motion</button>
+                <button type="button" class="cat-chip cat-turn" data-cat="turn">🟣 Turns</button>
+                <button type="button" class="cat-chip cat-control" data-cat="control">🟡 Control</button>
+                <button type="button" class="cat-chip cat-subsystem" data-cat="subsystem">🟢 Subsystems</button>
+                <button type="button" class="cat-chip cat-custom" data-cat="custom">🔴 C++ Code</button>
+              </div>
+            </div>
+            <div class="palette-block-list">
+              <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPoint">🔵 moveToPoint(x, y)</button>
+              <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPose">🔵 moveToPose(x, y, θ)</button>
+              <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToHeading">🟣 turnToHeading(θ)</button>
+              <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToPoint">🟣 turnToPoint(x, y)</button>
+              <button type="button" class="palette-block-btn btn-turn" data-act-type="swingToHeading">🟣 swingToHeading(θ)</button>
+              <button type="button" class="palette-block-btn btn-control" data-act-type="wait">🟡 wait / delay</button>
+              <button type="button" class="palette-block-btn btn-subsystem" data-snip-add="clamp.set_value(true);">🟢 clamp goal</button>
+              <button type="button" class="palette-block-btn btn-subsystem" data-snip-add="intake.move(127);">🟢 intake on</button>
+              <button type="button" class="palette-block-btn btn-custom" data-act-type="custom">🔴 custom C++</button>
+            </div>
+          </div>
+
           <div class="start-card" id="startCard">
             <div class="card-title">
               <span class="badge start">START</span>
@@ -391,7 +418,7 @@
           <div class="connector">▼</div>
 
           <div id="actionFlow" class="action-flow">
-            <!-- action cards injected here -->
+            <!-- Action block cards injected here -->
           </div>
 
           <div class="add-bar">
@@ -1978,19 +2005,19 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260922.k21"></script>
+  <script src="version.js?v=20260922.k26"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260922.k21"></script>
-  <script src="google-drive-sync.js?v=20260922.k21"></script>
-  <script src="session-guard.js?v=20260922.k21"></script>
-  <script src="v5-brain-serial.js?v=20260922.k21"></script>
-  <script src="project-manager.js?v=20260922.k21"></script>
-  <script src="cpp-parser.js?v=20260922.k21"></script>
-  <script src="app.js?v=20260922.k21"></script>
-  <script src="tutorial.js?v=20260922.k21"></script>
+  <script src="firebase-config.js?v=20260922.k26"></script>
+  <script src="google-drive-sync.js?v=20260922.k26"></script>
+  <script src="session-guard.js?v=20260922.k26"></script>
+  <script src="v5-brain-serial.js?v=20260922.k26"></script>
+  <script src="project-manager.js?v=20260922.k26"></script>
+  <script src="cpp-parser.js?v=20260922.k26"></script>
+  <script src="app.js?v=20260922.k26"></script>
+  <script src="tutorial.js?v=20260922.k26"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

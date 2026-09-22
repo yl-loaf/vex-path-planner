@@ -954,17 +954,17 @@ button.full { width: 100%; }
   border-color: #3b82f6;
 }
 
-.modal, .modal-overlay {
+.modal, .modal-overlay, .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.75);
+  background: rgba(0,0,0,0.78);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 10000;
   backdrop-filter: blur(4px);
 }
-.modal[hidden], .modal-overlay[hidden] { display: none !important; }
+.modal[hidden], .modal-overlay[hidden], .modal-backdrop[hidden] { display: none !important; }
 .modal-card, .modal-box {
   background: #0f172a;
   border: 1px solid #334155;
@@ -4243,6 +4243,7 @@ kbd {
   color: #94a3b8;
   cursor: pointer;
   transition: all 0.1s ease;
+  position: relative;
 }
 .ide-file-item:hover {
   background: #132238;
@@ -4252,6 +4253,68 @@ kbd {
   background: #0f2942;
   color: #38bdf8;
   font-weight: 600;
+}
+.ide-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ide-file-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ide-file-item:hover .ide-file-item-actions,
+.ide-file-item:focus-within .ide-file-item-actions {
+  opacity: 1;
+}
+.ide-file-del-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.ide-file-del-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  transform: scale(1.15);
+}
+.ide-breadcrumb-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ide-file-toolbar-del-btn {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: 0.70rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+.ide-file-toolbar-del-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .ide-symbols-tree {
@@ -7041,6 +7104,261 @@ kbd {
   border-radius: 8px;
   z-index: 10000;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================================
+   INTERLOCKING BLOCK PALETTE & ACTION CARDS
+   ========================================================================== */
+
+.palette-bar,
+.scratch-palette-bar {
+  position: -webkit-sticky;
+  position: sticky;
+  top: -12px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: #0a1120;
+  border: 1px solid #1e293b;
+  border-bottom: 2px solid #38bdf8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-top: -4px;
+  margin-bottom: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+}
+
+.palette-header,
+.scratch-palette-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.palette-title,
+.scratch-palette-title {
+  font-size: 0.80rem;
+  font-weight: 800;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+
+.category-chips,
+.scratch-category-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.cat-chip,
+.scratch-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.cat-chip:hover,
+.scratch-cat-chip:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.15);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.cat-chip.cat-motion, .scratch-cat-chip.cat-motion { background: #4C97FF; }
+.cat-chip.cat-turn, .scratch-cat-chip.cat-turn { background: #9966FF; }
+.cat-chip.cat-control, .scratch-cat-chip.cat-control { background: #FFAB19; }
+.cat-chip.cat-subsystem, .scratch-cat-chip.cat-subsystem { background: #0FBD8C; }
+.cat-chip.cat-custom, .scratch-cat-chip.cat-custom { background: #FF6680; }
+
+.palette-block-list,
+.scratch-palette-block-list {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.palette-block-btn,
+.scratch-block-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  transition: all 0.12s ease;
+  font-family: ui-monospace, monospace;
+}
+.palette-block-btn:hover,
+.scratch-block-btn:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+.palette-block-btn.btn-motion, .scratch-block-btn.btn-motion { background: linear-gradient(135deg, #4C97FF, #3373CC); }
+.palette-block-btn.btn-turn, .scratch-block-btn.btn-turn { background: linear-gradient(135deg, #9966FF, #7740CC); }
+.palette-block-btn.btn-control, .scratch-block-btn.btn-control { background: linear-gradient(135deg, #FFAB19, #CC8100); }
+.palette-block-btn.btn-subsystem, .scratch-block-btn.btn-subsystem { background: linear-gradient(135deg, #0FBD8C, #098C66); }
+.palette-block-btn.btn-custom, .scratch-block-btn.btn-custom { background: linear-gradient(135deg, #FF6680, #CC334E); }
+
+/* Routine Hat Block ("when autonomous starts") */
+.hat-block,
+.scratch-hat-block {
+  background: linear-gradient(135deg, #FFAB19, #E69500);
+  border: 2px solid #CC8100;
+  border-radius: 18px 18px 8px 8px;
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(255, 171, 25, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.hat-block::before,
+.scratch-hat-block::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 28px;
+  width: 65px;
+  height: 10px;
+  background: #FFAB19;
+  border-radius: 10px 10px 0 0;
+  border-top: 2px solid #CC8100;
+  border-left: 2px solid #CC8100;
+  border-right: 2px solid #CC8100;
+}
+
+.hat-title,
+.scratch-hat-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.90rem;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+.hat-select,
+.scratch-hat-select {
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.82rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 20px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+/* Interlocking Blocks */
+.action-card.block-card,
+.action-card.scratch-block {
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  margin-bottom: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: visible !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.action-card.cat-motion, .action-card.scratch-cat-motion {
+  background: linear-gradient(135deg, rgba(76, 151, 255, 0.22), rgba(15, 23, 42, 0.95));
+  border-color: #4C97FF;
+}
+.action-card.cat-motion .card-header, .action-card.scratch-cat-motion .card-header {
+  background: #4C97FF;
+  color: #ffffff;
+}
+
+.action-card.cat-turn, .action-card.scratch-cat-turn {
+  background: linear-gradient(135deg, rgba(153, 102, 255, 0.22), rgba(15, 23, 42, 0.95));
+  border-color: #9966FF;
+}
+.action-card.cat-turn .card-header, .action-card.scratch-cat-turn .card-header {
+  background: #9966FF;
+  color: #ffffff;
+}
+
+.action-card.cat-control, .action-card.scratch-cat-control {
+  background: linear-gradient(135deg, rgba(255, 171, 25, 0.22), rgba(15, 23, 42, 0.95));
+  border-color: #FFAB19;
+}
+.action-card.cat-control .card-header, .action-card.scratch-cat-control .card-header {
+  background: #FFAB19;
+  color: #ffffff;
+}
+
+.action-card.cat-subsystem, .action-card.scratch-cat-subsystem {
+  background: linear-gradient(135deg, rgba(15, 189, 140, 0.22), rgba(15, 23, 42, 0.95));
+  border-color: #0FBD8C;
+}
+.action-card.cat-subsystem .card-header, .action-card.scratch-cat-subsystem .card-header {
+  background: #0FBD8C;
+  color: #ffffff;
+}
+
+.action-card.cat-custom, .action-card.scratch-cat-custom {
+  background: linear-gradient(135deg, rgba(255, 102, 128, 0.22), rgba(15, 23, 42, 0.95));
+  border-color: #FF6680;
+}
+.action-card.cat-custom .card-header, .action-card.scratch-cat-custom .card-header {
+  background: #FF6680;
+  color: #ffffff;
+}
+
+.card-header {
+  padding: 6px 12px;
+  border-radius: 10px 10px 0 0;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.action-card input[type="number"],
+.action-card input[type="text"],
+.action-card select {
+  border-radius: 20px !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  text-align: center;
+  padding: 4px 10px !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.5) !important;
+}
+
+.action-card input[type="number"]:focus,
+.action-card input[type="text"]:focus,
+.action-card select:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.5), inset 0 2px 4px rgba(0,0,0,0.5) !important;
 }
 
 

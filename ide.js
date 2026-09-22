@@ -579,6 +579,193 @@
 
   const collapsedFolders = new Set();
 
+  function promptDeleteFileConfirmation(filename) {
+    return new Promise((resolve) => {
+      let modal = document.getElementById("ideDeleteFileModal");
+      if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "ideDeleteFileModal";
+        modal.className = "modal-backdrop";
+        modal.innerHTML = `
+          <div class="modal-card" style="max-width:480px;background:#0b1329;border:1px solid #334155;border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);overflow:hidden;">
+            <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;background:#0f172a;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:1.4rem;">🗑️</span>
+                <div>
+                  <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;font-weight:700;">Delete File</h3>
+                  <span style="font-size:0.75rem;color:#94a3b8;">Confirm file deletion from workspace</span>
+                </div>
+              </div>
+              <button type="button" id="btnIdeDeleteModalClose" class="modal-close" style="background:none;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;line-height:1;">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px;color:#e2e8f0;font-size:0.9rem;line-height:1.5;">
+              <p style="margin:0 0 14px 0;">
+                Are you sure you want to permanently delete <strong id="ideDeleteModalFileName" style="color:#38bdf8;font-family:monospace;background:rgba(56,189,248,0.12);padding:2px 6px;border-radius:4px;"></strong>?
+              </p>
+              <div id="ideDeleteModalCoreWarning" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+                <div style="display:flex;align-items:flex-start;gap:8px;color:#fca5a5;font-size:0.82rem;line-height:1.4;">
+                  <span style="font-size:1.1rem;line-height:1;">⚠️</span>
+                  <div>
+                    <strong style="color:#f87171;">Core Project File Warning:</strong>
+                    <div>This file contains critical project code or configurations. Deleting it will remove this source from your C++ project.</div>
+                  </div>
+                </div>
+              </div>
+              <div id="ideDeleteModalMeta" style="background:#09111e;border:1px solid #1e293b;border-radius:8px;padding:10px 12px;font-size:0.78rem;color:#94a3b8;display:flex;justify-content:space-between;align-items:center;">
+                <span>Lines: <strong id="ideDeleteModalLines" style="color:#f1f5f9;">0</strong></span>
+                <span>Size: <strong id="ideDeleteModalSize" style="color:#f1f5f9;">0 B</strong></span>
+              </div>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 20px;background:#09111e;border-top:1px solid #1e293b;">
+              <button type="button" id="btnIdeDeleteModalBackup" class="btn-subtle" style="font-size:0.80rem;padding:7px 12px;" title="Download a copy before deleting">💾 Download Copy</button>
+              <div style="display:flex;gap:8px;">
+                <button type="button" id="btnIdeDeleteModalCancel" class="btn-subtle" style="font-size:0.82rem;padding:7px 14px;">Cancel</button>
+                <button type="button" id="btnIdeDeleteModalConfirm" style="background:#dc2626;color:#ffffff;border:1px solid #ef4444;border-radius:6px;padding:7px 16px;font-size:0.84rem;font-weight:700;cursor:pointer;">🗑️ Delete File</button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+      }
+
+      const elFileName = document.getElementById("ideDeleteModalFileName");
+      const elWarning = document.getElementById("ideDeleteModalCoreWarning");
+      const elLines = document.getElementById("ideDeleteModalLines");
+      const elSize = document.getElementById("ideDeleteModalSize");
+      const btnClose = document.getElementById("btnIdeDeleteModalClose");
+      const btnCancel = document.getElementById("btnIdeDeleteModalCancel");
+      const btnConfirm = document.getElementById("btnIdeDeleteModalConfirm");
+      const btnBackup = document.getElementById("btnIdeDeleteModalBackup");
+
+      const isCore = filename === "src/autons.cpp" || filename === "src/main.cpp" || filename === "include/main.h";
+      const content = (ProjectManager.project?.files?.[filename]) || "";
+      const lineCount = content ? content.split("\n").length : 0;
+      const byteCount = new Blob([content]).size;
+      const sizeStr = byteCount > 1024 ? `${(byteCount / 1024).toFixed(1)} KB` : `${byteCount} B`;
+
+      if (elFileName) elFileName.textContent = filename;
+      if (elWarning) elWarning.style.display = isCore ? "block" : "none";
+      if (elLines) elLines.textContent = lineCount.toLocaleString();
+      if (elSize) elSize.textContent = sizeStr;
+
+      modal.removeAttribute("hidden");
+      modal.style.display = "flex";
+
+      let resolved = false;
+
+      const cleanup = () => {
+        if (resolved) return;
+        resolved = true;
+        modal.setAttribute("hidden", "true");
+        modal.style.display = "none";
+        window.removeEventListener("keydown", onKeyDown);
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      window.addEventListener("keydown", onKeyDown);
+
+      if (btnClose) {
+        btnClose.onclick = (e) => {
+          e.preventDefault();
+          cleanup();
+          resolve(false);
+        };
+      }
+
+      if (btnCancel) {
+        btnCancel.onclick = (e) => {
+          e.preventDefault();
+          cleanup();
+          resolve(false);
+        };
+      }
+
+      modal.onclick = (e) => {
+        if (e.target === modal) {
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      if (btnBackup) {
+        btnBackup.onclick = (e) => {
+          e.preventDefault();
+          if (ProjectManager && typeof ProjectManager.downloadFile === "function") {
+            ProjectManager.downloadFile(filename);
+            showToast(`💾 Downloaded copy of '${filename}'`);
+          }
+        };
+      }
+
+      if (btnConfirm) {
+        btnConfirm.onclick = (e) => {
+          e.preventDefault();
+          cleanup();
+          resolve(true);
+        };
+        setTimeout(() => {
+          if (btnConfirm) btnConfirm.focus();
+        }, 60);
+      }
+    });
+  }
+
+  async function deleteFileWithConfirm(filename) {
+    if (!filename || !ProjectManager.project?.files) return;
+    const allFiles = Object.keys(ProjectManager.project.files);
+    if (allFiles.length <= 1) {
+      showToast("❌ Cannot delete the only file in the project. Projects must contain at least one source file.", "error");
+      return;
+    }
+
+    if (!ProjectManager.project.files[filename]) {
+      showToast(`❌ File '${filename}' does not exist in workspace.`, "error");
+      return;
+    }
+
+    const confirmed = await promptDeleteFileConfirmation(filename);
+    if (!confirmed) return;
+
+    // 1. Delete from ProjectManager
+    ProjectManager.deleteFile(filename);
+
+    // 2. Remove from openTabs
+    openTabs = openTabs.filter(t => t !== filename);
+
+    // 3. If active file was deleted, switch to next open tab or available file
+    const remainingFiles = Object.keys(ProjectManager.project.files);
+    if (activeFile === filename) {
+      if (openTabs.length > 0) {
+        activeFile = openTabs[openTabs.length - 1];
+      } else if (remainingFiles.length > 0) {
+        activeFile = remainingFiles.find(f => f === "src/autons.cpp" || f === "src/main.cpp") || remainingFiles[0];
+        openTabs.push(activeFile);
+      } else {
+        activeFile = "src/autons.cpp";
+        ProjectManager.setFile("src/autons.cpp", `// Autonomous routines\n#include "main.h"\n\n`);
+        openTabs.push(activeFile);
+      }
+    } else if (openTabs.length === 0 && remainingFiles.length > 0) {
+      activeFile = remainingFiles[0];
+      openTabs.push(activeFile);
+    }
+
+    // 4. Update UI
+    renderFileTree();
+    renderTabs();
+    loadFile(activeFile);
+    renderSymbols();
+
+    showToast(`🗑️ Deleted file: '${filename}'`);
+  }
+
   function renderFileTree() {
     if (!elFileTree) return;
     elFileTree.innerHTML = "";
@@ -639,8 +826,22 @@
           item.className = `ide-file-item ${f === activeFile ? "active" : ""}`;
           const subPath = f.includes("/") ? f.substring(f.indexOf("/") + 1) : f;
           const icon = f.endsWith(".cpp") ? "📄" : f.endsWith(".h") || f.endsWith(".hpp") ? "📑" : "⚙️";
-          item.innerHTML = `<span class="ide-file-icon">${icon}</span> <span class="ide-file-name" title="${f}">${subPath}</span>`;
-          item.onclick = (e) => {
+          item.innerHTML = `
+            <span class="ide-file-icon">${icon}</span>
+            <span class="ide-file-name" title="${f}">${subPath}</span>
+            <div class="ide-file-item-actions">
+              <button type="button" class="ide-file-del-btn" title="Delete file (${subPath})" data-del-file="${f}">🗑️</button>
+            </div>
+          `;
+          item.onclick = async (e) => {
+            const delBtn = e.target.closest("[data-del-file]");
+            if (delBtn) {
+              e.stopPropagation();
+              e.preventDefault();
+              const targetFile = delBtn.getAttribute("data-del-file");
+              await deleteFileWithConfirm(targetFile);
+              return;
+            }
             e.stopPropagation();
             switchToFile(f);
           };
@@ -1607,6 +1808,17 @@
           ProjectManager.setFile(cleanName, `// ${cleanName}\n#pragma once\n#include "main.h"\n\n`);
           renderFileTree();
           switchToFile(cleanName);
+        }
+      });
+    }
+
+    const btnDeleteActiveFile = document.getElementById("btnIdeDeleteActiveFile");
+    if (btnDeleteActiveFile) {
+      btnDeleteActiveFile.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (activeFile) {
+          await deleteFileWithConfirm(activeFile);
         }
       });
     }

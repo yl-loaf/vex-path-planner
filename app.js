@@ -2072,6 +2072,35 @@
     }
     actionFlow.appendChild(botBanner);
 
+    // Routine Hat Cap Block ("when autonomous starts")
+    const activePathObj = paths.find(p => p.id === activePathId) || paths[0];
+    const hatBlock = document.createElement("div");
+    hatBlock.className = "hat-block";
+    const routineOptionsHtml = paths.map((p) => `<option value="${p.id}" ${p.id === activePathId ? "selected" : ""}>auton_${p.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}()</option>`).join("");
+    hatBlock.innerHTML = `
+      <div class="hat-title">
+        <span style="font-size:1.2rem;">🚩</span>
+        <span>when autonomous</span>
+        <select class="hat-select" id="hatRoutineSelect">${routineOptionsHtml}</select>
+        <span>starts</span>
+      </div>
+      <div style="font-size:0.72rem;font-weight:700;background:rgba(0,0,0,0.35);padding:3px 10px;border-radius:12px;border:1px solid rgba(255,255,255,0.25);">
+        ${actions.length} ${actions.length === 1 ? 'block' : 'blocks'}
+      </div>
+    `;
+    const hatSelect = hatBlock.querySelector("#hatRoutineSelect");
+    if (hatSelect) {
+      hatSelect.addEventListener("change", (e) => {
+        activePathId = e.target.value;
+        bindActive();
+        syncPathSelect();
+        renderFlow();
+        draw();
+        generateCode();
+      });
+    }
+    actionFlow.appendChild(hatBlock);
+
     actions.forEach((a, idx) => {
       const block = document.createElement("div");
       block.className = "action-block";
@@ -2113,9 +2142,18 @@
         mPrecCard = getMultitaskPrecedence(a, idx, nextAct, idx + 1, poses);
       }
 
+      let catClass = "cat-motion";
+      if (a.type === "moveToPoint" || a.type === "moveToPose") catClass = "cat-motion";
+      else if (a.type === "turnToPoint" || a.type === "turnToHeading" || a.type === "swingToPoint" || a.type === "swingToHeading") catClass = "cat-turn";
+      else if (a.type === "wait") catClass = "cat-control";
+      else if (a.type === "custom") {
+        if (/clamp|intake|conveyor|flywheel|piston|motor/i.test(a.customCode || "")) catClass = "cat-subsystem";
+        else catClass = "cat-custom";
+      }
+
       const card = document.createElement("div");
       card.className =
-        "action-card" +
+        `action-card block-card ${catClass}` +
         (a.id === selectedId ? " selected" : "") +
         (a.type === "custom" ? " custom-type" : "") +
         (a.async ? " multitask-active" : "");
@@ -3185,6 +3223,43 @@
     renderFlow();
     draw();
   };
+
+  // Block Palette Event Handler
+  const paletteBar = document.querySelector(".palette-bar");
+  if (paletteBar) {
+    paletteBar.addEventListener("click", (e) => {
+      const btnBlock = e.target.closest("[data-act-type]");
+      const btnSnip = e.target.closest("[data-snip-add]");
+      
+      if (btnBlock) {
+        const type = btnBlock.getAttribute("data-act-type");
+        const a = defaultAction(type);
+        const poses = computePoses();
+        const last = poses[poses.length - 1];
+        if (needsPoint(type) || isMove(type)) {
+          a.x = Number((last.x + 12).toFixed(1));
+          a.y = Number(last.y.toFixed(1));
+        }
+        if (needsHeading(type)) a.theta = last.theta;
+        actions.push(a);
+        selectedId = a.id;
+        markDirty();
+        renderFlow();
+        draw();
+        generateCode();
+      } else if (btnSnip) {
+        const snipCode = btnSnip.getAttribute("data-snip-add");
+        const a = defaultAction("custom");
+        a.customCode = snipCode;
+        actions.push(a);
+        selectedId = a.id;
+        markDirty();
+        renderFlow();
+        draw();
+        generateCode();
+      }
+    });
+  }
 
   document.getElementById("btnClear").onclick = () => {
     openClearModal();

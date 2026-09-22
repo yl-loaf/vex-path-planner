@@ -1423,8 +1423,14 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     deleteFile(filename) {
       if (this.project?.files?.[filename]) {
         delete this.project.files[filename];
+        if (this.versions && this.versions[filename]) {
+          delete this.versions[filename];
+          try { idbPut("file_versions_history", this.versions); } catch (_) {}
+        }
+        this.indexVariables();
         this.markDirty(true);
         this.saveLocal();
+        this.notifyListeners("file_deleted");
       }
     }
 
