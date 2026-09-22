@@ -261,6 +261,55 @@
           }).catch(alert);
         };
       }
+
+      // Auto-prompt Google Drive Sign-In when IDE is opened if token is missing
+      setTimeout(() => {
+        const gdriveToken = localStorage.getItem("gdrive_access_token");
+        const gdriveExpiry = Number(localStorage.getItem("gdrive_token_expiry")) || 0;
+        const gdriveModal = document.getElementById("gdriveConnectModal");
+        const btnModalConnect = document.getElementById("btnGdriveModalConnect");
+        const btnModalSkip = document.getElementById("btnGdriveModalSkip");
+
+        if (gdriveModal && (!gdriveToken || gdriveExpiry < Date.now() + 60000)) {
+          gdriveModal.removeAttribute("hidden");
+
+          if (btnModalConnect) {
+            btnModalConnect.onclick = async () => {
+              btnModalConnect.disabled = true;
+              btnModalConnect.innerHTML = "⏳ Connecting Google Drive...";
+              try {
+                if (window.GoogleDriveSync) {
+                  await window.GoogleDriveSync.getAccessToken(true);
+                  gdriveModal.setAttribute("hidden", "true");
+                  showToast("🎉 Successfully connected to Google Drive!");
+                } else {
+                  const provider = new firebase.auth.GoogleAuthProvider();
+                  provider.addScope("https://www.googleapis.com/auth/drive.file");
+                  const res = await firebase.auth().signInWithPopup(provider);
+                  if (res && res.credential && res.credential.accessToken) {
+                    localStorage.setItem("gdrive_access_token", res.credential.accessToken);
+                    localStorage.setItem("gdrive_token_expiry", Date.now() + 3500 * 1000);
+                    gdriveModal.setAttribute("hidden", "true");
+                    showToast("🎉 Connected to Google Drive!");
+                  }
+                }
+              } catch (err) {
+                console.error("Google Drive connection error:", err);
+                showToast("❌ Connection failed: " + err.message);
+              } finally {
+                btnModalConnect.disabled = false;
+              }
+            };
+          }
+
+          if (btnModalSkip) {
+            btnModalSkip.onclick = () => {
+              gdriveModal.setAttribute("hidden", "true");
+              showToast("ℹ️ Working offline. You can sign in to Google Drive anytime from 📁 Project menu.");
+            };
+          }
+        }
+      }, 600);
     } catch (e) {
       console.warn("IDE Auth init skipped or failed:", e);
     }
@@ -488,14 +537,14 @@
       lastSaveTimestamp = timeStr;
       const finalProgStr = pm.formatSavingProgress(changedBytes, changedBytes);
 
-      if (cloudUser) {
+      if (window.GoogleDriveSync) {
         try {
-          await pm.saveToCloud((curr, total, progStr) => {
-            updateAutosaveUI("saving", null, progStr);
-          }, true);
+          updateAutosaveUI("saving", null, finalProgStr);
+          await window.GoogleDriveSync.saveProject(pm.project);
           pm.markDirty(false);
-          updateAutosaveUI("synced", null, finalProgStr);
-        } catch (err) {
+          updateAutosaveUI("synced", `📁 Drive Synced (${timeStr})`, finalProgStr);
+        } catch (gErr) {
+          console.warn("[Autosave] Google Drive sync notice:", gErr.message);
           pm.markDirty(false);
           updateAutosaveUI("ready", `✓ Saved ${finalProgStr}`, finalProgStr);
         }

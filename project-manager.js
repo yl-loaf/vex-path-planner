@@ -862,6 +862,24 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.isDirty = false;
       this.recordSavedBaseline();
       this.notifyListeners("save");
+
+      // Background Google Drive Autosave
+      this.scheduleGoogleDriveAutosave();
+    }
+
+    scheduleGoogleDriveAutosave() {
+      if (typeof window === "undefined" || !window.GoogleDriveSync) return;
+      if (this._gdriveDebounceTimer) clearTimeout(this._gdriveDebounceTimer);
+      this._gdriveDebounceTimer = setTimeout(async () => {
+        try {
+          if (this.project && window.GoogleDriveSync) {
+            await window.GoogleDriveSync.saveProject(this.project);
+            console.log(`[GoogleDriveAutosave] Auto-synced '${this.project.name}' to Google Drive.`);
+          }
+        } catch (e) {
+          console.warn("[GoogleDriveAutosave] Background sync notice:", e.message);
+        }
+      }, 1500);
     }
 
     markDirty(dirty = true) {
