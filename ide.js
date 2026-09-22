@@ -2277,6 +2277,103 @@
     }
 
     // GitHub Pages Deploy Sync Event Wire-up
+    const btnSaveGDrive = document.getElementById("btnSaveGoogleDrive");
+    const btnLoadGDrive = document.getElementById("btnLoadGoogleDrive");
+
+    if (btnSaveGDrive) {
+      btnSaveGDrive.addEventListener("click", async () => {
+        const menu = document.getElementById("ideProjectMenu");
+        if (menu) menu.hidden = true;
+
+        if (!window.GoogleDriveSync) {
+          showToast("❌ Google Drive module not available.");
+          return;
+        }
+
+        saveCurrentEditorState();
+        const pm = window.ProjectManager;
+        if (!pm || !pm.project) {
+          showToast("❌ No active project to save.");
+          return;
+        }
+
+        btnSaveGDrive.disabled = true;
+        const origText = btnSaveGDrive.innerHTML;
+        btnSaveGDrive.innerHTML = "⏳ Saving to Drive...";
+
+        try {
+          const res = await window.GoogleDriveSync.saveProject(pm.project);
+          showToast(`✅ Saved to Google Drive! (/VEX Path Planner/${res.name})`);
+        } catch (err) {
+          console.error("Google Drive save error:", err);
+          showToast(`❌ Google Drive Save Error: ${err.message}`);
+        } finally {
+          btnSaveGDrive.disabled = false;
+          btnSaveGDrive.innerHTML = origText;
+        }
+      });
+    }
+
+    if (btnLoadGDrive) {
+      btnLoadGDrive.addEventListener("click", async () => {
+        const menu = document.getElementById("ideProjectMenu");
+        if (menu) menu.hidden = true;
+
+        if (!window.GoogleDriveSync) {
+          showToast("❌ Google Drive module not available.");
+          return;
+        }
+
+        btnLoadGDrive.disabled = true;
+        const origText = btnLoadGDrive.innerHTML;
+        btnLoadGDrive.innerHTML = "⏳ Loading Drive Files...";
+
+        try {
+          const files = await window.GoogleDriveSync.listProjects();
+          btnLoadGDrive.disabled = false;
+          btnLoadGDrive.innerHTML = origText;
+
+          if (!files || files.length === 0) {
+            showToast("ℹ️ No saved projects found in Google Drive folder '/VEX Path Planner/'.");
+            return;
+          }
+
+          let fileListStr = "Select a project to load from Google Drive:\n\n";
+          files.forEach((f, idx) => {
+            fileListStr += `${idx + 1}. ${f.name} (Modified: ${new Date(f.modifiedTime).toLocaleDateString()})\n`;
+          });
+          fileListStr += "\nEnter the number (1-" + files.length + "):";
+
+          const selection = prompt(fileListStr);
+          if (!selection) return;
+
+          const num = parseInt(selection.trim(), 10);
+          if (isNaN(num) || num < 1 || num > files.length) {
+            showToast("❌ Invalid selection number.");
+            return;
+          }
+
+          const selectedFile = files[num - 1];
+          showToast(`⏳ Downloading '${selectedFile.name}' from Google Drive...`);
+
+          const projectData = await window.GoogleDriveSync.loadProject(selectedFile.id);
+          if (projectData && window.ProjectManager) {
+            window.ProjectManager.project = projectData;
+            window.ProjectManager.saveLocal();
+            if (typeof renderFileTree === "function") renderFileTree();
+            if (typeof renderTabs === "function") renderTabs();
+            if (typeof renderProjectHeader === "function") renderProjectHeader();
+            showToast(`🎉 Loaded '${selectedFile.name}' from Google Drive!`);
+          }
+        } catch (err) {
+          console.error("Google Drive load error:", err);
+          showToast(`❌ Google Drive Load Error: ${err.message}`);
+          btnLoadGDrive.disabled = false;
+          btnLoadGDrive.innerHTML = origText;
+        }
+      });
+    }
+
     const btnGitHubSync = document.getElementById("btnGitHubSync");
     const githubSyncModal = document.getElementById("githubSyncModal");
     const btnGithubModalClose = document.getElementById("btnGithubModalClose");
