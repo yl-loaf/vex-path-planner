@@ -4386,6 +4386,13 @@
       const uid = activeUser.uid;
       const email = activeUser.email || "";
 
+      const proj = window.ProjectManager?.project;
+      const isIdeActive = proj && (proj.lastAutonEditor === "ide" || proj.rawCppPreserved);
+      if (isIdeActive) {
+        console.log("[CloudLoad] C++ IDE workspace is active. Bypassing cloud pathPayload to preserve parsed blocks from src/autons.cpp.");
+        pathLoaded = true;
+      }
+
       try {
         const params = new URLSearchParams();
         if (uid) params.set("uid", uid);
