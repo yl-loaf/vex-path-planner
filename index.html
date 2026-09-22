@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260922.k6" />
+  <link rel="stylesheet" href="style.css?v=20260922.k15" />
 </head>
 <body>
   <!-- =================================================================
@@ -269,23 +269,19 @@
           <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">🔌 Connect</button>
         </div>
 
-        <!-- Debugger Toggle -->
-        <button id="btnToggleDebug" type="button" class="btn-nav-debug" title="Toggle Cross-Script Variable Inspector &amp; Live Debugger">🐞 Debug</button>
-
-        <!-- Interactive Tutorial -->
-        <button id="btnOpenTutorial" type="button" class="btn-nav-tut" title="Open Interactive LemLib Studio Tutorial">🎓 Tutorial</button>
-
         <!-- Tools Dropdown Menu -->
         <div class="tools-dropdown-wrap">
-          <button type="button" id="btnToolsDropdown" class="btn-nav-tools" title="Additional Engineering Tools">
+          <button type="button" id="btnToolsDropdown" class="btn-nav-tools" title="Additional Engineering Tools &amp; Guides">
             ⚙️ Tools ▾
           </button>
           <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden>
-            <button type="button" id="btnToolsTutorial" class="tools-menu-item">🎓 Interactive Onboarding Tour</button>
+            <button type="button" id="btnToggleDebug" class="tools-menu-item">🐞 Live Debugger &amp; Inspector</button>
+            <button type="button" id="btnOpenTutorial" class="tools-menu-item">🎓 Interactive LemLib Tutorial</button>
             <div class="tools-menu-divider"></div>
             <a href="translator.html" class="tools-menu-item">📥 C++ Code Translator</a>
             <button type="button" id="btnPidTuner" class="tools-menu-item">🎛️ PID Gain Tuner</button>
             <button type="button" id="btnExportVideo" class="tools-menu-item">🎥 Export .mp4 Video</button>
+            <a href="stats.html" class="tools-menu-item">📊 Site &amp; User Stats</a>
             <div class="tools-menu-divider"></div>
             <button type="button" id="btnImport" class="tools-menu-item">📂 Import .vpath</button>
             <button type="button" id="btnExport" class="tools-menu-item">💾 Export .vpath</button>
@@ -1982,19 +1978,19 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260922.k6"></script>
+  <script src="version.js?v=20260922.k15"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260922.k6"></script>
-  <script src="google-drive-sync.js?v=20260922.k6"></script>
-  <script src="session-guard.js?v=20260922.k6"></script>
-  <script src="v5-brain-serial.js?v=20260922.k6"></script>
-  <script src="project-manager.js?v=20260922.k6"></script>
-  <script src="cpp-parser.js?v=20260922.k6"></script>
-  <script src="app.js?v=20260922.k6"></script>
-  <script src="tutorial.js?v=20260922.k6"></script>
+  <script src="firebase-config.js?v=20260922.k15"></script>
+  <script src="google-drive-sync.js?v=20260922.k15"></script>
+  <script src="session-guard.js?v=20260922.k15"></script>
+  <script src="v5-brain-serial.js?v=20260922.k15"></script>
+  <script src="project-manager.js?v=20260922.k15"></script>
+  <script src="cpp-parser.js?v=20260922.k15"></script>
+  <script src="app.js?v=20260922.k15"></script>
+  <script src="tutorial.js?v=20260922.k15"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

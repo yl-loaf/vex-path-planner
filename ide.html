@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PROS & LemLib C++ IDE · VEX V5 Path Planner</title>
   <meta name="description" content="Dedicated multi-file C++ coding IDE for VEX V5 robotics with LemLib, full project compiler, and cloud persistence." />
-  <link rel="stylesheet" href="style.css?v=20260922.k11" />
+  <link rel="stylesheet" href="style.css?v=20260922.k15" />
 </head>
 <body class="ide-page-body">
   <div id="app" class="ide-app-container">
@@ -70,14 +70,14 @@
             <button type="button" id="btnIdeOpenTutorial" title="Launch Interactive LemLib Studio Tutorial">
               🎓 Interactive Tutorial
             </button>
+            <a href="stats.html" class="tools-menu-item" style="text-decoration:none;color:inherit;display:block;padding:8px 12px;" title="View visitor stats">
+              📊 Site &amp; User Stats
+            </a>
           </div>
         </div>
       </div>
 
       <div class="header-actions">
-        <a href="stats.html" class="btn-nav-stats" style="background:#1a2433;color:#e8eef7;border:1px solid #2a3548;padding:6px 12px;border-radius:8px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="View visitor stats">
-          📊 Stats <span id="globalVisitorBadgeIDE" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 6px;border-radius:10px;font-size:0.75rem;">...</span>
-        </a>
         <div id="authArea" class="auth-area">
           <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
           <span id="authUser" class="auth-user" hidden></span>
@@ -517,13 +517,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260922.k11"></script>
-  <script src="google-drive-sync.js?v=20260922.k11"></script>
-  <script src="session-guard.js?v=20260922.k11"></script>
-  <script src="v5-brain-serial.js?v=20260922.k11"></script>
-  <script src="project-manager.js?v=20260922.k11"></script>
-  <script src="ide.js?v=20260922.k11"></script>
-  <script src="tutorial.js?v=20260922.k11"></script>
+  <script src="firebase-config.js?v=20260922.k15"></script>
+  <script src="google-drive-sync.js?v=20260922.k15"></script>
+  <script src="session-guard.js?v=20260922.k15"></script>
+  <script src="v5-brain-serial.js?v=20260922.k15"></script>
+  <script src="project-manager.js?v=20260922.k15"></script>
+  <script src="ide.js?v=20260922.k15"></script>
+  <script src="tutorial.js?v=20260922.k15"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {
