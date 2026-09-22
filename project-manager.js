@@ -2381,6 +2381,16 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       this.project.updatedAt = now;
       this.project.isDefault = false;
 
+      // Automatically sync project to user's Google Drive as the primary cloud persistence
+      if (typeof window !== "undefined" && window.GoogleDriveSync) {
+        try {
+          await window.GoogleDriveSync.saveProject(this.project);
+          console.log(`[ProjectManager] Auto-saved project to Google Drive: "${this.project.name}"`);
+        } catch (gErr) {
+          console.warn("[ProjectManager] Background Google Drive save notice:", gErr.message);
+        }
+      }
+
       // 1. Prepare clean files & compressed payload
       const cleanFiles = this.cleanFilesForFirestore(this.project.files || {});
       const compressedPayload = await this.compressFiles(cleanFiles);

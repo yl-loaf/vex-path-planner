@@ -4365,6 +4365,7 @@
       await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
       const provider = new firebase.auth.GoogleAuthProvider();
+      provider.addScope("https://www.googleapis.com/auth/drive.file");
       const lastEmail = localStorage.getItem(AUTH_EMAIL_KEY);
 
       if (forceAccountPicker) {
@@ -4378,6 +4379,10 @@
       setCloudStatus("Connecting…", "busy");
       const cred = await firebase.auth().signInWithPopup(provider);
       if (cred && cred.user) {
+        if (cred.credential && cred.credential.accessToken) {
+          localStorage.setItem("gdrive_access_token", cred.credential.accessToken);
+          localStorage.setItem("gdrive_token_expiry", Date.now() + 3500 * 1000);
+        }
         if (typeof sessionStorage !== "undefined") {
           sessionStorage.setItem("lemlib_just_logged_in", "true");
         }

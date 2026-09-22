@@ -229,11 +229,19 @@
             sessionStorage.setItem("lemlib_just_logged_in", "true");
           }
           const provider = new firebase.auth.GoogleAuthProvider();
-          firebase.auth().signInWithPopup(provider).catch(alert);
+          provider.addScope("https://www.googleapis.com/auth/drive.file");
+          firebase.auth().signInWithPopup(provider).then((res) => {
+            if (res && res.credential && res.credential.accessToken) {
+              localStorage.setItem("gdrive_access_token", res.credential.accessToken);
+              localStorage.setItem("gdrive_token_expiry", Date.now() + 3500 * 1000);
+            }
+          }).catch(alert);
         };
       }
       if (btnSignOut) {
         btnSignOut.onclick = () => {
+          localStorage.removeItem("gdrive_access_token");
+          localStorage.removeItem("gdrive_token_expiry");
           firebase.auth().signOut().catch(alert);
         };
       }
@@ -243,8 +251,14 @@
             sessionStorage.setItem("lemlib_just_logged_in", "true");
           }
           const provider = new firebase.auth.GoogleAuthProvider();
+          provider.addScope("https://www.googleapis.com/auth/drive.file");
           provider.setCustomParameters({ prompt: "select_account" });
-          firebase.auth().signInWithPopup(provider).catch(alert);
+          firebase.auth().signInWithPopup(provider).then((res) => {
+            if (res && res.credential && res.credential.accessToken) {
+              localStorage.setItem("gdrive_access_token", res.credential.accessToken);
+              localStorage.setItem("gdrive_token_expiry", Date.now() + 3500 * 1000);
+            }
+          }).catch(alert);
         };
       }
     } catch (e) {

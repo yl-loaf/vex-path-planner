@@ -18,7 +18,11 @@
 
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
-    provider.setCustomParameters({ prompt: "select_account" });
+
+    // Only prompt account picker if explicitly requested on token error
+    if (forcePrompt) {
+      provider.setCustomParameters({ prompt: "select_account" });
+    }
 
     try {
       const result = await firebase.auth().signInWithPopup(provider);
@@ -33,11 +37,13 @@
 
       return driveAccessToken;
     } catch (err) {
-      localStorage.removeItem("gdrive_access_token");
-      localStorage.removeItem("gdrive_token_expiry");
-      driveAccessToken = null;
-      driveTokenExpiry = 0;
-      throw new Error("Google Drive Authorization Failed: " + (err.message || err));
+      if (forcePrompt) {
+        localStorage.removeItem("gdrive_access_token");
+        localStorage.removeItem("gdrive_token_expiry");
+        driveAccessToken = null;
+        driveTokenExpiry = 0;
+      }
+      throw new Error("Google Drive Authorization: " + (err.message || err));
     }
   }
 
