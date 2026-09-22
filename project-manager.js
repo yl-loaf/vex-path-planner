@@ -2861,9 +2861,10 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           </div>
 
           <div class="import-sync-metric-panel">
-            <div class="import-metric-header">
+            <div class="import-metric-header" style="display:flex;align-items:center;">
               <span class="import-metric-label">DATA SYNCHRONIZED</span>
-              <span id="importPercentBadge" class="import-pct-badge">0%</span>
+              <span id="importEtaBadge" class="import-eta-badge" style="margin-left:auto;color:#38bdf8;font-size:0.8rem;font-weight:600;">Calculating ETA...</span>
+              <span id="importPercentBadge" class="import-pct-badge" style="margin-left:8px;">0%</span>
             </div>
             <div class="import-metric-values">
               <span id="importBytesSynced" class="import-bytes-main">0 KB</span>
@@ -2929,11 +2930,14 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         (b) => global.ProjectManager.formatBytes(b) : 
         (b) => `${(b / 1024).toFixed(1)} KB`;
 
+      this._startTime = Date.now();
       if (titleEl) titleEl.textContent = title;
       if (subtitleEl) subtitleEl.textContent = subtitle;
       if (bytesSyncedEl) bytesSyncedEl.textContent = "0 B";
       if (bytesTotalEl) bytesTotalEl.textContent = totalBytes > 0 ? formatFn(totalBytes) : "0 B";
       if (pctBadge) pctBadge.textContent = "0%";
+      const etaBadge = document.getElementById("importEtaBadge");
+      if (etaBadge) etaBadge.textContent = "Calculating ETA...";
       if (progressBar) progressBar.style.width = "0%";
       if (statusAction) statusAction.textContent = "Preparing files for synchronization...";
       if (fileCounter) fileCounter.textContent = totalFiles ? `(${totalFiles} files)` : "";
@@ -2979,6 +2983,20 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       const clampedPct = Math.min(100, Math.max(0, Math.round(pct)));
       if (progressBar) progressBar.style.width = `${clampedPct}%`;
       if (pctBadge) pctBadge.textContent = `${clampedPct}%`;
+
+      const etaBadge = document.getElementById("importEtaBadge");
+      if (etaBadge && this._startTime && clampedPct > 2 && clampedPct < 100) {
+        const elapsedSec = (Date.now() - this._startTime) / 1000;
+        const totalEstSec = elapsedSec / (clampedPct / 100);
+        const remainingSec = Math.max(1, Math.round(totalEstSec - elapsedSec));
+        if (remainingSec < 60) {
+          etaBadge.textContent = `⏱️ ~${remainingSec}s remaining`;
+        } else {
+          etaBadge.textContent = `⏱️ ~${Math.ceil(remainingSec / 60)}m remaining`;
+        }
+      } else if (etaBadge && clampedPct >= 100) {
+        etaBadge.textContent = "⚡ Done!";
+      }
 
       const formatFn = (global.ProjectManager && global.ProjectManager.formatBytes) ? 
         (b) => global.ProjectManager.formatBytes(b) : 

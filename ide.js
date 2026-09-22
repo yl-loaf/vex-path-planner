@@ -1619,7 +1619,19 @@
       const lower = path.toLowerCase().replace(/\\/g, "/");
       const base = path.split(/[\/\\]/).pop();
       if (base.startsWith(".") && base !== ".gitignore" && base !== ".editorconfig") return true;
-      if (lower.includes("/.git/") || lower.includes("/.vscode/") || lower.includes("/.idea/") || lower.includes("/bin/") || lower.includes("/build/") || lower.includes("/node_modules/") || lower.includes("/__macosx/") || lower.includes("/firmware/")) return true;
+      if (
+        lower.includes("/.git/") || lower.startsWith(".git/") ||
+        lower.includes("/.vscode/") || lower.startsWith(".vscode/") ||
+        lower.includes("/.idea/") || lower.startsWith(".idea/") ||
+        lower.includes("/.cache/") || lower.startsWith(".cache/") ||
+        lower.includes("/.clangd/") || lower.startsWith(".clangd/") ||
+        lower.includes("/.pros/") || lower.startsWith(".pros/") ||
+        lower.includes("/bin/") || lower.startsWith("bin/") ||
+        lower.includes("/build/") || lower.startsWith("build/") ||
+        lower.includes("/firmware/") || lower.startsWith("firmware/") ||
+        lower.includes("/node_modules/") || lower.startsWith("node_modules/") ||
+        lower.includes("/__macosx/") || lower.startsWith("__macosx/")
+      ) return true;
       if (lower.endsWith(".o") || lower.endsWith(".elf") || lower.endsWith(".bin") || lower.endsWith(".hex") || lower.endsWith(".map") || lower.endsWith(".a") || lower.endsWith(".lib") || lower.endsWith(".so") || lower.endsWith(".dylib") || lower.endsWith(".ds_store") || lower.endsWith(".zip") || lower.endsWith(".tar.gz") || lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".ico") || lower.endsWith(".pdf") || lower.endsWith(".woff") || lower.endsWith(".woff2") || lower.endsWith(".ttf")) return true;
       if (size && size > 2 * 1024 * 1024) return true;
       return false;
