@@ -386,6 +386,112 @@ app.post('/api/session/release', (req, res) => {
   res.json({ success: true });
 });
 
+// Git Integration API - Direct Commit & Push without repository cloning
+app.post('/api/github/push', async (req, res) => {
+  const { token, repo, branch, files, commitMessage } = req.body;
+  if (!token || !repo || !files || typeof files !== 'object') {
+    return res.status(400).json({ error: 'Missing token, repo, or files payload' });
+  }
+
+  const targetBranch = branch || 'main';
+  const msg = commitMessage || 'Sync from VEX Path Planner Workspace 🚀';
+
+  const [owner, repoName] = repo.split('/');
+  if (!owner || !repoName) {
+    return res.status(400).json({ error: 'Invalid repo name format. Must be "owner/repo"' });
+  }
+
+  const headers = {
+    'Authorization': `token ${token}`,
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'VEX-Path-Planner-Cloud-Sync'
+  };
+
+  try {
+    // Step 1: Get reference to the target branch head
+    const refUrl = `https://api.github.com/repos/${owner}/${repoName}/git/ref/heads/${targetBranch}`;
+    const refRes = await fetch(refUrl, { headers });
+    if (!refRes.ok) {
+      const errTxt = await refRes.text();
+      return res.status(refRes.status).json({ error: `Failed to fetch branch ref: ${errTxt}` });
+    }
+    const refData = await refRes.json();
+    const lastCommitSha = refData.object.sha;
+
+    // Get the commit details to retrieve its base tree SHA
+    const commitUrl = `https://api.github.com/repos/${owner}/${repoName}/git/commits/${lastCommitSha}`;
+    const commitRes = await fetch(commitUrl, { headers });
+    if (!commitRes.ok) {
+      const errTxt = await commitRes.text();
+      return res.status(commitRes.status).json({ error: `Failed to fetch commit details: ${errTxt}` });
+    }
+    const commitData = await commitRes.json();
+    const baseTreeSha = commitData.tree.sha;
+
+    // Step 2: Create a tree with the modified/new files
+    const treeItems = Object.entries(files).map(([pathStr, contentStr]) => ({
+      path: pathStr,
+      mode: '100644',
+      type: 'blob',
+      content: contentStr
+    }));
+
+    const createTreeUrl = `https://api.github.com/repos/${owner}/${repoName}/git/trees`;
+    const treeRes = await fetch(createTreeUrl, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: treeItems
+      })
+    });
+    if (!treeRes.ok) {
+      const errTxt = await treeRes.text();
+      return res.status(treeRes.status).json({ error: `Failed to create Git tree: ${errTxt}` });
+    }
+    const treeData = await treeRes.json();
+    const newTreeSha = treeData.sha;
+
+    // Step 3: Create the Git commit referencing the new tree and parent commit
+    const createCommitUrl = `https://api.github.com/repos/${owner}/${repoName}/git/commits`;
+    const createCommitRes = await fetch(createCommitUrl, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: msg,
+        tree: newTreeSha,
+        parents: [lastCommitSha]
+      })
+    });
+    if (!createCommitRes.ok) {
+      const errTxt = await createCommitRes.text();
+      return res.status(createCommitRes.status).json({ error: `Failed to create commit: ${errTxt}` });
+    }
+    const newCommitData = await createCommitRes.json();
+    const newCommitSha = newCommitData.sha;
+
+    // Step 4: Update the branch reference to point to the new commit
+    const updateRefUrl = `https://api.github.com/repos/${owner}/${repoName}/git/refs/heads/${targetBranch}`;
+    const updateRefRes = await fetch(updateRefUrl, {
+      method: 'PATCH',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sha: newCommitSha,
+        force: true
+      })
+    });
+    if (!updateRefRes.ok) {
+      const errTxt = await updateRefRes.text();
+      return res.status(updateRefRes.status).json({ error: `Failed to update ref: ${errTxt}` });
+    }
+
+    res.json({ success: true, commitSha: newCommitSha, branch: targetBranch });
+  } catch (err) {
+    console.error('[GitHub Sync Error]:', err);
+    res.status(500).json({ error: err.message || 'Internal server error during GitHub sync' });
+  }
+});
+
 app.get('/api/session/status', (req, res) => {
   const { uid, email, sessionId } = req.query;
   const userKey = getUserSessionKey(uid, email);

@@ -2275,6 +2275,152 @@
       });
       updateIdeBrainUI(window.V5BrainSerial.status);
     }
+
+    // GitHub Pages Deploy Sync Event Wire-up
+    const btnGitHubSync = document.getElementById("btnGitHubSync");
+    const githubSyncModal = document.getElementById("githubSyncModal");
+    const btnGithubModalClose = document.getElementById("btnGithubModalClose");
+    const btnGithubCancel = document.getElementById("btnGithubCancel");
+    const btnGithubDoSync = document.getElementById("btnGithubDoSync");
+    const inputGithubToken = document.getElementById("inputGithubToken");
+    const inputGithubRepo = document.getElementById("inputGithubRepo");
+    const inputGithubBranch = document.getElementById("inputGithubBranch");
+    const inputGithubMessage = document.getElementById("inputGithubMessage");
+    const githubStatusBox = document.getElementById("githubStatusBox");
+
+    if (btnGitHubSync) {
+      btnGitHubSync.addEventListener("click", () => {
+        const menu = document.getElementById("ideProjectMenu");
+        if (menu) menu.hidden = true;
+
+        inputGithubToken.value = localStorage.getItem("github_sync_token") || "";
+        inputGithubRepo.value = localStorage.getItem("github_sync_repo") || "yl-loaf/vex-path-planner";
+        inputGithubBranch.value = localStorage.getItem("github_sync_branch") || "main";
+
+        githubStatusBox.style.display = "none";
+        githubStatusBox.className = "";
+        githubStatusBox.textContent = "";
+
+        githubSyncModal.removeAttribute("hidden");
+      });
+    }
+
+    const closeGithubModal = () => {
+      githubSyncModal.setAttribute("hidden", "true");
+    };
+
+    if (btnGithubModalClose) btnGithubModalClose.addEventListener("click", closeGithubModal);
+    if (btnGithubCancel) btnGithubCancel.addEventListener("click", closeGithubModal);
+
+    if (btnGithubDoSync) {
+      btnGithubDoSync.addEventListener("click", async () => {
+        const token = inputGithubToken.value.trim();
+        const repo = inputGithubRepo.value.trim();
+        const branch = inputGithubBranch.value.trim();
+        const message = inputGithubMessage.value.trim();
+
+        if (!token) {
+          githubStatusBox.style.display = "block";
+          githubStatusBox.style.background = "rgba(239, 68, 68, 0.15)";
+          githubStatusBox.style.border = "1px solid rgba(239, 68, 68, 0.3)";
+          githubStatusBox.style.color = "#f87171";
+          githubStatusBox.textContent = "❌ Please enter your GitHub Personal Access Token.";
+          return;
+        }
+
+        if (!repo || !repo.includes("/")) {
+          githubStatusBox.style.display = "block";
+          githubStatusBox.style.background = "rgba(239, 68, 68, 0.15)";
+          githubStatusBox.style.border = "1px solid rgba(239, 68, 68, 0.3)";
+          githubStatusBox.style.color = "#f87171";
+          githubStatusBox.textContent = "❌ Please enter a valid repository (e.g. 'owner/repo').";
+          return;
+        }
+
+        localStorage.setItem("github_sync_token", token);
+        localStorage.setItem("github_sync_repo", repo);
+        localStorage.setItem("github_sync_branch", branch);
+
+        btnGithubDoSync.disabled = true;
+        const origText = btnGithubDoSync.textContent;
+        btnGithubDoSync.textContent = "⏳ Committing...";
+        githubStatusBox.style.display = "block";
+        githubStatusBox.style.background = "rgba(59, 130, 246, 0.15)";
+        githubStatusBox.style.border = "1px solid rgba(59, 130, 246, 0.3)";
+        githubStatusBox.style.color = "#60a5fa";
+        githubStatusBox.textContent = "⏳ Extracting files and connecting to GitHub Git Data API...";
+
+        const pm = window.ProjectManager;
+        if (!pm || !pm.project) {
+          githubStatusBox.style.display = "block";
+          githubStatusBox.style.background = "rgba(239, 68, 68, 0.15)";
+          githubStatusBox.style.border = "1px solid rgba(239, 68, 68, 0.3)";
+          githubStatusBox.style.color = "#f87171";
+          githubStatusBox.textContent = "❌ Project manager not initialized.";
+          btnGithubDoSync.disabled = false;
+          btnGithubDoSync.textContent = origText;
+          return;
+        }
+
+        saveCurrentEditorState();
+
+        const filesMap = {};
+        if (pm.project.files) {
+          for (const [filePath, content] of Object.entries(pm.project.files)) {
+            if (
+              filePath.startsWith("src/") ||
+              filePath.endsWith(".json") ||
+              filePath.endsWith(".js") ||
+              filePath.endsWith(".html") ||
+              filePath.endsWith(".css") ||
+              (filePath.startsWith("include/") && !filePath.startsWith("include/pros/") && !filePath.startsWith("include/lemlib/"))
+            ) {
+              filesMap[filePath] = content;
+            }
+          }
+        }
+
+        try {
+          const response = await fetch("/api/github/push", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token,
+              repo,
+              branch,
+              commitMessage: message,
+              files: filesMap
+            })
+          });
+
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || `HTTP ${response.status}`);
+          }
+
+          const resData = await response.json();
+
+          githubStatusBox.style.background = "rgba(34, 197, 94, 0.15)";
+          githubStatusBox.style.border = "1px solid rgba(34, 197, 94, 0.3)";
+          githubStatusBox.style.color = "#4ade80";
+          githubStatusBox.innerHTML = `<strong>✅ Deployment Sync Successful!</strong><br/>Successfully committed and pushed directly to branch <code>${resData.branch}</code>.<br/>GitHub Pages should auto-rebuild and go live in a minute!`;
+          showToast("🎉 Committed & Deployed to GitHub Pages!");
+
+          setTimeout(() => {
+            closeGithubModal();
+          }, 3500);
+
+        } catch (err) {
+          githubStatusBox.style.background = "rgba(239, 68, 68, 0.15)";
+          githubStatusBox.style.border = "1px solid rgba(239, 68, 68, 0.3)";
+          githubStatusBox.style.color = "#f87171";
+          githubStatusBox.textContent = `❌ GitHub Deploy Error: ${err.message}`;
+        } finally {
+          btnGithubDoSync.disabled = false;
+          btnGithubDoSync.textContent = origText;
+        }
+      });
+    }
   }
 
   function runCompilation() {
