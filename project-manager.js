@@ -17,7 +17,7 @@
     if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
       return path;
     }
-    const backendBase = "https://ais-dev-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
+    const backendBase = "https://ais-pre-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
     return backendBase + path;
   }
 

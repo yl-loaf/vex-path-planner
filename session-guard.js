@@ -18,7 +18,7 @@
     if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
       return path;
     }
-    const backendBase = "https://ais-dev-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
+    const backendBase = "https://ais-pre-fzuazthy5hd4fsmf2jzdep-555640893330.asia-southeast1.run.app";
     return backendBase + path;
   }
 
@@ -495,7 +495,7 @@
     if (typeof firebase === "undefined" || !firebase.firestore || !currentUser || !currentUser.uid) return;
     try {
       const db = firebase.firestore();
-      const sessDoc = db.collection("users").doc(currentUser.uid).collection("meta").doc("session");
+      const sessDoc = db.collection("users").doc(currentUser.uid).collection("data").doc("session");
 
       // Write active session record to firestore
       sessDoc.set({

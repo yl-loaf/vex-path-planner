@@ -48,13 +48,9 @@ export function updateBuildVersion() {
     const filePath = path.join(__dirname, f);
     if (fs.existsSync(filePath)) {
       let html = fs.readFileSync(filePath, 'utf8');
-      html = html.replace(/(style\.css\?v=)[^"']+/g, `$1${nextBuild}`);
-      html = html.replace(/(version\.js\?v=)[^"']+/g, `$1${nextBuild}`);
-      html = html.replace(/(app\.js\?v=)[^"']+/g, `$1${nextBuild}`);
-      html = html.replace(/(ide\.js\?v=)[^"']+/g, `$1${nextBuild}`);
-      html = html.replace(/(project-manager\.js\?v=)[^"']+/g, `$1${nextBuild}`);
-      html = html.replace(/(v5-brain-serial\.js\?v=)[^"']+/g, `$1${nextBuild}`);
-      html = html.replace(/(firebase-config\.js\?v=)[^"']+/g, `$1${nextBuild}`);
+      // Replace all .css?v=... and .js?v=... cache busters generically
+      html = html.replace(/(\.css\?v=)[^"']+/g, `$1${nextBuild}`);
+      html = html.replace(/(\.js\?v=)[^"']+/g, `$1${nextBuild}`);
       fs.writeFileSync(filePath, html, 'utf8');
       console.log(`[build] Updated asset cache-busters in ${f} to ${nextBuild}`);
     }
