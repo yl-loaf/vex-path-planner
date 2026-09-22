@@ -2408,13 +2408,14 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       // 2. Persist to Server Cloud Store if available
       try {
+        const payloadProject = { ...this.project, versions: this.versions || {} };
         const resp = await fetch(getApiUrl("/api/project"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             uid: uid,
             email: email,
-            project: this.project
+            project: payloadProject
           })
         });
         if (resp.ok) {
@@ -2445,7 +2446,8 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
             totalFiles: Object.keys(cleanFiles).length,
             files: (totalFilesJsonSize < 200 * 1024 && (!compressedPayload || compressedPayload.length < 500000)) ? cleanFiles : primaryFiles,
             chunkCount: 0,
-            isChunked: false
+            isChunked: false,
+            versions: this.versions || {}
           };
 
           const MAX_DOC_PROPERTY_CHARS = 600000;
@@ -2691,6 +2693,13 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         cloudSynced: true,
         isDefault: isCloudDefault,
       };
+
+      if (candidateData.versions && typeof candidateData.versions === "object") {
+        this.versions = candidateData.versions;
+        await idbPut("file_versions_history", this.versions).catch(() => {});
+        this.updateVersionCountBadges();
+      }
+
       this.markDirty(false);
       this.changedFiles.clear();
       await this.saveLocal(false);
