@@ -197,6 +197,7 @@
     const p = activePath();
     pose = p.pose;
     actions = p.actions;
+    isSimPathDirty = true;
   }
 
   function uidPath() {
@@ -296,6 +297,8 @@
   let animId = null;
   let simSpeed = 1;
   let saveTimer = null;
+  let isSimPathDirty = true;
+  let tuningGraphType = "linear";
 
   function uid() {
     return "a" + Math.random().toString(36).slice(2, 9);
@@ -569,13 +572,13 @@
     let vLin = 0;
     let omegaDeg = 0;
     let t = 0;
-    let points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
+    let points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 }];
     let carrotPoint = null;
 
     if (action.type === "custom") {
       const dur = action.customDuration != null ? Math.max(0, Number(action.customDuration)) : 0;
       if (dur > 0) {
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 });
       }
       return { endPose: pose, path: points, duration: dur, carrot: null };
     }
@@ -584,7 +587,7 @@
       const isTime = action.waitType === "time";
       const dur = isTime ? Math.max(0, (action.delayMs != null ? action.delayMs : 250) / 1000) : 0;
       if (dur > 0) {
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 });
       }
       return { endPose: pose, path: points, duration: dur, carrot: null };
     }
@@ -669,12 +672,12 @@
         pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
 
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg });
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg, targetVLin, targetOmega });
       }
 
       if (isSettled) {
         if (points.length) {
-          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
         }
       }
       return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: carrotPoint };
@@ -736,12 +739,12 @@
         pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
 
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg });
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg, targetVLin, targetOmega });
       }
 
       if (isSettled) {
         if (points.length) {
-          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
         }
       }
       return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: null };
@@ -782,12 +785,12 @@
 
         pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg });
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg, targetVLin: 0, targetOmega });
       }
 
       if (isSettled) {
         if (points.length) {
-          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
         }
       }
       return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
@@ -848,12 +851,13 @@
         pose.y = c.y;
 
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vDrive) / 2, omegaDeg: wDeg });
+        const targetW = (targetVDrive / trackWidth) * (180 / Math.PI);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vDrive) / 2, omegaDeg: wDeg, targetVLin: Math.abs(targetVDrive) / 2, targetOmega: targetW });
       }
 
       if (isSettled) {
         if (points.length) {
-          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0 };
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
         }
       }
 
@@ -972,7 +976,7 @@
     redoStack.push(current);
     const prev = undoStack[undoStack.length - 1];
     restoreState(prev);
-    saveLocal();
+    saveLocal(true);
   }
 
   function redo() {
@@ -980,7 +984,7 @@
     const next = redoStack.pop();
     undoStack.push(next);
     restoreState(next);
-    saveLocal();
+    saveLocal(true);
   }
 
   function scheduleHistoryPush() {
@@ -998,17 +1002,18 @@
       ap.pose = pose;
       ap.actions = actions;
     }
+    isSimPathDirty = true;
     saveStatus.textContent = "Unsaved...";
     saveStatus.className = "save-status dirty";
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveLocal, 400);
+    saveTimer = setTimeout(() => saveLocal(true), 400);
     try { updateTimeDisplay(); } catch (_) {}
     try { generateCode(); } catch (_) {}
     try { scheduleCloudSave(); } catch (_) {}
     try { scheduleHistoryPush(); } catch (_) {}
   }
 
-  function saveLocal() {
+  function saveLocal(isInteractive = false) {
     // keep active path data in sync
     bindActive();
     const ap = activePath();
@@ -1032,10 +1037,21 @@
     }
 
     if (window.ProjectManager && window.ProjectManager.project) {
-      // Mark blocks as active editor since user is actively editing visual paths
-      window.ProjectManager.project.lastAutonEditor = "blocks";
-      window.ProjectManager.project.rawCppPreserved = false;
-      syncPlannerIntoProjectManager({ ask: false });
+      const proj = window.ProjectManager.project;
+      const isIdeActive = proj.lastAutonEditor === "ide" || proj.rawCppPreserved;
+      
+      if (isInteractive) {
+        // User is actively editing the visual paths - visual editor takes over
+        proj.lastAutonEditor = "blocks";
+        proj.rawCppPreserved = false;
+        syncPlannerIntoProjectManager({ ask: false, force: true });
+      } else if (!isIdeActive) {
+        // Otherwise, if IDE is not active, sync passively
+        syncPlannerIntoProjectManager({ ask: false, force: false });
+      } else {
+        // IDE is active, do not overwrite autons.cpp passively
+        updateProjectBanner();
+      }
     } else if (window.ProjectManager) {
       updateProjectBanner();
     }
@@ -1139,8 +1155,8 @@
         renderFlow();
         draw();
         markDirty();
-        saveLocal();
-        syncPlannerIntoProjectManager();
+        saveLocal(true);
+        syncPlannerIntoProjectManager({ ask: false, force: true });
         if (cloudReady && cloudUser) {
           cloudSave(true);
         }
@@ -2870,11 +2886,12 @@
   }
 
   function buildSimPath() {
+    if (!isSimPathDirty && simSegments.length > 0) return;
     simSegments = [];
     simPath = [];
     let cur = { x: pose.x, y: pose.y, theta: pose.theta };
     let t = 0;
-    simPath.push({ ...cur, t: 0, vLin: 0, omegaDeg: 0 });
+    simPath.push({ ...cur, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 });
 
     for (const a of actions) {
       const seg = simulateAction(a, cur, bot);
@@ -2896,11 +2913,14 @@
           t: t + pt.t,
           vLin: pt.vLin,
           omegaDeg: pt.omegaDeg,
+          targetVLin: pt.targetVLin != null ? pt.targetVLin : 0,
+          targetOmega: pt.targetOmega != null ? pt.targetOmega : 0,
         });
       }
       t += seg.duration;
       cur = { ...seg.endPose };
     }
+    isSimPathDirty = false;
   }
 
   function startSim() {
@@ -2926,20 +2946,32 @@
     function frame(now) {
       if (!simRunning) return;
       const elapsed = ((now - startTime) / 1000) * simSpeed;
+      
+      // High-performance binary search to find the correct index in O(log N)
+      let low = 0;
+      let high = simPath.length - 1;
       let idx = 0;
-      for (let i = 0; i < simPath.length; i++) {
-        if (simPath[i].t <= elapsed) idx = i;
-        else break;
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        if (simPath[mid].t <= elapsed) {
+          idx = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
       }
       simIdx = idx;
       const pt = simPath[simIdx] || { vLin: 0, omegaDeg: 0 };
-      updateTimeDisplay(Math.min(elapsed, totalT), totalEst, pt.vLin, pt.omegaDeg);
+      const curElapsed = Math.min(elapsed, totalT);
+      updateTimeDisplay(curElapsed, totalEst, pt.vLin, pt.omegaDeg);
       draw();
+      drawPidTuningGraph(curElapsed);
       if (elapsed < totalT + 0.15) animId = requestAnimationFrame(frame);
       else {
         simRunning = false;
         updateTimeDisplay(totalT, totalEst, 0, 0);
         draw();
+        drawPidTuningGraph(totalT);
       }
     }
     animId = requestAnimationFrame(frame);
@@ -2951,6 +2983,173 @@
     simIdx = 0;
     updateTimeDisplay();
     draw();
+    drawPidTuningGraph(0);
+  }
+
+  function drawPidTuningGraph(elapsedTime = 0) {
+    const canvas = document.getElementById("pidTuningCanvas");
+    if (!canvas) return;
+
+    // Handle high DPI display
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    const width = rect.width;
+    const height = rect.height;
+
+    // Clear canvas
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(0, 0, width, height);
+
+    // If there is no simPath, or if it is dirty, build it first
+    if (!simPath.length || isSimPathDirty) {
+      try { buildSimPath(); } catch (_) {}
+    }
+
+    // Grid lines
+    ctx.strokeStyle = "#1e293b";
+    ctx.lineWidth = 1;
+    for (let x = 30; x < width; x += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+    for (let y = 15; y < height; y += 30) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    if (!simPath.length) return;
+
+    const totalT = simPath[simPath.length - 1].t;
+    const maxT = Math.max(5.0, totalT);
+
+    // Find the maximum absolute value in the path for scale
+    let maxVal = 12; // default scale range of at least 12 in/s
+    if (tuningGraphType === "linear") {
+      simPath.forEach((pt) => {
+        maxVal = Math.max(maxVal, Math.abs(pt.vLin), Math.abs(pt.targetVLin));
+      });
+    } else {
+      maxVal = 45; // default scale range of at least 45 deg/s
+      simPath.forEach((pt) => {
+        maxVal = Math.max(maxVal, Math.abs(pt.omegaDeg), Math.abs(pt.targetOmega));
+      });
+    }
+    // Add 15% margin
+    maxVal *= 1.15;
+
+    // Mapping helper functions
+    function getX(t) {
+      // Leave 10px margin on right/left
+      return 10 + (t / maxT) * (width - 20);
+    }
+    function getY(val) {
+      // Graph is bi-directional (values can be negative!)
+      // Center of graph represents 0
+      const center = height / 2;
+      return center - (val / maxVal) * (height / 2 - 10);
+    }
+
+    // Draw zero line
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(getX(0), getY(0));
+    ctx.lineTo(getX(maxT), getY(0));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw target path (blue #60a5fa)
+    ctx.strokeStyle = "#60a5fa";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    simPath.forEach((pt, i) => {
+      const val = tuningGraphType === "linear" ? pt.targetVLin : pt.targetOmega;
+      if (i === 0) {
+        ctx.moveTo(getX(pt.t), getY(val));
+      } else {
+        ctx.lineTo(getX(pt.t), getY(val));
+      }
+    });
+    ctx.stroke();
+
+    // Draw actual path (green #4ade80)
+    ctx.strokeStyle = "#4ade80";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    simPath.forEach((pt, i) => {
+      const val = tuningGraphType === "linear" ? pt.vLin : pt.omegaDeg;
+      if (i === 0) {
+        ctx.moveTo(getX(pt.t), getY(val));
+      } else {
+        ctx.lineTo(getX(pt.t), getY(val));
+      }
+    });
+    ctx.stroke();
+
+    // Draw vertical cursor at elapsedTime
+    const cursorX = getX(elapsedTime);
+    ctx.strokeStyle = "rgba(226, 232, 240, 0.4)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cursorX, 0);
+    ctx.lineTo(cursorX, height);
+    ctx.stroke();
+
+    // Find the closest point to elapsedTime for display
+    let low = 0;
+    let high = simPath.length - 1;
+    let idx = 0;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (simPath[mid].t <= elapsedTime) {
+        idx = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    const pt = simPath[idx] || { vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+    const targetVal = tuningGraphType === "linear" ? pt.targetVLin : pt.targetOmega;
+    const actualVal = tuningGraphType === "linear" ? pt.vLin : pt.omegaDeg;
+
+    // Draw intersection circles
+    ctx.fillStyle = "#60a5fa";
+    ctx.beginPath();
+    ctx.arc(cursorX, getY(targetVal), 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#4ade80";
+    ctx.beginPath();
+    ctx.arc(cursorX, getY(actualVal), 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Update HTML values
+    const timeValEl = document.getElementById("pidTuningTimeVal");
+    const targetValEl = document.getElementById("pidTuningTargetVal");
+    const actualValEl = document.getElementById("pidTuningActualVal");
+
+    if (timeValEl) timeValEl.textContent = `${elapsedTime.toFixed(2)}s / ${totalT.toFixed(1)}s`;
+    if (targetValEl) {
+      targetValEl.textContent = tuningGraphType === "linear" 
+        ? `${targetVal.toFixed(1)} in/s` 
+        : `${targetVal.toFixed(1)} °/s`;
+    }
+    if (actualValEl) {
+      actualValEl.textContent = tuningGraphType === "linear" 
+        ? `${actualVal.toFixed(1)} in/s` 
+        : `${actualVal.toFixed(1)} °/s`;
+    }
   }
 
   // -- Hit testing / drag -------------------------------------------
@@ -6221,8 +6420,16 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (options.ask) {
         promptMergeAutonCpp();
       } else {
+        const proj = window.ProjectManager.project;
+        const isIdeActive = proj.lastAutonEditor === "ide" || proj.rawCppPreserved;
+        
+        if (isIdeActive && !options.force) {
+          console.log("🛡️ Preserving raw C++ code; skipping passive sync from Visual Planner.");
+          return;
+        }
+
         const indent = typeof getIndentString === "function" ? getIndentString() : "    ";
-        window.ProjectManager.updateAutonCppFromPlanner(paths, indent, { mode: "replace", force: true });
+        window.ProjectManager.updateAutonCppFromPlanner(paths, indent, { mode: "replace", force: options.force || false });
         window.ProjectManager.project.lastAutonEditor = "blocks";
         window.ProjectManager.project.rawCppPreserved = false;
         window.ProjectManager.saveLocal(true);
@@ -6972,8 +7179,50 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
         if (targetId === "devices") refreshDebugDevices();
         if (targetId === "diagnostics") refreshDebugDiagnostics();
+        if (targetId === "tuning") drawPidTuningGraph(0);
       };
     });
+
+    // PID Tuning graph toggles
+    const btnTuningLinear = document.getElementById("btnTuningLinear");
+    const btnTuningAngular = document.getElementById("btnTuningAngular");
+    const btnClearPidTuning = document.getElementById("btnClearPidTuning");
+
+    if (btnTuningLinear) {
+      btnTuningLinear.onclick = () => {
+        tuningGraphType = "linear";
+        btnTuningLinear.classList.add("active");
+        btnTuningLinear.style.background = "#1e293b";
+        btnTuningLinear.style.color = "#fff";
+        if (btnTuningAngular) {
+          btnTuningAngular.classList.remove("active");
+          btnTuningAngular.style.background = "#0f172a";
+          btnTuningAngular.style.color = "#94a3b8";
+        }
+        drawPidTuningGraph(0);
+      };
+    }
+
+    if (btnTuningAngular) {
+      btnTuningAngular.onclick = () => {
+        tuningGraphType = "angular";
+        btnTuningAngular.classList.add("active");
+        btnTuningAngular.style.background = "#1e293b";
+        btnTuningAngular.style.color = "#fff";
+        if (btnTuningLinear) {
+          btnTuningLinear.classList.remove("active");
+          btnTuningLinear.style.background = "#0f172a";
+          btnTuningLinear.style.color = "#94a3b8";
+        }
+        drawPidTuningGraph(0);
+      };
+    }
+
+    if (btnClearPidTuning) {
+      btnClearPidTuning.onclick = () => {
+        drawPidTuningGraph(0);
+      };
+    }
 
     // Populate Indexed Devices & Variables Tab
     function refreshDebugDevices() {
