@@ -7861,6 +7861,198 @@ kbd {
   color: #f97316;
 }
 
+/* Drag and Drop Reordering */
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: #64748b;
+  cursor: grab;
+  border-radius: 4px;
+  font-size: 1.05rem;
+  user-select: none;
+  transition: all 0.15s ease;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+.drag-handle:hover {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.action-block.is-dragging,
+.loop-child-card.is-dragging {
+  opacity: 0.4;
+  transform: scale(0.985);
+  box-shadow: 0 0 0 2px #38bdf8;
+}
+
+.action-block.drop-before {
+  border-top: 3px solid #38bdf8 !important;
+  border-radius: 8px 8px 0 0;
+  transition: border 0.1s ease;
+}
+
+.action-block.drop-after {
+  border-bottom: 3px solid #38bdf8 !important;
+  border-radius: 0 0 8px 8px;
+  transition: border 0.1s ease;
+}
+
+.loop-child-card.drop-before {
+  border-top: 2.5px solid #FF7B00 !important;
+}
+
+.loop-child-card.drop-after {
+  border-bottom: 2.5px solid #FF7B00 !important;
+}
+
+/* Loop C-Arm Drop Zones & Nested Blocks */
+.loop-c-arm {
+  transition: all 0.2s ease;
+}
+
+.loop-c-arm.loop-drag-over {
+  border-left-color: #f97316 !important;
+  background: rgba(255, 123, 0, 0.18) !important;
+  box-shadow: inset 0 0 16px rgba(255, 123, 0, 0.35), 0 0 12px rgba(255, 123, 0, 0.25);
+  outline: 2px dashed #FF7B00;
+  outline-offset: 2px;
+}
+
+.loop-children-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.loop-child-card {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1.5px solid rgba(255, 123, 0, 0.35);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+}
+
+.loop-child-card:hover {
+  border-color: rgba(255, 123, 0, 0.65);
+}
+
+.loop-child-card.selected {
+  border-color: #FF7B00;
+  box-shadow: 0 0 10px rgba(255, 123, 0, 0.3);
+}
+
+.loop-child-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.loop-child-card .card-body {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.loop-child-card.collapsed .card-body {
+  display: none;
+}
+
+.loop-empty-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 12px;
+  border: 2px dashed rgba(255, 123, 0, 0.35);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #fed7aa;
+  font-size: 0.78rem;
+  text-align: center;
+  margin: 6px 0;
+  transition: all 0.15s ease;
+}
+
+.loop-empty-drop-zone .loop-drop-icon {
+  font-size: 1.4rem;
+}
+
+.loop-drop-target {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 1px dashed rgba(255, 123, 0, 0.3);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: #fdba74;
+  background: rgba(255, 123, 0, 0.06);
+  cursor: pointer;
+  margin-top: 6px;
+  transition: all 0.15s ease;
+}
+
+.loop-drop-target:hover,
+.loop-drop-target.drag-over {
+  border-color: #FF7B00;
+  background: rgba(255, 123, 0, 0.2);
+  color: #fff;
+}
+
+.loop-add-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-loop-add-quick {
+  background: rgba(255, 123, 0, 0.15);
+  border: 1px solid rgba(255, 123, 0, 0.4);
+  color: #fed7aa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-loop-add-quick:hover {
+  background: #FF7B00;
+  color: #0f172a;
+  border-color: #FF7B00;
+}
+
+.loop-add-more-select {
+  background: #090d16;
+  border: 1px solid rgba(255, 123, 0, 0.4);
+  color: #fed7aa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+
 
 
 

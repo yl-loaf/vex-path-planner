@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260922.k51" />
+  <link rel="stylesheet" href="style.css?v=20260922.k52" />
 </head>
 <body>
   <!-- =================================================================
@@ -1774,6 +1774,35 @@ void autonomous() {
     </div>
   </div>
 
+  <!-- Delete Action Block Confirmation Modal -->
+  <div id="deleteBlockModal" class="modal-overlay" hidden>
+    <div class="modal-box" style="width: min(440px, 94vw); border: 2px solid #ef4444; background: #0f172a; border-radius: 12px; padding: 22px; color: #f8fafc; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+      <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #1e293b;padding-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.5rem;">🗑️</span>
+          <div>
+            <h3 style="color:#f87171;margin:0;font-size:1.1rem;">Delete Action Block?</h3>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="btnDeleteBlockCancelX" style="background:none;border:none;color:#94a3b8;font-size:1.3rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-body" style="padding:0;margin-bottom:18px;">
+        <p style="margin-bottom:14px;font-size:0.92rem;line-height:1.5;color:#cbd5e1;">
+          Are you sure you want to delete this action block? This action cannot be undone.
+        </p>
+
+        <label style="display:inline-flex;align-items:center;gap:8px;font-size:0.85rem;color:#94a3b8;cursor:pointer;user-select:none;margin-top:6px;">
+          <input type="checkbox" id="chkDoNotWarnDeleteSession" style="width:16px;height:16px;accent-color:#ef4444;cursor:pointer;" />
+          Do not warn me until next session
+        </label>
+      </div>
+      <div class="modal-footer" style="display:flex;justify-content:flex-end;align-items:center;gap:10px;border-top:1px solid #1e293b;padding-top:14px;">
+        <button type="button" id="btnDeleteBlockCancel" class="btn-subtle" style="padding:8px 14px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.82rem;">Cancel</button>
+        <button type="button" id="btnDeleteBlockConfirm" class="primary" style="background:#dc2626;border-color:#ef4444;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.82rem;">Delete Block</button>
+      </div>
+    </div>
+  </div>
+
   <!-- VEX V5 Brain Telemetry & Upload Modal -->
   <div id="brainModal" class="modal brain-modal" hidden>
     <div class="modal-card brain-modal-card">
@@ -2036,19 +2065,19 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260922.k51"></script>
+  <script src="version.js?v=20260922.k52"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260922.k51"></script>
-  <script src="google-drive-sync.js?v=20260922.k51"></script>
-  <script src="session-guard.js?v=20260922.k51"></script>
-  <script src="v5-brain-serial.js?v=20260922.k51"></script>
-  <script src="project-manager.js?v=20260922.k51"></script>
-  <script src="cpp-parser.js?v=20260922.k51"></script>
-  <script src="app.js?v=20260922.k51"></script>
-  <script src="tutorial.js?v=20260922.k51"></script>
+  <script src="firebase-config.js?v=20260922.k52"></script>
+  <script src="google-drive-sync.js?v=20260922.k52"></script>
+  <script src="session-guard.js?v=20260922.k52"></script>
+  <script src="v5-brain-serial.js?v=20260922.k52"></script>
+  <script src="project-manager.js?v=20260922.k52"></script>
+  <script src="cpp-parser.js?v=20260922.k52"></script>
+  <script src="app.js?v=20260922.k52"></script>
+  <script src="tutorial.js?v=20260922.k52"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

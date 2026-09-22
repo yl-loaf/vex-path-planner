@@ -192,6 +192,84 @@
   // Live aliases used throughout the app
   let pose = paths[0].pose;
   let actions = paths[0].actions;
+  let pendingDeleteActionId = null;
+  let dragData = null;
+
+  function moveAction(source, dest) {
+    if (!source || !dest) return;
+    let movedAct = null;
+
+    if (source.source === "main") {
+      const sIdx = actions.findIndex((x) => x.id === source.id);
+      if (sIdx !== -1) {
+        movedAct = actions.splice(sIdx, 1)[0];
+      }
+    } else if (source.source === "loop") {
+      const parentLoop = actions.find((x) => x.id === source.parentLoopId);
+      if (parentLoop && Array.isArray(parentLoop.children)) {
+        const cIdx = parentLoop.children.findIndex((x) => x.id === source.id);
+        if (cIdx !== -1) {
+          movedAct = parentLoop.children.splice(cIdx, 1)[0];
+        }
+      }
+    }
+
+    if (!movedAct) return;
+
+    if (dest.target === "main") {
+      let tIdx = dest.targetIdx != null ? dest.targetIdx : actions.length;
+      tIdx = Math.max(0, Math.min(actions.length, tIdx));
+      actions.splice(tIdx, 0, movedAct);
+      showToast(`🔄 Reordered ${movedAct.type} in routine`);
+    } else if (dest.target === "loop") {
+      const targetLoop = actions.find((x) => x.id === dest.targetLoopId);
+      if (targetLoop) {
+        if (!Array.isArray(targetLoop.children)) targetLoop.children = [];
+        let cIdx = dest.targetChildIdx != null ? dest.targetChildIdx : targetLoop.children.length;
+        cIdx = Math.max(0, Math.min(targetLoop.children.length, cIdx));
+        targetLoop.children.splice(cIdx, 0, movedAct);
+        showToast(`🔄 Moved ${movedAct.type} block into loop`);
+      } else {
+        actions.push(movedAct);
+      }
+    }
+
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+  }
+
+  function addBlockToLoop(loopId, type) {
+    const loop = actions.find((x) => x.id === loopId);
+    if (!loop) return;
+    if (!Array.isArray(loop.children)) loop.children = [];
+
+    const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+    const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+    const poses = computePoses();
+    const last = poses[poses.length - 1] || { x: pose.x, y: pose.y, theta: pose.theta };
+
+    const child = defaultAction(type);
+    if (needsPoint(type) || isMove(type)) {
+      child.x = Number((last.x + 12).toFixed(1));
+      child.y = Number(last.y.toFixed(1));
+    }
+    if (needsHeading(type)) child.theta = last.theta;
+    child.maxSpeed = defMax;
+    child.minSpeed = defMin;
+
+    loop.children.push(child);
+    selectedId = child.id;
+
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+    showToast(`➕ Added ${type} block to loop (${loop.children.length} total)`);
+  }
 
   function bindActive() {
     const p = activePath();
@@ -351,17 +429,20 @@
         condition: "!limit_switch.get_value()",
         times: 5,
         loopLabel: "Move forward",
-        loopCode: "chassis.moveToPoint(24, 24, 2000);",
-        loopAction: {
-          type: "moveToPoint",
-          x: 24,
-          y: 24,
-          timeout: 2000,
-          forwards: true,
-          maxSpeed: defMax,
-          minSpeed: defMin,
-          earlyExitRange: 0,
-        },
+        children: [
+          {
+            id: uid(),
+            type: "moveToPoint",
+            x: 24,
+            y: 24,
+            timeout: 2000,
+            forwards: true,
+            maxSpeed: defMax,
+            minSpeed: defMin,
+            earlyExitRange: 0,
+            label: "Loop motion",
+          },
+        ],
         label: "",
         async: false,
       };
@@ -675,6 +756,29 @@
     }
 
     if (action.type === "loop") {
+      if (Array.isArray(action.children) && action.children.length > 0) {
+        let curPose = { ...fromPose };
+        let combinedPath = [];
+        let totalDuration = 0;
+        let lastCarrot = null;
+        for (const child of action.children) {
+          const childSeg = simulateAction(child, curPose, customBot);
+          if (childSeg && childSeg.path) {
+            for (const pt of childSeg.path) {
+              combinedPath.push({ ...pt, t: pt.t + totalDuration });
+            }
+            curPose = { ...childSeg.endPose };
+            totalDuration += (childSeg.duration || 0);
+            lastCarrot = childSeg.carrot || lastCarrot;
+          }
+        }
+        return {
+          path: combinedPath.length ? combinedPath : [{ ...fromPose, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 }],
+          endPose: curPose,
+          duration: totalDuration,
+          carrot: lastCarrot,
+        };
+      }
       let branchAct = action.loopAction;
       if (!branchAct) {
         const code = action.loopCode;
@@ -2196,6 +2300,108 @@
     }, 3200);
   }
 
+  function renderChildActionCard(child, cIdx, parentLoop) {
+    let childSummary = "";
+    if (child.type === "moveToPoint") childSummary = `(${child.x}, ${child.y})`;
+    else if (child.type === "moveToPose") childSummary = `(${child.x}, ${child.y}, ${child.theta}°)`;
+    else if (child.type === "turnToPoint" || child.type === "swingToPoint") childSummary = `to (${child.x}, ${child.y})`;
+    else if (child.type === "turnToHeading" || child.type === "swingToHeading") childSummary = `to ${child.theta}°`;
+    else if (child.type === "wait") {
+      const mode = child.waitType || "distance";
+      if (mode === "distance") childSummary = `${child.distance != null ? child.distance : 12}" dist`;
+      else if (mode === "done") childSummary = "until done";
+      else if (mode === "time") childSummary = `${child.delayMs != null ? child.delayMs : 250}ms`;
+    } else if (child.type === "custom") {
+      const firstLine = (child.customCode || "").trim().split("\n")[0];
+      childSummary = firstLine ? (firstLine.length > 20 ? firstLine.substring(0, 18) + "..." : firstLine) : "C++ Code";
+    }
+
+    const isSel = selectedId === child.id;
+    const cardCls = `action-card loop-child-card ${isSel ? 'selected' : 'collapsed'}`;
+
+    let childFields = "";
+    if (child.type === "custom") {
+      childFields = `
+        <div style="margin-bottom:6px;">
+          <textarea class="scratch-code-textarea" rows="2" data-child-f="customCode" data-loop-id="${parentLoop.id}" data-child-id="${child.id}" placeholder="e.g. intake.move(127);">${escapeHtml(child.customCode || '')}</textarea>
+        </div>`;
+    } else if (child.type === "wait") {
+      const mode = child.waitType || "distance";
+      childFields = `
+        <div class="row" style="margin-bottom:4px;">
+          <label>Wait Type
+            <select data-child-f="waitType" data-loop-id="${parentLoop.id}" data-child-id="${child.id}">
+              <option value="distance" ${mode === "distance" ? "selected" : ""}>chassis.waitUntil(dist)</option>
+              <option value="done" ${mode === "done" ? "selected" : ""}>chassis.waitUntilDone()</option>
+              <option value="time" ${mode === "time" ? "selected" : ""}>pros::delay(ms)</option>
+            </select>
+          </label>
+          ${mode === "distance" ? `
+            <label>Distance (in)
+              <input type="number" data-child-f="distance" step="0.5" value="${child.distance != null ? child.distance : 12}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+            </label>` : ""}
+          ${mode === "time" ? `
+            <label>Delay (ms)
+              <input type="number" data-child-f="delayMs" step="50" value="${child.delayMs != null ? child.delayMs : 250}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+            </label>` : ""}
+        </div>`;
+    } else {
+      const ptFields = needsPoint(child.type) ? `
+        <label>X <input type="number" data-child-f="x" step="0.1" value="${child.x}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/></label>
+        <label>Y <input type="number" data-child-f="y" step="0.1" value="${child.y}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/></label>` : "";
+      const hdField = needsHeading(child.type) ? `
+        <label>θ° <input type="number" data-child-f="theta" step="1" value="${child.theta}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/></label>` : "";
+      const sideField = needsSide(child.type) ? `
+        <label>Side
+          <select data-child-f="lockedSide" data-loop-id="${parentLoop.id}" data-child-id="${child.id}">
+            <option value="LEFT" ${child.lockedSide === "LEFT" ? "selected" : ""}>LEFT</option>
+            <option value="RIGHT" ${child.lockedSide === "RIGHT" ? "selected" : ""}>RIGHT</option>
+          </select>
+        </label>` : "";
+      const revToggle = isMove(child.type) ? `
+        <div class="check-row" style="margin-top:4px;">
+          <label class="reverse-toggle ${child.forwards === false ? "on" : ""}">
+            <input type="checkbox" data-child-f="forwards" data-invert="1" ${child.forwards === false ? "checked" : ""} data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+            Drive in reverse (forwards = false)
+          </label>
+        </div>` : "";
+
+      childFields = `
+        <div class="row">
+          ${ptFields}
+          ${hdField}
+          ${sideField}
+        </div>
+        <div class="row" style="margin-top:4px;">
+          <label>Timeout (ms)
+            <input type="number" data-child-f="timeout" min="0" step="50" value="${child.timeout || 2000}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+          </label>
+          <label>Max Speed
+            <input type="number" data-child-f="maxSpeed" min="0" max="127" step="1" value="${child.maxSpeed != null ? child.maxSpeed : 127}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+          </label>
+        </div>
+        ${revToggle}`;
+    }
+
+    return `
+      <div class="${cardCls}" data-loop-child-id="${child.id}" data-loop-id="${parentLoop.id}" draggable="true">
+        <div class="card-title">
+          <span class="drag-handle" title="Drag to reorder in loop or drag out to routine" draggable="true">⠿</span>
+          <span class="badge ${badgeClass(child.type)}" style="font-size:0.7rem;padding:2px 6px;">${cIdx + 1}. ${child.type}</span>
+          ${childSummary ? `<span class="collapsed-summary-badge" style="font-size:0.68rem;">${escapeHtml(childSummary)}</span>` : ""}
+          ${child.forwards === false ? '<span class="badge reverse" style="font-size:0.65rem;padding:1px 4px;">REV</span>' : ""}
+          <div style="margin-left:auto;display:flex;align-items:center;gap:3px">
+            <button type="button" class="icon" data-act="loop-child-up" data-loop-id="${parentLoop.id}" data-child-id="${child.id}" title="Move up in loop">↑</button>
+            <button type="button" class="icon" data-act="loop-child-down" data-loop-id="${parentLoop.id}" data-child-id="${child.id}" title="Move down in loop">↓</button>
+            <button type="button" class="icon" data-act="loop-child-del" data-loop-id="${parentLoop.id}" data-child-id="${child.id}" title="Delete block from loop">×</button>
+          </div>
+        </div>
+        <div class="card-body">
+          ${childFields}
+        </div>
+      </div>`;
+  }
+
   function renderFlow() {
     actionFlow.innerHTML = "";
     const poses = computePoses();
@@ -2413,6 +2619,15 @@
           </div>`;
       } else if (a.type === "loop") {
         const mode = a.loopMode || "until";
+        if (!Array.isArray(a.children)) {
+          if (a.loopAction) {
+            a.children = [{ ...a.loopAction, id: a.loopAction.id || uid() }];
+          } else if (a.loopCode) {
+            a.children = [{ id: uid(), type: "custom", customCode: a.loopCode, label: a.loopLabel || "" }];
+          } else {
+            a.children = [];
+          }
+        }
         body = `
           <div class="scratch-loop-container">
             <div class="scratch-loop-header">
@@ -2453,22 +2668,38 @@
             ` : ""}
 
             <!-- LOOP BODY ARM -->
-            <div class="scratch-c-arm">
+            <div class="scratch-c-arm loop-c-arm" data-loop-id="${a.id}">
               <div class="scratch-branch-header loop-header">
                 <span class="scratch-branch-badge">🔄 Repeat Body:</span>
                 <input type="text" data-f="loopLabel" class="scratch-branch-title-input" value="${escapeHtml(a.loopLabel || 'Move forward')}" placeholder="Move forward" />
+                <span style="margin-left:auto;font-size:0.75rem;color:#fed7aa;font-weight:700;">${a.children.length} ${a.children.length === 1 ? 'block' : 'blocks'}</span>
               </div>
-              <div class="scratch-branch-content">
-                <label class="scratch-sub-label">C++ Statement / Motion:
-                  <textarea data-f="loopCode" rows="2" class="scratch-code-textarea" placeholder="chassis.moveToPoint(24, 24, 2000);">${escapeHtml(a.loopCode || 'chassis.moveToPoint(24, 24, 2000);')}</textarea>
-                </label>
-                <div class="scratch-preset-actions">
-                  <span class="scratch-preset-lbl">Actions:</span>
-                  <button type="button" class="snip-btn" data-act="set-loop-preset" data-preset="moveForward">🔵 Move Forward</button>
-                  <button type="button" class="snip-btn" data-act="set-loop-preset" data-preset="turn90">🟣 Turn 90°</button>
-                  <button type="button" class="snip-btn" data-act="set-loop-preset" data-preset="clampOn">🟢 Clamp Goal</button>
-                  <button type="button" class="snip-btn" data-act="set-loop-preset" data-preset="intakeOn">🟢 Intake On</button>
+              <div class="loop-children-container" data-loop-id="${a.id}">
+                ${a.children.map((child, cIdx) => renderChildActionCard(child, cIdx, a)).join("")}
+              </div>
+              ${a.children.length === 0 ? `
+                <div class="loop-empty-drop-zone" data-loop-id="${a.id}">
+                  <span class="loop-drop-icon">📥</span>
+                  <span>No blocks in loop yet.<br><strong>Drag blocks here</strong> or use the buttons below to add blocks.</span>
                 </div>
+              ` : `
+                <div class="loop-drop-target" data-loop-id="${a.id}">
+                  ➕ Drop block here to append to loop
+                </div>
+              `}
+              <div class="loop-add-toolbar">
+                <span style="font-size:0.72rem;font-weight:700;color:#f97316;margin-right:2px;">Add Block:</span>
+                <button type="button" class="btn-loop-add-quick" data-act="loop-add" data-loop-id="${a.id}" data-type="moveToPoint">+ Move Point</button>
+                <button type="button" class="btn-loop-add-quick" data-act="loop-add" data-loop-id="${a.id}" data-type="turnToHeading">+ Turn Heading</button>
+                <button type="button" class="btn-loop-add-quick" data-act="loop-add" data-loop-id="${a.id}" data-type="wait">+ Wait</button>
+                <button type="button" class="btn-loop-add-quick" data-act="loop-add" data-loop-id="${a.id}" data-type="custom">+ Custom C++</button>
+                <select class="loop-add-more-select" data-act="loop-add-select" data-loop-id="${a.id}">
+                  <option value="">+ More Actions...</option>
+                  <option value="moveToPose">Move to Pose (Boomerang)</option>
+                  <option value="turnToPoint">Turn to Point</option>
+                  <option value="swingToPoint">Swing to Point</option>
+                  <option value="swingToHeading">Swing to Heading</option>
+                </select>
               </div>
             </div>
 
@@ -2807,6 +3038,9 @@
         if (mode === "distance") summaryText = `${a.distance != null ? a.distance : 12}" dist`;
         else if (mode === "done") summaryText = "until done";
         else if (mode === "time") summaryText = `${a.delayMs != null ? a.delayMs : 250}ms`;
+      } else if (a.type === "loop") {
+        const count = (a.children || []).length;
+        summaryText = `${a.loopMode || 'until'} (${count} ${count === 1 ? 'block' : 'blocks'})`;
       } else if (a.type === "custom") {
         const firstLine = (a.customCode || "").trim().split("\n")[0];
         summaryText = firstLine ? (firstLine.length > 25 ? firstLine.substring(0, 22) + "..." : firstLine) : "C++ Code";
@@ -2815,6 +3049,7 @@
       const cleanLbl = cleanCommentText(a.label);
       card.innerHTML = `
         <div class="card-title" style="cursor: pointer; user-select: none;">
+          <span class="drag-handle" title="Drag to reorder routine or drag into a loop" draggable="true">⠿</span>
           <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type === 'ifElse' ? 'if / else' : a.type}</span>
           ${summaryText ? `<span class="collapsed-summary-badge">${escapeHtml(summaryText)}</span>` : ""}
           ${a.async ? '<span class="badge multitask-badge" title="Multitasking: Runs concurrently">⚡ Async</span>' : ""}
@@ -2830,6 +3065,7 @@
 
       card.addEventListener("click", (e) => {
         if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("textarea")) return;
+        if (e.target.closest(".drag-handle") || e.target.closest(".loop-child-card") || e.target.closest(".loop-add-toolbar") || e.target.closest(".loop-empty-drop-zone") || e.target.closest(".loop-drop-target")) return;
         const clickedHeader = e.target.closest(".card-title");
         if (clickedHeader && selectedId === a.id) {
           selectedId = null; // collapse
@@ -3234,10 +3470,20 @@
             }
             return;
           }
+          if (act === "loop-add") {
+            addBlockToLoop(btn.dataset.loopId, btn.dataset.type);
+            return;
+          }
           const i = actions.findIndex((x) => x.id === a.id);
           if (act === "del") {
-            actions.splice(i, 1);
-            if (selectedId === a.id) selectedId = null;
+            if (sessionStorage.getItem("disableDeleteWarning") === "true") {
+              actions.splice(i, 1);
+              if (selectedId === a.id) selectedId = null;
+              showToast(`🗑️ Block deleted.`);
+            } else {
+              openDeleteBlockModal(a.id);
+              return;
+            }
           } else if (act === "up" && i > 0) {
             [actions[i - 1], actions[i]] = [actions[i], actions[i - 1]];
           } else if (act === "down" && i < actions.length - 1) {
@@ -3251,8 +3497,261 @@
         });
       });
 
+      card.querySelectorAll(".loop-add-more-select").forEach((sel) => {
+        sel.addEventListener("change", (e) => {
+          const bType = e.target.value;
+          const loopId = sel.dataset.loopId;
+          if (bType && loopId) {
+            addBlockToLoop(loopId, bType);
+            sel.value = "";
+          }
+        });
+      });
+
+      const loopDropZones = card.querySelectorAll(".loop-c-arm, .loop-children-container, .loop-empty-drop-zone, .loop-drop-target");
+      loopDropZones.forEach((dz) => {
+        dz.addEventListener("dragover", (e) => {
+          if (!dragData || dragData.id === a.id) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          dz.classList.add("loop-drag-over");
+          const arm = card.querySelector(".loop-c-arm");
+          if (arm) arm.classList.add("loop-drag-over");
+        });
+        dz.addEventListener("dragleave", (e) => {
+          if (!dz.contains(e.relatedTarget)) {
+            dz.classList.remove("loop-drag-over");
+            const arm = card.querySelector(".loop-c-arm");
+            if (arm && !arm.contains(e.relatedTarget)) arm.classList.remove("loop-drag-over");
+          }
+        });
+        dz.addEventListener("drop", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dz.classList.remove("loop-drag-over");
+          const arm = card.querySelector(".loop-c-arm");
+          if (arm) arm.classList.remove("loop-drag-over");
+          if (!dragData || dragData.id === a.id) return;
+          moveAction(dragData, { target: "loop", targetLoopId: a.id, targetChildIdx: (a.children || []).length });
+        });
+      });
+
+      card.querySelectorAll(".loop-child-card").forEach((childCard) => {
+        const childId = childCard.dataset.loopChildId;
+        const childIdx = (a.children || []).findIndex((c) => c.id === childId);
+        const child = (a.children || [])[childIdx];
+        if (!child) return;
+
+        childCard.addEventListener("dragstart", (e) => {
+          if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(e.target.tagName)) {
+            e.preventDefault();
+            return;
+          }
+          e.stopPropagation();
+          dragData = {
+            source: "loop",
+            id: child.id,
+            parentLoopId: a.id,
+            fromChildIdx: childIdx,
+            type: child.type,
+          };
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+          setTimeout(() => childCard.classList.add("is-dragging"), 0);
+        });
+
+        childCard.addEventListener("dragend", (e) => {
+          e.stopPropagation();
+          childCard.classList.remove("is-dragging");
+          document.querySelectorAll(".drop-before, .drop-after, .loop-drag-over").forEach((el) => {
+            el.classList.remove("drop-before", "drop-after", "loop-drag-over");
+          });
+          dragData = null;
+        });
+
+        childCard.addEventListener("dragover", (e) => {
+          if (!dragData) return;
+          if (dragData.id === child.id) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          const rect = childCard.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          if (e.clientY < midY) {
+            childCard.classList.add("drop-before");
+            childCard.classList.remove("drop-after");
+          } else {
+            childCard.classList.add("drop-after");
+            childCard.classList.remove("drop-before");
+          }
+        });
+
+        childCard.addEventListener("dragleave", (e) => {
+          if (!childCard.contains(e.relatedTarget)) {
+            childCard.classList.remove("drop-before", "drop-after");
+          }
+        });
+
+        childCard.addEventListener("drop", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const before = childCard.classList.contains("drop-before");
+          childCard.classList.remove("drop-before", "drop-after");
+          if (!dragData || dragData.id === child.id) return;
+          let targetChildIdx = before ? childIdx : childIdx + 1;
+          if (dragData.source === "loop" && dragData.parentLoopId === a.id && dragData.fromChildIdx < targetChildIdx) {
+            targetChildIdx--;
+          }
+          moveAction(dragData, { target: "loop", targetLoopId: a.id, targetChildIdx });
+        });
+
+        childCard.addEventListener("click", (e) => {
+          if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("textarea") || e.target.closest(".drag-handle")) return;
+          e.stopPropagation();
+          if (selectedId === child.id) {
+            selectedId = null;
+          } else {
+            selectedId = child.id;
+          }
+          renderFlow();
+          draw();
+        });
+
+        childCard.querySelectorAll("[data-act]").forEach((cBtn) => {
+          cBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const cAct = cBtn.dataset.act;
+            if (cAct === "loop-child-up" && childIdx > 0) {
+              [a.children[childIdx - 1], a.children[childIdx]] = [a.children[childIdx], a.children[childIdx - 1]];
+            } else if (cAct === "loop-child-down" && childIdx < a.children.length - 1) {
+              [a.children[childIdx], a.children[childIdx + 1]] = [a.children[childIdx + 1], a.children[childIdx]];
+            } else if (cAct === "loop-child-del") {
+              if (sessionStorage.getItem("disableDeleteWarning") === "true") {
+                a.children.splice(childIdx, 1);
+                if (selectedId === child.id) selectedId = null;
+                showToast(`🗑️ Block deleted from loop.`);
+              } else {
+                openDeleteBlockModal(child.id);
+                return;
+              }
+            }
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            try { updateTimeDisplay(); } catch (_) {}
+          });
+        });
+
+        childCard.querySelectorAll("[data-child-f]").forEach((cEl) => {
+          cEl.addEventListener("change", () => {
+            const f = cEl.dataset.childF;
+            let val;
+            if (cEl.type === "checkbox") {
+              val = cEl.dataset.invert ? !cEl.checked : cEl.checked;
+            } else if (cEl.type === "number") {
+              val = Number(cEl.value);
+            } else {
+              val = cEl.value;
+            }
+            child[f] = val;
+            markDirty();
+            draw();
+            generateCode();
+            try { updateTimeDisplay(); } catch (_) {}
+          });
+        });
+      });
+
+      block.setAttribute("draggable", "true");
+      block.dataset.idx = idx;
+      block.dataset.id = a.id;
+
+      block.addEventListener("dragstart", (e) => {
+        if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(e.target.tagName)) {
+          e.preventDefault();
+          return;
+        }
+        if (e.target.closest(".loop-child-card")) {
+          return;
+        }
+        dragData = {
+          source: "main",
+          id: a.id,
+          type: a.type,
+          fromIdx: idx,
+        };
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+        setTimeout(() => block.classList.add("is-dragging"), 0);
+      });
+
+      block.addEventListener("dragend", () => {
+        block.classList.remove("is-dragging");
+        document.querySelectorAll(".drop-before, .drop-after, .loop-drag-over").forEach((el) => {
+          el.classList.remove("drop-before", "drop-after", "loop-drag-over");
+        });
+        dragData = null;
+      });
+
+      block.addEventListener("dragover", (e) => {
+        if (!dragData) return;
+        if (dragData.source === "main" && dragData.id === a.id) return;
+        if (e.target.closest(".loop-c-arm") || e.target.closest(".loop-child-card")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = block.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          block.classList.add("drop-before");
+          block.classList.remove("drop-after");
+        } else {
+          block.classList.add("drop-after");
+          block.classList.remove("drop-before");
+        }
+      });
+
+      block.addEventListener("dragleave", (e) => {
+        if (!block.contains(e.relatedTarget)) {
+          block.classList.remove("drop-before", "drop-after");
+        }
+      });
+
+      block.addEventListener("drop", (e) => {
+        if (e.target.closest(".loop-c-arm") || e.target.closest(".loop-child-card")) return;
+        const before = block.classList.contains("drop-before");
+        block.classList.remove("drop-before", "drop-after");
+        if (!dragData) return;
+        if (dragData.source === "main" && dragData.id === a.id) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const currentIdx = actions.findIndex((x) => x.id === a.id);
+        if (currentIdx === -1) return;
+        let targetIdx = before ? currentIdx : currentIdx + 1;
+        if (dragData.source === "main" && dragData.fromIdx < targetIdx) {
+          targetIdx--;
+        }
+
+        moveAction(dragData, { target: "main", targetIdx });
+      });
+
       block.appendChild(card);
       actionFlow.appendChild(block);
+    });
+
+    actionFlow.addEventListener("dragover", (e) => {
+      if (!dragData) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+    });
+    actionFlow.addEventListener("drop", (e) => {
+      if (e.target === actionFlow && dragData) {
+        e.preventDefault();
+        moveAction(dragData, { target: "main", targetIdx: actions.length });
+      }
     });
   }
 
@@ -3293,46 +3792,137 @@
     return sel ? sel.value : (localStorage.getItem("lemlib_code_comment_style") || "inline");
   }
 
+  function emitSingleAction(a, ind, commentStyle) {
+    let code = "";
+    const cleanComment = cleanCommentText(a.label);
+    if (a.type === "custom") {
+      if (cleanComment) {
+        code += `${ind}// ${cleanComment}\n`;
+      }
+      const lines = (a.customCode || "").split("\n");
+      for (const line of lines) {
+        if (line.trim().length === 0) code += "\n";
+        else code += `${ind}${line}\n`;
+      }
+      return code;
+    }
+    if (a.type === "wait") {
+      if (cleanComment && commentStyle === "above") {
+        code += `${ind}// ${cleanComment}\n`;
+      }
+      const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
+      if (a.waitType === "distance") {
+        code += `${ind}chassis.waitUntil(${a.distance != null ? a.distance : 12});${commentSuffix}\n`;
+      } else if (a.waitType === "done") {
+        code += `${ind}chassis.waitUntilDone();${commentSuffix}\n`;
+      } else if (a.waitType === "time") {
+        code += `${ind}pros::delay(${a.delayMs != null ? a.delayMs : 250});${commentSuffix}\n`;
+      }
+      if (a.customCode && a.customCode.trim()) {
+        const lines = a.customCode.trim().split("\n");
+        for (const line of lines) {
+          if (line.trim().length === 0) code += "\n";
+          else code += `${ind}${line}\n`;
+        }
+      }
+      return code;
+    }
+    if (a.type === "loop") {
+      const mode = a.loopMode || "until";
+      const cond = (a.condition || "!limit_switch.get_value()").trim();
+      if (cleanComment && commentStyle === "above") {
+        code += `${ind}// ${cleanComment}\n`;
+      }
+      const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
+      if (mode === "until") {
+        code += `${ind}while (!(${cond})) {${commentSuffix}\n`;
+      } else if (mode === "for") {
+        const tCount = a.times != null ? a.times : 5;
+        code += `${ind}for (int i = 0; i < ${tCount}; i++) {${commentSuffix}\n`;
+      } else {
+        code += `${ind}while (true) {${commentSuffix}\n`;
+      }
+      if (Array.isArray(a.children) && a.children.length > 0) {
+        for (const child of a.children) {
+          code += emitSingleAction(child, ind + "  ", commentStyle);
+        }
+      } else {
+        const loopCode = (a.loopCode != null && a.loopCode !== "") ? a.loopCode : (a.loopAction ? "chassis.moveToPoint(24, 24, 2000);" : "chassis.moveToPoint(24, 24, 2000);");
+        const lines = loopCode.split("\n");
+        for (const line of lines) {
+          if (line.trim().length === 0) code += "\n";
+          else code += `${ind}  ${line}\n`;
+        }
+      }
+      code += `${ind}}\n`;
+      return code;
+    }
+
+    const px = a.x + (a.offsetX || 0);
+    const py = a.y + (a.offsetY || 0);
+    const pt = a.theta + (a.offsetTheta || 0);
+    const params = [];
+    if (!a.forwards) params.push(".forwards = false");
+    if (a.type === "moveToPose" && a.lead != null && Number(a.lead) !== 0.6) {
+      params.push(`.lead = ${Number(a.lead)}`);
+    }
+    if (a.driftScaler != null && Number(a.driftScaler) !== 1.0) {
+      params.push(`.horizontalDrift = ${Number(a.driftScaler)}`);
+    }
+    const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+    const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+    if (a.maxSpeed != null && Number(a.maxSpeed) !== Number(defMax)) {
+      params.push(`.maxSpeed = ${Number(a.maxSpeed)}`);
+    }
+    if (a.minSpeed != null && Number(a.minSpeed) !== Number(defMin)) {
+      params.push(`.minSpeed = ${Number(a.minSpeed)}`);
+    }
+    if (a.earlyExitRange) params.push(`.earlyExitRange = ${a.earlyExitRange}`);
+    const paramStr = params.length ? `, {${params.join(", ")}}` : "";
+    const asyncArg = a.async ? ", true" : "";
+
+    let inlineComment = "";
+    if (cleanComment) {
+      if (commentStyle === "above") {
+        code += `${ind}// ${cleanComment}\n`;
+      } else {
+        inlineComment = ` // ${cleanComment}`;
+      }
+    }
+
+    switch (a.type) {
+      case "moveToPoint":
+        code += `${ind}chassis.moveToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
+        break;
+      case "moveToPose":
+        code += `${ind}chassis.moveToPose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
+        break;
+      case "turnToPoint":
+        code += `${ind}chassis.turnToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
+        break;
+      case "turnToHeading":
+        code += `${ind}chassis.turnToHeading(${num(pt)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
+        break;
+      case "swingToPoint":
+        code += `${ind}chassis.swingToPoint(${num(px)}, ${num(py)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
+        break;
+      case "swingToHeading":
+        code += `${ind}chassis.swingToHeading(${num(pt)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
+        break;
+      default:
+        code += `${ind}// unknown action ${a.type}${inlineComment}\n`;
+    }
+    return code;
+  }
+
   function emitRoutineBody(pose0, acts, indent) {
     const ind = indent != null ? indent : "  ";
     const commentStyle = getCommentStyle();
     let code = "";
     code += `${ind}chassis.setPose(${num(pose0.x)}, ${num(pose0.y)}, ${num(pose0.theta)});\n`;
     for (const a of acts) {
-      const cleanComment = cleanCommentText(a.label);
-      if (a.type === "custom") {
-        if (cleanComment) {
-          code += `${ind}// ${cleanComment}\n`;
-        }
-        const lines = (a.customCode || "").split("\n");
-        for (const line of lines) {
-          if (line.trim().length === 0) code += "\n";
-          else code += `${ind}${line}\n`;
-        }
-        continue;
-      }
-      if (a.type === "wait") {
-        if (cleanComment && commentStyle === "above") {
-          code += `${ind}// ${cleanComment}\n`;
-        }
-        const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
-        if (a.waitType === "distance") {
-          code += `${ind}chassis.waitUntil(${a.distance != null ? a.distance : 12});${commentSuffix}\n`;
-        } else if (a.waitType === "done") {
-          code += `${ind}chassis.waitUntilDone();${commentSuffix}\n`;
-        } else if (a.waitType === "time") {
-          code += `${ind}pros::delay(${a.delayMs != null ? a.delayMs : 250});${commentSuffix}\n`;
-        }
-        if (a.customCode && a.customCode.trim()) {
-          const lines = a.customCode.trim().split("\n");
-          for (const line of lines) {
-            if (line.trim().length === 0) code += "\n";
-            else code += `${ind}${line}\n`;
-          }
-        }
-        continue;
-      }
       if (a.type === "ifElse") {
+        const cleanComment = cleanCommentText(a.label);
         const cond = (a.condition || "true").trim();
         if (cleanComment && commentStyle === "above") {
           code += `${ind}// ${cleanComment}\n`;
@@ -3355,88 +3945,7 @@
         code += `${ind}}\n`;
         continue;
       }
-      if (a.type === "loop") {
-        const mode = a.loopMode || "until";
-        const cond = (a.condition || "!limit_switch.get_value()").trim();
-        const loopCode = (a.loopCode != null && a.loopCode !== "") ? a.loopCode : (a.loopAction ? "chassis.moveToPoint(24, 24, 2000);" : "chassis.moveToPoint(24, 24, 2000);");
-
-        if (cleanComment && commentStyle === "above") {
-          code += `${ind}// ${cleanComment}\n`;
-        }
-        const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
-
-        if (mode === "until") {
-          // Loop until cond translates to while (!(cond)) in C++
-          code += `${ind}while (!(${cond})) {${commentSuffix}\n`;
-        } else if (mode === "for") {
-          const tCount = a.times != null ? a.times : 5;
-          code += `${ind}for (int i = 0; i < ${tCount}; i++) {${commentSuffix}\n`;
-        } else {
-          code += `${ind}while (true) {${commentSuffix}\n`;
-        }
-
-        const lines = loopCode.split("\n");
-        for (const line of lines) {
-          if (line.trim().length === 0) code += "\n";
-          else code += `${ind}${ind}${line}\n`;
-        }
-        code += `${ind}}\n`;
-        continue;
-      }
-      const px = a.x + (a.offsetX || 0);
-      const py = a.y + (a.offsetY || 0);
-      const pt = a.theta + (a.offsetTheta || 0);
-      const params = [];
-      if (!a.forwards) params.push(".forwards = false");
-      if (a.type === "moveToPose" && a.lead != null && Number(a.lead) !== 0.6) {
-        params.push(`.lead = ${Number(a.lead)}`);
-      }
-      if (a.driftScaler != null && Number(a.driftScaler) !== 1.0) {
-        params.push(`.horizontalDrift = ${Number(a.driftScaler)}`);
-      }
-      const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
-      const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
-      if (a.maxSpeed != null && Number(a.maxSpeed) !== Number(defMax)) {
-        params.push(`.maxSpeed = ${Number(a.maxSpeed)}`);
-      }
-      if (a.minSpeed != null && Number(a.minSpeed) !== Number(defMin)) {
-        params.push(`.minSpeed = ${Number(a.minSpeed)}`);
-      }
-      if (a.earlyExitRange) params.push(`.earlyExitRange = ${a.earlyExitRange}`);
-      const paramStr = params.length ? `, {${params.join(", ")}}` : "";
-      const asyncArg = a.async ? ", true" : "";
-
-      let inlineComment = "";
-      if (cleanComment) {
-        if (commentStyle === "above") {
-          code += `${ind}// ${cleanComment}\n`;
-        } else {
-          inlineComment = ` // ${cleanComment}`;
-        }
-      }
-
-      switch (a.type) {
-        case "moveToPoint":
-          code += `${ind}chassis.moveToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
-          break;
-        case "moveToPose":
-          code += `${ind}chassis.moveToPose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
-          break;
-        case "turnToPoint":
-          code += `${ind}chassis.turnToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
-          break;
-        case "turnToHeading":
-          code += `${ind}chassis.turnToHeading(${num(pt)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
-          break;
-        case "swingToPoint":
-          code += `${ind}chassis.swingToPoint(${num(px)}, ${num(py)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
-          break;
-        case "swingToHeading":
-          code += `${ind}chassis.swingToHeading(${num(pt)}, DriveSide::${a.lockedSide}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
-          break;
-        default:
-          code += `${ind}// unknown action ${a.type}${inlineComment}\n`;
-      }
+      code += emitSingleAction(a, ind, commentStyle);
     }
     return code;
   }
@@ -5636,6 +6145,83 @@
     });
   }
 
+  function openDeleteBlockModal(actionId) {
+    pendingDeleteActionId = actionId;
+    const modal = document.getElementById("deleteBlockModal");
+    if (modal) {
+      const chk = document.getElementById("chkDoNotWarnDeleteSession");
+      if (chk) chk.checked = false;
+      modal.hidden = false;
+    }
+  }
+
+  function closeDeleteBlockModal() {
+    pendingDeleteActionId = null;
+    const modal = document.getElementById("deleteBlockModal");
+    if (modal) modal.hidden = true;
+  }
+
+  function confirmDeleteBlock() {
+    if (!pendingDeleteActionId) return;
+    const chk = document.getElementById("chkDoNotWarnDeleteSession");
+    if (chk && chk.checked) {
+      sessionStorage.setItem("disableDeleteWarning", "true");
+    }
+
+    const i = actions.findIndex((x) => x.id === pendingDeleteActionId);
+    if (i !== -1) {
+      actions.splice(i, 1);
+      if (selectedId === pendingDeleteActionId) selectedId = null;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      try { updateTimeDisplay(); } catch (_) {}
+      showToast(`🗑️ Block deleted.`);
+    } else {
+      for (const a of actions) {
+        if (a.type === "loop" && Array.isArray(a.children)) {
+          const ci = a.children.findIndex((x) => x.id === pendingDeleteActionId);
+          if (ci !== -1) {
+            a.children.splice(ci, 1);
+            if (selectedId === pendingDeleteActionId) selectedId = null;
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            try { updateTimeDisplay(); } catch (_) {}
+            showToast(`🗑️ Block deleted from loop.`);
+            break;
+          }
+        }
+      }
+    }
+    closeDeleteBlockModal();
+  }
+
+  function wireDeleteBlockModal() {
+    const modal = document.getElementById("deleteBlockModal");
+    const btnCancelX = document.getElementById("btnDeleteBlockCancelX");
+    const btnCancel = document.getElementById("btnDeleteBlockCancel");
+    const btnConfirm = document.getElementById("btnDeleteBlockConfirm");
+
+    if (!modal) return;
+
+    btnCancelX.onclick = closeDeleteBlockModal;
+    btnCancel.onclick = closeDeleteBlockModal;
+    btnConfirm.onclick = confirmDeleteBlock;
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeDeleteBlockModal();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) {
+        closeDeleteBlockModal();
+      }
+    });
+  }
+
   function wireHelpModal() {
     const modal = document.getElementById("helpModal");
     const btnOpen = document.getElementById("btnHelp");
@@ -6913,6 +7499,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
   // Soft check a few seconds after load (no prompt unless newer)
   setTimeout(() => checkForUpdates(false), 2500);
   wireClearModal();
+  wireDeleteBlockModal();
   wireHelpModal();
   wireFlowchartModal();
   wireCppTranslateModal();
