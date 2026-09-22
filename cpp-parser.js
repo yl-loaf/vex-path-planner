@@ -111,6 +111,68 @@
     return "a" + Math.random().toString(36).slice(2, 9);
   }
 
+  // Parse multiple statements or code block into an array of actions
+  function parseStatementsToList(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
+    if (!codeStr || typeof codeStr !== "string") return [];
+    const trimmed = codeStr.trim();
+    if (!trimmed) return [];
+
+    // Split code by semicolons and nested blocks safely
+    const statements = [];
+    let cur = "";
+    let parenDepth = 0;
+    let braceDepth = 0;
+    let inString = false;
+    let stringChar = "";
+
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      const prev = i > 0 ? trimmed[i - 1] : "";
+
+      if (inString) {
+        cur += ch;
+        if (ch === stringChar && prev !== "\\") {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        inString = true;
+        stringChar = ch;
+        cur += ch;
+        continue;
+      }
+
+      if (ch === "(") parenDepth++;
+      else if (ch === ")") { if (parenDepth > 0) parenDepth--; }
+      else if (ch === "{") braceDepth++;
+      else if (ch === "}") { if (braceDepth > 0) braceDepth--; }
+
+      cur += ch;
+
+      if (braceDepth === 0 && parenDepth === 0) {
+        if (ch === ";" || ch === "\n" || (ch === "}" && prev !== "\\")) {
+          const stmt = cur.trim();
+          if (stmt && stmt !== ";") {
+            statements.push(stmt);
+          }
+          cur = "";
+        }
+      }
+    }
+    const rem = cur.trim();
+    if (rem && rem !== ";") statements.push(rem);
+
+    const result = [];
+    statements.forEach((stmt) => {
+      const act = parseStatementToAction(stmt, defaultMaxSpeed, defaultMinSpeed);
+      if (act) result.push(act);
+    });
+
+    return result;
+  }
+
   // Parse a single C++ statement line into a LemLib action object or custom action
   function parseStatementToAction(stmtStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
     if (!stmtStr) return null;
@@ -342,6 +404,8 @@
       act.elseCode = ternary.elseExpr + (ternary.elseExpr.endsWith(";") ? "" : ";");
       act.thenAction = parseStatementToAction(ternary.thenExpr, defaultMaxSpeed, defaultMinSpeed);
       act.elseAction = parseStatementToAction(ternary.elseExpr, defaultMaxSpeed, defaultMinSpeed);
+      act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
+      act.elseChildren = parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed);
       act.thenLabel = getActionHumanLabel(act.thenAction, ternary.thenExpr);
       act.elseLabel = getActionHumanLabel(act.elseAction, ternary.elseExpr);
       act.isTernary = true;
@@ -442,6 +506,8 @@
 
     act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
     act.elseAction = act.elseCode ? parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed) : null;
+    act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
+    act.elseChildren = act.elseCode ? parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed) : [];
     act.thenLabel = getActionHumanLabel(act.thenAction, act.thenCode);
     act.elseLabel = act.elseAction ? getActionHumanLabel(act.elseAction, act.elseCode) : (act.elseCode ? "Custom Action" : "No Action");
     act.isTernary = false;
@@ -631,6 +697,28 @@
 
   function createDefaultAction(type, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
     if (type === "ifElse") {
+      const defThen = {
+        id: uid(),
+        type: "moveToPoint",
+        x: 24,
+        y: 24,
+        timeout: 2000,
+        forwards: true,
+        maxSpeed: defaultMaxSpeed,
+        minSpeed: defaultMinSpeed,
+        earlyExitRange: 0,
+      };
+      const defElse = {
+        id: uid(),
+        type: "moveToPoint",
+        x: -24,
+        y: -24,
+        timeout: 2000,
+        forwards: false,
+        maxSpeed: defaultMaxSpeed,
+        minSpeed: defaultMinSpeed,
+        earlyExitRange: 0,
+      };
       return {
         id: uid(),
         type: "ifElse",
@@ -639,26 +727,10 @@
         elseLabel: "Move backwards",
         thenCode: "chassis.moveToPoint(24, 24, 2000);",
         elseCode: "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});",
-        thenAction: {
-          type: "moveToPoint",
-          x: 24,
-          y: 24,
-          timeout: 2000,
-          forwards: true,
-          maxSpeed: defaultMaxSpeed,
-          minSpeed: defaultMinSpeed,
-          earlyExitRange: 0,
-        },
-        elseAction: {
-          type: "moveToPoint",
-          x: -24,
-          y: -24,
-          timeout: 2000,
-          forwards: false,
-          maxSpeed: defaultMaxSpeed,
-          minSpeed: defaultMinSpeed,
-          earlyExitRange: 0,
-        },
+        thenAction: defThen,
+        elseAction: defElse,
+        thenChildren: [defThen],
+        elseChildren: [defElse],
         activeSimBranch: "then",
         label: "",
         async: false,
@@ -1082,6 +1154,8 @@
         act.elseCode = elseLines.filter(Boolean).join("\n").trim() || "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});";
         act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
         act.elseAction = parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed);
+        act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
+        act.elseChildren = act.elseCode ? parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed) : [];
         act.thenLabel = getActionHumanLabel(act.thenAction, act.thenCode);
         act.elseLabel = getActionHumanLabel(act.elseAction, act.elseCode);
 
@@ -1560,6 +1634,7 @@ void autonomous() {
     createDefaultAction,
     parseLemlibRobotConfig,
     parseStatementToAction,
+    parseStatementsToList,
     tryParseTernary,
     parseIfElseFromCode,
     parseLoopFromCode,
