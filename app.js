@@ -212,6 +212,17 @@
           movedAct = parentLoop.children.splice(cIdx, 1)[0];
         }
       }
+    } else if (source.source === "ifelse") {
+      const parentIf = actions.find((x) => x.id === source.parentIfId);
+      if (parentIf) {
+        const branchList = source.branch === "else" ? parentIf.elseChildren : parentIf.thenChildren;
+        if (Array.isArray(branchList)) {
+          const cIdx = branchList.findIndex((x) => x.id === source.id);
+          if (cIdx !== -1) {
+            movedAct = branchList.splice(cIdx, 1)[0];
+          }
+        }
+      }
     }
 
     if (!movedAct) return;
@@ -229,6 +240,26 @@
         cIdx = Math.max(0, Math.min(targetLoop.children.length, cIdx));
         targetLoop.children.splice(cIdx, 0, movedAct);
         showToast(`🔄 Moved ${movedAct.type} block into loop`);
+      } else {
+        actions.push(movedAct);
+      }
+    } else if (dest.target === "ifelse") {
+      const targetIf = actions.find((x) => x.id === dest.targetIfId);
+      if (targetIf) {
+        const branch = dest.branch === "else" ? "else" : "then";
+        if (branch === "else") {
+          if (!Array.isArray(targetIf.elseChildren)) targetIf.elseChildren = [];
+          let cIdx = dest.targetChildIdx != null ? dest.targetChildIdx : targetIf.elseChildren.length;
+          cIdx = Math.max(0, Math.min(targetIf.elseChildren.length, cIdx));
+          targetIf.elseChildren.splice(cIdx, 0, movedAct);
+          showToast(`🔄 Moved ${movedAct.type} block into Else branch`);
+        } else {
+          if (!Array.isArray(targetIf.thenChildren)) targetIf.thenChildren = [];
+          let cIdx = dest.targetChildIdx != null ? dest.targetChildIdx : targetIf.thenChildren.length;
+          cIdx = Math.max(0, Math.min(targetIf.thenChildren.length, cIdx));
+          targetIf.thenChildren.splice(cIdx, 0, movedAct);
+          showToast(`🔄 Moved ${movedAct.type} block into Then branch`);
+        }
       } else {
         actions.push(movedAct);
       }
@@ -269,6 +300,38 @@
     generateCode();
     try { updateTimeDisplay(); } catch (_) {}
     showToast(`➕ Added ${type} block to loop (${loop.children.length} total)`);
+  }
+
+  function addBlockToIfElse(ifId, branch, type) {
+    const ifAct = actions.find((x) => x.id === ifId);
+    if (!ifAct) return;
+    if (!Array.isArray(ifAct.thenChildren)) ifAct.thenChildren = [];
+    if (!Array.isArray(ifAct.elseChildren)) ifAct.elseChildren = [];
+
+    const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+    const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+    const poses = computePoses();
+    const last = poses[poses.length - 1] || { x: pose.x, y: pose.y, theta: pose.theta };
+
+    const child = defaultAction(type);
+    if (needsPoint(type) || isMove(type)) {
+      child.x = Number((branch === "else" ? (last.x - 12) : (last.x + 12)).toFixed(1));
+      child.y = Number((branch === "else" ? (last.y - 12) : (last.y + 12)).toFixed(1));
+    }
+    if (needsHeading(type)) child.theta = last.theta;
+    child.maxSpeed = defMax;
+    child.minSpeed = defMin;
+
+    const list = branch === "else" ? ifAct.elseChildren : ifAct.thenChildren;
+    list.push(child);
+    selectedId = child.id;
+
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+    showToast(`➕ Added ${type} block to ${branch === 'else' ? 'Else' : 'Then'} branch (${list.length} total)`);
   }
 
   function bindActive() {
@@ -392,28 +455,32 @@
         condition: "true",
         thenLabel: "Move forward",
         elseLabel: "Move backwards",
-        thenCode: "chassis.moveToPoint(24, 24, 2000);",
-        elseCode: "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});",
-        thenAction: {
-          type: "moveToPoint",
-          x: 24,
-          y: 24,
-          timeout: 2000,
-          forwards: true,
-          maxSpeed: defMax,
-          minSpeed: defMin,
-          earlyExitRange: 0,
-        },
-        elseAction: {
-          type: "moveToPoint",
-          x: -24,
-          y: -24,
-          timeout: 2000,
-          forwards: false,
-          maxSpeed: defMax,
-          minSpeed: defMin,
-          earlyExitRange: 0,
-        },
+        thenChildren: [
+          {
+            id: uid(),
+            type: "moveToPoint",
+            x: 24,
+            y: 24,
+            timeout: 2000,
+            forwards: true,
+            maxSpeed: defMax,
+            minSpeed: defMin,
+            earlyExitRange: 0,
+          },
+        ],
+        elseChildren: [
+          {
+            id: uid(),
+            type: "moveToPoint",
+            x: -24,
+            y: -24,
+            timeout: 2000,
+            forwards: false,
+            maxSpeed: defMax,
+            minSpeed: defMin,
+            earlyExitRange: 0,
+          },
+        ],
         activeSimBranch: "then",
         label: "",
         async: false,
@@ -736,6 +803,31 @@
 
     if (action.type === "ifElse") {
       const isElse = action.activeSimBranch === "else";
+      const branchChildren = isElse ? action.elseChildren : action.thenChildren;
+      if (Array.isArray(branchChildren) && branchChildren.length > 0) {
+        let curPose = { ...fromPose };
+        let combinedPath = [];
+        let totalDuration = 0;
+        let lastCarrot = null;
+        for (const child of branchChildren) {
+          const childSeg = simulateAction(child, curPose, customBot);
+          if (childSeg && childSeg.path) {
+            for (const pt of childSeg.path) {
+              combinedPath.push({ ...pt, t: pt.t + totalDuration });
+            }
+            curPose = { ...childSeg.endPose };
+            totalDuration += (childSeg.duration || 0);
+            lastCarrot = childSeg.carrot || lastCarrot;
+          }
+        }
+        return {
+          path: combinedPath.length ? combinedPath : [{ ...fromPose, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 }],
+          endPose: curPose,
+          duration: totalDuration,
+          carrot: lastCarrot,
+        };
+      }
+
       let branchAct = isElse ? action.elseAction : action.thenAction;
       if (!branchAct) {
         const code = isElse ? action.elseCode : action.thenCode;
@@ -2300,7 +2392,7 @@
     }, 3200);
   }
 
-  function renderChildActionCard(child, cIdx, parentLoop) {
+  function renderNestedActionCard(child, cIdx, parentAct, context = "loop", branch = "") {
     let childSummary = "";
     if (child.type === "moveToPoint") childSummary = `(${child.x}, ${child.y})`;
     else if (child.type === "moveToPose") childSummary = `(${child.x}, ${child.y}, ${child.theta}°)`;
@@ -2317,20 +2409,26 @@
     }
 
     const isSel = selectedId === child.id;
-    const cardCls = `action-card loop-child-card ${isSel ? 'selected' : 'collapsed'}`;
+    const isIfElse = context === "ifelse";
+    const branchCls = isIfElse ? (branch === "else" ? "ifelse-child-card is-else" : "ifelse-child-card is-then") : "loop-child-card";
+    const cardCls = `action-card nested-child-card ${branchCls} ${isSel ? 'selected' : 'collapsed'}`;
+
+    const parentAttrs = isIfElse
+      ? `data-context="ifelse" data-if-id="${parentAct.id}" data-branch="${branch}" data-child-id="${child.id}"`
+      : `data-context="loop" data-loop-id="${parentAct.id}" data-child-id="${child.id}"`;
 
     let childFields = "";
     if (child.type === "custom") {
       childFields = `
         <div style="margin-bottom:6px;">
-          <textarea class="scratch-code-textarea" rows="2" data-child-f="customCode" data-loop-id="${parentLoop.id}" data-child-id="${child.id}" placeholder="e.g. intake.move(127);">${escapeHtml(child.customCode || '')}</textarea>
+          <textarea class="scratch-code-textarea" rows="2" data-child-f="customCode" ${parentAttrs} placeholder="e.g. intake.move(127);">${escapeHtml(child.customCode || '')}</textarea>
         </div>`;
     } else if (child.type === "wait") {
       const mode = child.waitType || "distance";
       childFields = `
         <div class="row" style="margin-bottom:4px;">
           <label>Wait Type
-            <select data-child-f="waitType" data-loop-id="${parentLoop.id}" data-child-id="${child.id}">
+            <select data-child-f="waitType" ${parentAttrs}>
               <option value="distance" ${mode === "distance" ? "selected" : ""}>chassis.waitUntil(dist)</option>
               <option value="done" ${mode === "done" ? "selected" : ""}>chassis.waitUntilDone()</option>
               <option value="time" ${mode === "time" ? "selected" : ""}>pros::delay(ms)</option>
@@ -2338,22 +2436,22 @@
           </label>
           ${mode === "distance" ? `
             <label>Distance (in)
-              <input type="number" data-child-f="distance" step="0.5" value="${child.distance != null ? child.distance : 12}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+              <input type="number" data-child-f="distance" step="0.5" value="${child.distance != null ? child.distance : 12}" ${parentAttrs}/>
             </label>` : ""}
           ${mode === "time" ? `
             <label>Delay (ms)
-              <input type="number" data-child-f="delayMs" step="50" value="${child.delayMs != null ? child.delayMs : 250}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+              <input type="number" data-child-f="delayMs" step="50" value="${child.delayMs != null ? child.delayMs : 250}" ${parentAttrs}/>
             </label>` : ""}
         </div>`;
     } else {
       const ptFields = needsPoint(child.type) ? `
-        <label>X <input type="number" data-child-f="x" step="0.1" value="${child.x}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/></label>
-        <label>Y <input type="number" data-child-f="y" step="0.1" value="${child.y}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/></label>` : "";
+        <label>X <input type="number" data-child-f="x" step="0.1" value="${child.x}" ${parentAttrs}/></label>
+        <label>Y <input type="number" data-child-f="y" step="0.1" value="${child.y}" ${parentAttrs}/></label>` : "";
       const hdField = needsHeading(child.type) ? `
-        <label>θ° <input type="number" data-child-f="theta" step="1" value="${child.theta}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/></label>` : "";
+        <label>θ° <input type="number" data-child-f="theta" step="1" value="${child.theta}" ${parentAttrs}/></label>` : "";
       const sideField = needsSide(child.type) ? `
         <label>Side
-          <select data-child-f="lockedSide" data-loop-id="${parentLoop.id}" data-child-id="${child.id}">
+          <select data-child-f="lockedSide" ${parentAttrs}>
             <option value="LEFT" ${child.lockedSide === "LEFT" ? "selected" : ""}>LEFT</option>
             <option value="RIGHT" ${child.lockedSide === "RIGHT" ? "selected" : ""}>RIGHT</option>
           </select>
@@ -2361,7 +2459,7 @@
       const revToggle = isMove(child.type) ? `
         <div class="check-row" style="margin-top:4px;">
           <label class="reverse-toggle ${child.forwards === false ? "on" : ""}">
-            <input type="checkbox" data-child-f="forwards" data-invert="1" ${child.forwards === false ? "checked" : ""} data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+            <input type="checkbox" data-child-f="forwards" data-invert="1" ${child.forwards === false ? "checked" : ""} ${parentAttrs}/>
             Drive in reverse (forwards = false)
           </label>
         </div>` : "";
@@ -2374,32 +2472,43 @@
         </div>
         <div class="row" style="margin-top:4px;">
           <label>Timeout (ms)
-            <input type="number" data-child-f="timeout" min="0" step="50" value="${child.timeout || 2000}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+            <input type="number" data-child-f="timeout" min="0" step="50" value="${child.timeout || 2000}" ${parentAttrs}/>
           </label>
           <label>Max Speed
-            <input type="number" data-child-f="maxSpeed" min="0" max="127" step="1" value="${child.maxSpeed != null ? child.maxSpeed : 127}" data-loop-id="${parentLoop.id}" data-child-id="${child.id}"/>
+            <input type="number" data-child-f="maxSpeed" min="0" max="127" step="1" value="${child.maxSpeed != null ? child.maxSpeed : 127}" ${parentAttrs}/>
           </label>
         </div>
         ${revToggle}`;
     }
 
+    const upAct = isIfElse ? "ifelse-child-up" : "loop-child-up";
+    const downAct = isIfElse ? "ifelse-child-down" : "loop-child-down";
+    const delAct = isIfElse ? "ifelse-child-del" : "loop-child-del";
+    const cardAttrs = isIfElse
+      ? `data-nested-child-id="${child.id}" data-context="ifelse" data-if-id="${parentAct.id}" data-branch="${branch}"`
+      : `data-nested-child-id="${child.id}" data-context="loop" data-loop-id="${parentAct.id}" data-loop-child-id="${child.id}"`;
+
     return `
-      <div class="${cardCls}" data-loop-child-id="${child.id}" data-loop-id="${parentLoop.id}" draggable="true">
+      <div class="${cardCls}" ${cardAttrs} draggable="true">
         <div class="card-title">
-          <span class="drag-handle" title="Drag to reorder in loop or drag out to routine" draggable="true">⠿</span>
+          <span class="drag-handle" title="Drag to reorder or move between blocks" draggable="true">⠿</span>
           <span class="badge ${badgeClass(child.type)}" style="font-size:0.7rem;padding:2px 6px;">${cIdx + 1}. ${child.type}</span>
           ${childSummary ? `<span class="collapsed-summary-badge" style="font-size:0.68rem;">${escapeHtml(childSummary)}</span>` : ""}
           ${child.forwards === false ? '<span class="badge reverse" style="font-size:0.65rem;padding:1px 4px;">REV</span>' : ""}
           <div style="margin-left:auto;display:flex;align-items:center;gap:3px">
-            <button type="button" class="icon" data-act="loop-child-up" data-loop-id="${parentLoop.id}" data-child-id="${child.id}" title="Move up in loop">↑</button>
-            <button type="button" class="icon" data-act="loop-child-down" data-loop-id="${parentLoop.id}" data-child-id="${child.id}" title="Move down in loop">↓</button>
-            <button type="button" class="icon" data-act="loop-child-del" data-loop-id="${parentLoop.id}" data-child-id="${child.id}" title="Delete block from loop">×</button>
+            <button type="button" class="icon" data-act="${upAct}" ${parentAttrs} title="Move up">↑</button>
+            <button type="button" class="icon" data-act="${downAct}" ${parentAttrs} title="Move down">↓</button>
+            <button type="button" class="icon" data-act="${delAct}" ${parentAttrs} title="Delete nested block">×</button>
           </div>
         </div>
         <div class="card-body">
           ${childFields}
         </div>
       </div>`;
+  }
+
+  function renderChildActionCard(child, cIdx, parentLoop) {
+    return renderNestedActionCard(child, cIdx, parentLoop, "loop");
   }
 
   function renderFlow() {
@@ -2537,6 +2646,24 @@
       let body = "";
       if (a.type === "ifElse") {
         const isElseSim = a.activeSimBranch === "else";
+        if (!Array.isArray(a.thenChildren)) {
+          if (a.thenAction) {
+            a.thenChildren = [{ ...a.thenAction, id: a.thenAction.id || uid() }];
+          } else if (a.thenCode) {
+            a.thenChildren = [{ id: uid(), type: "custom", customCode: a.thenCode, label: a.thenLabel || "" }];
+          } else {
+            a.thenChildren = [];
+          }
+        }
+        if (!Array.isArray(a.elseChildren)) {
+          if (a.elseAction) {
+            a.elseChildren = [{ ...a.elseAction, id: a.elseAction.id || uid() }];
+          } else if (a.elseCode) {
+            a.elseChildren = [{ id: uid(), type: "custom", customCode: a.elseCode, label: a.elseLabel || "" }];
+          } else {
+            a.elseChildren = [];
+          }
+        }
         body = `
           <div class="scratch-if-container">
             <div class="scratch-if-header">
@@ -2549,8 +2676,8 @@
               <span class="scratch-keyword">then</span>
               <div class="scratch-sim-toggle" title="Select which conditional branch simulates on the 2D field">
                 <span class="scratch-sim-label">Simulate:</span>
-                <button type="button" class="scratch-sim-btn ${!isElseSim ? 'active' : ''}" data-act="set-sim-branch" data-branch="then">✓ Then</button>
-                <button type="button" class="scratch-sim-btn ${isElseSim ? 'active' : ''}" data-act="set-sim-branch" data-branch="else">Else</button>
+                <button type="button" class="scratch-sim-btn ${!isElseSim ? 'active' : ''}" data-act="set-sim-branch" data-branch="then">✓ Then (${a.thenChildren.length})</button>
+                <button type="button" class="scratch-sim-btn ${isElseSim ? 'active' : ''}" data-act="set-sim-branch" data-branch="else">Else (${a.elseChildren.length})</button>
               </div>
             </div>
             <div class="scratch-cond-presets">
@@ -2561,23 +2688,39 @@
               <button type="button" class="cond-chip ${a.condition === 'dist < 10' ? 'active' : ''}" data-act="set-condition" data-cond="dist < 10">dist &lt; 10</button>
             </div>
 
-            <!-- THEN ARM (If true, move forward...) -->
-            <div class="scratch-c-arm">
+            <!-- THEN ARM (If true...) -->
+            <div class="scratch-c-arm ifelse-c-arm ifelse-then-arm" data-if-id="${a.id}" data-branch="then">
               <div class="scratch-branch-header then-header">
-                <span class="scratch-branch-badge">🟢 If true,</span>
+                <span class="scratch-branch-badge">🟢 If true:</span>
                 <input type="text" data-f="thenLabel" class="scratch-branch-title-input" value="${escapeHtml(a.thenLabel || 'Move forward')}" placeholder="Move forward" />
+                <span style="margin-left:auto;font-size:0.75rem;color:#6ee7b7;font-weight:700;">${a.thenChildren.length} ${a.thenChildren.length === 1 ? 'block' : 'blocks'}</span>
               </div>
-              <div class="scratch-branch-content">
-                <label class="scratch-sub-label">C++ Statement / Motion:
-                  <textarea data-f="thenCode" rows="2" class="scratch-code-textarea" placeholder="chassis.moveToPoint(24, 24, 2000);">${escapeHtml(a.thenCode || 'chassis.moveToPoint(24, 24, 2000);')}</textarea>
-                </label>
-                <div class="scratch-preset-actions">
-                  <span class="scratch-preset-lbl">Actions:</span>
-                  <button type="button" class="snip-btn" data-act="set-then-preset" data-preset="moveForward">🔵 Move Forward</button>
-                  <button type="button" class="snip-btn" data-act="set-then-preset" data-preset="turn90">🟣 Turn 90°</button>
-                  <button type="button" class="snip-btn" data-act="set-then-preset" data-preset="clampOn">🟢 Clamp Goal</button>
-                  <button type="button" class="snip-btn" data-act="set-then-preset" data-preset="intakeOn">🟢 Intake On</button>
+              <div class="ifelse-children-container" data-if-id="${a.id}" data-branch="then">
+                ${a.thenChildren.map((child, cIdx) => renderNestedActionCard(child, cIdx, a, "ifelse", "then")).join("")}
+              </div>
+              ${a.thenChildren.length === 0 ? `
+                <div class="loop-empty-drop-zone ifelse-empty-drop-zone then-zone" data-if-id="${a.id}" data-branch="then">
+                  <span class="loop-drop-icon">📥</span>
+                  <span>No blocks in Then branch.<br><strong>Drag blocks here</strong> or use the buttons below.</span>
                 </div>
+              ` : `
+                <div class="loop-drop-target ifelse-drop-target then-target" data-if-id="${a.id}" data-branch="then">
+                  ➕ Drop block here to append to Then branch
+                </div>
+              `}
+              <div class="loop-add-toolbar">
+                <span style="font-size:0.72rem;font-weight:700;color:#10b981;margin-right:2px;">Add Block:</span>
+                <button type="button" class="btn-ifelse-add-quick then-btn" data-act="ifelse-add" data-if-id="${a.id}" data-branch="then" data-type="moveToPoint">+ Move Point</button>
+                <button type="button" class="btn-ifelse-add-quick then-btn" data-act="ifelse-add" data-if-id="${a.id}" data-branch="then" data-type="turnToHeading">+ Turn Heading</button>
+                <button type="button" class="btn-ifelse-add-quick then-btn" data-act="ifelse-add" data-if-id="${a.id}" data-branch="then" data-type="wait">+ Wait</button>
+                <button type="button" class="btn-ifelse-add-quick then-btn" data-act="ifelse-add" data-if-id="${a.id}" data-branch="then" data-type="custom">+ Custom C++</button>
+                <select class="ifelse-add-more-select then-select" data-act="ifelse-add-select" data-if-id="${a.id}" data-branch="then">
+                  <option value="">+ More Actions...</option>
+                  <option value="moveToPose">Move to Pose (Boomerang)</option>
+                  <option value="turnToPoint">Turn to Point</option>
+                  <option value="swingToPoint">Swing to Point</option>
+                  <option value="swingToHeading">Swing to Heading</option>
+                </select>
               </div>
             </div>
 
@@ -2586,23 +2729,39 @@
               <span class="scratch-keyword">else</span>
             </div>
 
-            <!-- ELSE ARM (Else, move backwards...) -->
-            <div class="scratch-c-arm">
+            <!-- ELSE ARM (Else...) -->
+            <div class="scratch-c-arm ifelse-c-arm ifelse-else-arm" data-if-id="${a.id}" data-branch="else">
               <div class="scratch-branch-header else-header">
-                <span class="scratch-branch-badge">🟠 Else,</span>
+                <span class="scratch-branch-badge">🟠 Else:</span>
                 <input type="text" data-f="elseLabel" class="scratch-branch-title-input" value="${escapeHtml(a.elseLabel || 'Move backwards')}" placeholder="Move backwards" />
+                <span style="margin-left:auto;font-size:0.75rem;color:#fdba74;font-weight:700;">${a.elseChildren.length} ${a.elseChildren.length === 1 ? 'block' : 'blocks'}</span>
               </div>
-              <div class="scratch-branch-content">
-                <label class="scratch-sub-label">C++ Statement / Motion:
-                  <textarea data-f="elseCode" rows="2" class="scratch-code-textarea" placeholder="chassis.moveToPoint(-24, -24, 2000, {.forwards = false});">${escapeHtml(a.elseCode || 'chassis.moveToPoint(-24, -24, 2000, {.forwards = false});')}</textarea>
-                </label>
-                <div class="scratch-preset-actions">
-                  <span class="scratch-preset-lbl">Actions:</span>
-                  <button type="button" class="snip-btn" data-act="set-else-preset" data-preset="moveBackwards">🔵 Move Backwards</button>
-                  <button type="button" class="snip-btn" data-act="set-else-preset" data-preset="turnNeg90">🟣 Turn -90°</button>
-                  <button type="button" class="snip-btn" data-act="set-else-preset" data-preset="clampOff">🔓 Release Clamp</button>
-                  <button type="button" class="snip-btn" data-act="set-else-preset" data-preset="intakeOff">🛑 Intake Off</button>
+              <div class="ifelse-children-container" data-if-id="${a.id}" data-branch="else">
+                ${a.elseChildren.map((child, cIdx) => renderNestedActionCard(child, cIdx, a, "ifelse", "else")).join("")}
+              </div>
+              ${a.elseChildren.length === 0 ? `
+                <div class="loop-empty-drop-zone ifelse-empty-drop-zone else-zone" data-if-id="${a.id}" data-branch="else">
+                  <span class="loop-drop-icon">📥</span>
+                  <span>No blocks in Else branch.<br><strong>Drag blocks here</strong> or use the buttons below.</span>
                 </div>
+              ` : `
+                <div class="loop-drop-target ifelse-drop-target else-target" data-if-id="${a.id}" data-branch="else">
+                  ➕ Drop block here to append to Else branch
+                </div>
+              `}
+              <div class="loop-add-toolbar">
+                <span style="font-size:0.72rem;font-weight:700;color:#f97316;margin-right:2px;">Add Block:</span>
+                <button type="button" class="btn-ifelse-add-quick else-btn" data-act="ifelse-add" data-if-id="${a.id}" data-branch="else" data-type="moveToPoint">+ Move Point</button>
+                <button type="button" class="btn-ifelse-add-quick else-btn" data-act="ifelse-add" data-if-id="${a.id}" data-branch="else" data-type="turnToHeading">+ Turn Heading</button>
+                <button type="button" class="btn-ifelse-add-quick else-btn" data-act="ifelse-add" data-if-id="${a.id}" data-branch="else" data-type="wait">+ Wait</button>
+                <button type="button" class="btn-ifelse-add-quick else-btn" data-act="ifelse-add" data-if-id="${a.id}" data-branch="else" data-type="custom">+ Custom C++</button>
+                <select class="ifelse-add-more-select else-select" data-act="ifelse-add-select" data-if-id="${a.id}" data-branch="else">
+                  <option value="">+ More Actions...</option>
+                  <option value="moveToPose">Move to Pose (Boomerang)</option>
+                  <option value="turnToPoint">Turn to Point</option>
+                  <option value="swingToPoint">Swing to Point</option>
+                  <option value="swingToHeading">Swing to Heading</option>
+                </select>
               </div>
             </div>
 
@@ -3028,8 +3187,11 @@
       }
 
       let summaryText = "";
-      if (a.type === "ifElse") summaryText = `if (${a.condition || 'true'}) ${a.thenLabel || 'Move forward'} : ${a.elseLabel || 'Move backwards'}`;
-      else if (a.type === "moveToPoint") summaryText = `(${a.x}, ${a.y})`;
+      if (a.type === "ifElse") {
+        const thenCount = Array.isArray(a.thenChildren) ? a.thenChildren.length : 0;
+        const elseCount = Array.isArray(a.elseChildren) ? a.elseChildren.length : 0;
+        summaryText = `if (${a.condition || 'true'}) [${thenCount} blk] : [${elseCount} blk]`;
+      } else if (a.type === "moveToPoint") summaryText = `(${a.x}, ${a.y})`;
       else if (a.type === "moveToPose") summaryText = `(${a.x}, ${a.y}, ${a.theta}°)`;
       else if (a.type === "turnToPoint" || a.type === "swingToPoint") summaryText = `to (${a.x}, ${a.y})`;
       else if (a.type === "turnToHeading" || a.type === "swingToHeading") summaryText = `to ${a.theta}°`;
@@ -3065,7 +3227,7 @@
 
       card.addEventListener("click", (e) => {
         if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("textarea")) return;
-        if (e.target.closest(".drag-handle") || e.target.closest(".loop-child-card") || e.target.closest(".loop-add-toolbar") || e.target.closest(".loop-empty-drop-zone") || e.target.closest(".loop-drop-target")) return;
+        if (e.target.closest(".drag-handle") || e.target.closest(".loop-child-card") || e.target.closest(".ifelse-child-card") || e.target.closest(".loop-add-toolbar") || e.target.closest(".loop-empty-drop-zone") || e.target.closest(".loop-drop-target")) return;
         const clickedHeader = e.target.closest(".card-title");
         if (clickedHeader && selectedId === a.id) {
           selectedId = null; // collapse
@@ -3474,6 +3636,10 @@
             addBlockToLoop(btn.dataset.loopId, btn.dataset.type);
             return;
           }
+          if (act === "ifelse-add") {
+            addBlockToIfElse(btn.dataset.ifId, btn.dataset.branch, btn.dataset.type);
+            return;
+          }
           const i = actions.findIndex((x) => x.id === a.id);
           if (act === "del") {
             if (sessionStorage.getItem("disableDeleteWarning") === "true") {
@@ -3508,6 +3674,18 @@
         });
       });
 
+      card.querySelectorAll(".ifelse-add-more-select").forEach((sel) => {
+        sel.addEventListener("change", (e) => {
+          const bType = e.target.value;
+          const ifId = sel.dataset.ifId;
+          const branch = sel.dataset.branch;
+          if (bType && ifId) {
+            addBlockToIfElse(ifId, branch, bType);
+            sel.value = "";
+          }
+        });
+      });
+
       const loopDropZones = card.querySelectorAll(".loop-c-arm, .loop-children-container, .loop-empty-drop-zone, .loop-drop-target");
       loopDropZones.forEach((dz) => {
         dz.addEventListener("dragover", (e) => {
@@ -3534,6 +3712,167 @@
           if (arm) arm.classList.remove("loop-drag-over");
           if (!dragData || dragData.id === a.id) return;
           moveAction(dragData, { target: "loop", targetLoopId: a.id, targetChildIdx: (a.children || []).length });
+        });
+      });
+
+      const ifElseDropZones = card.querySelectorAll(".ifelse-c-arm, .ifelse-children-container, .ifelse-empty-drop-zone, .ifelse-drop-target");
+      ifElseDropZones.forEach((dz) => {
+        const branch = dz.dataset.branch || (dz.closest("[data-branch]") ? dz.closest("[data-branch]").dataset.branch : "then");
+        dz.addEventListener("dragover", (e) => {
+          if (!dragData || dragData.id === a.id) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          dz.classList.add("loop-drag-over");
+          const arm = card.querySelector(`.ifelse-c-arm[data-branch="${branch}"]`);
+          if (arm) arm.classList.add("loop-drag-over");
+        });
+        dz.addEventListener("dragleave", (e) => {
+          if (!dz.contains(e.relatedTarget)) {
+            dz.classList.remove("loop-drag-over");
+            const arm = card.querySelector(`.ifelse-c-arm[data-branch="${branch}"]`);
+            if (arm && !arm.contains(e.relatedTarget)) arm.classList.remove("loop-drag-over");
+          }
+        });
+        dz.addEventListener("drop", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dz.classList.remove("loop-drag-over");
+          const arm = card.querySelector(`.ifelse-c-arm[data-branch="${branch}"]`);
+          if (arm) arm.classList.remove("loop-drag-over");
+          if (!dragData || dragData.id === a.id) return;
+          const list = branch === "else" ? (a.elseChildren || []) : (a.thenChildren || []);
+          moveAction(dragData, { target: "ifelse", targetIfId: a.id, branch, targetChildIdx: list.length });
+        });
+      });
+
+      card.querySelectorAll(".ifelse-child-card").forEach((childCard) => {
+        const branch = childCard.dataset.branch;
+        const childId = childCard.dataset.nestedChildId;
+        const list = branch === "else" ? (a.elseChildren || []) : (a.thenChildren || []);
+        const childIdx = list.findIndex((c) => c.id === childId);
+        const child = list[childIdx];
+        if (!child) return;
+
+        childCard.addEventListener("dragstart", (e) => {
+          if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(e.target.tagName)) {
+            e.preventDefault();
+            return;
+          }
+          e.stopPropagation();
+          dragData = {
+            source: "ifelse",
+            id: child.id,
+            parentIfId: a.id,
+            branch,
+            fromChildIdx: childIdx,
+            type: child.type,
+          };
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+          setTimeout(() => childCard.classList.add("is-dragging"), 0);
+        });
+
+        childCard.addEventListener("dragend", (e) => {
+          e.stopPropagation();
+          childCard.classList.remove("is-dragging");
+          document.querySelectorAll(".drop-before, .drop-after, .loop-drag-over").forEach((el) => {
+            el.classList.remove("drop-before", "drop-after", "loop-drag-over");
+          });
+          dragData = null;
+        });
+
+        childCard.addEventListener("dragover", (e) => {
+          if (!dragData) return;
+          if (dragData.id === child.id) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          const rect = childCard.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          if (e.clientY < midY) {
+            childCard.classList.add("drop-before");
+            childCard.classList.remove("drop-after");
+          } else {
+            childCard.classList.add("drop-after");
+            childCard.classList.remove("drop-before");
+          }
+        });
+
+        childCard.addEventListener("dragleave", (e) => {
+          if (!childCard.contains(e.relatedTarget)) {
+            childCard.classList.remove("drop-before", "drop-after");
+          }
+        });
+
+        childCard.addEventListener("drop", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const before = childCard.classList.contains("drop-before");
+          childCard.classList.remove("drop-before", "drop-after");
+          if (!dragData || dragData.id === child.id) return;
+          let targetChildIdx = before ? childIdx : childIdx + 1;
+          if (dragData.source === "ifelse" && dragData.parentIfId === a.id && dragData.branch === branch && dragData.fromChildIdx < targetChildIdx) {
+            targetChildIdx--;
+          }
+          moveAction(dragData, { target: "ifelse", targetIfId: a.id, branch, targetChildIdx });
+        });
+
+        childCard.addEventListener("click", (e) => {
+          if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("textarea") || e.target.closest(".drag-handle")) return;
+          e.stopPropagation();
+          if (selectedId === child.id) {
+            selectedId = null;
+          } else {
+            selectedId = child.id;
+          }
+          renderFlow();
+          draw();
+        });
+
+        childCard.querySelectorAll("[data-act]").forEach((cBtn) => {
+          cBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const cAct = cBtn.dataset.act;
+            if (cAct === "ifelse-child-up" && childIdx > 0) {
+              [list[childIdx - 1], list[childIdx]] = [list[childIdx], list[childIdx - 1]];
+            } else if (cAct === "ifelse-child-down" && childIdx < list.length - 1) {
+              [list[childIdx], list[childIdx + 1]] = [list[childIdx + 1], list[childIdx]];
+            } else if (cAct === "ifelse-child-del") {
+              if (sessionStorage.getItem("disableDeleteWarning") === "true") {
+                list.splice(childIdx, 1);
+                if (selectedId === child.id) selectedId = null;
+                showToast(`🗑️ Block deleted from ${branch === 'else' ? 'Else' : 'Then'} branch.`);
+              } else {
+                openDeleteBlockModal(child.id);
+                return;
+              }
+            }
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            try { updateTimeDisplay(); } catch (_) {}
+          });
+        });
+
+        childCard.querySelectorAll("[data-child-f]").forEach((cEl) => {
+          cEl.addEventListener("change", () => {
+            const f = cEl.dataset.childF;
+            let val;
+            if (cEl.type === "checkbox") {
+              val = cEl.dataset.invert ? !cEl.checked : cEl.checked;
+            } else if (cEl.type === "number") {
+              val = Number(cEl.value);
+            } else {
+              val = cEl.value;
+            }
+            child[f] = val;
+            markDirty();
+            draw();
+            generateCode();
+            try { updateTimeDisplay(); } catch (_) {}
+          });
         });
       });
 
@@ -3673,7 +4012,7 @@
           e.preventDefault();
           return;
         }
-        if (e.target.closest(".loop-child-card")) {
+        if (e.target.closest(".loop-child-card") || e.target.closest(".ifelse-child-card")) {
           return;
         }
         dragData = {
@@ -3698,7 +4037,7 @@
       block.addEventListener("dragover", (e) => {
         if (!dragData) return;
         if (dragData.source === "main" && dragData.id === a.id) return;
-        if (e.target.closest(".loop-c-arm") || e.target.closest(".loop-child-card")) return;
+        if (e.target.closest(".loop-c-arm") || e.target.closest(".loop-child-card") || e.target.closest(".ifelse-c-arm") || e.target.closest(".ifelse-child-card")) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         const rect = block.getBoundingClientRect();
@@ -3719,7 +4058,7 @@
       });
 
       block.addEventListener("drop", (e) => {
-        if (e.target.closest(".loop-c-arm") || e.target.closest(".loop-child-card")) return;
+        if (e.target.closest(".loop-c-arm") || e.target.closest(".loop-child-card") || e.target.closest(".ifelse-c-arm") || e.target.closest(".ifelse-child-card")) return;
         const before = block.classList.contains("drop-before");
         block.classList.remove("drop-before", "drop-after");
         if (!dragData) return;
@@ -3929,18 +4268,30 @@
         }
         const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
         code += `${ind}if (${cond}) {${commentSuffix}\n`;
-        const thenCode = (a.thenCode != null && a.thenCode !== "") ? a.thenCode : (a.thenAction ? "chassis.moveToPoint(24, 24, 2000);" : "");
-        const thenLines = thenCode.split("\n");
-        for (const line of thenLines) {
-          if (line.trim().length === 0) code += "\n";
-          else code += `${ind}${ind}${line}\n`;
+        if (Array.isArray(a.thenChildren) && a.thenChildren.length > 0) {
+          for (const child of a.thenChildren) {
+            code += emitSingleAction(child, ind + ind, commentStyle);
+          }
+        } else {
+          const thenCode = (a.thenCode != null && a.thenCode !== "") ? a.thenCode : (a.thenAction ? "chassis.moveToPoint(24, 24, 2000);" : "chassis.moveToPoint(24, 24, 2000);");
+          const thenLines = thenCode.split("\n");
+          for (const line of thenLines) {
+            if (line.trim().length === 0) code += "\n";
+            else code += `${ind}${ind}${line}\n`;
+          }
         }
         code += `${ind}} else {\n`;
-        const elseCode = (a.elseCode != null && a.elseCode !== "") ? a.elseCode : (a.elseAction ? "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});" : "");
-        const elseLines = elseCode.split("\n");
-        for (const line of elseLines) {
-          if (line.trim().length === 0) code += "\n";
-          else code += `${ind}${ind}${line}\n`;
+        if (Array.isArray(a.elseChildren) && a.elseChildren.length > 0) {
+          for (const child of a.elseChildren) {
+            code += emitSingleAction(child, ind + ind, commentStyle);
+          }
+        } else {
+          const elseCode = (a.elseCode != null && a.elseCode !== "") ? a.elseCode : (a.elseAction ? "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});" : "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});");
+          const elseLines = elseCode.split("\n");
+          for (const line of elseLines) {
+            if (line.trim().length === 0) code += "\n";
+            else code += `${ind}${ind}${line}\n`;
+          }
         }
         code += `${ind}}\n`;
         continue;

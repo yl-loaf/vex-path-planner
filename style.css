@@ -8052,6 +8052,165 @@ kbd {
   cursor: pointer;
 }
 
+/* If / Else Nested Blocks & Drop Targets */
+.ifelse-then-arm {
+  border-left-color: #10b981 !important;
+}
+
+.ifelse-then-arm.ifelse-drag-over {
+  border-left-color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.18) !important;
+  box-shadow: inset 0 0 16px rgba(16, 185, 129, 0.35), 0 0 12px rgba(16, 185, 129, 0.25);
+  outline: 2px dashed #10b981;
+  outline-offset: 2px;
+}
+
+.ifelse-else-arm {
+  border-left-color: #f97316 !important;
+}
+
+.ifelse-else-arm.ifelse-drag-over {
+  border-left-color: #fb923c !important;
+  background: rgba(249, 115, 22, 0.18) !important;
+  box-shadow: inset 0 0 16px rgba(249, 115, 22, 0.35), 0 0 12px rgba(249, 115, 22, 0.25);
+  outline: 2px dashed #f97316;
+  outline-offset: 2px;
+}
+
+.ifelse-child-card.is-then {
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.ifelse-child-card.is-then:hover {
+  border-color: rgba(16, 185, 129, 0.7);
+}
+
+.ifelse-child-card.is-then.selected {
+  border-color: #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+}
+
+.ifelse-child-card.is-then.drop-before {
+  border-top: 2.5px solid #10b981 !important;
+}
+
+.ifelse-child-card.is-then.drop-after {
+  border-bottom: 2.5px solid #10b981 !important;
+}
+
+.ifelse-child-card.is-else {
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+.ifelse-child-card.is-else:hover {
+  border-color: rgba(249, 115, 22, 0.7);
+}
+
+.ifelse-child-card.is-else.selected {
+  border-color: #f97316;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.35);
+}
+
+.ifelse-child-card.is-else.drop-before {
+  border-top: 2.5px solid #f97316 !important;
+}
+
+.ifelse-child-card.is-else.drop-after {
+  border-bottom: 2.5px solid #f97316 !important;
+}
+
+.btn-ifelse-add-quick.then-btn {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #a7f3d0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-ifelse-add-quick.then-btn:hover {
+  background: #10b981;
+  color: #0f172a;
+  border-color: #10b981;
+}
+
+.btn-ifelse-add-quick.else-btn {
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  color: #fed7aa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-ifelse-add-quick.else-btn:hover {
+  background: #f97316;
+  color: #0f172a;
+  border-color: #f97316;
+}
+
+.ifelse-add-more-select.then-select {
+  background: #090d16;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #a7f3d0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ifelse-add-more-select.else-select {
+  background: #090d16;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  color: #fed7aa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ifelse-empty-drop-zone.then-zone {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #a7f3d0;
+}
+
+.ifelse-empty-drop-zone.else-zone {
+  border-color: rgba(249, 115, 22, 0.35);
+  color: #fed7aa;
+}
+
+.ifelse-drop-target.then-target {
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.06);
+}
+.ifelse-drop-target.then-target:hover,
+.ifelse-drop-target.then-target.drag-over {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.2);
+  color: #fff;
+}
+
+.ifelse-drop-target.else-target {
+  border-color: rgba(249, 115, 22, 0.3);
+  color: #fdba74;
+  background: rgba(249, 115, 22, 0.06);
+}
+.ifelse-drop-target.else-target:hover,
+.ifelse-drop-target.else-target.drag-over {
+  border-color: #f97316;
+  background: rgba(249, 115, 22, 0.2);
+  color: #fff;
+}
+
 
 
 
