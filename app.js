@@ -441,6 +441,64 @@
   let isSimPathDirty = true;
   let tuningGraphType = "linear";
 
+  // -- Condition Manager State (Boolean Variables & Flags) ------------
+  const DEFAULT_CONDITIONS = [
+    { id: "cond_isGoalLoaded", name: "isGoalLoaded", value: true, description: "Mobile goal clamp loaded / locked", type: "boolean" },
+    { id: "cond_ringDetected", name: "ringDetected", value: false, description: "Optical sensor sees ring", type: "boolean" },
+    { id: "cond_isRedAlliance", name: "isRedAlliance", value: true, description: "Red alliance match side", type: "boolean" },
+    { id: "cond_isSkillsRun", name: "isSkillsRun", value: false, description: "Autonomous skills challenge mode", type: "boolean" },
+    { id: "cond_distanceClear", name: "distanceClear", value: true, description: "Distance sensor > 10 inches clear", type: "boolean" },
+  ];
+
+  let conditions = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
+
+  function sanitizeConditionName(name) {
+    if (!name) return "";
+    let clean = name.trim().replace(/[^a-zA-Z0-9_.]/g, "");
+    if (/^[0-9]/.test(clean)) clean = "_" + clean;
+    return clean || "cond";
+  }
+
+  function evaluateConditionExpression(condStr) {
+    if (!condStr || typeof condStr !== "string") return true;
+    const trimmed = condStr.trim();
+    if (trimmed === "true" || trimmed === "1") return true;
+    if (trimmed === "false" || trimmed === "0") return false;
+
+    // Direct variable match
+    const found = conditions.find((c) => c.name === trimmed);
+    if (found) return !!found.value;
+
+    // Negation match e.g. !isGoalLoaded
+    if (trimmed.startsWith("!")) {
+      const sub = trimmed.slice(1).trim();
+      const foundSub = conditions.find((c) => c.name === sub);
+      if (foundSub) return !foundSub.value;
+    }
+
+    // Equality expression e.g. isGoalLoaded == true
+    if (trimmed.includes("==")) {
+      const parts = trimmed.split("==").map((s) => s.trim());
+      if (parts.length === 2) {
+        const leftVal = evaluateConditionExpression(parts[0]);
+        const rightVal = (parts[1] === "true" || parts[1] === "1") ? true : ((parts[1] === "false" || parts[1] === "0") ? false : evaluateConditionExpression(parts[1]));
+        return leftVal === rightVal;
+      }
+    }
+
+    // Inequality expression e.g. isGoalLoaded != true
+    if (trimmed.includes("!=")) {
+      const parts = trimmed.split("!=").map((s) => s.trim());
+      if (parts.length === 2) {
+        const leftVal = evaluateConditionExpression(parts[0]);
+        const rightVal = (parts[1] === "true" || parts[1] === "1") ? true : ((parts[1] === "false" || parts[1] === "0") ? false : evaluateConditionExpression(parts[1]));
+        return leftVal !== rightVal;
+      }
+    }
+
+    return true;
+  }
+
   function uid() {
     return "a" + Math.random().toString(36).slice(2, 9);
   }
@@ -449,10 +507,11 @@
     if (type === "ifElse") {
       const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
       const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+      const defaultCond = conditions.length ? conditions[0].name : "isGoalLoaded";
       return {
         id: uid(),
         type: "ifElse",
-        condition: "true",
+        condition: defaultCond,
         thenLabel: "Move forward",
         elseLabel: "Move backwards",
         thenChildren: [
@@ -802,7 +861,11 @@
     }
 
     if (action.type === "ifElse") {
-      const isElse = action.activeSimBranch === "else";
+      let isElse = action.activeSimBranch === "else";
+      if (action.activeSimBranch !== "else" && action.activeSimBranch !== "then") {
+        const evalRes = evaluateConditionExpression(action.condition || "true");
+        isElse = !evalRes;
+      }
       const branchChildren = isElse ? action.elseChildren : action.thenChildren;
       if (Array.isArray(branchChildren) && branchChildren.length > 0) {
         let curPose = { ...fromPose };
@@ -1350,10 +1413,12 @@
       paths,
       activePathId,
       bot,
+      conditions,
       savedAt: new Date().toISOString(),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem("lemlib_conditions", JSON.stringify(conditions));
       saveStatus.textContent = "Saved";
       saveStatus.className = "save-status ok";
     } catch (e) {
@@ -1387,6 +1452,17 @@
       if (!raw) return;
       const data = JSON.parse(raw);
       if (data.bot) bot = { ...bot, ...data.bot };
+      if (Array.isArray(data.conditions) && data.conditions.length) {
+        conditions = data.conditions;
+      } else {
+        const savedConds = localStorage.getItem("lemlib_conditions");
+        if (savedConds) {
+          try {
+            const parsedConds = JSON.parse(savedConds);
+            if (Array.isArray(parsedConds) && parsedConds.length) conditions = parsedConds;
+          } catch (_) {}
+        }
+      }
       if (Array.isArray(data.paths) && data.paths.length) {
         paths = data.paths.map((p) => ({
           id: p.id || uidPath(),
@@ -2664,28 +2740,79 @@
             a.elseChildren = [];
           }
         }
+
+        const condExpr = (a.condition || "true").trim();
+        const matchedCond = conditions.find((c) => c.name === condExpr);
+        const matchedNegCond = condExpr.startsWith("!") ? conditions.find((c) => c.name === condExpr.slice(1).trim()) : null;
+        const currentEval = evaluateConditionExpression(condExpr);
+
+        let liveBadgeHtml = "";
+        if (matchedCond) {
+          liveBadgeHtml = `
+            <span class="scratch-cond-live-badge ${matchedCond.value ? 'is-true' : 'is-false'}" data-act="toggle-cond-badge" data-var="${escapeHtml(matchedCond.name)}" title="Variable '${matchedCond.name}' = ${matchedCond.value}. Click to toggle truth value.">
+              ${matchedCond.value ? '🟢 true' : '⚪ false'}
+            </span>
+          `;
+        } else if (matchedNegCond) {
+          liveBadgeHtml = `
+            <span class="scratch-cond-live-badge ${!matchedNegCond.value ? 'is-true' : 'is-false'}" data-act="toggle-cond-badge" data-var="${escapeHtml(matchedNegCond.name)}" title="Variable '${matchedNegCond.name}' = ${matchedNegCond.value} (Inverted). Click to toggle.">
+              ${!matchedNegCond.value ? '🟢 true' : '⚪ false'}
+            </span>
+          `;
+        }
+
+        // Build options for condition dropdown
+        const condOptionsHtml = conditions.map((c) => {
+          const isSel = condExpr === c.name;
+          return `<option value="${escapeHtml(c.name)}" ${isSel ? 'selected' : ''}>${c.name} (${c.value ? 'true' : 'false'})</option>`;
+        }).join("");
+
+        // Build dynamic preset chips from condition variables
+        const condChipsHtml = [
+          `<button type="button" class="cond-chip ${(condExpr === 'true') ? 'active' : ''}" data-act="set-condition" data-cond="true">true</button>`,
+          ...conditions.slice(0, 6).map((c) => {
+            const isChipActive = condExpr === c.name;
+            return `<button type="button" class="cond-chip ${isChipActive ? 'active' : ''}" data-act="set-condition" data-cond="${escapeHtml(c.name)}" title="${escapeHtml(c.description || c.name)}">${c.value ? '🟢' : '⚪'} ${escapeHtml(c.name)}</button>`;
+          })
+        ].join("");
+
         body = `
           <div class="scratch-if-container">
             <div class="scratch-if-header">
               <span class="scratch-keyword">if</span>
               <div class="scratch-condition-slot" title="C++ boolean condition expression">
                 <span class="scratch-hex-point">◀</span>
-                <input type="text" data-f="condition" class="scratch-condition-input" value="${escapeHtml(a.condition || 'true')}" placeholder="true, isRed, etc." />
+                <input type="text" data-f="condition" class="scratch-condition-input" value="${escapeHtml(a.condition || 'true')}" placeholder="isGoalLoaded, true, etc." />
                 <span class="scratch-hex-point">▶</span>
               </div>
+              <div class="scratch-condition-select-wrap">
+                <select class="scratch-condition-select" data-act="select-cond-var" title="Select defined variable from Condition Manager">
+                  <option value="">⚙️ Variables ▾</option>
+                  <optgroup label="Defined Conditions">
+                    ${condOptionsHtml}
+                  </optgroup>
+                  <optgroup label="Common Expressions">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                    <option value="!isGoalLoaded">!isGoalLoaded</option>
+                    <option value="dist < 10">dist &lt; 10</option>
+                  </optgroup>
+                  <option value="__open_mgr__">🔀 Manage in Sidebar...</option>
+                </select>
+              </div>
+              ${liveBadgeHtml}
               <span class="scratch-keyword">then</span>
               <div class="scratch-sim-toggle" title="Select which conditional branch simulates on the 2D field">
                 <span class="scratch-sim-label">Simulate:</span>
                 <button type="button" class="scratch-sim-btn ${!isElseSim ? 'active' : ''}" data-act="set-sim-branch" data-branch="then">✓ Then (${a.thenChildren.length})</button>
                 <button type="button" class="scratch-sim-btn ${isElseSim ? 'active' : ''}" data-act="set-sim-branch" data-branch="else">Else (${a.elseChildren.length})</button>
               </div>
+              <button type="button" class="btn-scratch-cond-mgr" data-act="goto-cond-mgr" title="Open Condition Manager in sidebar">🔀 Conditions</button>
             </div>
             <div class="scratch-cond-presets">
-              <span class="scratch-preset-lbl">Presets:</span>
-              <button type="button" class="cond-chip ${(a.condition === 'true' || !a.condition) ? 'active' : ''}" data-act="set-condition" data-cond="true">true</button>
-              <button type="button" class="cond-chip ${a.condition === 'isRed' ? 'active' : ''}" data-act="set-condition" data-cond="isRed">isRed</button>
-              <button type="button" class="cond-chip ${a.condition === 'ringDetected' ? 'active' : ''}" data-act="set-condition" data-cond="ringDetected">ringDetected</button>
-              <button type="button" class="cond-chip ${a.condition === 'dist < 10' ? 'active' : ''}" data-act="set-condition" data-cond="dist < 10">dist &lt; 10</button>
+              <span class="scratch-preset-lbl">Variables:</span>
+              ${condChipsHtml}
+              <button type="button" class="btn-cond-action" data-act="goto-cond-mgr" style="margin-left:auto;font-size:0.65rem;">+ Manage</button>
             </div>
 
             <!-- THEN ARM (If true...) -->
@@ -3500,11 +3627,28 @@
             showToast(`🔀 Simulating ${a.activeSimBranch === 'else' ? 'Else (False)' : 'Then (True)'} branch on 2D field`);
             return;
           }
+          if (act === "goto-cond-mgr") {
+            switchPlannerTab("conditions");
+            return;
+          }
+          if (act === "toggle-cond-badge") {
+            const varName = btn.dataset.var;
+            const foundCond = conditions.find((c) => c.name === varName);
+            if (foundCond) {
+              toggleConditionVariableValue(foundCond.id);
+            }
+            return;
+          }
           if (act === "set-condition") {
             a.condition = btn.dataset.cond;
+            const evalRes = evaluateConditionExpression(a.condition);
+            a.activeSimBranch = evalRes ? "then" : "else";
             markDirty();
             renderFlow();
+            draw();
+            updateTimeDisplay();
             generateCode();
+            showToast(`🔀 Set condition to '${a.condition}' (${evalRes ? 'Then' : 'Else'} branch active)`);
             return;
           }
           if (act === "set-then-preset") {
@@ -3682,6 +3826,28 @@
           if (bType && ifId) {
             addBlockToIfElse(ifId, branch, bType);
             sel.value = "";
+          }
+        });
+      });
+
+      card.querySelectorAll(".scratch-condition-select").forEach((sel) => {
+        sel.addEventListener("change", (e) => {
+          e.stopPropagation();
+          const val = sel.value;
+          if (val === "__open_mgr__") {
+            switchPlannerTab("conditions");
+            return;
+          }
+          if (val) {
+            a.condition = val;
+            const evalRes = evaluateConditionExpression(val);
+            a.activeSimBranch = evalRes ? "then" : "else";
+            markDirty();
+            renderFlow();
+            draw();
+            updateTimeDisplay();
+            generateCode();
+            showToast(`🔀 Set condition to '${val}' (${evalRes ? 'Then' : 'Else'} branch active)`);
           }
         });
       });
@@ -4311,6 +4477,16 @@
     const indent = getIndentString();
 
     let code = `// Auto-generated by VEX LemLib Path Planner\n`;
+
+    // Autonomous Sensor & Strategy Condition Flags
+    if (conditions && conditions.length > 0) {
+      code += `// Autonomous Sensor & Strategy Condition Flags\n`;
+      conditions.forEach((c) => {
+        const comment = c.description ? ` // ${c.description}` : "";
+        code += `bool ${c.name} = ${c.value ? "true" : "false"};${comment}\n`;
+      });
+      code += `\n`;
+    }
 
     if (mode === "all") {
       code += `// Autonomous selector — call runAuton(slot) from autonomous()\n\n`;
@@ -5085,40 +5261,451 @@
   const btnStopField = document.getElementById("btnStopField");
   if (btnStopField) btnStopField.onclick = stopSim;
 
-  // Segmented Tab Switcher for Left Sidebar (Routine, Bot & PID, C++ Code)
-  function wirePlannerTabsAndModes() {
+  // Segmented Tab Switcher for Left Sidebar (Routine, Conditions, Bot & PID, C++ Code)
+  let newCondInitialVal = true;
+  let condSearchQuery = "";
+
+  function switchPlannerTab(tab) {
     const tabBtnFlowchart = document.getElementById("tabBtnFlowchart");
+    const tabBtnConditions = document.getElementById("tabBtnConditions");
     const tabBtnBot = document.getElementById("tabBtnBot");
     const tabBtnCode = document.getElementById("tabBtnCode");
 
     const paneFlowchart = document.getElementById("paneTabFlowchart");
+    const paneConditions = document.getElementById("paneTabConditions");
     const paneBot = document.getElementById("paneTabBot");
     const paneCode = document.getElementById("paneTabCode");
 
-    function selectTab(tab) {
-      const allTabs = [tabBtnFlowchart, tabBtnBot, tabBtnCode];
-      const allPanes = [paneFlowchart, paneBot, paneCode];
-      allTabs.forEach((t) => { if (t) t.classList.remove("active"); });
-      allPanes.forEach((p) => { if (p) p.style.display = "none"; });
+    const allTabs = [tabBtnFlowchart, tabBtnConditions, tabBtnBot, tabBtnCode];
+    const allPanes = [paneFlowchart, paneConditions, paneBot, paneCode];
+    allTabs.forEach((t) => { if (t) t.classList.remove("active"); });
+    allPanes.forEach((p) => { if (p) p.style.display = "none"; });
 
-      if (tab === "flowchart") {
-        if (tabBtnFlowchart) tabBtnFlowchart.classList.add("active");
-        if (paneFlowchart) paneFlowchart.style.display = "flex";
-      } else if (tab === "bot") {
-        if (tabBtnBot) tabBtnBot.classList.add("active");
-        if (paneBot) paneBot.style.display = "flex";
-        syncBotInputs();
-        syncBotVisualUI();
-      } else if (tab === "code") {
-        if (tabBtnCode) tabBtnCode.classList.add("active");
-        if (paneCode) paneCode.style.display = "flex";
-        generateCode();
+    if (tab === "flowchart") {
+      if (tabBtnFlowchart) tabBtnFlowchart.classList.add("active");
+      if (paneFlowchart) paneFlowchart.style.display = "flex";
+    } else if (tab === "conditions") {
+      if (tabBtnConditions) tabBtnConditions.classList.add("active");
+      if (paneConditions) paneConditions.style.display = "flex";
+      renderConditionManager();
+    } else if (tab === "bot") {
+      if (tabBtnBot) tabBtnBot.classList.add("active");
+      if (paneBot) paneBot.style.display = "flex";
+      syncBotInputs();
+      syncBotVisualUI();
+    } else if (tab === "code") {
+      if (tabBtnCode) tabBtnCode.classList.add("active");
+      if (paneCode) paneCode.style.display = "flex";
+      generateCode();
+    }
+  }
+
+  function toggleConditionVariableValue(id) {
+    const cond = conditions.find((c) => c.id === id);
+    if (!cond) return;
+    cond.value = !cond.value;
+    saveLocal(true);
+    renderConditionManager();
+
+    // Dynamically update If/Else blocks evaluating this condition
+    actions.forEach((a) => {
+      if (a.type === "ifElse") {
+        const condExpr = (a.condition || "").trim();
+        if (condExpr === cond.name || condExpr === `!${cond.name}` || condExpr.includes(cond.name)) {
+          const evalRes = evaluateConditionExpression(a.condition);
+          a.activeSimBranch = evalRes ? "then" : "else";
+        }
+      }
+    });
+
+    renderFlow();
+    draw();
+    updateTimeDisplay();
+    generateCode();
+    showToast(`🔀 '${cond.name}' set to ${cond.value ? 'TRUE' : 'FALSE'}. Path simulation updated.`);
+  }
+
+  function addNewConditionVariable(name, value, description) {
+    const cleanName = sanitizeConditionName(name);
+    if (!cleanName) {
+      alert("Please enter a valid C++ identifier name (e.g., isGoalLoaded).");
+      return;
+    }
+    if (conditions.some((c) => c.name === cleanName)) {
+      alert(`A condition variable named "${cleanName}" already exists.`);
+      return;
+    }
+    const newCond = {
+      id: "cond_" + uid(),
+      name: cleanName,
+      value: !!value,
+      description: (description || "").trim(),
+      type: "boolean",
+    };
+    conditions.push(newCond);
+    saveLocal(true);
+    renderConditionManager();
+    renderFlow();
+    generateCode();
+    showToast(`✓ Added boolean variable '${cleanName}'`);
+  }
+
+  function deleteConditionVariable(id) {
+    const cond = conditions.find((c) => c.id === id);
+    if (!cond) return;
+    if (!confirm(`Delete boolean variable "${cond.name}"?`)) return;
+    const deletedName = cond.name;
+    conditions = conditions.filter((c) => c.id !== id);
+    saveLocal(true);
+    renderConditionManager();
+    renderFlow();
+    generateCode();
+    showToast(`🗑️ Deleted variable '${deletedName}'`);
+  }
+
+  function editConditionVariable(id) {
+    const cond = conditions.find((c) => c.id === id);
+    if (!cond) return;
+    const newName = prompt("Edit variable identifier:", cond.name);
+    if (newName === null) return;
+    const cleanName = sanitizeConditionName(newName);
+    if (!cleanName) {
+      alert("Invalid identifier.");
+      return;
+    }
+    if (cleanName !== cond.name && conditions.some((c) => c.name === cleanName)) {
+      alert(`A variable named "${cleanName}" already exists.`);
+      return;
+    }
+    const oldName = cond.name;
+    const newDesc = prompt("Edit description / sensor note:", cond.description || "");
+    if (newDesc !== null) cond.description = newDesc.trim();
+
+    if (cleanName !== oldName) {
+      actions.forEach((a) => {
+        if (a.type === "ifElse" && a.condition === oldName) {
+          a.condition = cleanName;
+        }
+      });
+      cond.name = cleanName;
+    }
+
+    saveLocal(true);
+    renderConditionManager();
+    renderFlow();
+    generateCode();
+    showToast(`✓ Updated variable '${cond.name}'`);
+  }
+
+  function renderConditionManager() {
+    const listEl = document.getElementById("conditionVarList");
+    const countBadge = document.getElementById("condActiveCountBadge");
+    const tabCountBadge = document.getElementById("tabConditionCount");
+    const cppPreview = document.getElementById("condCppPreview");
+    const usageListEl = document.getElementById("condIfElseUsageList");
+    const usageCountBadge = document.getElementById("condIfElseCountBadge");
+
+    if (tabCountBadge) tabCountBadge.textContent = conditions.length;
+    if (countBadge) countBadge.textContent = `${conditions.length} Variable${conditions.length === 1 ? '' : 's'}`;
+
+    // C++ Declaration Preview
+    if (cppPreview) {
+      if (conditions.length === 0) {
+        cppPreview.textContent = "// No boolean variables defined yet";
+      } else {
+        let cppText = "// Autonomous Condition & Sensor Flags\n";
+        conditions.forEach((c) => {
+          const comment = c.description ? ` // ${c.description}` : "";
+          cppText += `bool ${c.name} = ${c.value ? "true" : "false"};${comment}\n`;
+        });
+        cppPreview.textContent = cppText;
       }
     }
 
-    if (tabBtnFlowchart) tabBtnFlowchart.onclick = () => selectTab("flowchart");
-    if (tabBtnBot) tabBtnBot.onclick = () => selectTab("bot");
-    if (tabBtnCode) tabBtnCode.onclick = () => selectTab("code");
+    // Determine usage in active routine
+    const ifElseBlocks = actions.filter((a) => a.type === "ifElse");
+    if (usageCountBadge) usageCountBadge.textContent = `${ifElseBlocks.length} block${ifElseBlocks.length === 1 ? '' : 's'}`;
+    if (usageListEl) {
+      if (ifElseBlocks.length === 0) {
+        usageListEl.innerHTML = `<span style="color:#64748b;font-style:italic;">No If/Else blocks in active routine. Add one from the Block Palette or click '⚡ Use in If/Else' on any variable below.</span>`;
+      } else {
+        usageListEl.innerHTML = ifElseBlocks.map((a, idx) => {
+          const cond = (a.condition || "true").trim();
+          const evalRes = evaluateConditionExpression(cond);
+          const matched = conditions.some((c) => cond.includes(c.name));
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:rgba(0,0,0,0.35);border-radius:4px;border-left:3px solid ${matched ? '#38bdf8' : '#64748b'};">
+              <span style="font-family:monospace;font-weight:700;color:${matched ? '#38bdf8' : '#e2e8f0'};font-size:0.75rem;">#${idx + 1} if (${escapeHtml(cond)})</span>
+              <span style="font-size:0.68rem;padding:2px 6px;border-radius:4px;background:${evalRes ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'};color:${evalRes ? '#34d399' : '#f87171'};font-weight:700;">
+                Sim: ${evalRes ? 'Then branch' : 'Else branch'}
+              </span>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    if (!listEl) return;
+
+    let filtered = conditions;
+    if (condSearchQuery) {
+      const q = condSearchQuery.toLowerCase();
+      filtered = conditions.filter((c) => c.name.toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q)));
+    }
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = `
+        <div style="text-align:center;padding:18px 8px;background:rgba(15,23,42,0.5);border:1px dashed #334155;border-radius:8px;color:#94a3b8;font-size:0.75rem;">
+          ${condSearchQuery ? 'No matching variables found.' : 'No condition variables defined yet.<br>Use the form above or pick a quick preset to add one!'}
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = filtered.map((c) => {
+      const isUsedInActive = ifElseBlocks.some((a) => (a.condition || "").includes(c.name));
+      return `
+        <div class="cond-item-card ${isUsedInActive ? 'active-in-routine' : ''}" data-id="${c.id}">
+          <div class="cond-item-header">
+            <span class="cond-name-code">
+              <span style="color:#a78bfa;font-size:0.72rem;font-weight:700;">bool</span>
+              <strong>${escapeHtml(c.name)}</strong>
+              ${isUsedInActive ? '<span title="Active in current routine" style="font-size:0.65rem;color:#38bdf8;background:rgba(56,189,248,0.15);padding:1px 5px;border-radius:3px;font-weight:700;">⚡ Active</span>' : ''}
+            </span>
+            <span class="cond-val-badge ${c.value ? 'val-true' : 'val-false'}" data-act="toggle-var-val" data-id="${c.id}" title="Simulated value: ${c.value ? 'true' : 'false'}. Click to toggle truth state.">
+              ${c.value ? '✓ TRUE (1)' : '✕ FALSE (0)'}
+            </span>
+          </div>
+          ${c.description ? `<div class="cond-item-desc">${escapeHtml(c.description)}</div>` : ''}
+          <div class="cond-item-actions">
+            <button type="button" class="btn-cond-action primary" data-act="use-in-ifelse" data-name="${escapeHtml(c.name)}" title="Set or insert an If/Else block using this condition">⚡ Use in If/Else</button>
+            <button type="button" class="btn-cond-action" data-act="copy-cpp-var" data-name="${escapeHtml(c.name)}" data-val="${c.value}" title="Copy C++ code snippet">📋 Copy C++</button>
+            <button type="button" class="btn-cond-action" data-act="edit-var" data-id="${c.id}" title="Edit name &amp; notes">✏️ Edit</button>
+            <button type="button" class="btn-cond-action danger" data-act="delete-var" data-id="${c.id}" title="Delete variable">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function wireConditionManager() {
+    // Initial value selector pills
+    const pillTrue = document.getElementById("pillValTrue");
+    const pillFalse = document.getElementById("pillValFalse");
+
+    if (pillTrue && pillFalse) {
+      pillTrue.onclick = () => {
+        newCondInitialVal = true;
+        pillTrue.classList.add("active");
+        pillFalse.classList.remove("active");
+      };
+      pillFalse.onclick = () => {
+        newCondInitialVal = false;
+        pillFalse.classList.add("active");
+        pillTrue.classList.remove("active");
+      };
+    }
+
+    // Quick preset chips
+    const pane = document.getElementById("paneTabConditions");
+    if (pane) {
+      pane.querySelectorAll(".cond-quick-chip").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          const varName = chip.dataset.var;
+          const varVal = chip.dataset.val === "true";
+          const varDesc = chip.dataset.desc || "";
+          const inputName = document.getElementById("newCondNameInput");
+          const inputDesc = document.getElementById("newCondDescInput");
+          if (inputName) inputName.value = varName;
+          if (inputDesc) inputDesc.value = varDesc;
+          newCondInitialVal = varVal;
+          if (pillTrue && pillFalse) {
+            if (varVal) {
+              pillTrue.classList.add("active");
+              pillFalse.classList.remove("active");
+            } else {
+              pillFalse.classList.add("active");
+              pillTrue.classList.remove("active");
+            }
+          }
+          addNewConditionVariable(varName, varVal, varDesc);
+        });
+      });
+    }
+
+    // Add New Condition Button
+    const btnAdd = document.getElementById("btnAddNewCondition");
+    const inputName = document.getElementById("newCondNameInput");
+    const inputDesc = document.getElementById("newCondDescInput");
+
+    if (btnAdd) {
+      btnAdd.onclick = () => {
+        const name = inputName ? inputName.value : "";
+        const desc = inputDesc ? inputDesc.value : "";
+        if (!name.trim()) {
+          if (inputName) inputName.focus();
+          return;
+        }
+        addNewConditionVariable(name, newCondInitialVal, desc);
+        if (inputName) inputName.value = "";
+        if (inputDesc) inputDesc.value = "";
+      };
+    }
+    if (inputName) {
+      inputName.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (btnAdd) btnAdd.click();
+        }
+      });
+    }
+
+    // Search input
+    const searchInput = document.getElementById("condSearchInput");
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        condSearchQuery = e.target.value.trim();
+        renderConditionManager();
+      });
+    }
+
+    // Preset Pack Add
+    const btnAddPresets = document.getElementById("btnCondAddPresetPack");
+    if (btnAddPresets) {
+      btnAddPresets.onclick = () => {
+        DEFAULT_CONDITIONS.forEach((def) => {
+          if (!conditions.some((c) => c.name === def.name)) {
+            conditions.push({ ...def, id: "cond_" + uid() });
+          }
+        });
+        saveLocal(true);
+        renderConditionManager();
+        renderFlow();
+        generateCode();
+        showToast("✓ Added competition preset condition variables!");
+      };
+    }
+
+    // Reset Defaults
+    const btnResetDefaults = document.getElementById("btnCondResetDefaults");
+    if (btnResetDefaults) {
+      btnResetDefaults.onclick = () => {
+        if (!confirm("Reset all condition variables to factory competition defaults?")) return;
+        conditions = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
+        saveLocal(true);
+        renderConditionManager();
+        renderFlow();
+        generateCode();
+        showToast("✓ Reset condition variables to defaults.");
+      };
+    }
+
+    // Copy C++ Preview
+    const btnCopyCpp = document.getElementById("btnCopyCondCpp");
+    if (btnCopyCpp) {
+      btnCopyCpp.onclick = async () => {
+        const cppPreview = document.getElementById("condCppPreview");
+        if (!cppPreview) return;
+        try {
+          await navigator.clipboard.writeText(cppPreview.textContent);
+        } catch (_) {
+          const ta = document.createElement("textarea");
+          ta.value = cppPreview.textContent;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          ta.remove();
+        }
+        const orig = btnCopyCpp.textContent;
+        btnCopyCpp.textContent = "✓ Copied!";
+        setTimeout(() => { btnCopyCpp.textContent = orig; }, 1800);
+      };
+    }
+
+    // Variable Item List Delegated Actions
+    const varListEl = document.getElementById("conditionVarList");
+    if (varListEl) {
+      varListEl.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-act]");
+        if (!btn) return;
+        const act = btn.dataset.act;
+        const id = btn.dataset.id;
+        const name = btn.dataset.name;
+
+        if (act === "toggle-var-val") {
+          toggleConditionVariableValue(id);
+          return;
+        }
+        if (act === "edit-var") {
+          editConditionVariable(id);
+          return;
+        }
+        if (act === "delete-var") {
+          deleteConditionVariable(id);
+          return;
+        }
+        if (act === "copy-cpp-var") {
+          const val = btn.dataset.val === "true";
+          const snippet = `bool ${name} = ${val ? "true" : "false"};`;
+          try {
+            navigator.clipboard.writeText(snippet);
+          } catch (_) {
+            const ta = document.createElement("textarea");
+            ta.value = snippet;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+          }
+          showToast(`📋 Copied '${snippet}' to clipboard!`);
+          return;
+        }
+        if (act === "use-in-ifelse") {
+          let targetIf = actions.find((a) => a.id === selectedId && a.type === "ifElse");
+          if (!targetIf) {
+            targetIf = actions.find((a) => a.type === "ifElse");
+          }
+
+          if (targetIf) {
+            targetIf.condition = name;
+            const evalRes = evaluateConditionExpression(name);
+            targetIf.activeSimBranch = evalRes ? "then" : "else";
+            selectedId = targetIf.id;
+          } else {
+            const newIf = defaultAction("ifElse");
+            newIf.condition = name;
+            const evalRes = evaluateConditionExpression(name);
+            newIf.activeSimBranch = evalRes ? "then" : "else";
+            actions.push(newIf);
+            selectedId = newIf.id;
+          }
+
+          markDirty();
+          renderFlow();
+          draw();
+          updateTimeDisplay();
+          generateCode();
+          switchPlannerTab("flowchart");
+          showToast(`⚡ Configured If/Else block with condition '${name}'!`);
+          return;
+        }
+      });
+    }
+  }
+
+  function wirePlannerTabsAndModes() {
+    const tabBtnFlowchart = document.getElementById("tabBtnFlowchart");
+    const tabBtnConditions = document.getElementById("tabBtnConditions");
+    const tabBtnBot = document.getElementById("tabBtnBot");
+    const tabBtnCode = document.getElementById("tabBtnCode");
+
+    if (tabBtnFlowchart) tabBtnFlowchart.onclick = () => switchPlannerTab("flowchart");
+    if (tabBtnConditions) tabBtnConditions.onclick = () => switchPlannerTab("conditions");
+    if (tabBtnBot) tabBtnBot.onclick = () => switchPlannerTab("bot");
+    if (tabBtnCode) tabBtnCode.onclick = () => switchPlannerTab("code");
+
+    wireConditionManager();
+    renderConditionManager();
 
     // Header Mode Nav
     const navPlanner = document.getElementById("navModePlanner");

@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260922.k52" />
+  <link rel="stylesheet" href="style.css?v=20260922.k58" />
 </head>
 <body>
   <!-- =================================================================
@@ -334,6 +334,9 @@
           <button type="button" class="planner-tab-btn active" data-tab="flowchart" id="tabBtnFlowchart">
             <span class="tab-icon">🎯</span> Routine (<span id="tabActionCount">0</span>)
           </button>
+          <button type="button" class="planner-tab-btn" data-tab="conditions" id="tabBtnConditions" title="Manage boolean variables and flags for If/Else and Loop blocks">
+            <span class="tab-icon">🔀</span> Conditions (<span id="tabConditionCount">5</span>)
+          </button>
           <button type="button" class="planner-tab-btn" data-tab="bot" id="tabBtnBot">
             <span class="tab-icon">🤖</span> Bot &amp; PID
           </button>
@@ -437,6 +440,94 @@
             </select>
             <button id="btnAddAction" class="primary">+ Add</button>
           </div>
+        </div>
+
+        <!-- TAB PANE: Condition Manager (Boolean Variables & Flags) -->
+        <div class="planner-tab-pane" id="paneTabConditions" style="display:none;">
+          <section class="conditions-section" style="margin-top:4px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:4px;">
+              <h2 style="margin-bottom:0;display:flex;align-items:center;gap:6px;">
+                <span>🔀 Condition Manager</span>
+              </h2>
+              <div style="display:flex;gap:4px;">
+                <button type="button" id="btnCondAddPresetPack" class="btn-xs-clean" title="Load VEX robotics standard condition variables">📦 Presets</button>
+                <button type="button" id="btnCondResetDefaults" class="btn-xs-clean" title="Reset to default condition variables">🔄 Reset</button>
+              </div>
+            </div>
+
+            <p class="hint" style="margin-bottom:8px">Define boolean variables (e.g. <code>isGoalLoaded</code>, <code>ringDetected</code>) to control <strong>If/Else</strong> branching and loop logic across your autonomous routines.</p>
+
+            <!-- Add / Create Variable Card -->
+            <div class="cond-create-card">
+              <div class="cond-create-header">
+                <span style="font-weight:700;font-size:0.78rem;color:#38bdf8;">➕ Define New Variable</span>
+                <span style="font-size:0.68rem;color:#94a3b8;">C++ <code>bool</code> flag</span>
+              </div>
+              <div class="row" style="margin-bottom:6px;">
+                <label style="flex:1.4;">Variable Name
+                  <input type="text" id="newCondName" placeholder="e.g. isGoalLoaded" style="font-family:ui-monospace, monospace;font-weight:700;" />
+                </label>
+                <label style="flex:1;">Initial Sim Value
+                  <div class="cond-val-pill-group" id="newCondValGroup">
+                    <button type="button" class="cond-val-pill active" id="pillValTrue" data-val="true">✓ true</button>
+                    <button type="button" class="cond-val-pill" id="pillValFalse" data-val="false">✕ false</button>
+                  </div>
+                </label>
+              </div>
+              <div class="row" style="margin-bottom:8px;">
+                <label style="flex:1;">Description / Note (optional)
+                  <input type="text" id="newCondDesc" placeholder="e.g. Mobile goal clamp loaded / engaged" />
+                </label>
+              </div>
+              
+              <!-- Quick Preset Chips -->
+              <div class="cond-quick-presets">
+                <span style="font-size:0.68rem;color:#64748b;font-weight:600;">Quick Presets:</span>
+                <button type="button" class="cond-quick-chip" data-name="isGoalLoaded" data-val="true" data-desc="Mobile goal clamp locked">isGoalLoaded</button>
+                <button type="button" class="cond-quick-chip" data-name="ringDetected" data-val="false" data-desc="Optical sensor sees ring">ringDetected</button>
+                <button type="button" class="cond-quick-chip" data-name="isRedAlliance" data-val="true" data-desc="Red alliance match side">isRedAlliance</button>
+                <button type="button" class="cond-quick-chip" data-name="isSkillsRun" data-val="false" data-desc="Autonomous skills challenge">isSkillsRun</button>
+                <button type="button" class="cond-quick-chip" data-name="distanceClear" data-val="true" data-desc="Distance sensor clear">distanceClear</button>
+              </div>
+
+              <div style="margin-top:8px;">
+                <button type="button" id="btnAddNewCondition" class="primary" style="width:100%;padding:6px 12px;font-size:0.8rem;">+ Add Condition Variable</button>
+              </div>
+            </div>
+
+            <!-- Search & Active Count -->
+            <div class="cond-search-bar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;margin-bottom:6px;">
+              <div style="display:flex;align-items:center;gap:6px;flex:1;">
+                <input type="text" id="condSearchInput" placeholder="🔍 Filter variables..." style="font-size:0.75rem;padding:4px 8px;border-radius:6px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;width:100%;" />
+              </div>
+              <span id="condActiveCountBadge" class="badge" style="font-size:0.7rem;background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);white-space:nowrap;">5 Variables</span>
+            </div>
+
+            <!-- Condition Variables List Container -->
+            <div id="conditionVarList" class="condition-var-list">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <!-- Active Routine Usage Summary -->
+            <div class="cond-usage-box" id="condUsageBox" style="margin-top:10px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-size:0.74rem;font-weight:700;color:#fbbf24;">⚡ Condition Usage in Active Routine</span>
+                <span id="condIfElseCountBadge" style="font-size:0.68rem;color:#94a3b8;">0 blocks</span>
+              </div>
+              <div id="condIfElseUsageList" style="font-size:0.72rem;color:#cbd5e1;display:flex;flex-direction:column;gap:4px;">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+
+            <!-- C++ Code Declarations Preview -->
+            <div class="cond-cpp-preview-box" style="margin-top:10px;background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:8px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-size:0.72rem;font-weight:700;color:#94a3b8;">📄 C++ Variable Declarations</span>
+                <button type="button" id="btnCopyCondCpp" class="btn-xs-clean" style="font-size:0.65rem;">📋 Copy C++</button>
+              </div>
+              <pre id="condCppPreview" style="margin:0;padding:6px;background:#030712;border-radius:4px;font-family:ui-monospace, monospace;font-size:0.7rem;color:#38bdf8;overflow-x:auto;max-height:100px;"></pre>
+            </div>
+          </section>
         </div>
 
         <!-- TAB PANE 2: Bot & LemLib PID Hardware Setup -->
@@ -2065,19 +2156,19 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260922.k52"></script>
+  <script src="version.js?v=20260922.k58"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260922.k52"></script>
-  <script src="google-drive-sync.js?v=20260922.k52"></script>
-  <script src="session-guard.js?v=20260922.k52"></script>
-  <script src="v5-brain-serial.js?v=20260922.k52"></script>
-  <script src="project-manager.js?v=20260922.k52"></script>
-  <script src="cpp-parser.js?v=20260922.k52"></script>
-  <script src="app.js?v=20260922.k52"></script>
-  <script src="tutorial.js?v=20260922.k52"></script>
+  <script src="firebase-config.js?v=20260922.k58"></script>
+  <script src="google-drive-sync.js?v=20260922.k58"></script>
+  <script src="session-guard.js?v=20260922.k58"></script>
+  <script src="v5-brain-serial.js?v=20260922.k58"></script>
+  <script src="project-manager.js?v=20260922.k58"></script>
+  <script src="cpp-parser.js?v=20260922.k58"></script>
+  <script src="app.js?v=20260922.k58"></script>
+  <script src="tutorial.js?v=20260922.k58"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
