@@ -9425,6 +9425,227 @@ kbd {
   border-radius: 3px;
 }
 
+/* ==========================================================================
+   QoL Onboarding Tour, Tooltips, Validation and Upload & Run Button Styles
+   ========================================================================== */
+
+/* 1. Quick Tour Button */
+.btn-quick-tour {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-quick-tour:hover {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: #10b981;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+/* 2. Onboarding Tour Overlay & Dialog */
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.25s ease;
+}
+.tour-card {
+  background: #0f172a;
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  width: min(400px, 94vw);
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(59, 130, 246, 0.15);
+  position: absolute;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #f1f5f9;
+}
+.tour-step-badge {
+  display: inline-block;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  margin-bottom: 8px;
+}
+.tour-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: #fff;
+}
+.tour-desc {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #94a3b8;
+  margin: 0 0 16px 0;
+}
+.tour-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.tour-btn-skip {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+.tour-btn-skip:hover {
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+}
+.tour-btn-next {
+  background: #2563eb;
+  border: none;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tour-btn-next:hover {
+  background: #3b82f6;
+}
+
+/* Highlighted elements during tour */
+.tour-highlight {
+  position: relative;
+  z-index: 10001 !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.8), 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+  background-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+/* 3. Sleek CSS Context-Sensitive Tooltips */
+.qol-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 5px;
+  cursor: help;
+  position: relative;
+  user-select: none;
+  vertical-align: middle;
+}
+.qol-info-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 135%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  color: #f1f5f9;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  width: 220px;
+  white-space: normal;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 999999;
+  text-align: left;
+  line-height: 1.35;
+  font-weight: 500;
+}
+.qol-info-icon:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+/* 4. Range Input Validation & Alerts */
+.input-invalid {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
+}
+.validation-error-msg {
+  display: block;
+  color: #f87171;
+  font-size: 0.68rem;
+  margin-top: 2px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* 5. Quick Upload & Run Button */
+.btn-xs-upload-run {
+  background: #10b981;
+  border: none;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: all 0.15s ease;
+}
+.btn-xs-upload-run:hover {
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+/* 6. Real-Time C++ Linter Warnings box */
+.cpp-linter-warnings {
+  margin-top: 6px;
+  background: rgba(239, 68, 68, 0.07);
+  border: 1px dashed rgba(239, 68, 68, 0.4);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.cpp-linter-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #f87171;
+  margin-bottom: 2px;
+}
+.cpp-linter-msg {
+  font-size: 0.68rem;
+  color: #cbd5e1;
+  margin: 2px 0;
+}
+
+
 
 
 

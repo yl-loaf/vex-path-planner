@@ -258,6 +258,9 @@
 
       <!-- Right: Actions & Tools -->
       <div class="header-actions">
+        <!-- Quick Start Onboarding Tour for Beginners -->
+        <button id="btnStartQuickTour" type="button" class="btn-quick-tour" title="Interactive Step-by-Step Guided Tour for Beginners">🎓 Quick Tour</button>
+        
         <!-- Project Workspace Menu -->
         <button id="btnLoadProject" type="button" class="btn-nav-compact" title="Open Project Workspace Manager">📁 Project</button>
         <button id="btnOpenCommandPalette" type="button" class="btn-cmd-palette" title="Open Command Palette (Ctrl+K)">🔍 <span class="cmd-kbd">Ctrl+K</span></button>
@@ -268,6 +271,7 @@
           <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
           <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
           <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">🔌 Connect</button>
+          <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;">🚀 Upload & Run</button>
         </div>
 
         <!-- Tools Dropdown Menu -->
@@ -1354,7 +1358,7 @@ void autonomous() {
               <!-- kP Gain -->
               <div class="pid-slider-group">
                 <div class="pid-slider-header">
-                  <label for="pidKpInput"><strong>kP (Proportional Gain):</strong></label>
+                  <label for="pidKpInput"><strong>kP (Proportional Gain):</strong><span class="qol-info-icon" data-tooltip="Primary drive power. Higher value = faster acceleration but more overshoot. Recommended: 8.0 - 15.0">?</span></label>
                   <input type="number" id="pidKpInput" step="0.1" min="0" max="100" value="8.0" class="pid-num-input" />
                 </div>
                 <input type="range" id="pidKpSlider" min="0" max="40" step="0.1" value="8.0" class="pid-slider" />
@@ -1364,7 +1368,7 @@ void autonomous() {
               <!-- kI Gain -->
               <div class="pid-slider-group">
                 <div class="pid-slider-header">
-                  <label for="pidKiInput"><strong>kI (Integral Gain):</strong></label>
+                  <label for="pidKiInput"><strong>kI (Integral Gain):</strong><span class="qol-info-icon" data-tooltip="Corrects steady-state error. Used if the robot stops short of the target due to friction. Recommended: 0.0 - 0.05">?</span></label>
                   <input type="number" id="pidKiInput" step="0.01" min="0" max="10" value="0.0" class="pid-num-input" />
                 </div>
                 <input type="range" id="pidKiSlider" min="0" max="2" step="0.01" value="0.0" class="pid-slider" />
@@ -1374,7 +1378,7 @@ void autonomous() {
               <!-- kD Gain -->
               <div class="pid-slider-group">
                 <div class="pid-slider-header">
-                  <label for="pidKdInput"><strong>kD (Derivative Gain):</strong></label>
+                  <label for="pidKdInput"><strong>kD (Derivative Gain):</strong><span class="qol-info-icon" data-tooltip="Dampening power. Higher value reduces overshoot & oscillation but slows down settle time. Recommended: 30.0 - 50.0">?</span></label>
                   <input type="number" id="pidKdInput" step="0.5" min="0" max="200" value="30.0" class="pid-num-input" />
                 </div>
                 <input type="range" id="pidKdSlider" min="0" max="100" step="0.5" value="30.0" class="pid-slider" />
@@ -2631,5 +2635,18 @@ void autonomous() {
       setInterval(updateGlobalVisitorBadge, 15000);
     })();
   </script>
+
+  <!-- Guided Walkthrough Tour Overlay -->
+  <div id="tourOverlay" class="tour-overlay" style="display:none;">
+    <div class="tour-card" id="tourCard">
+      <div class="tour-step-badge" id="tourStepBadge">Step 1 of 4</div>
+      <h3 class="tour-title" id="tourTitle">Welcome to LemLib Planner!</h3>
+      <p class="tour-desc" id="tourDesc">This guided tour will show you how to design, simulate, and download your robot's autonomous routines.</p>
+      <div class="tour-footer">
+        <button type="button" class="tour-btn-skip" id="tourSkipBtn">Skip Tour</button>
+        <button type="button" class="tour-btn-next primary" id="tourNextBtn">Next →</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

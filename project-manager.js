@@ -951,6 +951,15 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         const stored = await idbGet("file_versions_history");
         if (stored && typeof stored === "object") {
           this.versions = stored;
+          // Enforce 50-version limit to prevent massive files in Google Drive
+          for (const key in this.versions) {
+            if (Array.isArray(this.versions[key])) {
+              if (this.versions[key].length > 50) {
+                this.versions[key].length = 50;
+              }
+            }
+          }
+          await idbPut("file_versions_history", this.versions).catch(() => {});
         } else {
           this.versions = {};
         }
@@ -1007,7 +1016,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       };
 
       list.unshift(snapshot);
-      if (list.length > 60) list.length = 60;
+      if (list.length > 50) list.length = 50;
 
       // Persist to IndexedDB asynchronously
       idbPut("file_versions_history", this.versions).catch(() => {});
@@ -2753,6 +2762,14 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       if (candidateData.versions && typeof candidateData.versions === "object") {
         this.versions = candidateData.versions;
+        // Enforce 50-version limit to prevent massive files in Google Drive
+        for (const key in this.versions) {
+          if (Array.isArray(this.versions[key])) {
+            if (this.versions[key].length > 50) {
+              this.versions[key].length = 50;
+            }
+          }
+        }
         await idbPut("file_versions_history", this.versions).catch(() => {});
         this.updateVersionCountBadges();
       }

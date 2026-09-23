@@ -17,6 +17,17 @@
     };
   }
 
+  // Universal helper to open modals by ID safely
+  window.openModalById = function(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+      modal.hidden = false;
+      modal.classList.add("open");
+    } else {
+      console.warn("⚠️ Modal with ID not found:", id);
+    }
+  };
+
   // -- Constants ----------------------------------------------------
   const FIELD_IN = 144;
   const HALF = 70.5;
@@ -8040,6 +8051,57 @@ lemlib::ControllerSettings ${currentMode}_controller(
         ctx.closePath();
         ctx.fill();
       }
+
+      // Render Interactive Draggable Handles on the Step Response curve
+      let kpPoint = null;
+      let kdPoint = null;
+      if (sim.points && sim.points.length > 0) {
+        // Find points closest to t = 0.4s and t = 1.1s
+        kpPoint = sim.points.reduce((prev, curr) => Math.abs(curr.t - 0.4) < Math.abs(prev.t - 0.4) ? curr : prev);
+        kdPoint = sim.points.reduce((prev, curr) => Math.abs(curr.t - 1.1) < Math.abs(prev.t - 1.1) ? curr : prev);
+      }
+
+      if (kpPoint && kdPoint) {
+        window.pidKpHandleX = toX(kpPoint.t);
+        window.pidKpHandleY = toY(kpPoint.y);
+        window.pidKdHandleX = toX(kdPoint.t);
+        window.pidKdHandleY = toY(kdPoint.y);
+
+        // Draw Amber kP Proportional Handle (Power/Rise)
+        ctx.save();
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "#f59e0b";
+        ctx.fillStyle = "#f59e0b";
+        ctx.beginPath();
+        ctx.arc(window.pidKpHandleX, window.pidKpHandleY, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        // Draw Cobalt kD Derivative Handle (Damping)
+        ctx.save();
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "#3b82f6";
+        ctx.fillStyle = "#3b82f6";
+        ctx.beginPath();
+        ctx.arc(window.pidKdHandleX, window.pidKdHandleY, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        // Overlay text instructions/labels near handles
+        ctx.fillStyle = "#fde68a";
+        ctx.font = "bold 9px Inter, system-ui, sans-serif";
+        ctx.fillText("↕ kP Power", window.pidKpHandleX + 10, window.pidKpHandleY - 2);
+
+        ctx.fillStyle = "#93c5fd";
+        ctx.font = "bold 9px Inter, system-ui, sans-serif";
+        ctx.fillText("↔ kD Damping", window.pidKdHandleX + 10, window.pidKdHandleY + 12);
+      }
     }
 
     // Tab Switching
@@ -8171,6 +8233,98 @@ lemlib::ControllerSettings ${currentMode}_controller(
         showToast(`🚀 Applied ${currentMode} PID gains to bot & updated src/robot-config.cpp!`);
       });
     }
+
+    // Visual PID Tuning Draggable Canvas Interaction
+    let isDraggingKp = false;
+    let isDraggingKd = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.style.cursor = "pointer";
+
+    function getMouseCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    function handleStart(e) {
+      const coords = getMouseCoords(e);
+      if (window.pidKpHandleX != null && window.pidKpHandleY != null) {
+        const dKp = Math.hypot(coords.x - window.pidKpHandleX, coords.y - window.pidKpHandleY);
+        if (dKp < 16) {
+          isDraggingKp = true;
+          lastX = coords.x;
+          lastY = coords.y;
+          canvas.style.cursor = "grabbing";
+          e.preventDefault();
+          return;
+        }
+      }
+      if (window.pidKdHandleX != null && window.pidKdHandleY != null) {
+        const dKd = Math.hypot(coords.x - window.pidKdHandleX, coords.y - window.pidKdHandleY);
+        if (dKd < 16) {
+          isDraggingKd = true;
+          lastX = coords.x;
+          lastY = coords.y;
+          canvas.style.cursor = "grabbing";
+          e.preventDefault();
+          return;
+        }
+      }
+    }
+
+    function handleMove(e) {
+      const coords = getMouseCoords(e);
+      
+      // Update cursor on hover
+      if (!isDraggingKp && !isDraggingKd) {
+        let hover = false;
+        if (window.pidKpHandleX != null && window.pidKpHandleY != null) {
+          if (Math.hypot(coords.x - window.pidKpHandleX, coords.y - window.pidKpHandleY) < 16) hover = true;
+        }
+        if (window.pidKdHandleX != null && window.pidKdHandleY != null) {
+          if (Math.hypot(coords.x - window.pidKdHandleX, coords.y - window.pidKdHandleY) < 16) hover = true;
+        }
+        canvas.style.cursor = hover ? "grab" : "default";
+        return;
+      }
+
+      const cur = state[currentMode];
+      if (isDraggingKp) {
+        const deltaY = lastY - coords.y;
+        cur.kp = Math.max(0, Math.min(40, Number((cur.kp + deltaY * 0.15).toFixed(2))));
+        syncInputsFromState();
+        updateGraphAndDiagnosis();
+      } else if (isDraggingKd) {
+        const deltaX = coords.x - lastX;
+        cur.kd = Math.max(0, Math.min(100, Number((cur.kd + deltaX * 0.4).toFixed(1))));
+        syncInputsFromState();
+        updateGraphAndDiagnosis();
+      }
+
+      lastX = coords.x;
+      lastY = coords.y;
+      e.preventDefault();
+    }
+
+    function handleEnd() {
+      isDraggingKp = false;
+      isDraggingKd = false;
+      canvas.style.cursor = "default";
+    }
+
+    canvas.addEventListener("mousedown", handleStart);
+    canvas.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleEnd);
+
+    canvas.addEventListener("touchstart", handleStart, { passive: false });
+    canvas.addEventListener("touchmove", handleMove, { passive: false });
+    window.addEventListener("touchend", handleEnd);
 
     if (btnOpenHead) btnOpenHead.onclick = openModal;
     if (btnOpenBot) btnOpenBot.onclick = openModal;
@@ -11543,6 +11697,41 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (btnModalUpload) btnModalUpload.onclick = () => handleUploadToBrain(modalSlotSelect);
     if (btnDebugUpload) btnDebugUpload.onclick = () => handleUploadToBrain(debugSlotSelect);
 
+    const btnUploadAndRun = document.getElementById("btnUploadAndRun");
+    if (btnUploadAndRun) {
+      btnUploadAndRun.onclick = async () => {
+        if (!window.V5BrainSerial.isConnected) {
+          showToast("⚠️ VEX V5 Brain is not connected via USB!");
+          openBrainModal();
+          return;
+        }
+        
+        btnUploadAndRun.disabled = true;
+        const oldHtml = btnUploadAndRun.innerHTML;
+        btnUploadAndRun.innerHTML = "⏳ Uploading...";
+        btnUploadAndRun.style.background = "#f59e0b";
+        showToast("⚡ Starting Unified 1-Click Upload & Run...");
+
+        const slot = parseInt(debugSlotSelect?.value || "1", 10);
+        
+        try {
+          // Upload to slot
+          await handleUploadToBrain(debugSlotSelect);
+          // Wait 350ms, then trigger execution
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          showToast(`🚀 Program updated! Starting routine in Slot ${slot}...`);
+          await window.V5BrainSerial.startProgram(slot);
+          showToast("🟢 Robot running autonomously!");
+        } catch (err) {
+          showToast(`❌ 1-Click failed: ${err.message}`);
+        } finally {
+          btnUploadAndRun.disabled = false;
+          btnUploadAndRun.innerHTML = oldHtml;
+          btnUploadAndRun.style.background = "";
+        }
+      };
+    }
+
     if (btnModalRun) btnModalRun.onclick = () => window.V5BrainSerial.startProgram(parseInt(modalSlotSelect?.value || "1", 10));
     if (btnDebugRun) btnDebugRun.onclick = () => window.V5BrainSerial.startProgram(parseInt(debugSlotSelect?.value || "1", 10));
     if (btnModalStop) btnModalStop.onclick = () => window.V5BrainSerial.stopProgram();
@@ -11846,6 +12035,253 @@ lemlib::ControllerSettings ${currentMode}_controller(
   initMainSplitter();
   showPlannerView();
   updateTimeDisplay();
+
+  // ==========================================================================
+  // BEGINNER QOL & ONBOARDING SYSTEM: VALIDATION, LINTER & INTERACTIVE TOUR
+  // ==========================================================================
+
+  // 1. INPUT RANGE VALIDATION & ERROR BUBBLES
+  function validateInput(inputEl) {
+    const valStr = inputEl.value;
+    const val = Number(valStr);
+    const id = inputEl.id || "";
+    const name = inputEl.name || "";
+    const field = inputEl.dataset.f || inputEl.dataset.childF || "";
+
+    let isInvalid = false;
+    let errMsg = "";
+
+    // Parse bounds depending on type
+    if (id.toLowerCase().includes("startx") || id.toLowerCase().includes("starty") || field === "x" || field === "y") {
+      if (Math.abs(val) > 72) {
+        isInvalid = true;
+        errMsg = "Off Field: Limits are [-72, 72] inches";
+      }
+    } else if (field === "maxSpeed" || field === "speed" || id.toLowerCase().includes("speed")) {
+      if (valStr.trim() !== "" && (val < 0 || val > 127)) {
+        isInvalid = true;
+        errMsg = "V5 Motor Limit: Must be 0 to 127";
+      }
+    } else if (field === "timeout" || id.toLowerCase().includes("timeout")) {
+      if (val < 0) {
+        isInvalid = true;
+        errMsg = "Timeout cannot be negative";
+      } else if (val > 15000) {
+        isInvalid = true;
+        errMsg = "Warning: Long timeout (>15s)";
+      }
+    }
+
+    // Toggle validation markup cleanly on parentNode
+    let parent = inputEl.parentNode;
+    if (parent) {
+      let errSpan = parent.querySelector(".validation-error-msg");
+      if (isInvalid) {
+        inputEl.classList.add("input-invalid");
+        if (!errSpan) {
+          errSpan = document.createElement("span");
+          errSpan.className = "validation-error-msg";
+          parent.appendChild(errSpan);
+        }
+        errSpan.textContent = errMsg;
+      } else {
+        inputEl.classList.remove("input-invalid");
+        if (errSpan) {
+          errSpan.remove();
+        }
+      }
+    }
+  }
+
+  // 2. C++ SAFE MODE REAL-TIME LINTER
+  function lintTextarea(textareaEl) {
+    const code = textareaEl.value;
+    const warnings = [];
+
+    // Bracket/paren matching
+    const counts = { '(': 0, ')': 0, '{': 0, '}': 0, '[': 0, ']': 0 };
+    for (const char of code) {
+      if (counts[char] !== undefined) counts[char]++;
+    }
+    if (counts['('] !== counts[')']) warnings.push("Unbalanced parenthesis ( and )");
+    if (counts['{'] !== counts['}']) warnings.push("Unbalanced curly braces { and }");
+    if (counts['['] !== counts[']']) warnings.push("Unbalanced square brackets [ and ]");
+
+    // Case typos in standard LemLib functions
+    if (/chassis\.moveto/i.test(code) && !/chassis\.moveTo/i.test(code) && /chassis\./i.test(code)) {
+      warnings.push("Typo: LemLib uses camelCase. Use 'chassis.moveToPoint' or 'chassis.moveToPose'.");
+    }
+    if (/chassis\.turnto/i.test(code) && !/chassis\.turnTo/i.test(code) && /chassis\./i.test(code)) {
+      warnings.push("Typo: LemLib uses camelCase. Use 'chassis.turnToHeading'.");
+    }
+
+    // Missing semicolon checker
+    const lines = code.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    let missingSemicolon = false;
+    for (const line of lines) {
+      if (line.endsWith("{") || line.endsWith("}") || line.endsWith(";") || line.startsWith("//") || line.startsWith("/*")) {
+        continue;
+      }
+      if (/^(if|for|while|else)\b/.test(line)) {
+        continue;
+      }
+      missingSemicolon = true;
+    }
+    if (missingSemicolon) {
+      warnings.push("Missing semicolon ';' at the end of statement");
+    }
+
+    // Assignment inside conditional block
+    if (/if\s*\([^=]*=[^=]*\)/.test(code)) {
+      warnings.push("Assignment '=' found inside 'if' statement condition. Did you mean '=='?");
+    }
+
+    // Render alerts
+    let warningsBox = textareaEl.parentNode.querySelector(".cpp-linter-warnings");
+    if (warnings.length > 0) {
+      if (!warningsBox) {
+        warningsBox = document.createElement("div");
+        warningsBox.className = "cpp-linter-warnings";
+        textareaEl.parentNode.appendChild(warningsBox);
+      }
+      warningsBox.innerHTML = `
+        <div class="cpp-linter-title">⚠️ C++ Safe Mode Alerts:</div>
+        ${warnings.map(w => `<div class="cpp-linter-msg">• ${w}</div>`).join("")}
+      `;
+    } else {
+      if (warningsBox) {
+        warningsBox.remove();
+      }
+    }
+  }
+
+  // Bind dynamic listeners via event delegation across flowchart and start cards
+  const flowchartContainer = document.getElementById("actionFlow");
+  const startCardEl = document.getElementById("startCard");
+
+  if (flowchartContainer) {
+    flowchartContainer.addEventListener("input", (e) => {
+      if (e.target.tagName === "INPUT") validateInput(e.target);
+      if (e.target.tagName === "TEXTAREA") lintTextarea(e.target);
+    });
+  }
+  if (startCardEl) {
+    startCardEl.addEventListener("input", (e) => {
+      if (e.target.tagName === "INPUT") validateInput(e.target);
+    });
+  }
+
+  // 3. INTERACTIVE "GETTING STARTED" WALKTHROUGH
+  function setupGuidedTour() {
+    const tourOverlay = document.getElementById("tourOverlay");
+    const btnStart = document.getElementById("btnStartQuickTour");
+    const btnSkip = document.getElementById("tourSkipBtn");
+    const btnNext = document.getElementById("tourNextBtn");
+    const badge = document.getElementById("tourStepBadge");
+    const title = document.getElementById("tourTitle");
+    const desc = document.getElementById("tourDesc");
+    const card = document.getElementById("tourCard");
+
+    if (!tourOverlay || !btnStart) return;
+
+    const steps = [
+      {
+        title: "🗺️ 2D Robot Field Simulator",
+        desc: "Interactive canvas displaying your robot's live kinematics. Double-click anywhere to add target points, or click-and-drag the robot to reposition its starting pose.",
+        targetId: "fieldCanvasCanvas", // standard canvas inside the simulator wrapper
+        fallbackId: "fieldCanvas",
+        pos: "right"
+      },
+      {
+        title: "🧩 Autonomous Block Palette",
+        desc: "Choose and click block actions like moveToPoint, moveToPose, turns, wait, loop, or custom C++ code to build your autonomous routine visually.",
+        targetId: "plannerTabBar",
+        pos: "bottom"
+      },
+      {
+        title: "🎯 Sequenced Auton Flowchart",
+        desc: "Your block actions chain together sequentially here. Adjust speed ranges, timeouts, coordinates, and precision parameters on-the-fly with real-time range validation.",
+        targetId: "actionFlow",
+        pos: "bottom"
+      },
+      {
+        title: "⚡ Unified 1-Click Upload & Run",
+        desc: "Plug in your robot's V5 Brain via USB Web Serial. 1-click on this button compiles, uploads to the active slot, and runs it on the robot instantly!",
+        targetId: "bannerBrainStatus",
+        pos: "bottom"
+      }
+    ];
+
+    let currentStep = 0;
+
+    function showStep(idx) {
+      if (idx < 0 || idx >= steps.length) {
+        endTour();
+        return;
+      }
+      currentStep = idx;
+      const s = steps[idx];
+
+      badge.textContent = `Step ${idx + 1} of ${steps.length}`;
+      title.textContent = s.title;
+      desc.textContent = s.desc;
+      btnNext.textContent = (idx === steps.length - 1) ? "Finish" : "Next →";
+
+      // Position card beside the target element
+      let target = document.getElementById(s.targetId) || document.getElementById(s.fallbackId);
+      
+      // Temporarily clear old highlights
+      document.querySelectorAll(".tour-highlight").forEach(el => el.classList.remove("tour-highlight"));
+
+      if (target) {
+        target.classList.add("tour-highlight");
+        const r = target.getBoundingClientRect();
+        const pad = 16;
+
+        if (s.pos === "right") {
+          card.style.left = `${r.right + pad}px`;
+          card.style.top = `${r.top + (r.height / 2) - 100}px`;
+          card.style.transform = "none";
+        } else if (s.pos === "bottom") {
+          card.style.left = `${r.left + (r.width / 2) - 200}px`;
+          card.style.top = `${r.bottom + pad}px`;
+          card.style.transform = "none";
+        } else {
+          card.style.top = "50%";
+          card.style.left = "50%";
+          card.style.transform = "translate(-50%, -50%)";
+        }
+      } else {
+        // Fallback center of the screen
+        card.style.top = "50%";
+        card.style.left = "50%";
+        card.style.transform = "translate(-50%, -50%)";
+      }
+
+      // Constrain within visible viewport bounds
+      const cardRect = card.getBoundingClientRect();
+      if (cardRect.left < 10) card.style.left = "10px";
+      if (cardRect.right > window.innerWidth - 10) card.style.left = `${window.innerWidth - cardRect.width - 10}px`;
+      if (cardRect.top < 10) card.style.top = "10px";
+      if (cardRect.bottom > window.innerHeight - 10) card.style.top = `${window.innerHeight - cardRect.height - 10}px`;
+    }
+
+    function startTour() {
+      tourOverlay.style.display = "flex";
+      showStep(0);
+    }
+
+    function endTour() {
+      tourOverlay.style.display = "none";
+      document.querySelectorAll(".tour-highlight").forEach(el => el.classList.remove("tour-highlight"));
+    }
+
+    btnStart.onclick = () => startTour();
+    btnSkip.onclick = () => endTour();
+    btnNext.onclick = () => showStep(currentStep + 1);
+  }
+
+  setupGuidedTour();
 
   window.PlannerApp = {
     emitRoutineBody,
