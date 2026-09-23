@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260922.k58" />
+  <link rel="stylesheet" href="style.css?v=20260923.k3" />
 </head>
 <body>
   <!-- =================================================================
@@ -260,6 +260,7 @@
       <div class="header-actions">
         <!-- Project Workspace Menu -->
         <button id="btnLoadProject" type="button" class="btn-nav-compact" title="Open Project Workspace Manager">📁 Project</button>
+        <button id="btnOpenCommandPalette" type="button" class="btn-cmd-palette" title="Open Command Palette (Ctrl+K)">🔍 <span class="cmd-kbd">Ctrl+K</span></button>
         
         <!-- Hardware Brain Link & Quick Connect -->
         <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB">
@@ -279,6 +280,8 @@
             <button type="button" id="btnOpenTutorial" class="tools-menu-item">🎓 Interactive LemLib Tutorial</button>
             <div class="tools-menu-divider"></div>
             <a href="translator.html" class="tools-menu-item">📥 C++ Code Translator</a>
+            <button type="button" id="btnToolsAllianceMirror" class="tools-menu-item">🪞 Alliance Routine Mirror</button>
+            <button type="button" id="btnToolsDrivePhysics" class="tools-menu-item">⚡ Real-Time Drive Physics</button>
             <button type="button" id="btnPidTuner" class="tools-menu-item">🎛️ PID Gain Tuner</button>
             <button type="button" id="btnExportVideo" class="tools-menu-item">🎥 Export .mp4 Video</button>
             <a href="stats.html" class="tools-menu-item">📊 Site &amp; User Stats</a>
@@ -361,11 +364,13 @@
             </label>
             <div class="path-btn-group">
               <button type="button" id="btnPathAdd" class="btn-routine-primary" title="Create new autonomous routine">+ New</button>
+              <button type="button" id="btnOpenAllianceMirror" class="btn-routine-mirror" title="Mirror or Invert Routine (Red/Blue Alliance symmetry or field rotation)">🪞 Mirror</button>
               <div class="compact-dropdown-wrap">
-                <button type="button" id="btnRoutineMenuDropdown" class="btn-routine-more" title="More routine actions (Rename, Duplicate, Delete)">⋯</button>
+                <button type="button" id="btnRoutineMenuDropdown" class="btn-routine-more" title="More routine actions (Rename, Duplicate, Mirror, Delete)">⋯</button>
                 <div class="compact-dropdown-menu" id="routineActionsMenu" hidden>
                   <button type="button" id="btnPathRename">✏️ Rename Routine</button>
                   <button type="button" id="btnPathDup">📋 Duplicate Routine</button>
+                  <button type="button" id="btnPathMirror">🪞 Alliance Mirroring...</button>
                   <div class="compact-dropdown-divider"></div>
                   <button type="button" id="btnPathDel" class="danger-item">🗑️ Delete Routine</button>
                 </div>
@@ -400,6 +405,11 @@
               <button type="button" class="palette-block-btn btn-subsystem" data-snip-add="intake.move(127);">🟢 intake on</button>
               <button type="button" class="palette-block-btn btn-custom" data-act-type="custom">🔴 custom C++</button>
             </div>
+          </div>
+
+          <!-- Flowchart Breadcrumb Navigation Bar -->
+          <div class="flow-breadcrumb-bar" id="flowBreadcrumbs">
+            <!-- Dynamically populated breadcrumb trail -->
           </div>
 
           <div class="start-card" id="startCard">
@@ -595,6 +605,42 @@
               <label>Default min speed
                 <input type="number" id="defaultMinSpeed" min="0" max="127" step="1" value="0"/>
               </label>
+            </div>
+
+            <!-- Real-Time Drive Physics & Dyno Configuration -->
+            <div class="bot-physics-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;">⚡ Real-Time Drive Physics &amp; Dyno</span>
+                <button type="button" id="btnOpenPhysicsFromBot" class="btn-xs-clean" style="color:#fbbf24;border-color:rgba(245,158,11,0.4);" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Dyno &amp; 15s Clock</button>
+              </div>
+              <div class="row" style="margin-bottom:4px;">
+                <label title="Number of drivetrain drive motors">Motors
+                  <select id="botMotorCount" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;">
+                    <option value="6" selected>6-Motor (3L/3R)</option>
+                    <option value="4">4-Motor (2L/2R)</option>
+                    <option value="8">8-Motor (4L/4R)</option>
+                  </select>
+                </label>
+                <label title="Total robot weight including battery and mechanisms">Weight (lbs)
+                  <input type="number" id="botRobotWeight" step="0.5" value="15" min="8" max="30"/>
+                </label>
+              </div>
+              <div class="row">
+                <label title="Friction coefficient between drive wheels and foam field tiles">Traction (µ)
+                  <select id="botWheelTraction" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;">
+                    <option value="0.85" selected>0.85 µ (Omni on Foam)</option>
+                    <option value="1.10">1.10 µ (Traction Wheels)</option>
+                    <option value="0.65">0.65 µ (Worn Rollers)</option>
+                  </select>
+                </label>
+                <label title="Battery state of charge / initial voltage">Battery (V)
+                  <select id="botBatteryVolts" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;">
+                    <option value="12.8" selected>12.8V (100% Fresh)</option>
+                    <option value="12.2">12.2V (60% Typical)</option>
+                    <option value="11.5">11.5V (Low Sag)</option>
+                  </select>
+                </label>
+              </div>
             </div>
 
             <!-- LemLib PID Controllers Configuration (Direct in UI) -->
@@ -859,11 +905,23 @@
           <div class="sim-hud-handle-bar">
             <div style="display:flex;align-items:center;gap:8px;">
               <span class="hud-drag-handle" id="hudDragHandle" title="Drag to reposition simulation controls">⋮⋮</span>
-              <span class="hud-title-tag">SIMULATION</span>
+              <span class="hud-title-tag">SIMULATION &amp; DRIVE DYNAMICS</span>
             </div>
             <div class="hud-action-btns">
+              <button type="button" id="btnHudPhysicsModal" class="hud-tool-btn" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Physics</button>
               <button type="button" id="btnHudDock" class="hud-tool-btn" title="Dock controls above field canvas so field image is 100% visible">📌 Dock Above</button>
               <button type="button" id="btnHudMinimize" class="hud-tool-btn" title="Minimize or expand controls">―</button>
+            </div>
+          </div>
+          <!-- 15-Second Competition Auton Clock Progress Bar -->
+          <div class="sim-auton-clock-wrap" id="simAutonClockWrap">
+            <div class="sim-auton-clock-header">
+              <span class="clock-label" id="simClockLabel">⏱️ 15.0s Match Auton Clock</span>
+              <span class="clock-status legal" id="simClockStatus">🟢 Legal (0.00s / 15.0s)</span>
+            </div>
+            <div class="sim-auton-progress-track">
+              <div class="sim-auton-progress-bar" id="simAutonProgressBar" style="width: 0%;"></div>
+              <div class="sim-auton-marker-15s" id="simAutonMarker" title="15.00s Match Limit">15.0s</div>
             </div>
           </div>
           <div class="sim-hud-content" id="simHudContent">
@@ -886,6 +944,15 @@
               </div>
               <div class="sim-hud-chip chip-speed" id="simHudSpeed" title="Simulated Linear & Angular Velocity">
                 🏎️ 0.0 in/s
+              </div>
+              <div class="sim-hud-chip chip-accel" id="simHudAccel" title="Linear Acceleration & Lateral G-Force">
+                🚀 0.00g (0 in/s²)
+              </div>
+              <div class="sim-hud-chip chip-power" id="simHudPower" title="Drivetrain Power & Battery Voltage Sag">
+                ⚡ 12.8V · 0W
+              </div>
+              <div class="sim-hud-chip chip-traction" id="simHudTraction" title="Wheel Traction Status on Foam Field Tiles">
+                🛞 Grip 100%
               </div>
               <div class="sim-hud-chip chip-coords" id="simHudCoords" title="Realtime Field Coordinates (X, Y, θ)">
                 📍 (-60.0", -60.0") θ=0°
@@ -1443,6 +1510,302 @@ void autonomous() {
       <div class="video-modal-footer">
         <button type="button" id="videoModalCancelBtn">Cancel</button>
         <button type="button" id="btnStartVideoExport" class="primary">🎬 Record &amp; Download .mp4 Video</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alliance Mirroring & Inversion Modal -->
+  <div id="allianceMirrorModal" class="modal alliance-mirror-modal" hidden>
+    <div class="modal-card alliance-mirror-card">
+      <div class="alliance-modal-header">
+        <div class="alliance-title-wrap">
+          <span class="alliance-badge">COMPETITION SYMMETRY</span>
+          <h2>🪞 Alliance Mirroring &amp; Routine Inversion</h2>
+        </div>
+        <button type="button" id="allianceMirrorClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="alliance-modal-body">
+        <p class="alliance-intro">
+          Transform your autonomous routine across field axes with millimeter precision. Convert a Red Alliance routine into an opposing Blue Alliance routine via 180° rotational symmetry, or flip across the X-axis for Left ⇄ Right quadrant symmetry.
+        </p>
+
+        <!-- Mirror Symmetry Selector Cards -->
+        <div class="mirror-types-grid">
+          <label class="mirror-type-card active" data-mode="x">
+            <input type="radio" name="mirrorModeSelect" value="x" checked />
+            <div class="mirror-card-icon">↔️</div>
+            <div class="mirror-card-info">
+              <h4>Horizontal Flip (Flip X)</h4>
+              <p>Red Left ⇄ Red Right (or Blue Left ⇄ Blue Right). Flips X coordinates and headings across field midline.</p>
+              <div class="mirror-card-math">x' = -x, y' = y, θ' = -θ, lockedSide inverted</div>
+            </div>
+          </label>
+
+          <label class="mirror-type-card" data-mode="rot180">
+            <input type="radio" name="mirrorModeSelect" value="rot180" />
+            <div class="mirror-card-icon">🔄</div>
+            <div class="mirror-card-info">
+              <h4>Opposing Alliance Inversion (180° Field Rotation)</h4>
+              <p>Red Alliance ⇄ Blue Alliance. Full rotational symmetry across the field center origin (0, 0).</p>
+              <div class="mirror-card-math">x' = -x, y' = -y, θ' = θ + 180°</div>
+            </div>
+          </label>
+
+          <label class="mirror-type-card" data-mode="y">
+            <input type="radio" name="mirrorModeSelect" value="y" />
+            <div class="mirror-card-icon">↕️</div>
+            <div class="mirror-card-info">
+              <h4>Vertical Flip (Flip Y)</h4>
+              <p>Top ⇄ Bottom quadrant symmetry across the autonomous barrier centerline.</p>
+              <div class="mirror-card-math">x' = x, y' = -y, θ' = 180° - θ</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="mirror-config-layout">
+          <!-- Configuration Options -->
+          <div class="mirror-options-box">
+            <h4>⚙️ Transformation Options</h4>
+            <div class="mirror-radio-group">
+              <label class="radio-label">
+                <input type="radio" name="mirrorDestination" value="new" checked />
+                <span>Create as <strong>New Mirrored Routine</strong> (Keeps original intact)</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="mirrorDestination" value="inplace" />
+                <span>Overwrite current routine in-place</span>
+              </label>
+            </div>
+
+            <div class="mirror-input-row" id="mirrorNewNameRow">
+              <label for="mirrorRoutineNameInput">New Routine Name:</label>
+              <input type="text" id="mirrorRoutineNameInput" value="" placeholder="e.g. Blue_Rush_Auton" />
+            </div>
+
+            <div class="mirror-checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="mirrorInvertSwingSides" checked />
+                <span>Invert swing turn locked sides (LEFT ⇄ RIGHT)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="mirrorSwapColorTerms" checked />
+                <span>Swap color terms in comments &amp; custom code ("Red" ⇄ "Blue", "red" ⇄ "blue")</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="mirrorSwapDirectionTerms" checked />
+                <span>Swap directional terms ("Left" ⇄ "Right", "left" ⇄ "right")</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="mirrorSwitchImmediately" checked />
+                <span>Switch to the mirrored routine immediately</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Live Interactive Preview Panel -->
+          <div class="mirror-preview-box">
+            <h4>👁️ Live Symmetry Preview</h4>
+            <div class="mirror-preview-canvas-wrap">
+              <canvas id="mirrorPreviewCanvas" width="340" height="340"></canvas>
+              <div class="mirror-canvas-legend">
+                <span class="legend-chip orig"><span class="legend-dot orig-dot"></span> Original</span>
+                <span class="legend-chip mirrored"><span class="legend-dot mir-dot"></span> Mirrored</span>
+              </div>
+            </div>
+            <div class="mirror-stats-grid">
+              <div class="mirror-stat-pill">
+                <span class="stat-k">Original Start:</span>
+                <strong id="mirrorOrigPoseTxt">(-60.0", -60.0", 0°)</strong>
+              </div>
+              <div class="mirror-stat-pill highlight">
+                <span class="stat-k">Mirrored Start:</span>
+                <strong id="mirrorNewPoseTxt">(60.0", -60.0", 0°)</strong>
+              </div>
+              <div class="mirror-stat-pill" style="grid-column: span 2;">
+                <span class="stat-k">Total Waypoints:</span>
+                <strong id="mirrorWaypointCount">0 actions</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="alliance-modal-footer">
+        <button type="button" id="allianceMirrorCancelBtn">Cancel</button>
+        <button type="button" id="btnExecuteMirror" class="primary">🪞 Apply Alliance Mirroring</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-Time Drive Physics & 15s Auton Clock Modal -->
+  <div id="drivePhysicsModal" class="modal drive-physics-modal" hidden>
+    <div class="modal-card drive-physics-card">
+      <div class="physics-modal-header">
+        <div class="physics-title-wrap">
+          <span class="physics-badge">VEX V5 DYNO &amp; CHASSIS KINEMATICS</span>
+          <h2>⚡ Real-Time Drive Physics &amp; 15-Second Auton Clock</h2>
+        </div>
+        <button type="button" id="drivePhysicsClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="physics-modal-body">
+        <div class="physics-top-toolbar">
+          <div class="physics-presets-bar">
+            <span class="presets-label">⚡ Drivetrain Presets:</span>
+            <button type="button" class="btn-physics-preset" data-preset="6m_speed">6-Motor 600 RPM (14 lbs)</button>
+            <button type="button" class="btn-physics-preset" data-preset="6m_balanced">6-Motor 450 RPM (15 lbs)</button>
+            <button type="button" class="btn-physics-preset" data-preset="8m_heavy">8-Motor 360 RPM (18 lbs)</button>
+            <button type="button" class="btn-physics-preset" data-preset="4m_starter">4-Motor 200 RPM (12 lbs)</button>
+          </div>
+          <div class="physics-period-toggle">
+            <span class="period-label">Rule:</span>
+            <div class="period-btns">
+              <button type="button" class="btn-period active" data-period="15s" id="btnPeriod15s">15s Match Auton</button>
+              <button type="button" class="btn-period" data-period="60s" id="btnPeriod60s">60s Robot Skills</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="physics-layout-grid">
+          <!-- Physics Configuration Column -->
+          <div class="physics-config-column">
+            <h4>⚙️ Robot Mass &amp; Drivetrain Dynamics</h4>
+            
+            <div class="physics-form-row">
+              <label>Drive Motor Count
+                <select id="physMotorCount">
+                  <option value="6" selected>6 Motors (3L / 3R - Competitive Standard)</option>
+                  <option value="4">4 Motors (2L / 2R - Classic)</option>
+                  <option value="8">8 Motors (4L / 4R - High Torque Pusher)</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="physics-form-row">
+              <label>Robot Weight / Mass (lbs)
+                <div class="physics-slider-row">
+                  <input type="range" id="physWeightRange" min="8" max="25" step="0.5" value="15" />
+                  <input type="number" id="physWeightVal" min="8" max="25" step="0.5" value="15" style="width:65px;" />
+                  <span class="unit-tag">lbs</span>
+                </div>
+              </label>
+            </div>
+
+            <div class="physics-form-row">
+              <label>Wheel Traction &amp; Foam Grip
+                <select id="physTractionSelect">
+                  <option value="0.85" selected>0.85 µ — Standard VEX Omni Wheels on Foam</option>
+                  <option value="1.10">1.10 µ — High Traction / Rubber Wheels</option>
+                  <option value="0.65">0.65 µ — Worn Rollers / Dusty Tile Slip</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="physics-form-row">
+              <label>V5 Battery Voltage (Initial State)
+                <select id="physBatterySelect">
+                  <option value="12.8" selected>12.8V (100% Fresh LiFePO4 Pack)</option>
+                  <option value="12.2">12.2V (60% Typical Mid-Match Battery)</option>
+                  <option value="11.5">11.5V (20% Low Battery / Severe Sag)</option>
+                </select>
+              </label>
+            </div>
+
+            <!-- Physics Calculations Summary Card -->
+            <div class="physics-calc-card">
+              <h5>🧮 Dynamic Limits</h5>
+              <div class="calc-row">
+                <span>Max Motor Drive Force:</span>
+                <strong id="calcDriveForce">~0 lbf</strong>
+              </div>
+              <div class="calc-row">
+                <span>Traction Slip Limit (a_max):</span>
+                <strong id="calcTractionLimit">~0.85 g</strong>
+              </div>
+              <div class="calc-row">
+                <span>Rotational Inertia (J):</span>
+                <strong id="calcInertia">~0 lb·in²</strong>
+              </div>
+              <div class="calc-row">
+                <span>Free Drivetrain Speed:</span>
+                <strong id="calcFreeSpeed">~0 in/s</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-Time Physics Telemetry & Interactive Graph Column -->
+          <div class="physics-graph-column">
+            <div class="physics-graph-top">
+              <div class="graph-channel-tabs">
+                <button type="button" class="phys-channel-btn active" data-channel="velocity">🏎️ Speed &amp; Turn</button>
+                <button type="button" class="phys-channel-btn" data-channel="accel">🚀 Accel &amp; Lateral G</button>
+                <button type="button" class="phys-channel-btn" data-channel="power">⚡ Voltage Sag &amp; Power</button>
+              </div>
+              <div class="graph-legend-row" id="physGraphLegend">
+                <!-- Dynamically updated -->
+              </div>
+            </div>
+
+            <div class="physics-canvas-wrap">
+              <canvas id="physGraphCanvas" width="580" height="240"></canvas>
+            </div>
+
+            <!-- Physics Performance KPI Grid -->
+            <div class="physics-kpi-grid">
+              <div class="physics-kpi-card">
+                <span class="kpi-label">Peak Linear Speed</span>
+                <strong class="kpi-val" id="physKpiPeakSpeed">0.0 in/s</strong>
+                <span class="kpi-sub" id="physKpiPeakSpeedSub">0.00 mph</span>
+              </div>
+              <div class="physics-kpi-card">
+                <span class="kpi-label">Peak Acceleration</span>
+                <strong class="kpi-val" id="physKpiPeakAccel">0.00 g</strong>
+                <span class="kpi-sub" id="physKpiPeakAccelSub">0 in/s²</span>
+              </div>
+              <div class="physics-kpi-card">
+                <span class="kpi-label">Max Lateral G-Force</span>
+                <strong class="kpi-val" id="physKpiPeakG">0.00 g</strong>
+                <span class="kpi-sub" id="physKpiGWarning">Normal Grip</span>
+              </div>
+              <div class="physics-kpi-card">
+                <span class="kpi-label">Min Battery Voltage</span>
+                <strong class="kpi-val" id="physKpiMinVolt">12.8 V</strong>
+                <span class="kpi-sub" id="physKpiPeakWatts">Peak 0 W</span>
+              </div>
+              <div class="physics-kpi-card highlight">
+                <span class="kpi-label">Auton Period Rule</span>
+                <strong class="kpi-val text-green" id="physKpiAutonCompliance">🟢 Legal (15.0s)</strong>
+                <span class="kpi-sub" id="physKpiMargin">~0.0s margin</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="physics-modal-footer">
+        <button type="button" id="drivePhysicsCloseBtn">Close</button>
+        <button type="button" id="btnApplyPhysicsToBot" class="primary">💾 Save Physics Settings to Robot</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Command Palette Modal (Ctrl+K) -->
+  <div id="commandPaletteModal" class="modal command-palette-modal" hidden>
+    <div class="modal-card command-palette-card">
+      <div class="command-palette-header">
+        <span class="cmd-icon">🔍</span>
+        <input type="text" id="cmdPaletteInput" placeholder="Type a command, block, tab, or action (e.g. 'moveToPose', 'code', 'simulate', 'mirror')..." autocomplete="off" />
+        <button type="button" id="cmdPaletteClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+      <div class="command-palette-body">
+        <div id="cmdPaletteResults" class="cmd-palette-results">
+          <!-- Dynamically populated commands -->
+        </div>
+      </div>
+      <div class="command-palette-footer">
+        <span class="cmd-footer-hint"><strong>↑↓</strong> Navigate &nbsp;•&nbsp; <strong>↵</strong> Select &nbsp;•&nbsp; <strong>Esc</strong> Close</span>
+        <span class="cmd-footer-shortcut">Shortcuts: <strong>Ctrl+K</strong> Palette &nbsp;|&nbsp; <strong>Ctrl+Space</strong> Sim &nbsp;|&nbsp; <strong>Ctrl+D</strong> Dup &nbsp;|&nbsp; <strong>Del</strong> Delete</span>
       </div>
     </div>
   </div>
@@ -2156,19 +2519,19 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260922.k58"></script>
+  <script src="version.js?v=20260923.k3"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260922.k58"></script>
-  <script src="google-drive-sync.js?v=20260922.k58"></script>
-  <script src="session-guard.js?v=20260922.k58"></script>
-  <script src="v5-brain-serial.js?v=20260922.k58"></script>
-  <script src="project-manager.js?v=20260922.k58"></script>
-  <script src="cpp-parser.js?v=20260922.k58"></script>
-  <script src="app.js?v=20260922.k58"></script>
-  <script src="tutorial.js?v=20260922.k58"></script>
+  <script src="firebase-config.js?v=20260923.k3"></script>
+  <script src="google-drive-sync.js?v=20260923.k3"></script>
+  <script src="session-guard.js?v=20260923.k3"></script>
+  <script src="v5-brain-serial.js?v=20260923.k3"></script>
+  <script src="project-manager.js?v=20260923.k3"></script>
+  <script src="cpp-parser.js?v=20260923.k3"></script>
+  <script src="app.js?v=20260923.k3"></script>
+  <script src="tutorial.js?v=20260923.k3"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");

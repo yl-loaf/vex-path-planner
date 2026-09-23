@@ -34,6 +34,12 @@
     lateralDrift: 1.0,
     turnDrift: 1.0,
     defaultLead: 0.6,
+    // Real-Time Drive Physics & Auton Clock
+    motorCount: 6,
+    robotWeightLbs: 15.0,
+    wheelTraction: 0.85,
+    batteryVolts: 12.8,
+    matchPeriod: "15s",
     // LemLib Lateral Controller PID & Settling Parameters
     lateralKp: 8.0,
     lateralKi: 0.0,
@@ -721,6 +727,102 @@
   }
 
   /**
+   * Real-Time Robot Drive Dynamics & Kinematic Limit Calculations
+   */
+  function getRobotPhysicsProps(customBot) {
+    const b = customBot || bot;
+    const motorCount = Number(b.motorCount) || 6;
+    const weightLbs = Math.max(Number(b.robotWeightLbs) || 15.0, 1.0);
+    const tractionMu = Math.max(Number(b.wheelTraction) || 0.85, 0.1);
+    const battVolts = Number(b.batteryVolts) || 12.8;
+    const rpm = Math.max(Number(b.driveRpm) || 600, 1);
+    const wheelDiam = Math.max(Number(b.wheelDiam) || 3.25, 0.5);
+    const trackWidth = Math.max(Number(b.trackWidth) || 12.0, 1.0);
+    const robotW = Math.max(Number(b.robotW) || 14.0, 1.0);
+    const robotL = Math.max(Number(b.robotL) || 14.0, 1.0);
+
+    const gInSec2 = 386.09; // 1g in in/s^2
+    const massSlugs = weightLbs / gInSec2;
+
+    // V5 11W motor stall torque (in-lbs): ~210 / rpm
+    const singleMotorStallTorque = 210 / rpm;
+    const totalDriveStallTorque = motorCount * singleMotorStallTorque;
+    const wheelRadius = wheelDiam / 2;
+    const maxDriveForceLbf = totalDriveStallTorque / wheelRadius;
+
+    // Dynamic acceleration limits
+    const maxMotorAccelInSec2 = (maxDriveForceLbf / massSlugs); // F = m*a => a = F/m
+    const maxTractionAccelInSec2 = tractionMu * gInSec2;
+    const maxLinearAccelInSec2 = Math.min(maxMotorAccelInSec2, maxTractionAccelInSec2);
+    const maxLinearAccelG = maxLinearAccelInSec2 / gInSec2;
+
+    // Rotational moment of inertia (uniform rectangular chassis): J = (1/12)*m*(w^2 + l^2)
+    const inertiaJ = (1 / 12) * massSlugs * (robotW * robotW + robotL * robotL);
+    const turnTorque = maxDriveForceLbf * (trackWidth / 2);
+    const maxAngularAccelDegSec2 = (turnTorque / inertiaJ) * (180 / Math.PI);
+
+    const vMaxInSec = getMaxLinearSpeed(b);
+    const vMaxMph = (vMaxInSec * 3600) / 63360;
+
+    return {
+      motorCount,
+      weightLbs,
+      tractionMu,
+      battVolts,
+      rpm,
+      wheelDiam,
+      trackWidth,
+      massSlugs,
+      maxDriveForceLbf,
+      maxTractionAccelInSec2,
+      maxLinearAccelInSec2,
+      maxLinearAccelG,
+      inertiaJ,
+      maxAngularAccelDegSec2,
+      vMaxInSec,
+      vMaxMph,
+    };
+  }
+
+  /**
+   * Calculate live discrete step physics (acceleration, lateral G, wheel slip, battery sag)
+   */
+  function calculateStepPhysics(prevVLin, newVLin, newOmegaDeg, dt, phys, b) {
+    const aLin = (newVLin - prevVLin) / Math.max(dt, 0.001);
+    const gLin = aLin / 386.09;
+    const omegaRad = (newOmegaDeg * Math.PI) / 180;
+    const aLateral = Math.abs(newVLin * omegaRad);
+    const gLateral = aLateral / 386.09;
+    const gTotal = Math.hypot(gLin, gLateral);
+    const isSlipping = gTotal > (phys.tractionMu + 0.05);
+    const gripMargin = Math.max(0, Math.min(100, Math.round((1 - (gTotal / phys.tractionMu)) * 100)));
+
+    // Motor load & battery voltage sag
+    const speedRatio = Math.abs(newVLin) / Math.max(phys.vMaxInSec, 1);
+    const turnRatio = Math.abs(newOmegaDeg) / Math.max(getMaxTurnRateDps(b), 1);
+    const accelRatio = Math.abs(aLin) / Math.max(phys.maxLinearAccelInSec2, 1);
+    const motorEffort = Math.min(1.0, 0.15 * speedRatio + 0.15 * turnRatio + 0.70 * accelRatio);
+    const currentPerMotor = 0.25 + 2.25 * motorEffort; // Up to 2.5A peak
+    const totalCurrent = phys.motorCount * currentPerMotor;
+    const internalR = 0.08; // 80 milliohm pack impedance
+    const voltSag = totalCurrent * internalR;
+    const actualVoltage = Math.max(9.0, phys.battVolts - voltSag);
+    const totalWatts = actualVoltage * totalCurrent;
+
+    return {
+      aLin,
+      gLin,
+      gLateral,
+      gTotal,
+      isSlipping,
+      gripMargin,
+      voltage: actualVoltage,
+      current: totalCurrent,
+      watts: totalWatts,
+    };
+  }
+
+  /**
    * LemLib discrete PID controller (matching src/lemlib/PID.cpp)
    */
   class LemLibPID {
@@ -836,17 +938,22 @@
     const latPid = new LemLibPID(latKp, latKi, latKd, latWindup, latSlew);
     const angPid = new LemLibPID(angKp, angKi, angKd, angWindup, angSlew);
 
+    const phys = getRobotPhysicsProps(b);
+    const maxStepV = phys.maxLinearAccelInSec2 * dt;
+    const maxStepW = phys.maxAngularAccelDegSec2 * dt;
+
     let pose = { x: fromPose.x, y: fromPose.y, theta: fromPose.theta };
     let vLin = 0;
     let omegaDeg = 0;
     let t = 0;
-    let points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 }];
+    const initPhys = calculateStepPhysics(0, 0, 0, dt, phys, b);
+    let points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys }];
     let carrotPoint = null;
 
     if (action.type === "custom") {
       const dur = action.customDuration != null ? Math.max(0, Number(action.customDuration)) : 0;
       if (dur > 0) {
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 });
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
       }
       return { endPose: pose, path: points, duration: dur, carrot: null };
     }
@@ -855,7 +962,7 @@
       const isTime = action.waitType === "time";
       const dur = isTime ? Math.max(0, (action.delayMs != null ? action.delayMs : 250) / 1000) : 0;
       if (dur > 0) {
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 });
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
       }
       return { endPose: pose, path: points, duration: dur, carrot: null };
     }
@@ -1023,8 +1130,12 @@
         const targetVLin = ((desat.left + desat.right) / 2) * vMax;
         const targetOmega = (((desat.left - desat.right) * vMax) / trackWidth) * (180 / Math.PI);
 
-        vLin += ((targetVLin - vLin) / tau) * dt;
-        omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
+        const prevVLin = vLin;
+        const dV = clamp(((targetVLin - vLin) / tau) * dt, -maxStepV, maxStepV);
+        vLin += dV;
+
+        const dW = clamp(((targetOmega - omegaDeg) / tau) * dt, -maxStepW, maxStepW);
+        omegaDeg += dW;
 
         // Smooth physical settling decay to prevent high-frequency numeric PID shaking
         if (dist < 1.0) {
@@ -1041,12 +1152,14 @@
         pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
 
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg, targetVLin, targetOmega });
+        const stepPhys = calculateStepPhysics(prevVLin, vLin, omegaDeg, dt, phys, b);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg, targetVLin, targetOmega, ...stepPhys });
       }
 
       if (isSettled) {
         if (points.length) {
-          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+          const finalPhys = calculateStepPhysics(0, 0, 0, dt, phys, b);
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...finalPhys };
         }
       }
       return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: carrotPoint };
@@ -1098,8 +1211,12 @@
         const targetVLin = ((desat.left + desat.right) / 2) * vMax;
         const targetOmega = (((desat.left - desat.right) * vMax) / trackWidth) * (180 / Math.PI);
 
-        vLin += ((targetVLin - vLin) / tau) * dt;
-        omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
+        const prevVLin = vLin;
+        const dV = clamp(((targetVLin - vLin) / tau) * dt, -maxStepV, maxStepV);
+        vLin += dV;
+
+        const dW = clamp(((targetOmega - omegaDeg) / tau) * dt, -maxStepW, maxStepW);
+        omegaDeg += dW;
 
         // Smooth physical settling decay to prevent high-frequency numeric PID shaking
         if (dist < 1.0) {
@@ -1116,12 +1233,14 @@
         pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
 
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg, targetVLin, targetOmega });
+        const stepPhys = calculateStepPhysics(prevVLin, vLin, omegaDeg, dt, phys, b);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg, targetVLin, targetOmega, ...stepPhys });
       }
 
       if (isSettled) {
         if (points.length) {
-          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+          const finalPhys = calculateStepPhysics(0, 0, 0, dt, phys, b);
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...finalPhys };
         }
       }
       return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: null };
@@ -1158,7 +1277,8 @@
         if (Math.abs(angPower) < minSpeed) angPower = Math.sign(angPower) * minSpeed;
 
         const targetOmega = angPower * maxOmega;
-        omegaDeg += ((targetOmega - omegaDeg) / tau) * dt;
+        const dW = clamp(((targetOmega - omegaDeg) / tau) * dt, -maxStepW, maxStepW);
+        omegaDeg += dW;
 
         // Smooth physical settling decay to prevent high-frequency numeric PID shaking
         if (Math.abs(angError) < 1.0) {
@@ -1167,12 +1287,14 @@
 
         pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg, targetVLin: 0, targetOmega });
+        const stepPhys = calculateStepPhysics(0, 0, omegaDeg, dt, phys, b);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg, targetVLin: 0, targetOmega, ...stepPhys });
       }
 
       if (isSettled) {
         if (points.length) {
-          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+          const finalPhys = calculateStepPhysics(0, 0, 0, dt, phys, b);
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...finalPhys };
         }
       }
       return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
@@ -1221,8 +1343,10 @@
         let pwr = clamp(rawAngPid / 127, -maxSpeed, maxSpeed);
         if (Math.abs(pwr) < minSpeed) pwr = Math.sign(pwr) * minSpeed;
 
+        const prevVDrive = vDrive;
         const targetVDrive = pwr * vMax;
-        vDrive += ((targetVDrive - vDrive) / tau) * dt;
+        const dVDrive = clamp(((targetVDrive - vDrive) / tau) * dt, -maxStepV, maxStepV);
+        vDrive += dVDrive;
 
         // Smooth physical settling decay to prevent high-frequency numeric PID shaking
         if (Math.abs(angError) < 1.0) {
@@ -1239,12 +1363,16 @@
 
         t += dt;
         const targetW = (targetVDrive / trackWidth) * (180 / Math.PI);
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vDrive) / 2, omegaDeg: wDeg, targetVLin: Math.abs(targetVDrive) / 2, targetOmega: targetW });
+        const vEff = Math.abs(vDrive) / 2;
+        const prevVEff = Math.abs(prevVDrive) / 2;
+        const stepPhys = calculateStepPhysics(prevVEff, vEff, wDeg, dt, phys, b);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: vEff, omegaDeg: wDeg, targetVLin: Math.abs(targetVDrive) / 2, targetOmega: targetW, ...stepPhys });
       }
 
       if (isSettled) {
         if (points.length) {
-          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+          const finalPhys = calculateStepPhysics(0, 0, 0, dt, phys, b);
+          points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...finalPhys };
         }
       }
 
@@ -4258,6 +4386,8 @@
         moveAction(dragData, { target: "main", targetIdx: actions.length });
       }
     });
+
+    try { renderBreadcrumbs(); } catch (_) {}
   }
 
   function syncStartInputs() {
@@ -4547,12 +4677,41 @@
     return total;
   }
 
-  function updateTimeDisplay(elapsed, totalEst, currentVLin, currentOmegaDeg) {
+  function updateTimeDisplay(elapsed, totalEst, currentVLin, currentOmegaDeg, currentPt) {
     const el = document.getElementById("timeEst");
     const hudTime = document.getElementById("simHudTime");
     const hudSpeed = document.getElementById("simHudSpeed");
     const hudCoords = document.getElementById("simHudCoords");
     const btnSimF = document.getElementById("btnSimField");
+
+    const clockLimit = (bot.matchPeriod === "60s") ? 60.0 : 15.0;
+    const autonBar = document.getElementById("simAutonProgressBar");
+    const clockStatus = document.getElementById("simClockStatus");
+    const clockLabel = document.getElementById("simClockLabel");
+    const autonMarker = document.getElementById("simAutonMarker");
+    const hudAccel = document.getElementById("simHudAccel");
+    const hudPower = document.getElementById("simHudPower");
+    const hudTraction = document.getElementById("simHudTraction");
+
+    if (clockLabel) clockLabel.textContent = `⏱️ ${clockLimit.toFixed(0)}s ${bot.matchPeriod === "60s" ? "Skills" : "Match"} Auton Clock`;
+    if (autonMarker) autonMarker.textContent = `${clockLimit.toFixed(0)}s`;
+
+    const curTime = (elapsed != null) ? elapsed : (actions.length ? estimateTotalTime() : 0);
+    const progressPct = Math.min(100, Math.max(0, (curTime / clockLimit) * 100));
+    if (autonBar) autonBar.style.width = `${progressPct}%`;
+
+    if (clockStatus) {
+      if (curTime <= clockLimit - 1.5) {
+        clockStatus.className = "clock-status legal";
+        clockStatus.textContent = `🟢 Legal (${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s)`;
+      } else if (curTime <= clockLimit) {
+        clockStatus.className = "clock-status warning";
+        clockStatus.textContent = `🟡 Buffer (${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s)`;
+      } else {
+        clockStatus.className = "clock-status overtime";
+        clockStatus.textContent = `⚠️ Overtime (+${(curTime - clockLimit).toFixed(2)}s)`;
+      }
+    }
 
     const asyncCount = actions.filter((a) => a.async).length;
     const asyncTag = asyncCount > 0 ? ` · ⚡ ${asyncCount} Multitask` : "";
@@ -4584,6 +4743,36 @@
       if (hudSpeed) hudSpeed.textContent = `🏎️ 0.0 in/s`;
     }
 
+    if (currentPt) {
+      if (hudAccel) {
+        const aLin = currentPt.aLin != null ? Math.round(currentPt.aLin) : 0;
+        const gLin = currentPt.gLin != null ? currentPt.gLin.toFixed(2) : "0.00";
+        hudAccel.textContent = `🚀 ${gLin}g (${aLin} in/s²)`;
+      }
+      if (hudPower) {
+        const v = currentPt.voltage != null ? currentPt.voltage.toFixed(1) : (bot.batteryVolts || 12.8).toFixed(1);
+        const w = currentPt.watts != null ? Math.round(currentPt.watts) : 0;
+        hudPower.textContent = `⚡ ${v}V · ${w}W`;
+      }
+      if (hudTraction) {
+        if (currentPt.isSlipping) {
+          hudTraction.className = "sim-hud-chip chip-traction slip";
+          hudTraction.textContent = "⚠️ Wheel Slip! (Drift)";
+        } else {
+          hudTraction.className = "sim-hud-chip chip-traction";
+          const grip = currentPt.gripMargin != null ? currentPt.gripMargin : 100;
+          hudTraction.textContent = `🛞 Grip ${grip}%`;
+        }
+      }
+    } else {
+      if (hudAccel) hudAccel.textContent = `🚀 0.00g (0 in/s²)`;
+      if (hudPower) hudPower.textContent = `⚡ ${(bot.batteryVolts || 12.8).toFixed(1)}V · 0W`;
+      if (hudTraction) {
+        hudTraction.className = "sim-hud-chip chip-traction";
+        hudTraction.textContent = `🛞 Grip 100%`;
+      }
+    }
+
     if (btnSimF) {
       if (simRunning) {
         btnSimF.classList.add("playing");
@@ -4603,7 +4792,8 @@
     simPath = [];
     let cur = { x: pose.x, y: pose.y, theta: pose.theta };
     let t = 0;
-    simPath.push({ ...cur, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 });
+    const initPhys = calculateStepPhysics(0, 0, 0, 0.01, getRobotPhysicsProps(bot), bot);
+    simPath.push({ ...cur, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
 
     for (const a of actions) {
       const seg = simulateAction(a, cur, bot);
@@ -4627,6 +4817,15 @@
           omegaDeg: pt.omegaDeg,
           targetVLin: pt.targetVLin != null ? pt.targetVLin : 0,
           targetOmega: pt.targetOmega != null ? pt.targetOmega : 0,
+          aLin: pt.aLin != null ? pt.aLin : 0,
+          gLin: pt.gLin != null ? pt.gLin : 0,
+          gLateral: pt.gLateral != null ? pt.gLateral : 0,
+          gTotal: pt.gTotal != null ? pt.gTotal : 0,
+          isSlipping: !!pt.isSlipping,
+          gripMargin: pt.gripMargin != null ? pt.gripMargin : 100,
+          voltage: pt.voltage != null ? pt.voltage : (bot.batteryVolts || 12.8),
+          current: pt.current != null ? pt.current : 0,
+          watts: pt.watts != null ? pt.watts : 0,
         });
       }
       t += seg.duration;
@@ -4653,7 +4852,8 @@
     const startTime = performance.now();
     const totalT = simPath.length ? simPath[simPath.length - 1].t : 0;
     const totalEst = estimateTotalTime();
-    updateTimeDisplay(0, totalEst, 0, 0);
+    const startPt = simPath.length ? simPath[0] : null;
+    updateTimeDisplay(0, totalEst, 0, 0, startPt);
 
     function frame(now) {
       if (!simRunning) return;
@@ -4675,13 +4875,13 @@
       simIdx = idx;
       const pt = simPath[simIdx] || { vLin: 0, omegaDeg: 0 };
       const curElapsed = Math.min(elapsed, totalT);
-      updateTimeDisplay(curElapsed, totalEst, pt.vLin, pt.omegaDeg);
+      updateTimeDisplay(curElapsed, totalEst, pt.vLin, pt.omegaDeg, pt);
       draw();
       drawPidTuningGraph(curElapsed);
       if (elapsed < totalT + 0.15) animId = requestAnimationFrame(frame);
       else {
         simRunning = false;
-        updateTimeDisplay(totalT, totalEst, 0, 0);
+        updateTimeDisplay(totalT, totalEst, 0, 0, pt);
         draw();
         drawPidTuningGraph(totalT);
       }
@@ -8385,6 +8585,946 @@ lemlib::ControllerSettings ${currentMode}_controller(
   }
 
 
+  // -- Alliance Mirror Transformation Engine -------------------------
+  function executeAllianceMirror(mode, options = {}) {
+    const origPath = activePath();
+    if (!origPath) return;
+
+    const dest = options.destination || "new";
+    const newName = options.newName || `${origPath.name} (${mode === "rot180" ? "Blue Inverted" : mode === "y" ? "Y-Flipped" : "Mirrored"})`;
+    const invertSwing = options.invertSwingSides !== false;
+    const swapColors = options.swapColorTerms !== false;
+    const swapDirs = options.swapDirectionTerms !== false;
+    const switchNow = options.switchImmediately !== false;
+
+    function swapColorsInText(text) {
+      if (!text || typeof text !== "string") return text;
+      return text
+        .replace(/\bRed\b/g, "__BLUE_TEMP__")
+        .replace(/\bBlue\b/g, "Red")
+        .replace(/__BLUE_TEMP__/g, "Blue")
+        .replace(/\bred\b/g, "__blue_temp__")
+        .replace(/\bblue\b/g, "red")
+        .replace(/__blue_temp__/g, "blue")
+        .replace(/\bRED\b/g, "__BLUE_CAP_TEMP__")
+        .replace(/\bBLUE\b/g, "RED")
+        .replace(/__BLUE_CAP_TEMP__/g, "BLUE");
+    }
+
+    function swapDirectionsInText(text) {
+      if (!text || typeof text !== "string") return text;
+      return text
+        .replace(/\bLeft\b/g, "__RIGHT_TEMP__")
+        .replace(/\bRight\b/g, "Left")
+        .replace(/__RIGHT_TEMP__/g, "Right")
+        .replace(/\bleft\b/g, "__right_temp__")
+        .replace(/\bright\b/g, "left")
+        .replace(/__right_temp__/g, "right")
+        .replace(/\bLEFT\b/g, "__RIGHT_CAP_TEMP__")
+        .replace(/\bRIGHT\b/g, "LEFT")
+        .replace(/__RIGHT_CAP_TEMP__/g, "RIGHT");
+    }
+
+    function transformText(text) {
+      let t = text;
+      if (swapColors) t = swapColorsInText(t);
+      if (swapDirs) t = swapDirectionsInText(t);
+      return t;
+    }
+
+    function transformPose(p) {
+      let x = p.x;
+      let y = p.y;
+      let theta = p.theta;
+      if (mode === "x") {
+        x = -x;
+        theta = normalizeAngle(360 - theta);
+      } else if (mode === "rot180") {
+        x = -x;
+        y = -y;
+        theta = normalizeAngle(theta + 180);
+      } else if (mode === "y") {
+        y = -y;
+        theta = normalizeAngle(180 - theta);
+      }
+      return { x, y, theta };
+    }
+
+    function transformAction(a) {
+      const cloned = JSON.parse(JSON.stringify(a));
+      cloned.id = uid();
+
+      if (cloned.x != null) {
+        if (mode === "x" || mode === "rot180") cloned.x = -cloned.x;
+      }
+      if (cloned.y != null) {
+        if (mode === "rot180" || mode === "y") cloned.y = -cloned.y;
+      }
+      if (cloned.theta != null) {
+        if (mode === "x") cloned.theta = normalizeAngle(360 - cloned.theta);
+        else if (mode === "rot180") cloned.theta = normalizeAngle(cloned.theta + 180);
+        else if (mode === "y") cloned.theta = normalizeAngle(180 - cloned.theta);
+      }
+
+      if (cloned.offsetX != null && (mode === "x" || mode === "rot180")) {
+        cloned.offsetX = -cloned.offsetX;
+      }
+      if (cloned.offsetY != null && (mode === "y" || mode === "rot180")) {
+        cloned.offsetY = -cloned.offsetY;
+      }
+      if (cloned.offsetTheta != null && (mode === "x" || mode === "y")) {
+        cloned.offsetTheta = -cloned.offsetTheta;
+      }
+
+      if (invertSwing && cloned.lockedSide) {
+        if (cloned.lockedSide === "LEFT") cloned.lockedSide = "RIGHT";
+        else if (cloned.lockedSide === "RIGHT") cloned.lockedSide = "LEFT";
+      }
+
+      if (cloned.label) cloned.label = transformText(cloned.label);
+      if (cloned.customCode) cloned.customCode = transformText(cloned.customCode);
+      if (cloned.thenCode) cloned.thenCode = transformText(cloned.thenCode);
+      if (cloned.elseCode) cloned.elseCode = transformText(cloned.elseCode);
+      if (cloned.thenLabel) cloned.thenLabel = transformText(cloned.thenLabel);
+      if (cloned.elseLabel) cloned.elseLabel = transformText(cloned.elseLabel);
+      if (cloned.loopCode) cloned.loopCode = transformText(cloned.loopCode);
+
+      if (Array.isArray(cloned.thenChildren)) {
+        cloned.thenChildren = cloned.thenChildren.map(transformAction);
+      }
+      if (Array.isArray(cloned.elseChildren)) {
+        cloned.elseChildren = cloned.elseChildren.map(transformAction);
+      }
+      if (Array.isArray(cloned.children)) {
+        cloned.children = cloned.children.map(transformAction);
+      }
+
+      return cloned;
+    }
+
+    const transformedStart = transformPose(origPath.pose);
+    const transformedActions = origPath.actions.map(transformAction);
+
+    if (dest === "new") {
+      const newPath = {
+        id: uidPath(),
+        name: newName,
+        pose: transformedStart,
+        actions: transformedActions,
+      };
+      paths.push(newPath);
+      pushHistory(`Alliance Mirror "${origPath.name}" to "${newPath.name}"`);
+      if (switchNow) {
+        switchPath(newPath.id);
+      } else {
+        syncPathSelect();
+      }
+    } else {
+      origPath.pose = transformedStart;
+      origPath.actions = transformedActions;
+      if (options.updateNameInPlace && newName) {
+        origPath.name = newName;
+      }
+      pushHistory(`Alliance Mirror "${origPath.name}" in-place`);
+      bindActive();
+      selectedId = null;
+      syncPathSelect();
+      syncStartInputs();
+      renderFlow();
+      draw();
+      markDirty();
+      generateCode();
+      try { updateTimeDisplay(); } catch (_) {}
+    }
+  }
+
+  // -- Alliance Mirroring & Routine Inversion Modal -----------------
+  function wireAllianceMirrorModal() {
+    const modal = document.getElementById("allianceMirrorModal");
+    const btnOpenMirrorHeader = document.getElementById("btnToolsAllianceMirror");
+    const btnOpenMirrorRoutine = document.getElementById("btnPathMirror");
+    const btnClose = document.getElementById("allianceMirrorClose");
+    const btnCancel = document.getElementById("allianceMirrorCancelBtn");
+    const btnExecute = document.getElementById("btnExecuteMirror");
+
+    const modeRadios = document.querySelectorAll('input[name="mirrorModeSelect"]');
+    const destRadios = document.querySelectorAll('input[name="mirrorDestination"]');
+    const nameInput = document.getElementById("mirrorRoutineNameInput");
+    const nameRow = document.getElementById("mirrorNewNameRow");
+    const invertSwingCb = document.getElementById("mirrorInvertSwingSides");
+    const swapColorCb = document.getElementById("mirrorSwapColorTerms");
+    const swapDirCb = document.getElementById("mirrorSwapDirectionTerms");
+    const switchNowCb = document.getElementById("mirrorSwitchImmediately");
+
+    const origPoseTxt = document.getElementById("mirrorOrigPoseTxt");
+    const newPoseTxt = document.getElementById("mirrorNewPoseTxt");
+    const waypointCountTxt = document.getElementById("mirrorWaypointCount");
+    const previewCanvas = document.getElementById("mirrorPreviewCanvas");
+
+    if (!modal) return;
+
+    function getSelectedMode() {
+      const checked = document.querySelector('input[name="mirrorModeSelect"]:checked');
+      return checked ? checked.value : "x";
+    }
+
+    function getSelectedDest() {
+      const checked = document.querySelector('input[name="mirrorDestination"]:checked');
+      return checked ? checked.value : "new";
+    }
+
+    function updateCardSelectionUI() {
+      const selMode = getSelectedMode();
+      document.querySelectorAll(".mirror-type-card").forEach((card) => {
+        if (card.dataset.mode === selMode) {
+          card.classList.add("active");
+        } else {
+          card.classList.remove("active");
+        }
+      });
+    }
+
+    function suggestMirroredName(origName, mode) {
+      if (!origName) return "Mirrored_Routine";
+      let base = origName;
+      if (mode === "rot180") {
+        if (/Red/i.test(base)) {
+          base = base.replace(/\bRed\b/g, "Blue").replace(/\bred\b/g, "blue");
+        } else if (/Blue/i.test(base)) {
+          base = base.replace(/\bBlue\b/g, "Red").replace(/\bblue\b/g, "red");
+        } else {
+          base = base + " (Blue 180°)";
+        }
+      } else if (mode === "x") {
+        if (/Left/i.test(base)) {
+          base = base.replace(/\bLeft\b/g, "Right").replace(/\bleft\b/g, "right");
+        } else if (/Right/i.test(base)) {
+          base = base.replace(/\bRight\b/g, "Left").replace(/\bright\b/g, "left");
+        } else {
+          base = base + " (Flip X)";
+        }
+      } else if (mode === "y") {
+        base = base + " (Flip Y)";
+      }
+      return base;
+    }
+
+    function getMirroredPose(p, mode) {
+      let x = p.x;
+      let y = p.y;
+      let theta = p.theta;
+      if (mode === "x") {
+        x = -x;
+        theta = normalizeAngle(360 - theta);
+      } else if (mode === "rot180") {
+        x = -x;
+        y = -y;
+        theta = normalizeAngle(theta + 180);
+      } else if (mode === "y") {
+        y = -y;
+        theta = normalizeAngle(180 - theta);
+      }
+      return { x, y, theta };
+    }
+
+    function renderPreviewCanvas() {
+      if (!previewCanvas) return;
+      const ctx = previewCanvas.getContext("2d");
+      const W = previewCanvas.width;
+      const H = previewCanvas.height;
+      const HALF = 72;
+      const scale = Math.min(W, H) / 144.0;
+      const ox = (W - 144 * scale) / 2;
+      const oy = (H - 144 * scale) / 2;
+
+      const toC = (x, y) => ({
+        cx: ox + (x + HALF) * scale,
+        cy: oy + (HALF - y) * scale,
+      });
+
+      // Clear & Background
+      ctx.fillStyle = "#0c1222";
+      ctx.fillRect(0, 0, W, H);
+
+      // Grid tiles (6x6 tiles for standard 144" field)
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      const tileSize = 24 * scale;
+      for (let x = ox; x <= ox + 144 * scale + 0.1; x += tileSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, oy);
+        ctx.lineTo(x, oy + 144 * scale);
+        ctx.stroke();
+      }
+      for (let y = oy; y <= oy + 144 * scale + 0.1; y += tileSize) {
+        ctx.beginPath();
+        ctx.moveTo(ox, y);
+        ctx.lineTo(ox + 144 * scale, y);
+        ctx.stroke();
+      }
+
+      // Center origin axes
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(ox + 72 * scale, oy);
+      ctx.lineTo(ox + 72 * scale, oy + 144 * scale);
+      ctx.moveTo(ox, oy + 72 * scale);
+      ctx.lineTo(ox + 144 * scale, oy + 72 * scale);
+      ctx.stroke();
+
+      // Field perimeter border
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(ox, oy, 144 * scale, 144 * scale);
+
+      // Original path points
+      const origPts = [{ x: pose.x, y: pose.y, theta: pose.theta }];
+      actions.forEach((a) => {
+        if (a.x != null && a.y != null) {
+          origPts.push({ x: a.x, y: a.y, theta: a.theta != null ? a.theta : 0 });
+        }
+      });
+
+      // Draw Original Path (Cyan dashed)
+      if (origPts.length > 1) {
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.75)";
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        const start = toC(origPts[0].x, origPts[0].y);
+        ctx.moveTo(start.cx, start.cy);
+        for (let i = 1; i < origPts.length; i++) {
+          const pt = toC(origPts[i].x, origPts[i].y);
+          ctx.lineTo(pt.cx, pt.cy);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Draw Original Waypoint Dots
+      origPts.forEach((pt, idx) => {
+        const c = toC(pt.x, pt.y);
+        ctx.fillStyle = idx === 0 ? "#38bdf8" : "#0284c7";
+        ctx.beginPath();
+        ctx.arc(c.cx, c.cy, idx === 0 ? 5 : 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Mirrored path points
+      const mode = getSelectedMode();
+      const mirPts = origPts.map((p) => getMirroredPose(p, mode));
+
+      // Draw Mirrored Path (Purple / Violet solid)
+      if (mirPts.length > 1) {
+        ctx.strokeStyle = "#c084fc";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        const start = toC(mirPts[0].x, mirPts[0].y);
+        ctx.moveTo(start.cx, start.cy);
+        for (let i = 1; i < mirPts.length; i++) {
+          const pt = toC(mirPts[i].x, mirPts[i].y);
+          ctx.lineTo(pt.cx, pt.cy);
+        }
+        ctx.stroke();
+      }
+
+      // Draw Mirrored Waypoint Dots & Direction Arrow
+      mirPts.forEach((pt, idx) => {
+        const c = toC(pt.x, pt.y);
+        ctx.fillStyle = idx === 0 ? "#e879f9" : "#a855f7";
+        ctx.beginPath();
+        ctx.arc(c.cx, c.cy, idx === 0 ? 6 : 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw start orientation heading indicator
+        if (idx === 0) {
+          const rad = ((90 - pt.theta) * Math.PI) / 180;
+          const arrowLen = 14;
+          const tipX = c.cx + Math.cos(rad) * arrowLen;
+          const tipY = c.cy - Math.sin(rad) * arrowLen;
+          ctx.strokeStyle = "#f472b6";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(c.cx, c.cy);
+          ctx.lineTo(tipX, tipY);
+          ctx.stroke();
+        }
+      });
+    }
+
+    function updatePreviewAndUI() {
+      const mode = getSelectedMode();
+      const orig = activePath();
+      if (!orig) return;
+
+      updateCardSelectionUI();
+
+      if (origPoseTxt) {
+        origPoseTxt.textContent = `(${pose.x.toFixed(1)}", ${pose.y.toFixed(1)}", ${Math.round(normalizeAngle(pose.theta))}°)`;
+      }
+      const mirPose = getMirroredPose(pose, mode);
+      if (newPoseTxt) {
+        newPoseTxt.textContent = `(${mirPose.x.toFixed(1)}", ${mirPose.y.toFixed(1)}", ${Math.round(normalizeAngle(mirPose.theta))}°)`;
+      }
+      if (waypointCountTxt) {
+        waypointCountTxt.textContent = `${actions.length} action${actions.length === 1 ? "" : "s"}`;
+      }
+
+      if (nameInput) {
+        nameInput.value = suggestMirroredName(orig.name, mode);
+      }
+
+      renderPreviewCanvas();
+    }
+
+    function openModal() {
+      const orig = activePath();
+      if (!orig) return;
+      modal.hidden = false;
+      modal.classList.add("open");
+      updatePreviewAndUI();
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    if (btnOpenMirrorHeader) {
+      btnOpenMirrorHeader.addEventListener("click", () => {
+        openModal();
+      });
+    }
+
+    if (btnOpenMirrorRoutine) {
+      btnOpenMirrorRoutine.addEventListener("click", () => {
+        const menu = document.getElementById("routineActionsMenu");
+        if (menu) menu.hidden = true;
+        openModal();
+      });
+    }
+
+    if (btnClose) btnClose.addEventListener("click", closeModal);
+    if (btnCancel) btnCancel.addEventListener("click", closeModal);
+
+    modeRadios.forEach((r) => {
+      r.addEventListener("change", () => {
+        updatePreviewAndUI();
+      });
+    });
+
+    document.querySelectorAll(".mirror-type-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const r = card.querySelector('input[name="mirrorModeSelect"]');
+        if (r && !r.checked) {
+          r.checked = true;
+          updatePreviewAndUI();
+        }
+      });
+    });
+
+    destRadios.forEach((r) => {
+      r.addEventListener("change", () => {
+        if (nameRow) {
+          nameRow.hidden = (r.value === "inplace");
+        }
+      });
+    });
+
+    if (btnExecute) {
+      btnExecute.addEventListener("click", () => {
+        const mode = getSelectedMode();
+        const dest = getSelectedDest();
+        const newName = nameInput ? nameInput.value.trim() : "";
+        const invertSwing = invertSwingCb ? invertSwingCb.checked : true;
+        const swapColors = swapColorCb ? swapColorCb.checked : true;
+        const swapDirs = swapDirCb ? swapDirCb.checked : true;
+        const switchNow = switchNowCb ? switchNowCb.checked : true;
+
+        executeAllianceMirror(mode, {
+          destination: dest,
+          newName: newName || `Mirrored Routine`,
+          invertSwingSides: invertSwing,
+          swapColorTerms: swapColors,
+          swapDirectionTerms: swapDirs,
+          switchImmediately: switchNow,
+        });
+
+        closeModal();
+        showToast("🪞 Routine mirrored with competition symmetry!");
+      });
+    }
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeModal();
+    });
+  }
+
+  // -- Real-Time Drive Physics & 15s Auton Clock Modal ---------------
+  function wireDrivePhysicsModal() {
+    const modal = document.getElementById("drivePhysicsModal");
+    const btnOpenTools = document.getElementById("btnToolsDrivePhysics");
+    const btnOpenHud = document.getElementById("btnHudPhysicsModal");
+    const btnOpenBotTab = document.getElementById("btnOpenPhysicsFromBot");
+    const btnClose = document.getElementById("drivePhysicsClose");
+    const btnCloseBtn = document.getElementById("drivePhysicsCloseBtn");
+    const btnApply = document.getElementById("btnApplyPhysicsToBot");
+
+    const motorCountSel = document.getElementById("physMotorCount");
+    const weightRange = document.getElementById("physWeightRange");
+    const weightVal = document.getElementById("physWeightVal");
+    const tractionSel = document.getElementById("physTractionSelect");
+    const battSel = document.getElementById("physBatterySelect");
+
+    const btnPeriod15 = document.getElementById("btnPeriod15s");
+    const btnPeriod60 = document.getElementById("btnPeriod60s");
+
+    const calcDriveForce = document.getElementById("calcDriveForce");
+    const calcTractionLimit = document.getElementById("calcTractionLimit");
+    const calcInertia = document.getElementById("calcInertia");
+    const calcFreeSpeed = document.getElementById("calcFreeSpeed");
+
+    const kpiPeakSpeed = document.getElementById("physKpiPeakSpeed");
+    const kpiPeakSpeedSub = document.getElementById("physKpiPeakSpeedSub");
+    const kpiPeakAccel = document.getElementById("physKpiPeakAccel");
+    const kpiPeakAccelSub = document.getElementById("physKpiPeakAccelSub");
+    const kpiPeakG = document.getElementById("physKpiPeakG");
+    const kpiGWarning = document.getElementById("physKpiGWarning");
+    const kpiMinVolt = document.getElementById("physKpiMinVolt");
+    const kpiPeakWatts = document.getElementById("physKpiPeakWatts");
+    const kpiAutonCompliance = document.getElementById("physKpiAutonCompliance");
+    const kpiMargin = document.getElementById("physKpiMargin");
+
+    const graphCanvas = document.getElementById("physGraphCanvas");
+    const legendRow = document.getElementById("physGraphLegend");
+    let activeChannel = "velocity"; // "velocity" | "accel" | "power"
+
+    if (!modal) return;
+
+    function syncInputsFromBot() {
+      if (motorCountSel) motorCountSel.value = String(bot.motorCount || 6);
+      if (weightRange) weightRange.value = String(bot.robotWeightLbs || 15.0);
+      if (weightVal) weightVal.value = String(bot.robotWeightLbs || 15.0);
+      if (tractionSel) tractionSel.value = String(bot.wheelTraction || 0.85);
+      if (battSel) battSel.value = String(bot.batteryVolts || 12.8);
+
+      const period = bot.matchPeriod || "15s";
+      if (period === "60s") {
+        if (btnPeriod60) btnPeriod60.classList.add("active");
+        if (btnPeriod15) btnPeriod15.classList.remove("active");
+      } else {
+        if (btnPeriod15) btnPeriod15.classList.add("active");
+        if (btnPeriod60) btnPeriod60.classList.remove("active");
+      }
+    }
+
+    function getCurrentSettingsBot() {
+      return {
+        ...bot,
+        motorCount: Number(motorCountSel ? motorCountSel.value : 6) || 6,
+        robotWeightLbs: Number(weightVal ? weightVal.value : 15.0) || 15.0,
+        wheelTraction: Number(tractionSel ? tractionSel.value : 0.85) || 0.85,
+        batteryVolts: Number(battSel ? battSel.value : 12.8) || 12.8,
+        matchPeriod: btnPeriod60 && btnPeriod60.classList.contains("active") ? "60s" : "15s",
+      };
+    }
+
+    function updateDynoCalculations() {
+      const tempBot = getCurrentSettingsBot();
+      const phys = getRobotPhysicsProps(tempBot);
+
+      if (calcDriveForce) calcDriveForce.textContent = `~${phys.maxDriveForceLbf.toFixed(1)} lbf (${(phys.maxDriveForceLbf * 4.448).toFixed(0)} N)`;
+      if (calcTractionLimit) calcTractionLimit.textContent = `~${phys.tractionMu.toFixed(2)} g (${Math.round(phys.maxTractionAccelInSec2)} in/s²)`;
+      if (calcInertia) calcInertia.textContent = `~${(phys.inertiaJ * 386.09).toFixed(1)} lb·in²`;
+      if (calcFreeSpeed) calcFreeSpeed.textContent = `~${phys.vMaxInSec.toFixed(1)} in/s (${phys.vMaxMph.toFixed(1)} mph)`;
+
+      // Simulate current routine with temporary physics parameters
+      const simPts = [];
+      let cur = { x: pose.x, y: pose.y, theta: pose.theta };
+      let tOffset = 0;
+      actions.forEach((act) => {
+        const seg = simulateAction(act, cur, tempBot);
+        if (seg && seg.path) {
+          seg.path.forEach((p, idx) => {
+            if (idx > 0 || simPts.length === 0) {
+              simPts.push({ ...p, t: tOffset + p.t });
+            }
+          });
+          tOffset += seg.duration;
+          cur = { ...seg.endPose };
+        }
+      });
+
+      // Analyze performance KPIs
+      let peakSpeed = 0;
+      let peakAccel = 0;
+      let peakG = 0;
+      let minVolt = tempBot.batteryVolts;
+      let peakWatts = 0;
+      let slipOccurred = false;
+
+      simPts.forEach((p) => {
+        if (p.vLin && Math.abs(p.vLin) > peakSpeed) peakSpeed = Math.abs(p.vLin);
+        if (p.aLin && Math.abs(p.aLin) > peakAccel) peakAccel = Math.abs(p.aLin);
+        if (p.gTotal && p.gTotal > peakG) peakG = p.gTotal;
+        if (p.voltage && p.voltage < minVolt) minVolt = p.voltage;
+        if (p.watts && p.watts > peakWatts) peakWatts = p.watts;
+        if (p.isSlipping) slipOccurred = true;
+      });
+
+      const peakMph = (peakSpeed * 3600) / 63360;
+      const peakAccelG = peakAccel / 386.09;
+
+      if (kpiPeakSpeed) kpiPeakSpeed.textContent = `${peakSpeed.toFixed(1)} in/s`;
+      if (kpiPeakSpeedSub) kpiPeakSpeedSub.textContent = `${peakMph.toFixed(2)} mph`;
+
+      if (kpiPeakAccel) kpiPeakAccel.textContent = `${peakAccelG.toFixed(2)} g`;
+      if (kpiPeakAccelSub) kpiPeakAccelSub.textContent = `${Math.round(peakAccel)} in/s²`;
+
+      if (kpiPeakG) kpiPeakG.textContent = `${peakG.toFixed(2)} g`;
+      if (kpiGWarning) {
+        if (slipOccurred) {
+          kpiGWarning.textContent = "⚠️ Traction Slip (Drift)";
+          kpiGWarning.style.color = "#f43f5e";
+        } else {
+          kpiGWarning.textContent = "🟢 Full Traction Grip";
+          kpiGWarning.style.color = "#10b981";
+        }
+      }
+
+      if (kpiMinVolt) kpiMinVolt.textContent = `${minVolt.toFixed(1)} V`;
+      if (kpiPeakWatts) kpiPeakWatts.textContent = `Peak ${Math.round(peakWatts)} W`;
+
+      const limitSec = tempBot.matchPeriod === "60s" ? 60.0 : 15.0;
+      const totalTime = tOffset;
+      const margin = limitSec - totalTime;
+
+      if (kpiAutonCompliance) {
+        if (margin >= 0) {
+          kpiAutonCompliance.textContent = `🟢 Legal (${totalTime.toFixed(2)}s)`;
+          kpiAutonCompliance.className = "kpi-val text-green";
+        } else {
+          kpiAutonCompliance.textContent = `⚠️ Overtime (+${Math.abs(margin).toFixed(2)}s)`;
+          kpiAutonCompliance.className = "kpi-val text-red";
+        }
+      }
+      if (kpiMargin) {
+        kpiMargin.textContent = margin >= 0 ? `~${margin.toFixed(2)}s safety buffer` : `Exceeds ${limitSec.toFixed(0)}s clock!`;
+      }
+
+      renderDynoGraph(simPts, tempBot);
+    }
+
+    function renderDynoGraph(pts, currentBot) {
+      if (!graphCanvas) return;
+      const ctx = graphCanvas.getContext("2d");
+      const W = graphCanvas.width;
+      const H = graphCanvas.height;
+
+      ctx.fillStyle = "#0c1222";
+      ctx.fillRect(0, 0, W, H);
+
+      if (!pts || pts.length < 2) {
+        ctx.fillStyle = "#64748b";
+        ctx.font = "13px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("No path trajectory to analyze. Add actions to routine.", W / 2, H / 2);
+        return;
+      }
+
+      const totalT = pts[pts.length - 1].t;
+      const padLeft = 46;
+      const padRight = 16;
+      const padTop = 20;
+      const padBottom = 28;
+      const plotW = W - padLeft - padRight;
+      const plotH = H - padTop - padBottom;
+
+      // Update Legend Row
+      if (legendRow) {
+        if (activeChannel === "velocity") {
+          legendRow.innerHTML = `
+            <span class="legend-item"><span class="legend-color-box" style="background:#38bdf8;"></span> Linear Speed (in/s)</span>
+            <span class="legend-item"><span class="legend-color-box" style="background:#facc15;"></span> Turn Rate (°/s)</span>
+          `;
+        } else if (activeChannel === "accel") {
+          legendRow.innerHTML = `
+            <span class="legend-item"><span class="legend-color-box" style="background:#f43f5e;"></span> Acceleration (g)</span>
+            <span class="legend-item"><span class="legend-color-box" style="background:#fb923c;"></span> Centripetal Lat G</span>
+            <span class="legend-item"><span class="legend-color-box" style="background:#ef4444;border-top:2px dashed #ef4444;"></span> Slip Limit (${currentBot.wheelTraction || 0.85}g)</span>
+          `;
+        } else if (activeChannel === "power") {
+          legendRow.innerHTML = `
+            <span class="legend-item"><span class="legend-color-box" style="background:#fbbf24;"></span> Battery Voltage (V)</span>
+            <span class="legend-item"><span class="legend-color-box" style="background:#34d399;"></span> Drivetrain Power (W)</span>
+          `;
+        }
+      }
+
+      // Draw Grid & Axes
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = padTop + (plotH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(W - padRight, y);
+        ctx.stroke();
+      }
+
+      const timeSteps = 5;
+      for (let i = 0; i <= timeSteps; i++) {
+        const x = padLeft + (plotW / timeSteps) * i;
+        ctx.beginPath();
+        ctx.moveTo(x, padTop);
+        ctx.lineTo(x, padTop + plotH);
+        ctx.stroke();
+
+        const tVal = (totalT / timeSteps) * i;
+        ctx.fillStyle = "#64748b";
+        ctx.font = "10px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(`${tVal.toFixed(1)}s`, x, H - 10);
+      }
+
+      const getX = (t) => padLeft + (Math.max(0, t) / Math.max(totalT, 0.01)) * plotW;
+
+      if (activeChannel === "velocity") {
+        // Linear velocity & turn rate
+        const maxV = Math.max(80, ...pts.map((p) => Math.abs(p.vLin || 0)));
+        const maxW = Math.max(360, ...pts.map((p) => Math.abs(p.omegaDeg || 0)));
+
+        const getY_V = (v) => padTop + plotH - (Math.abs(v) / maxV) * plotH;
+        const getY_W = (w) => padTop + plotH - (Math.abs(w) / maxW) * plotH;
+
+        // Draw Speed (Cyan)
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = getX(p.t);
+          const y = getY_V(p.vLin || 0);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Draw Turn Rate (Yellow)
+        ctx.strokeStyle = "#facc15";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = getX(p.t);
+          const y = getY_W(p.omegaDeg || 0);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Left axis labels (Speed)
+        ctx.fillStyle = "#38bdf8";
+        ctx.textAlign = "right";
+        ctx.fillText(`${Math.round(maxV)}`, padLeft - 6, padTop + 8);
+        ctx.fillText(`0`, padLeft - 6, padTop + plotH);
+
+      } else if (activeChannel === "accel") {
+        const maxG = Math.max(1.5, (currentBot.wheelTraction || 0.85) * 1.3, ...pts.map((p) => p.gTotal || 0));
+        const getYG = (g) => padTop + plotH - (Math.min(g, maxG) / maxG) * plotH;
+
+        // Draw Traction Limit threshold line (Red dashed)
+        const slipY = getYG(currentBot.wheelTraction || 0.85);
+        ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, slipY);
+        ctx.lineTo(W - padRight, slipY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw Linear Accel (Magenta)
+        ctx.strokeStyle = "#f43f5e";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = getX(p.t);
+          const y = getYG(Math.abs(p.gLin || 0));
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Draw Lateral G (Orange)
+        ctx.strokeStyle = "#fb923c";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = getX(p.t);
+          const y = getYG(p.gLateral || 0);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        ctx.fillStyle = "#f43f5e";
+        ctx.textAlign = "right";
+        ctx.fillText(`${maxG.toFixed(1)}g`, padLeft - 6, padTop + 8);
+        ctx.fillText(`0g`, padLeft - 6, padTop + plotH);
+
+      } else if (activeChannel === "power") {
+        const minV = 8.5;
+        const maxV = 13.5;
+        const maxW = Math.max(120, ...pts.map((p) => p.watts || 0));
+
+        const getY_Volt = (v) => padTop + plotH - ((v - minV) / (maxV - minV)) * plotH;
+        const getY_Watts = (w) => padTop + plotH - (w / maxW) * plotH;
+
+        // Draw Battery Voltage (Amber)
+        ctx.strokeStyle = "#fbbf24";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = getX(p.t);
+          const y = getY_Volt(p.voltage || currentBot.batteryVolts || 12.8);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Draw Power (Green)
+        ctx.strokeStyle = "#34d399";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const x = getX(p.t);
+          const y = getY_Watts(p.watts || 0);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        ctx.fillStyle = "#fbbf24";
+        ctx.textAlign = "right";
+        ctx.fillText(`${maxV}V`, padLeft - 6, padTop + 8);
+        ctx.fillText(`${minV}V`, padLeft - 6, padTop + plotH);
+      }
+    }
+
+    function openModal() {
+      syncInputsFromBot();
+      modal.hidden = false;
+      modal.classList.add("open");
+      updateDynoCalculations();
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    if (btnOpenTools) btnOpenTools.addEventListener("click", openModal);
+    if (btnOpenHud) btnOpenHud.addEventListener("click", openModal);
+    if (btnOpenBotTab) btnOpenBotTab.addEventListener("click", openModal);
+    if (btnClose) btnClose.addEventListener("click", closeModal);
+    if (btnCloseBtn) btnCloseBtn.addEventListener("click", closeModal);
+
+    // Form change events
+    if (motorCountSel) motorCountSel.addEventListener("change", updateDynoCalculations);
+    if (tractionSel) tractionSel.addEventListener("change", updateDynoCalculations);
+    if (battSel) battSel.addEventListener("change", updateDynoCalculations);
+
+    if (weightRange && weightVal) {
+      weightRange.addEventListener("input", () => {
+        weightVal.value = weightRange.value;
+        updateDynoCalculations();
+      });
+      weightVal.addEventListener("input", () => {
+        weightRange.value = weightVal.value;
+        updateDynoCalculations();
+      });
+    }
+
+    // Period toggles
+    if (btnPeriod15 && btnPeriod60) {
+      btnPeriod15.addEventListener("click", () => {
+        btnPeriod15.classList.add("active");
+        btnPeriod60.classList.remove("active");
+        updateDynoCalculations();
+      });
+      btnPeriod60.addEventListener("click", () => {
+        btnPeriod60.classList.add("active");
+        btnPeriod15.classList.remove("active");
+        updateDynoCalculations();
+      });
+    }
+
+    // Preset buttons
+    const presets = {
+      "6m_speed": { motorCount: 6, rpm: 600, weight: 14.0, diam: 3.25, traction: 0.85 },
+      "6m_balanced": { motorCount: 6, rpm: 450, weight: 15.0, diam: 3.25, traction: 0.85 },
+      "8m_heavy": { motorCount: 8, rpm: 360, weight: 18.0, diam: 4.0, traction: 1.10 },
+      "4m_starter": { motorCount: 4, rpm: 200, weight: 12.0, diam: 4.0, traction: 0.85 },
+    };
+
+    document.querySelectorAll(".btn-physics-preset").forEach((b) => {
+      b.addEventListener("click", () => {
+        const p = presets[b.dataset.preset];
+        if (p) {
+          if (motorCountSel) motorCountSel.value = String(p.motorCount);
+          if (weightRange) weightRange.value = String(p.weight);
+          if (weightVal) weightVal.value = String(p.weight);
+          if (tractionSel) tractionSel.value = String(p.traction);
+          updateDynoCalculations();
+          showToast(`⚡ Loaded preset: ${b.textContent.trim()}`);
+        }
+      });
+    });
+
+    // Channel tabs
+    document.querySelectorAll(".phys-channel-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll(".phys-channel-btn").forEach((btn) => btn.classList.remove("active"));
+        b.classList.add("active");
+        activeChannel = b.dataset.channel;
+        updateDynoCalculations();
+      });
+    });
+
+    // Save Physics Settings to Robot
+    if (btnApply) {
+      btnApply.addEventListener("click", () => {
+        const newProps = getCurrentSettingsBot();
+        bot.motorCount = newProps.motorCount;
+        bot.robotWeightLbs = newProps.robotWeightLbs;
+        bot.wheelTraction = newProps.wheelTraction;
+        bot.batteryVolts = newProps.batteryVolts;
+        bot.matchPeriod = newProps.matchPeriod;
+
+        syncBotInputs();
+        isSimPathDirty = true;
+        markDirty();
+        updateTimeDisplay();
+        draw();
+        closeModal();
+        showToast("💾 Saved robot drive physics & auton period settings!");
+      });
+    }
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeModal();
+    });
+  }
+
+
 // -- Init ---------------------------------------------------------
   wireBotSettings();
   wireBotVisualCard();
@@ -8431,6 +9571,604 @@ lemlib::ControllerSettings ${currentMode}_controller(
   }
 
 
+  /* =================================================================
+     BREADCRUMB NAVIGATION & GLOBAL QOL UTILITIES
+     ================================================================= */
+  function renderBreadcrumbs() {
+    const el = document.getElementById("flowBreadcrumbs");
+    if (!el) return;
+
+    const curPath = activePath();
+    const routineName = curPath ? curPath.name : "Routine";
+
+    if (!selectedId) {
+      el.innerHTML = `
+        <div class="crumb-item active" data-crumb-act="root" title="Top-level routine view">
+          <span>🏁</span> <strong>${escapeHtml(routineName)}</strong> <span class="crumb-count">(${actions.length} ${actions.length === 1 ? "block" : "blocks"})</span>
+        </div>
+      `;
+      return;
+    }
+
+    // Find trail to selectedId
+    function findTrail(id, list, parentTrail = []) {
+      for (let i = 0; i < list.length; i++) {
+        const item = list[i];
+        const currentStep = {
+          id: item.id,
+          type: item.type,
+          index: i + 1,
+          item: item
+        };
+        if (item.id === id) {
+          return [...parentTrail, currentStep];
+        }
+        if (item.type === "ifElse") {
+          if (Array.isArray(item.thenChildren)) {
+            const res = findTrail(id, item.thenChildren, [...parentTrail, currentStep, { branch: "then", parentId: item.id }]);
+            if (res) return res;
+          }
+          if (Array.isArray(item.elseChildren)) {
+            const res = findTrail(id, item.elseChildren, [...parentTrail, currentStep, { branch: "else", parentId: item.id }]);
+            if (res) return res;
+          }
+        }
+        if (item.type === "loop" && Array.isArray(item.children)) {
+          const res = findTrail(id, item.children, [...parentTrail, currentStep, { branch: "loop", parentId: item.id }]);
+          if (res) return res;
+        }
+      }
+      return null;
+    }
+
+    const trail = findTrail(selectedId, actions);
+
+    let html = `
+      <div class="crumb-item" data-crumb-act="root" title="Select top-level routine">
+        <span>🏁</span> <strong>${escapeHtml(routineName)}</strong>
+      </div>
+    `;
+
+    if (trail && trail.length) {
+      trail.forEach((step, idx) => {
+        const isLast = idx === trail.length - 1;
+        html += `<span class="crumb-sep">›</span>`;
+
+        if (step.branch) {
+          const branchLabel = step.branch === "then" ? "Then Branch" : (step.branch === "else" ? "Else Branch" : "Loop Body");
+          const branchClass = step.branch === "then" ? "then-branch" : (step.branch === "else" ? "else-branch" : "loop-branch");
+          html += `
+            <div class="crumb-item branch ${branchClass}" data-crumb-act="branch" data-parent-id="${step.parentId}" data-branch="${step.branch}">
+              <span>⚡</span> ${branchLabel}
+            </div>
+          `;
+        } else {
+          let icon = "📍";
+          if (step.type === "ifElse") icon = "🔀";
+          else if (step.type === "loop") icon = "🔁";
+          else if (step.type.includes("turn")) icon = "🔄";
+          else if (step.type.includes("swing")) icon = "🌊";
+          else if (step.type === "custom") icon = "🔴";
+
+          const label = `#${step.index} ${step.type === 'ifElse' ? 'if/else' : step.type}`;
+          html += `
+            <div class="crumb-item ${isLast ? "active" : ""}" data-crumb-act="block" data-id="${step.id}">
+              <span>${icon}</span> ${escapeHtml(label)}
+            </div>
+          `;
+        }
+      });
+    } else {
+      html += `
+        <span class="crumb-sep">›</span>
+        <div class="crumb-item active"><span>📍</span> Selected Block</div>
+      `;
+    }
+
+    el.innerHTML = html;
+  }
+
+  function wireBreadcrumbs() {
+    const el = document.getElementById("flowBreadcrumbs");
+    if (!el) return;
+
+    el.addEventListener("click", (e) => {
+      const item = e.target.closest("[data-crumb-act]");
+      if (!item) return;
+
+      const act = item.dataset.crumbAct;
+      if (act === "root") {
+        selectedId = null;
+        renderFlow();
+        draw();
+      } else if (act === "block") {
+        const id = item.dataset.id;
+        if (id) {
+          selectedId = id;
+          renderFlow();
+          draw();
+          setTimeout(() => {
+            const cardEl = document.querySelector(`.action-card[data-id="${id}"]`) || document.querySelector(`[data-nested-child-id="${id}"]`);
+            if (cardEl) cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 30);
+        }
+      } else if (act === "branch") {
+        const parentId = item.dataset.parentId;
+        const branch = item.dataset.branch;
+        if (parentId) {
+          selectedId = parentId;
+          if (branch === "then" || branch === "else") {
+            const parentBlock = actions.find(a => a.id === parentId);
+            if (parentBlock && parentBlock.type === "ifElse") {
+              parentBlock.activeSimBranch = branch;
+            }
+          }
+          renderFlow();
+          draw();
+          setTimeout(() => {
+            const cardEl = document.querySelector(`.action-card[data-id="${parentId}"]`);
+            if (cardEl) cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 30);
+        }
+      }
+    });
+  }
+
+  function duplicateActionById(actionId) {
+    if (!actionId) return;
+
+    function cloneAction(act) {
+      const cloned = JSON.parse(JSON.stringify(act));
+      cloned.id = uid();
+      if (Array.isArray(cloned.thenChildren)) cloned.thenChildren = cloned.thenChildren.map(cloneAction);
+      if (Array.isArray(cloned.elseChildren)) cloned.elseChildren = cloned.elseChildren.map(cloneAction);
+      if (Array.isArray(cloned.children)) cloned.children = cloned.children.map(cloneAction);
+      return cloned;
+    }
+
+    const idx = actions.findIndex((x) => x.id === actionId);
+    if (idx !== -1) {
+      const cloned = cloneAction(actions[idx]);
+      actions.splice(idx + 1, 0, cloned);
+      selectedId = cloned.id;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      try { updateTimeDisplay(); } catch (_) {}
+      showToast(`📋 Duplicated block #${idx + 1} (${cloned.type})`);
+      return;
+    }
+
+    // Check nested loops and if/else
+    for (const a of actions) {
+      if (a.type === "loop" && Array.isArray(a.children)) {
+        const cIdx = a.children.findIndex((x) => x.id === actionId);
+        if (cIdx !== -1) {
+          const cloned = cloneAction(a.children[cIdx]);
+          a.children.splice(cIdx + 1, 0, cloned);
+          selectedId = cloned.id;
+          markDirty();
+          renderFlow();
+          draw();
+          generateCode();
+          try { updateTimeDisplay(); } catch (_) {}
+          showToast(`📋 Duplicated block in Loop (${cloned.type})`);
+          return;
+        }
+      }
+      if (a.type === "ifElse") {
+        if (Array.isArray(a.thenChildren)) {
+          const tIdx = a.thenChildren.findIndex((x) => x.id === actionId);
+          if (tIdx !== -1) {
+            const cloned = cloneAction(a.thenChildren[tIdx]);
+            a.thenChildren.splice(tIdx + 1, 0, cloned);
+            selectedId = cloned.id;
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            try { updateTimeDisplay(); } catch (_) {}
+            showToast(`📋 Duplicated block in Then Branch (${cloned.type})`);
+            return;
+          }
+        }
+        if (Array.isArray(a.elseChildren)) {
+          const eIdx = a.elseChildren.findIndex((x) => x.id === actionId);
+          if (eIdx !== -1) {
+            const cloned = cloneAction(a.elseChildren[eIdx]);
+            a.elseChildren.splice(eIdx + 1, 0, cloned);
+            selectedId = cloned.id;
+            markDirty();
+            renderFlow();
+            draw();
+            generateCode();
+            try { updateTimeDisplay(); } catch (_) {}
+            showToast(`📋 Duplicated block in Else Branch (${cloned.type})`);
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  /* =================================================================
+     COMMAND PALETTE (CTRL+K) & GLOBAL KEYBOARD SHORTCUTS
+     ================================================================= */
+  let cmdPaletteHighlightIdx = 0;
+  let cmdPaletteFilteredList = [];
+
+  function addActionToFlow(type) {
+    const act = defaultAction(type);
+    if (!act) return;
+    actions.push(act);
+    selectedId = act.id;
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+    switchPlannerTab("flowchart");
+    showToast(`➕ Added '${type}' block to routine!`);
+
+    setTimeout(() => {
+      const cardEl = document.querySelector(`.action-card[data-id="${act.id}"]`);
+      if (cardEl) cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+  }
+
+  function addSnippetToFlow(snippet) {
+    const act = defaultAction("custom");
+    act.customCode = snippet;
+    act.label = snippet.split("(")[0] || "subsystem command";
+    actions.push(act);
+    selectedId = act.id;
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+    switchPlannerTab("flowchart");
+    showToast(`🟢 Inserted subsystem snippet '${snippet}'!`);
+
+    setTimeout(() => {
+      const cardEl = document.querySelector(`.action-card[data-id="${act.id}"]`);
+      if (cardEl) cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+  }
+
+  function setSimSpeed(sp) {
+    simSpeed = sp;
+    const speedEl = document.getElementById("simSpeedVal");
+    if (speedEl) speedEl.textContent = `${sp.toFixed(1)}x`;
+    showToast(`⚡ Simulation speed set to ${sp.toFixed(1)}x`);
+  }
+
+  function toggleCommandPaletteModal() {
+    const modal = document.getElementById("commandPaletteModal");
+    if (!modal) return;
+    if (modal.hidden) {
+      modal.hidden = false;
+      modal.classList.add("open");
+      const input = document.getElementById("cmdPaletteInput");
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+      cmdPaletteHighlightIdx = 0;
+      renderCommandPaletteList();
+    } else {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+  }
+
+  function closeCommandPaletteModal() {
+    const modal = document.getElementById("commandPaletteModal");
+    if (modal) {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+  }
+
+  function renderCommandPaletteList() {
+    const resultsContainer = document.getElementById("cmdPaletteResults");
+    const input = document.getElementById("cmdPaletteInput");
+    if (!resultsContainer) return;
+
+    const query = input ? input.value.trim().toLowerCase() : "";
+
+    const COMMAND_PALETTE_ITEMS = [
+      // Category 1: Blocks & Motions
+      { id: "act_moveToPose", cat: "🧩 Blocks & Motion", title: "Add moveToPose(x, y, θ)", desc: "Drive chassis to target field position and angle", keywords: "move pose drive motion", action: () => addActionToFlow("moveToPose") },
+      { id: "act_moveToPoint", cat: "🧩 Blocks & Motion", title: "Add moveToPoint(x, y)", desc: "Drive chassis to target point without fixed ending angle", keywords: "move point drive motion", action: () => addActionToFlow("moveToPoint") },
+      { id: "act_turnToHeading", cat: "🧩 Blocks & Motion", title: "Add turnToHeading(θ)", desc: "Rotate chassis in place to face target heading angle", keywords: "turn heading angle rotate", action: () => addActionToFlow("turnToHeading") },
+      { id: "act_turnToPoint", cat: "🧩 Blocks & Motion", title: "Add turnToPoint(x, y)", desc: "Rotate chassis in place to face target field coordinate", keywords: "turn point face target", action: () => addActionToFlow("turnToPoint") },
+      { id: "act_swingToHeading", cat: "🧩 Blocks & Motion", title: "Add swingToHeading(θ)", desc: "Single-sided wheel lock swing turn to heading angle", keywords: "swing turn heading lock wheel", action: () => addActionToFlow("swingToHeading") },
+      { id: "act_swingToPoint", cat: "🧩 Blocks & Motion", title: "Add swingToPoint(x, y)", desc: "Single-sided wheel lock swing turn towards target point", keywords: "swing turn point lock wheel", action: () => addActionToFlow("swingToPoint") },
+      { id: "act_wait", cat: "🧩 Blocks & Motion", title: "Add Wait / Delay Block", desc: "Pause auton timing or wait for sensor condition / event", keywords: "wait delay pause event timing", action: () => addActionToFlow("wait") },
+      { id: "act_ifElse", cat: "🧩 Logic & Control", title: "Add If / Else Block (Scratch Logic)", desc: "Conditional branch block evaluating boolean variable", keywords: "if else condition logic branch scratch", action: () => addActionToFlow("ifElse") },
+      { id: "act_loop", cat: "🧩 Logic & Control", title: "Add Loop Block (for/until/forever)", desc: "Repeat nested actions multiple times or until condition", keywords: "loop repeat for until forever repeat", action: () => addActionToFlow("loop") },
+      { id: "act_custom", cat: "🧩 Code & Custom", title: "Add Custom C++ Block", desc: "Execute custom subsystem C++ code or inline function", keywords: "custom code cpp pros lemlib inline", action: () => addActionToFlow("custom") },
+      { id: "snip_clamp", cat: "🟢 Subsystem Snippets", title: "Add 'clamp goal' Command", desc: "Insert clamp.set_value(true); custom snippet", keywords: "clamp goal mogo pneumatic", action: () => addSnippetToFlow("clamp.set_value(true);") },
+      { id: "snip_intake", cat: "🟢 Subsystem Snippets", title: "Add 'intake on' Command", desc: "Insert intake.move(127); custom snippet", keywords: "intake move spin motor roller", action: () => addSnippetToFlow("intake.move(127);") },
+
+      // Category 2: Navigation & Tabs
+      { id: "nav_tab_flow", cat: "🗺️ Navigation & Tabs", title: "Switch to Auton Action Flow", desc: "Visual Scratch block editor and routine timeline", shortcut: "Alt+1", keywords: "flow flowchart blocks actions scratch tab", action: () => switchPlannerTab("flowchart") },
+      { id: "nav_tab_cond", cat: "🗺️ Navigation & Tabs", title: "Switch to Conditions & Variables", desc: "Manage boolean flags and sensor condition states", shortcut: "Alt+2", keywords: "condition variable flag boolean logic tab", action: () => switchPlannerTab("conditions") },
+      { id: "nav_tab_bot", cat: "🗺️ Navigation & Tabs", title: "Switch to Robot Specs & Drivetrain", desc: "Configure track width, wheel diameter, RPM & PID gains", shortcut: "Alt+3", keywords: "bot specs drivetrain pid track rpm tab", action: () => switchPlannerTab("bot") },
+      { id: "nav_tab_code", cat: "🗺️ Navigation & Tabs", title: "Switch to LemLib C++ Code Export", desc: "View auto-generated C++ code for src/autons.cpp", shortcut: "Alt+4", keywords: "code cpp export generate source tab", action: () => switchPlannerTab("code") },
+      { id: "nav_pros_ide", cat: "🗺️ Navigation & Tabs", title: "Open PROS C++ Web IDE", desc: "Full C++ code editor with syntax highlighting", keywords: "pros ide editor cpp code page", action: () => { window.location.href = "ide.html"; } },
+      { id: "nav_brain_usb", cat: "🗺️ Navigation & Tabs", title: "Open VEX V5 Brain USB Telemetry", desc: "Live terminal and serial communication with V5 Brain", keywords: "brain usb serial telemetry connect", action: () => { const btn = document.getElementById("navModeBrain"); if (btn) btn.click(); } },
+
+      // Category 3: Simulation
+      { id: "sim_toggle", cat: "▶️ Simulation", title: "Run / Pause Simulation", desc: "Play or pause 2D field kinematics simulation", shortcut: "Ctrl+Space", keywords: "run pause play stop simulation sim", action: () => { if (simRunning) stopSim(); else startSim(); } },
+      { id: "sim_reset", cat: "▶️ Simulation", title: "Reset Simulation Rewind", desc: "Stop simulation and return robot to start pose", keywords: "reset rewind stop start sim", action: () => stopSim() },
+      { id: "sim_sp_1x", cat: "▶️ Simulation", title: "Set Speed 1.0x (Normal Time)", desc: "Real-time 1:1 playback speed", keywords: "speed 1x normal time", action: () => setSimSpeed(1.0) },
+      { id: "sim_sp_2x", cat: "▶️ Simulation", title: "Set Speed 2.0x (Fast Forward)", desc: "Double speed playback for fast review", keywords: "speed 2x fast forward", action: () => setSimSpeed(2.0) },
+      { id: "sim_sp_05x", cat: "▶️ Simulation", title: "Set Speed 0.5x (Slow Motion)", desc: "Half speed playback for precision debugging", keywords: "speed 0.5x slow motion", action: () => setSimSpeed(0.5) },
+
+      // Category 4: Tools & Engineering Modals
+      { id: "tool_mirror", cat: "⚙️ Tools & Utilities", title: "Open Alliance Routine Mirror", desc: "Transform routine across X-axis, Y-axis, or 180° rotation", shortcut: "Ctrl+Shift+M", keywords: "mirror alliance invert flip red blue rot180", action: () => openModalById("allianceMirrorModal") },
+      { id: "tool_physics", cat: "⚙️ Tools & Utilities", title: "Open Real-Time Drive Physics Dyno", desc: "Inspect motor torque, traction limit, G-forces & 15s clock", shortcut: "Ctrl+Shift+P", keywords: "physics dyno traction gforce voltage battery clock", action: () => openModalById("drivePhysicsModal") },
+      { id: "tool_flowchart", cat: "⚙️ Tools & Utilities", title: "Open Interactive Routine Flowchart", desc: "View full routine visual diagram", keywords: "flowchart diagram visual tree graph", action: () => openModalById("flowchartModal") },
+      { id: "tool_cpp_import", cat: "⚙️ Tools & Utilities", title: "Open C++ Code Translator", desc: "Parse and convert raw C++ auton code into Scratch blocks", keywords: "translator import cpp convert parse blocks", action: () => openModalById("cppTranslateModal") },
+      { id: "tool_pid_tuner", cat: "⚙️ Tools & Utilities", title: "Open PID Gain Visualizer", desc: "Interactive step response graph and PID tuner", keywords: "pid gain tuner lateral angular step graph", action: () => openModalById("pidModal") },
+      { id: "tool_export_vid", cat: "⚙️ Tools & Utilities", title: "Export .mp4 Video Recording", desc: "Render HD video file of autonomous simulation", keywords: "export video mp4 recording render video", action: () => openModalById("videoExportModal") },
+      { id: "tool_help", cat: "⚙️ Tools & Utilities", title: "Open Help & Documentation", desc: "Comprehensive guides, field specs, and shortcuts", keywords: "help docs guide reference documentation", action: () => openModalById("helpModal") },
+
+      // Category 5: Routine File Operations
+      { id: "file_new", cat: "📁 Routine Operations", title: "New Autonomous Routine", desc: "Create a blank routine in active project", keywords: "new routine path auton create", action: () => addPath() },
+      { id: "file_duplicate", cat: "📁 Routine Operations", title: "Duplicate Selected Block / Routine", desc: "Duplicate active block (or entire routine if none selected)", shortcut: "Ctrl+D", keywords: "duplicate copy clone block routine", action: () => { if (selectedId) duplicateActionById(selectedId); else duplicateActivePath(); } },
+      { id: "file_rename", cat: "📁 Routine Operations", title: "Rename Active Routine", desc: "Change active routine display name", keywords: "rename name title routine", action: () => renameActivePath() },
+      { id: "file_delete_block", cat: "📁 Routine Operations", title: "Delete Selected Block", desc: "Remove currently selected block card", shortcut: "Delete", keywords: "delete remove trash block card", action: () => { if (selectedId) openDeleteBlockModal(selectedId); else showToast("Select a block first to delete"); } },
+      { id: "file_undo", cat: "📁 Routine Operations", title: "Undo Last Edit", desc: "Revert last change to routine or bot settings", shortcut: "Ctrl+Z", keywords: "undo revert back history", action: () => undo() },
+      { id: "file_redo", cat: "📁 Routine Operations", title: "Redo Edit", desc: "Reapply previously undone change", shortcut: "Ctrl+Shift+Z", keywords: "redo reapply forward history", action: () => redo() },
+    ];
+
+    cmdPaletteFilteredList = COMMAND_PALETTE_ITEMS.filter((item) => {
+      if (!query) return true;
+      return (
+        item.title.toLowerCase().includes(query) ||
+        item.desc.toLowerCase().includes(query) ||
+        item.keywords.toLowerCase().includes(query) ||
+        item.cat.toLowerCase().includes(query) ||
+        (item.shortcut && item.shortcut.toLowerCase().includes(query))
+      );
+    });
+
+    if (cmdPaletteHighlightIdx < 0) cmdPaletteHighlightIdx = 0;
+    if (cmdPaletteHighlightIdx >= cmdPaletteFilteredList.length) {
+      cmdPaletteHighlightIdx = Math.max(0, cmdPaletteFilteredList.length - 1);
+    }
+
+    if (cmdPaletteFilteredList.length === 0) {
+      resultsContainer.innerHTML = `<div style="padding:24px;text-align:center;color:#94a3b8;font-size:0.88rem;">No commands or actions found matching "<strong>${escapeHtml(query)}</strong>"</div>`;
+      return;
+    }
+
+    // Group items by category
+    const categories = [];
+    cmdPaletteFilteredList.forEach((item) => {
+      let cat = categories.find((c) => c.name === item.cat);
+      if (!cat) {
+        cat = { name: item.cat, items: [] };
+        categories.push(cat);
+      }
+      cat.items.push(item);
+    });
+
+    let html = "";
+    let overallIndex = 0;
+    categories.forEach((cat) => {
+      html += `<div class="cmd-category-title">${escapeHtml(cat.name)}</div>`;
+      cat.items.forEach((item) => {
+        const isHighlighted = overallIndex === cmdPaletteHighlightIdx;
+        html += `
+          <div class="cmd-item-card ${isHighlighted ? "highlighted" : ""}" data-item-idx="${overallIndex}">
+            <div class="cmd-item-left">
+              <span class="cmd-item-title">${escapeHtml(item.title)}</span>
+              <span class="cmd-item-desc">${escapeHtml(item.desc)}</span>
+            </div>
+            ${item.shortcut ? `<span class="cmd-item-shortcut">${escapeHtml(item.shortcut)}</span>` : ""}
+          </div>
+        `;
+        overallIndex++;
+      });
+    });
+
+    resultsContainer.innerHTML = html;
+
+    // Scroll highlighted item into view
+    const highlightedEl = resultsContainer.querySelector(".cmd-item-card.highlighted");
+    if (highlightedEl) {
+      highlightedEl.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function wireCommandPaletteModal() {
+    const btnHeader = document.getElementById("btnOpenCommandPalette");
+    if (btnHeader) {
+      btnHeader.addEventListener("click", () => {
+        toggleCommandPaletteModal();
+      });
+    }
+
+    const btnClose = document.getElementById("cmdPaletteClose");
+    if (btnClose) {
+      btnClose.addEventListener("click", () => {
+        closeCommandPaletteModal();
+      });
+    }
+
+    const modal = document.getElementById("commandPaletteModal");
+    if (modal) {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeCommandPaletteModal();
+      });
+    }
+
+    const input = document.getElementById("cmdPaletteInput");
+    if (input) {
+      input.addEventListener("input", () => {
+        cmdPaletteHighlightIdx = 0;
+        renderCommandPaletteList();
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          if (cmdPaletteFilteredList.length > 0) {
+            cmdPaletteHighlightIdx = (cmdPaletteHighlightIdx + 1) % cmdPaletteFilteredList.length;
+            renderCommandPaletteList();
+          }
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          if (cmdPaletteFilteredList.length > 0) {
+            cmdPaletteHighlightIdx = (cmdPaletteHighlightIdx - 1 + cmdPaletteFilteredList.length) % cmdPaletteFilteredList.length;
+            renderCommandPaletteList();
+          }
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          if (cmdPaletteFilteredList[cmdPaletteHighlightIdx]) {
+            const item = cmdPaletteFilteredList[cmdPaletteHighlightIdx];
+            closeCommandPaletteModal();
+            item.action();
+          }
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          closeCommandPaletteModal();
+        }
+      });
+    }
+
+    const resultsContainer = document.getElementById("cmdPaletteResults");
+    if (resultsContainer) {
+      resultsContainer.addEventListener("click", (e) => {
+        const itemCard = e.target.closest(".cmd-item-card");
+        if (!itemCard) return;
+        const idx = Number(itemCard.dataset.itemIdx);
+        if (cmdPaletteFilteredList[idx]) {
+          closeCommandPaletteModal();
+          cmdPaletteFilteredList[idx].action();
+        }
+      });
+    }
+
+    initGlobalShortcuts();
+  }
+
+  function initGlobalShortcuts() {
+    window.addEventListener("keydown", (e) => {
+      const activeEl = document.activeElement;
+      const tag = activeEl ? activeEl.tagName.toLowerCase() : "";
+      const isInput = tag === "input" || tag === "textarea" || tag === "select" || (activeEl && activeEl.isContentEditable);
+
+      // Ctrl+K / Cmd+K: Open/Toggle Command Palette
+      const isCmdK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
+      if (isCmdK) {
+        e.preventDefault();
+        toggleCommandPaletteModal();
+        return;
+      }
+
+      // If Command Palette modal is open, let palette keydown listener handle keys
+      const cmdPaletteModal = document.getElementById("commandPaletteModal");
+      if (cmdPaletteModal && !cmdPaletteModal.hidden) {
+        if (e.key === "Escape") {
+          closeCommandPaletteModal();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      // Ctrl+Space or Cmd+Space: Toggle simulation
+      const isCmdSpace = (e.ctrlKey || e.metaKey) && (e.code === "Space" || e.key === " ");
+      if (isCmdSpace) {
+        e.preventDefault();
+        if (simRunning) stopSim();
+        else startSim();
+        return;
+      }
+
+      // Ctrl+Shift+M or Cmd+Shift+M: Alliance Mirror Modal
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        openModalById("allianceMirrorModal");
+        if (typeof updateAllianceMirrorPreview === "function") updateAllianceMirrorPreview();
+        return;
+      }
+
+      // Ctrl+Shift+P or Cmd+Shift+P: Drive Physics Modal
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        openModalById("drivePhysicsModal");
+        if (typeof updateDrivePhysicsDyno === "function") updateDrivePhysicsDyno();
+        return;
+      }
+
+      // Ctrl+Enter or Cmd+Enter: Switch to Code Tab & Generate C++ Code
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        switchPlannerTab("code");
+        showToast("💻 Generated LemLib C++ Code!");
+        return;
+      }
+
+      // Alt+1, Alt+2, Alt+3, Alt+4: Switch Planner Tabs
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === "1") { e.preventDefault(); switchPlannerTab("flowchart"); return; }
+        if (e.key === "2") { e.preventDefault(); switchPlannerTab("conditions"); return; }
+        if (e.key === "3") { e.preventDefault(); switchPlannerTab("bot"); return; }
+        if (e.key === "4") { e.preventDefault(); switchPlannerTab("code"); return; }
+      }
+
+      // Do NOT execute single-key shortcuts when typing in input/textarea/select
+      if (isInput) return;
+
+      // Space key alone outside inputs: Toggle simulation
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (simRunning) stopSim();
+        else startSim();
+        return;
+      }
+
+      // Ctrl+D / Cmd+D: Duplicate selected block or routine
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        if (selectedId) {
+          duplicateActionById(selectedId);
+        } else {
+          duplicateActivePath();
+        }
+        return;
+      }
+
+      // Delete / Backspace outside inputs: Delete selected block
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedId) {
+          e.preventDefault();
+          openDeleteBlockModal(selectedId);
+        }
+        return;
+      }
+
+      // Ctrl+Z / Cmd+Z (Undo) and Ctrl+Shift+Z / Cmd+Shift+Z or Ctrl+Y (Redo)
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        const key = e.key.toLowerCase();
+        if (key === "z" && !e.shiftKey) {
+          e.preventDefault();
+          undo();
+        } else if ((key === "z" && e.shiftKey) || key === "y") {
+          e.preventDefault();
+          redo();
+        }
+      }
+    });
+  }
+
+
   showBuildNumber();
   const btnUp = document.getElementById("btnCheckUpdate");
   if (btnUp) btnUp.onclick = () => checkForUpdates(true);
@@ -8443,6 +10181,10 @@ lemlib::ControllerSettings ${currentMode}_controller(
   wireCppTranslateModal();
   wirePidModal();
   wireVideoExportModal();
+  wireAllianceMirrorModal();
+  wireDrivePhysicsModal();
+  wireBreadcrumbs();
+  wireCommandPaletteModal();
   loadLocal();
   syncPathSelect();
   syncStartInputs();
