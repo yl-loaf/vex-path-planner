@@ -758,28 +758,42 @@ button.full { width: 100%; }
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  contain: layout style;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .sim-hud-chip {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
   font-size: 0.74rem;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 6px;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  text-align: center;
+  flex-shrink: 0;
 }
 .sim-hud-chip.chip-time {
+  min-width: 145px;
   background: rgba(245, 158, 11, 0.12);
   border: 1px solid rgba(245, 158, 11, 0.35);
   color: #fbbf24;
 }
 .sim-hud-chip.chip-speed {
+  min-width: 155px;
   background: rgba(56, 189, 248, 0.12);
   border: 1px solid rgba(56, 189, 248, 0.35);
   color: #38bdf8;
 }
 .sim-hud-chip.chip-coords {
+  min-width: 185px;
   background: rgba(148, 163, 184, 0.1);
   border: 1px solid rgba(148, 163, 184, 0.25);
   color: #cbd5e1;
@@ -8872,20 +8886,23 @@ kbd {
 
 /* Extended HUD Chips */
 .sim-hud-chip.chip-accel {
+  min-width: 145px;
   background: rgba(168, 85, 247, 0.12);
   border: 1px solid rgba(168, 85, 247, 0.35);
   color: #c084fc;
 }
 .sim-hud-chip.chip-power {
+  min-width: 110px;
   background: rgba(234, 179, 8, 0.12);
   border: 1px solid rgba(234, 179, 8, 0.35);
   color: #facc15;
 }
 .sim-hud-chip.chip-traction {
+  min-width: 120px;
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.35);
   color: #34d399;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .sim-hud-chip.chip-traction.slip {
   background: rgba(239, 68, 68, 0.25);

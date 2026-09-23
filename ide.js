@@ -978,12 +978,24 @@
     renderSyntaxHighlight();
   }
 
+  function isIgnoredSymbol(name) {
+    if (!name || typeof name !== "string") return true;
+    const l = name.toLowerCase();
+    return l.startsWith("lv_") || l.startsWith("_lv_") || l.startsWith("lvgl");
+  }
+
   function renderSymbols() {
     if (!elSymbolsTree) return;
     const sym = ProjectManager.symbols || ProjectManager.indexVariables();
     elSymbolsTree.innerHTML = "";
 
-    let total = sym.motors.length + sym.pistons.length + sym.sensors.length + sym.functions.length;
+    const filterItems = (arr) => (arr || []).filter(item => !isIgnoredSymbol(item.name));
+    const cleanMotors = filterItems(sym.motors);
+    const cleanPistons = filterItems(sym.pistons);
+    const cleanSensors = filterItems(sym.sensors);
+    const cleanFunctions = filterItems(sym.functions);
+
+    let total = cleanMotors.length + cleanPistons.length + cleanSensors.length + cleanFunctions.length;
     if (elSymbolsCount) elSymbolsCount.textContent = `${total} indexed`;
 
     const createSection = (title, items, icon) => {
@@ -1013,10 +1025,10 @@
       return sec;
     };
 
-    const s1 = createSection("Motors", sym.motors, "⚙️");
-    const s2 = createSection("Pistons / ADI", sym.pistons, "📍");
-    const s3 = createSection("Sensors & IMU", sym.sensors, "🧭");
-    const s4 = createSection("Functions & Routines", sym.functions, "⚡");
+    const s1 = createSection("Motors", cleanMotors, "⚙️");
+    const s2 = createSection("Pistons / ADI", cleanPistons, "📍");
+    const s3 = createSection("Sensors & IMU", cleanSensors, "🧭");
+    const s4 = createSection("Functions & Routines", cleanFunctions, "⚡");
 
     if (s1) elSymbolsTree.appendChild(s1);
     if (s2) elSymbolsTree.appendChild(s2);
@@ -1300,6 +1312,7 @@
     const items = [];
 
     sym.motors.forEach(m => {
+      if (isIgnoredSymbol(m.name)) return;
       items.push({
         name: m.name,
         kind: "variable",
@@ -1312,6 +1325,7 @@
     });
 
     sym.pistons.forEach(p => {
+      if (isIgnoredSymbol(p.name)) return;
       items.push({
         name: p.name,
         kind: "variable",
@@ -1324,6 +1338,7 @@
     });
 
     sym.sensors.forEach(s => {
+      if (isIgnoredSymbol(s.name)) return;
       items.push({
         name: s.name,
         kind: "variable",
@@ -1336,6 +1351,7 @@
     });
 
     sym.functions.forEach(f => {
+      if (isIgnoredSymbol(f.name)) return;
       items.push({
         name: f.name,
         kind: "method",
@@ -1715,6 +1731,90 @@
         elCodeEditor.value = elCodeEditor.value.substring(0, start) + "    " + elCodeEditor.value.substring(end);
         elCodeEditor.selectionStart = elCodeEditor.selectionEnd = start + 4;
         onEditorChange();
+        debouncedUpdateIntelliSense();
+        return;
+      }
+
+      // Auto-closing parentheses, brackets, braces, and quotes
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const pairMap = { "(": ")", "{": "}", "[": "]", '"': '"', "'": "'" };
+        const closingChars = [")", "}", "]", '"', "'"];
+
+        const start = elCodeEditor.selectionStart;
+        const end = elCodeEditor.selectionEnd;
+        const val = elCodeEditor.value;
+
+        // 1. Opening character (", (, {, [, ')
+        if (pairMap[e.key]) {
+          const openChar = e.key;
+          const closeChar = pairMap[openChar];
+
+          if (start !== end) {
+            e.preventDefault();
+            const selText = val.substring(start, end);
+            elCodeEditor.value = val.substring(0, start) + openChar + selText + closeChar + val.substring(end);
+            elCodeEditor.selectionStart = start + 1;
+            elCodeEditor.selectionEnd = start + 1 + selText.length;
+            onEditorChange();
+            debouncedUpdateIntelliSense();
+            return;
+          } else {
+            // Overtype quote if cursor is right before the same quote
+            if ((openChar === '"' || openChar === "'") && val[start] === openChar) {
+              e.preventDefault();
+              elCodeEditor.selectionStart = elCodeEditor.selectionEnd = start + 1;
+              return;
+            }
+            e.preventDefault();
+            elCodeEditor.value = val.substring(0, start) + openChar + closeChar + val.substring(start);
+            elCodeEditor.selectionStart = elCodeEditor.selectionEnd = start + 1;
+            onEditorChange();
+            debouncedUpdateIntelliSense();
+            return;
+          }
+        }
+
+        // 2. Typing a closing character when cursor is right before it -> step over
+        if (closingChars.includes(e.key) && start === end && val[start] === e.key) {
+          e.preventDefault();
+          elCodeEditor.selectionStart = elCodeEditor.selectionEnd = start + 1;
+          return;
+        }
+
+        // 3. Backspace removing empty pair
+        if (e.key === "Backspace" && start === end && start > 0) {
+          const charBefore = val[start - 1];
+          const charAfter = val[start];
+          if (pairMap[charBefore] && pairMap[charBefore] === charAfter) {
+            e.preventDefault();
+            elCodeEditor.value = val.substring(0, start - 1) + val.substring(start + 1);
+            elCodeEditor.selectionStart = elCodeEditor.selectionEnd = start - 1;
+            onEditorChange();
+            debouncedUpdateIntelliSense();
+            return;
+          }
+        }
+
+        // 4. Enter inside {} or () -> indent neatly
+        if (e.key === "Enter" && start === end && start > 0) {
+          const charBefore = val[start - 1];
+          const charAfter = val[start];
+          if ((charBefore === "{" && charAfter === "}") || (charBefore === "(" && charAfter === ")")) {
+            e.preventDefault();
+            const lineStart = val.lastIndexOf("\n", start - 1) + 1;
+            const currentLine = val.substring(lineStart, start);
+            const indentMatch = currentLine.match(/^\s*/);
+            const currentIndent = indentMatch ? indentMatch[0] : "";
+            const extraIndent = "    ";
+            const newText = "\n" + currentIndent + extraIndent + "\n" + currentIndent;
+            elCodeEditor.value = val.substring(0, start) + newText + val.substring(start);
+            const newPos = start + 1 + currentIndent.length + extraIndent.length;
+            elCodeEditor.selectionStart = elCodeEditor.selectionEnd = newPos;
+            onEditorChange();
+            debouncedUpdateIntelliSense();
+            return;
+          }
+        }
       }
     });
   }

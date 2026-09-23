@@ -4677,6 +4677,16 @@
     return total;
   }
 
+  function setDomText(el, text) {
+    if (el && el.textContent !== text) el.textContent = text;
+  }
+  function setDomClass(el, cls) {
+    if (el && el.className !== cls) el.className = cls;
+  }
+  function setDomWidth(el, widthStr) {
+    if (el && el.style.width !== widthStr) el.style.width = widthStr;
+  }
+
   function updateTimeDisplay(elapsed, totalEst, currentVLin, currentOmegaDeg, currentPt) {
     const el = document.getElementById("timeEst");
     const hudTime = document.getElementById("simHudTime");
@@ -4693,23 +4703,23 @@
     const hudPower = document.getElementById("simHudPower");
     const hudTraction = document.getElementById("simHudTraction");
 
-    if (clockLabel) clockLabel.textContent = `⏱️ ${clockLimit.toFixed(0)}s ${bot.matchPeriod === "60s" ? "Skills" : "Match"} Auton Clock`;
-    if (autonMarker) autonMarker.textContent = `${clockLimit.toFixed(0)}s`;
+    setDomText(clockLabel, `⏱️ ${clockLimit.toFixed(0)}s ${bot.matchPeriod === "60s" ? "Skills" : "Match"} Auton Clock`);
+    setDomText(autonMarker, `${clockLimit.toFixed(0)}s`);
 
     const curTime = (elapsed != null) ? elapsed : (actions.length ? estimateTotalTime() : 0);
     const progressPct = Math.min(100, Math.max(0, (curTime / clockLimit) * 100));
-    if (autonBar) autonBar.style.width = `${progressPct}%`;
+    setDomWidth(autonBar, `${progressPct}%`);
 
     if (clockStatus) {
       if (curTime <= clockLimit - 1.5) {
-        clockStatus.className = "clock-status legal";
-        clockStatus.textContent = `🟢 Legal (${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s)`;
+        setDomClass(clockStatus, "clock-status legal");
+        setDomText(clockStatus, `🟢 Legal (${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s)`);
       } else if (curTime <= clockLimit) {
-        clockStatus.className = "clock-status warning";
-        clockStatus.textContent = `🟡 Buffer (${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s)`;
+        setDomClass(clockStatus, "clock-status warning");
+        setDomText(clockStatus, `🟡 Buffer (${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s)`);
       } else {
-        clockStatus.className = "clock-status overtime";
-        clockStatus.textContent = `⚠️ Overtime (+${(curTime - clockLimit).toFixed(2)}s)`;
+        setDomClass(clockStatus, "clock-status overtime");
+        setDomText(clockStatus, `⚠️ Overtime (+${(curTime - clockLimit).toFixed(2)}s)`);
       }
     }
 
@@ -4722,66 +4732,62 @@
       activeRobotPose = simPath[simIdx];
     }
 
-    if (hudCoords) {
-      hudCoords.textContent = `📍 (${activeRobotPose.x.toFixed(1)}", ${activeRobotPose.y.toFixed(1)}") θ=${Math.round(normalizeAngle(activeRobotPose.theta))}°`;
-    }
+    setDomText(hudCoords, `📍 (${activeRobotPose.x.toFixed(1)}", ${activeRobotPose.y.toFixed(1)}") θ=${Math.round(normalizeAngle(activeRobotPose.theta))}°`);
 
     if (elapsed != null && totalEst != null) {
       let speedText = "";
       if (currentVLin != null && currentOmegaDeg != null) {
         speedText = ` · ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`;
-        if (hudSpeed) {
-          hudSpeed.textContent = `🏎️ ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`;
-        }
+        setDomText(hudSpeed, `🏎️ ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`);
       }
-      if (el) el.textContent = `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s${asyncTag}${speedText}`;
-      if (hudTime) hudTime.textContent = `⏱ ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s`;
+      setDomText(el, `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s${asyncTag}${speedText}`);
+      setDomText(hudTime, `⏱ ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s`);
     } else {
       const t = estimateTotalTime();
-      if (el) el.textContent = actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)${asyncTag}` : `Est. time: —`;
-      if (hudTime) hudTime.textContent = actions.length ? `⏱ ~${t.toFixed(2)}s total` : `⏱ 0.00s`;
-      if (hudSpeed) hudSpeed.textContent = `🏎️ 0.0 in/s`;
+      setDomText(el, actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)${asyncTag}` : `Est. time: —`);
+      setDomText(hudTime, actions.length ? `⏱ ~${t.toFixed(2)}s total` : `⏱ 0.00s`);
+      setDomText(hudSpeed, `🏎️ 0.0 in/s`);
     }
 
     if (currentPt) {
       if (hudAccel) {
         const aLin = currentPt.aLin != null ? Math.round(currentPt.aLin) : 0;
         const gLin = currentPt.gLin != null ? currentPt.gLin.toFixed(2) : "0.00";
-        hudAccel.textContent = `🚀 ${gLin}g (${aLin} in/s²)`;
+        setDomText(hudAccel, `🚀 ${gLin}g (${aLin} in/s²)`);
       }
       if (hudPower) {
         const v = currentPt.voltage != null ? currentPt.voltage.toFixed(1) : (bot.batteryVolts || 12.8).toFixed(1);
         const w = currentPt.watts != null ? Math.round(currentPt.watts) : 0;
-        hudPower.textContent = `⚡ ${v}V · ${w}W`;
+        setDomText(hudPower, `⚡ ${v}V · ${w}W`);
       }
       if (hudTraction) {
         if (currentPt.isSlipping) {
-          hudTraction.className = "sim-hud-chip chip-traction slip";
-          hudTraction.textContent = "⚠️ Wheel Slip! (Drift)";
+          setDomClass(hudTraction, "sim-hud-chip chip-traction slip");
+          setDomText(hudTraction, "⚠️ Wheel Slip! (Drift)");
         } else {
-          hudTraction.className = "sim-hud-chip chip-traction";
+          setDomClass(hudTraction, "sim-hud-chip chip-traction");
           const grip = currentPt.gripMargin != null ? currentPt.gripMargin : 100;
-          hudTraction.textContent = `🛞 Grip ${grip}%`;
+          setDomText(hudTraction, `🛞 Grip ${grip}%`);
         }
       }
     } else {
-      if (hudAccel) hudAccel.textContent = `🚀 0.00g (0 in/s²)`;
-      if (hudPower) hudPower.textContent = `⚡ ${(bot.batteryVolts || 12.8).toFixed(1)}V · 0W`;
+      setDomText(hudAccel, `🚀 0.00g (0 in/s²)`);
+      setDomText(hudPower, `⚡ ${(bot.batteryVolts || 12.8).toFixed(1)}V · 0W`);
       if (hudTraction) {
-        hudTraction.className = "sim-hud-chip chip-traction";
-        hudTraction.textContent = `🛞 Grip 100%`;
+        setDomClass(hudTraction, "sim-hud-chip chip-traction");
+        setDomText(hudTraction, `🛞 Grip 100%`);
       }
     }
 
     if (btnSimF) {
       if (simRunning) {
-        btnSimF.classList.add("playing");
+        if (!btnSimF.classList.contains("playing")) btnSimF.classList.add("playing");
         const txt = btnSimF.querySelector(".hud-btn-text");
-        if (txt) txt.textContent = "Pause";
+        setDomText(txt, "Pause");
       } else {
-        btnSimF.classList.remove("playing");
+        if (btnSimF.classList.contains("playing")) btnSimF.classList.remove("playing");
         const txt = btnSimF.querySelector(".hud-btn-text");
-        if (txt) txt.textContent = "Simulate";
+        setDomText(txt, "Simulate");
       }
     }
   }
@@ -4900,13 +4906,19 @@
 
   function drawPidTuningGraph(elapsedTime = 0) {
     const canvas = document.getElementById("pidTuningCanvas");
-    if (!canvas) return;
+    if (!canvas || canvas.offsetParent === null) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
 
     // Handle high DPI display
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const targetW = Math.floor(rect.width * dpr);
+    const targetH = Math.floor(rect.height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
 
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);

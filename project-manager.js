@@ -1454,6 +1454,12 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         return this.symbols;
       }
 
+      const isIgnoredSymbol = (name) => {
+        if (!name || typeof name !== "string") return true;
+        const l = name.toLowerCase();
+        return l.startsWith("lv_") || l.startsWith("_lv_") || l.startsWith("lvgl");
+      };
+
       const symbols = {
         motors: [],
         pistons: [],
@@ -1480,7 +1486,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           if (motorMatch && motorMatch[1] && !motorMatch[1].includes("Group") && motorMatch[1] !== "left_front" && motorMatch[1] !== "right_front") {
             const name = motorMatch[1];
             const args = motorMatch[2] || "";
-            if (!symbols.motors.some(m => m.name === name)) {
+            if (!isIgnoredSymbol(name) && !symbols.motors.some(m => m.name === name)) {
               symbols.motors.push({
                 name,
                 type: "pros::Motor",
@@ -1497,7 +1503,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           const groupMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?MotorGroup\s+([a-zA-Z0-9_]+)/);
           if (groupMatch && groupMatch[1]) {
             const name = groupMatch[1];
-            if (!symbols.motors.some(m => m.name === name)) {
+            if (!isIgnoredSymbol(name) && !symbols.motors.some(m => m.name === name)) {
               symbols.motors.push({
                 name,
                 type: "pros::MotorGroup",
@@ -1515,7 +1521,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           if (pistonMatch && pistonMatch[1]) {
             const name = pistonMatch[1];
             const port = pistonMatch[2] || "Port";
-            if (!symbols.pistons.some(p => p.name === name)) {
+            if (!isIgnoredSymbol(name) && !symbols.pistons.some(p => p.name === name)) {
               symbols.pistons.push({
                 name,
                 type: "pros::adi::DigitalOut",
@@ -1534,7 +1540,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
             const stype = sensorMatch[1];
             const name = sensorMatch[2];
             const args = sensorMatch[3] || "";
-            if (!symbols.sensors.some(s => s.name === name)) {
+            if (!isIgnoredSymbol(name) && !symbols.sensors.some(s => s.name === name)) {
               symbols.sensors.push({
                 name,
                 type: `pros::${stype}`,
@@ -1550,7 +1556,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           const chassisMatch = trimmed.match(/(?:extern\s+)?(?:lemlib::)?Chassis\s+([a-zA-Z0-9_]+)/);
           if (chassisMatch && chassisMatch[1]) {
             const name = chassisMatch[1];
-            if (!symbols.chassis.some(c => c.name === name)) {
+            if (!isIgnoredSymbol(name) && !symbols.chassis.some(c => c.name === name)) {
               symbols.chassis.push({
                 name,
                 type: "lemlib::Chassis",
@@ -1566,7 +1572,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           if (fnMatch && fnMatch[1]) {
             const fnName = fnMatch[1];
             const params = fnMatch[2];
-            if (!["initialize", "disabled", "competition_initialize", "autonomous", "opcontrol"].includes(fnName)) {
+            if (!isIgnoredSymbol(fnName) && !["initialize", "disabled", "competition_initialize", "autonomous", "opcontrol"].includes(fnName)) {
               if (!symbols.functions.some(f => f.name === fnName)) {
                 symbols.functions.push({
                   name: fnName,
