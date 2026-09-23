@@ -201,6 +201,45 @@ header h1 { font-size: 1.35rem; font-weight: 700; }
   background: rgba(6, 182, 212, 0.35);
   color: #fff;
 }
+
+/* ==========================================================================
+   EthicalAds Responsive Layout & Theme Styling
+   ========================================================================== */
+.ea-banner-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 6px 0;
+  padding: 4px 12px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.ea-banner-wrapper.ea-top {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.35);
+}
+.ea-banner-wrapper.ea-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.35);
+  margin-top: 14px;
+}
+.ea-banner-wrapper:empty {
+  display: none;
+}
+.ea-banner-wrapper [data-ea-publisher] {
+  margin: 0 auto;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.ea-banner-wrapper .horizontal.adaptive .ea-content {
+  background: #111a28 !important;
+  border: 1px solid #1e293b !important;
+  color: #e2e8f0 !important;
+  border-radius: 8px !important;
+}
 .action-card.multitask-active {
   border-left: 3px solid #a855f7 !important;
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, #161f2e 100%);
