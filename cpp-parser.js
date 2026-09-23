@@ -219,8 +219,9 @@
     // moveToPose
     const mtPoseMatch = line.match(/chassis\.moveToPose\s*\(([^;]+)\)/i);
     if (mtPoseMatch) {
+      const isBezier = /bezier|spline/i.test(line);
       const args = splitCppArgsSafe(mtPoseMatch[1]);
-      const act = createDefaultAction("moveToPose", defaultMaxSpeed, defaultMinSpeed);
+      const act = createDefaultAction(isBezier ? "bezierCurve" : "moveToPose", defaultMaxSpeed, defaultMinSpeed);
       act.x = parseFloat(args[0]) || 0;
       act.y = parseFloat(args[1]) || 0;
       act.theta = parseFloat(args[2]) || 0;
@@ -236,6 +237,20 @@
         if (p.async) act.async = true;
       }
       if (args[args.length - 1]?.trim().toLowerCase() === "true") act.async = true;
+      return act;
+    }
+
+    // chassis.followCurve or spline
+    const followCurveMatch = line.match(/chassis\.(?:followCurve|followSpline|follow)\s*\(([^;]+)\)/i);
+    if (followCurveMatch) {
+      const args = splitCppArgsSafe(followCurveMatch[1]);
+      const act = createDefaultAction("bezierCurve", defaultMaxSpeed, defaultMinSpeed);
+      if (args.length >= 3 && !isNaN(parseFloat(args[0]))) {
+        act.x = parseFloat(args[0]) || 0;
+        act.y = parseFloat(args[1]) || 0;
+        act.theta = parseFloat(args[2]) || 0;
+        act.timeout = parseInt(args[3], 10) || 2500;
+      }
       return act;
     }
 
@@ -743,7 +758,13 @@
       y: 0,
       theta: 0,
       lead: 0.6,
-      timeout: 2000,
+      cp1X: null,
+      cp1Y: null,
+      cp2X: null,
+      cp2Y: null,
+      lead1: 18,
+      lead2: 18,
+      timeout: type === "bezierCurve" ? 2500 : 2000,
       forwards: true,
       maxSpeed: defaultMaxSpeed,
       minSpeed: defaultMinSpeed,

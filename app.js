@@ -597,7 +597,13 @@
       y: 0,
       theta: 0,
       lead: bot.defaultLead != null ? bot.defaultLead : 0.6,
-      timeout: 2000,
+      cp1X: null,
+      cp1Y: null,
+      cp2X: null,
+      cp2Y: null,
+      lead1: 18,
+      lead2: 18,
+      timeout: type === "bezierCurve" ? 2500 : 2000,
       forwards: true,
       maxSpeed: bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127,
       minSpeed: bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0,
@@ -617,20 +623,47 @@
     };
   }
 
-  // -- Coordinate helpers -------------------------------------------
-  function fieldToCanvas(x, y) {
+  // Field inner playable area calibration (derived from field.jpg 810x806)
+  // Playing field 144" x 144" is bounded by perimeter walls inside the image:
+  // x: 20.3px to 783.8px in 810px image (center = 402.05px, width = 763.5px)
+  // y: 18.0px to 781.1px in 806px image (center = 399.55px, height = 763.1px)
+  function getFieldMetrics() {
+    if (imgReady && fieldImg.naturalWidth) {
+      const cxCenter = canvas.width * (402.05 / 810.0);
+      const cyCenter = canvas.height * (399.55 / 806.0);
+      const scaleX = (canvas.width * (763.5 / 810.0)) / FIELD_IN;
+      const scaleY = (canvas.height * (763.1 / 806.0)) / FIELD_IN;
+      const scale = (scaleX + scaleY) / 2;
+      return { cxCenter, cyCenter, scaleX, scaleY, scale };
+    }
     const scale = canvas.width / FIELD_IN;
     return {
-      cx: canvas.width / 2 + x * scale,
-      cy: canvas.height / 2 - y * scale,
+      cxCenter: canvas.width / 2,
+      cyCenter: canvas.height / 2,
+      scaleX: scale,
+      scaleY: scale,
+      scale: scale,
+    };
+  }
+
+  function getFieldScale() {
+    return getFieldMetrics().scale;
+  }
+
+  // -- Coordinate helpers -------------------------------------------
+  function fieldToCanvas(x, y) {
+    const m = getFieldMetrics();
+    return {
+      cx: m.cxCenter + x * m.scaleX,
+      cy: m.cyCenter - y * m.scaleY,
     };
   }
 
   function canvasToField(cx, cy) {
-    const scale = canvas.width / FIELD_IN;
+    const m = getFieldMetrics();
     return {
-      x: (cx - canvas.width / 2) / scale,
-      y: (canvas.height / 2 - cy) / scale,
+      x: (cx - m.cxCenter) / m.scaleX,
+      y: (m.cyCenter - cy) / m.scaleY,
     };
   }
 
@@ -684,6 +717,428 @@
 
   function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
+  }
+
+  // ==========================================================================
+  // FIELD COLLISION DETECTION ENGINE (VEX High Stakes: Walls, Loaders & Mogos)
+  // ==========================================================================
+
+  const FIELD_OBSTACLES = {
+    // 1. Perimeter Walls: 144" x 144" field, inner boundaries ±70.5"
+    walls: [
+      { id: "wall_west", name: "West Wall (Left)", type: "wall", axis: "x", value: -70.5, sign: -1, label: "Left Perimeter Wall (-70.5\")" },
+      { id: "wall_east", name: "East Wall (Right)", type: "wall", axis: "x", value: 70.5, sign: 1, label: "Right Perimeter Wall (+70.5\")" },
+      { id: "wall_south", name: "South Wall (Bottom)", type: "wall", axis: "y", value: -70.5, sign: -1, label: "Bottom Perimeter Wall (-70.5\")" },
+      { id: "wall_north", name: "North Wall (Top)", type: "wall", axis: "y", value: 70.5, sign: 1, label: "Top Perimeter Wall (+70.5\")" },
+    ],
+    // 2. Wall Match Loaders: 4 official loaders mounted on perimeter walls (calibrated to VEX High Stakes field specs & field.jpg)
+    loaders: [
+      {
+        id: "loader_red_tl",
+        name: "Red Loader (Top-Left)",
+        color: "red",
+        wall: "west",
+        minX: -70.5, maxX: -60.0,
+        minY: 51.5, maxY: 65.5,
+        center: { x: -65.25, y: 58.5 },
+        width: 10.5, height: 14.0,
+        label: "Red Match Loader (Top-Left, Y=58.5\")"
+      },
+      {
+        id: "loader_red_bl",
+        name: "Red Loader (Bottom-Left)",
+        color: "red",
+        wall: "west",
+        minX: -70.5, maxX: -60.0,
+        minY: -65.5, maxY: -51.5,
+        center: { x: -65.25, y: -58.5 },
+        width: 10.5, height: 14.0,
+        label: "Red Match Loader (Bottom-Left, Y=-58.5\")"
+      },
+      {
+        id: "loader_blue_tr",
+        name: "Blue Loader (Top-Right)",
+        color: "blue",
+        wall: "east",
+        minX: 60.0, maxX: 70.5,
+        minY: 51.5, maxY: 65.5,
+        center: { x: 65.25, y: 58.5 },
+        width: 10.5, height: 14.0,
+        label: "Blue Match Loader (Top-Right, Y=58.5\")"
+      },
+      {
+        id: "loader_blue_br",
+        name: "Blue Loader (Bottom-Right)",
+        color: "blue",
+        wall: "east",
+        minX: 60.0, maxX: 70.5,
+        minY: -65.5, maxY: -51.5,
+        center: { x: 65.25, y: -58.5 },
+        width: 10.5, height: 14.0,
+        label: "Blue Match Loader (Bottom-Right, Y=-58.5\")"
+      }
+    ],
+    // 3. Mobile Goals: 9 starting field positions (including Middle Goal)
+    // Radius = 3.1 inches (hexagonal base diameter ~6.2 inches) precisely matching field graphic
+    goals: [
+      { id: "goal_center", name: "Middle Goal", color: "yellow", x: 0.0, y: 0.0, radius: 3.1, label: "Middle Goal (0\", 0\")" },
+      { id: "goal_red_1", name: "Red Mobile Goal 1", color: "red", x: -48.0, y: -24.0, radius: 3.1, label: "Red Mogo (-48\", -24\")" },
+      { id: "goal_red_2", name: "Red Mobile Goal 2", color: "red", x: -24.0, y: -48.0, radius: 3.1, label: "Red Mogo (-24\", -48\")" },
+      { id: "goal_blue_1", name: "Blue Mobile Goal 1", color: "blue", x: 48.0, y: 24.0, radius: 3.1, label: "Blue Mogo (48\", 24\")" },
+      { id: "goal_blue_2", name: "Blue Mobile Goal 2", color: "blue", x: 24.0, y: 48.0, radius: 3.1, label: "Blue Mogo (24\", 48\")" },
+      { id: "goal_neutral_tl", name: "Neutral Mobile Goal (Top-Left)", color: "yellow", x: -24.0, y: 48.0, radius: 3.1, label: "Neutral Mogo (-24\", 48\")" },
+      { id: "goal_neutral_ml", name: "Neutral Mobile Goal (Mid-Left)", color: "yellow", x: -48.0, y: 24.0, radius: 3.1, label: "Neutral Mogo (-48\", 24\")" },
+      { id: "goal_neutral_mr", name: "Neutral Mobile Goal (Mid-Right)", color: "yellow", x: 48.0, y: -24.0, radius: 3.1, label: "Neutral Mogo (48\", -24\")" },
+      { id: "goal_neutral_br", name: "Neutral Mobile Goal (Bottom-Right)", color: "yellow", x: 24.0, y: -48.0, radius: 3.1, label: "Neutral Mogo (24\", -48\")" }
+    ],
+    // 4. Center Ladder Structure
+    ladder: []
+  };
+
+  let collisionConfig = {
+    enabled: true,
+    checkWalls: true,
+    checkLoaders: true,
+    checkGoals: true,
+    checkLadder: true,
+    safetyBuffer: 0.0,
+    showObstacleOverlays: true,
+    showSafeClearanceZones: false,
+    stopSimOnCollision: false,
+    disabledObstacleIds: {},
+    clampedObstacleIds: {}
+  };
+
+  // Cached collisions by action ID for instant UI rendering
+  let actionCollisionsCache = new Map();
+  let cachedRoutineCollisionReport = { totalCollisions: 0, collisions: [], collidingObstacleIds: new Set() };
+
+  /**
+   * Computes the 4 corners of the robot's oriented bounding box in field inches.
+   * Heading 0° = +Y, increases clockwise.
+   */
+  function getRobotCorners(x, y, thetaDeg, extraBuffer = 0) {
+    const hl = (bot.robotL || 14.0) / 2 + extraBuffer;
+    const hw = (bot.robotW || 14.0) / 2 + extraBuffer;
+    const rad = (thetaDeg * Math.PI) / 180;
+    const fx = Math.sin(rad), fy = Math.cos(rad);
+    const rx = Math.cos(rad), ry = -Math.sin(rad);
+    return [
+      { x: x + hl * fx + hw * rx, y: y + hl * fy + hw * ry }, // Front-Right
+      { x: x + hl * fx - hw * rx, y: y + hl * fy - hw * ry }, // Front-Left
+      { x: x - hl * fx - hw * rx, y: y - hl * fy - hw * ry }, // Rear-Left
+      { x: x - hl * fx + hw * rx, y: y - hl * fy + hw * ry }, // Rear-Right
+    ];
+  }
+
+  /**
+   * Check collision against field perimeter walls (±70.5")
+   */
+  function checkWallCollision(x, y, thetaDeg, buffer = 0) {
+    if (!collisionConfig.checkWalls) return null;
+    const corners = getRobotCorners(x, y, thetaDeg, buffer);
+    const half = HALF; // 70.5
+    for (const c of corners) {
+      if (c.x < -half) {
+        return {
+          type: "wall",
+          id: "wall_west",
+          name: "West Perimeter Wall",
+          penetration: Math.abs(c.x - (-half)),
+          point: { x: c.x, y: c.y }
+        };
+      }
+      if (c.x > half) {
+        return {
+          type: "wall",
+          id: "wall_east",
+          name: "East Perimeter Wall",
+          penetration: Math.abs(c.x - half),
+          point: { x: c.x, y: c.y }
+        };
+      }
+      if (c.y < -half) {
+        return {
+          type: "wall",
+          id: "wall_south",
+          name: "South Perimeter Wall",
+          penetration: Math.abs(c.y - (-half)),
+          point: { x: c.x, y: c.y }
+        };
+      }
+      if (c.y > half) {
+        return {
+          type: "wall",
+          id: "wall_north",
+          name: "North Perimeter Wall",
+          penetration: Math.abs(c.y - half),
+          point: { x: c.x, y: c.y }
+        };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Separating Axis Theorem (SAT) collision test between robot OBB and an AABB box (e.g. wall match loader).
+   */
+  function checkAABBvsOBB(aabb, x, y, thetaDeg, buffer = 0) {
+    const corners = getRobotCorners(x, y, thetaDeg, buffer);
+    const boxMinX = aabb.minX;
+    const boxMaxX = aabb.maxX;
+    const boxMinY = aabb.minY;
+    const boxMaxY = aabb.maxY;
+
+    const boxCorners = [
+      { x: boxMinX, y: boxMinY },
+      { x: boxMaxX, y: boxMinY },
+      { x: boxMaxX, y: boxMaxY },
+      { x: boxMinX, y: boxMaxY }
+    ];
+
+    const rad = (thetaDeg * Math.PI) / 180;
+    const axes = [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: Math.sin(rad), y: Math.cos(rad) },
+      { x: Math.cos(rad), y: -Math.sin(rad) }
+    ];
+
+    let minOverlap = Infinity;
+
+    for (const axis of axes) {
+      let minA = Infinity, maxA = -Infinity;
+      for (const p of corners) {
+        const proj = p.x * axis.x + p.y * axis.y;
+        if (proj < minA) minA = proj;
+        if (proj > maxA) maxA = proj;
+      }
+
+      let minB = Infinity, maxB = -Infinity;
+      for (const p of boxCorners) {
+        const proj = p.x * axis.x + p.y * axis.y;
+        if (proj < minB) minB = proj;
+        if (proj > maxB) maxB = proj;
+      }
+
+      if (maxA < minB || maxB < minA) {
+        return null; // Separating axis exists: no collision
+      }
+
+      const overlap = Math.min(maxA - minB, maxB - minA);
+      if (overlap < minOverlap) minOverlap = overlap;
+    }
+
+    return { hit: true, penetration: minOverlap };
+  }
+
+  /**
+   * Collision check between a circle obstacle (e.g. Mobile Goal) and Robot OBB.
+   */
+  function checkCircleVsOBB(circleX, circleY, radius, robotX, robotY, thetaDeg, buffer = 0) {
+    const dx = circleX - robotX;
+    const dy = circleY - robotY;
+    const rad = (thetaDeg * Math.PI) / 180;
+    const fx = Math.sin(rad), fy = Math.cos(rad);
+    const rx = Math.cos(rad), ry = -Math.sin(rad);
+
+    // Transform circle center to robot local coordinate frame
+    const localX = dx * rx + dy * ry;
+    const localY = dx * fx + dy * fy;
+
+    const hl = (bot.robotL || 14.0) / 2 + buffer;
+    const hw = (bot.robotW || 14.0) / 2 + buffer;
+
+    // Find closest point on box [-hw, hw] x [-hl, hl]
+    const clampX = Math.max(-hw, Math.min(hw, localX));
+    const clampY = Math.max(-hl, Math.min(hl, localY));
+
+    const distX = localX - clampX;
+    const distY = localY - clampY;
+    const distSq = distX * distX + distY * distY;
+
+    if (distSq <= radius * radius) {
+      const dist = Math.sqrt(distSq);
+      const penetration = radius - dist;
+      return { hit: true, penetration: Math.max(0.1, penetration) };
+    }
+    return null;
+  }
+
+  /**
+   * Main collision evaluation for robot at arbitrary pose (x, y, theta).
+   */
+  function checkRobotCollisionAtPose(x, y, thetaDeg, buffer = 0) {
+    if (!collisionConfig.enabled) return { hit: false, obstacles: [] };
+    const hits = [];
+
+    // 1. Perimeter Walls
+    if (collisionConfig.checkWalls) {
+      const wallHit = checkWallCollision(x, y, thetaDeg, buffer);
+      if (wallHit) hits.push(wallHit);
+    }
+
+    // 2. Wall Match Loaders
+    if (collisionConfig.checkLoaders) {
+      for (const loader of FIELD_OBSTACLES.loaders) {
+        if (collisionConfig.disabledObstacleIds[loader.id]) continue;
+        const res = checkAABBvsOBB(loader, x, y, thetaDeg, buffer);
+        if (res) {
+          hits.push({
+            type: "loader",
+            id: loader.id,
+            name: loader.name,
+            color: loader.color,
+            penetration: res.penetration,
+            obstacle: loader
+          });
+        }
+      }
+    }
+
+    // 3. Mobile Goals
+    if (collisionConfig.checkGoals) {
+      for (const goal of FIELD_OBSTACLES.goals) {
+        if (collisionConfig.disabledObstacleIds[goal.id]) continue;
+        if (collisionConfig.clampedObstacleIds[goal.id]) continue; // Ignore if clamped/carried
+        const res = checkCircleVsOBB(goal.x, goal.y, goal.radius, x, y, thetaDeg, buffer);
+        if (res) {
+          hits.push({
+            type: "goal",
+            id: goal.id,
+            name: goal.name,
+            color: goal.color,
+            penetration: res.penetration,
+            obstacle: goal
+          });
+        }
+      }
+    }
+
+    // 4. Center Ladder
+    if (collisionConfig.checkLadder) {
+      for (const lad of FIELD_OBSTACLES.ladder) {
+        if (collisionConfig.disabledObstacleIds[lad.id]) continue;
+        const res = checkCircleVsOBB(lad.x, lad.y, lad.radius, x, y, thetaDeg, buffer);
+        if (res) {
+          hits.push({
+            type: "ladder",
+            id: lad.id,
+            name: lad.name,
+            penetration: res.penetration,
+            obstacle: lad
+          });
+        }
+      }
+    }
+
+    return { hit: hits.length > 0, obstacles: hits };
+  }
+
+  /**
+   * Evaluates collisions along the entire planned routine trajectory.
+   * Returns a detailed collision report.
+   */
+  function evaluateRoutineCollisions() {
+    if (!collisionConfig.enabled) {
+      cachedRoutineCollisionReport = { totalCollisions: 0, collisions: [], collidingObstacleIds: new Set() };
+      actionCollisionsCache.clear();
+      return cachedRoutineCollisionReport;
+    }
+
+    const collisions = [];
+    const collidingObstacleIds = new Set();
+    actionCollisionsCache.clear();
+    const buf = collisionConfig.safetyBuffer || 0;
+
+    // Check start pose
+    const startCol = checkRobotCollisionAtPose(pose.x, pose.y, pose.theta, buf);
+    if (startCol.hit) {
+      for (const obs of startCol.obstacles) {
+        collidingObstacleIds.add(obs.id);
+        collisions.push({
+          stepIdx: 0,
+          actionId: "start",
+          actionType: "Start Pose",
+          t: 0,
+          point: { x: pose.x, y: pose.y, theta: pose.theta, t: 0 },
+          obstacle: obs,
+          penetration: obs.penetration || 0.5
+        });
+      }
+    }
+
+    // Check each simSegment and actions
+    for (let si = 0; si < simSegments.length; si++) {
+      const seg = simSegments[si];
+      const act = seg.action;
+      if (!act) continue;
+
+      let actFirstHit = null;
+
+      // Check trajectory sample points
+      const pts = seg.points || [];
+      const stepInterval = Math.max(1, Math.floor(pts.length / 25)); // Sample ~25 points per segment for speed
+
+      for (let pi = 0; pi < pts.length; pi += stepInterval) {
+        const pt = pts[pi];
+        const res = checkRobotCollisionAtPose(pt.x, pt.y, pt.theta, buf);
+        if (res.hit) {
+          for (const obs of res.obstacles) {
+            collidingObstacleIds.add(obs.id);
+            const entry = {
+              stepIdx: si + 1,
+              actionId: act.id,
+              actionType: act.type,
+              t: pt.t || 0,
+              point: { ...pt },
+              obstacle: obs,
+              penetration: obs.penetration || 0.5
+            };
+            collisions.push(entry);
+            if (!actFirstHit) actFirstHit = entry;
+          }
+          break; // Record first collision point along segment to avoid duplicate clutter
+        }
+      }
+
+      // Check end pose of segment
+      if (!actFirstHit && seg.endPose) {
+        const endRes = checkRobotCollisionAtPose(seg.endPose.x, seg.endPose.y, seg.endPose.theta, buf);
+        if (endRes.hit) {
+          for (const obs of endRes.obstacles) {
+            collidingObstacleIds.add(obs.id);
+            const entry = {
+              stepIdx: si + 1,
+              actionId: act.id,
+              actionType: act.type,
+              t: seg.duration || 0,
+              point: { ...seg.endPose, t: seg.duration || 0 },
+              obstacle: obs,
+              penetration: obs.penetration || 0.5
+            };
+            collisions.push(entry);
+            if (!actFirstHit) actFirstHit = entry;
+          }
+        }
+      }
+
+      if (actFirstHit) {
+        actionCollisionsCache.set(act.id, actFirstHit);
+      }
+    }
+
+    cachedRoutineCollisionReport = {
+      totalCollisions: collisions.length,
+      collisions,
+      collidingObstacleIds
+    };
+
+    return cachedRoutineCollisionReport;
+  }
+
+  function getActionCollision(actionId) {
+    return actionCollisionsCache.get(actionId) || null;
   }
 
   // -- LemLib Movement Math & Differential-Drive Physics ----------------
@@ -864,19 +1319,20 @@
       // Anti-windup
       if (this.windup > 0) {
         if (Math.abs(error) < this.windup) {
-          this.totalError += error * dt;
+          this.totalError += error;
         } else {
           this.totalError = 0;
         }
       } else {
-        this.totalError += error * dt;
+        this.totalError += error;
       }
       // Reset integral on sign change
       if ((error > 0 && this.prevError < 0) || (error < 0 && this.prevError > 0)) {
         this.totalError = 0;
       }
 
-      const deriv = dt > 0 ? (error - this.prevError) / dt : 0;
+      // Authentic LemLib PID (src/lemlib/pid.cpp): derivative is raw error difference per 10ms cycle
+      const deriv = error - this.prevError;
       let output = (this.kP * error) + (this.kI * this.totalError) + (this.kD * deriv);
 
       // Slew rate limiting
@@ -903,6 +1359,94 @@
     const endX = lockLeft ? pivotX + h * Math.cos(endRad) : pivotX - h * Math.cos(endRad);
     const endY = lockLeft ? pivotY - h * Math.sin(endRad) : pivotY + h * Math.sin(endRad);
     return { x: endX, y: endY, theta: endTheta };
+  }
+
+  /**
+   * Evaluates or derives Cubic Bezier control points and heading vectors.
+   * Auto-computes departure and arrival curvature handles along the robot's
+   * tangent headings when custom control points are not specified.
+   */
+  function getBezierControlPoints(action, fromPose) {
+    const p0 = { x: fromPose.x, y: fromPose.y };
+    const p3 = { x: action.x, y: action.y };
+    const dist = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+    const defaultLead = Math.max(8, Math.min(36, dist * 0.45));
+    const lead1 = action.lead1 != null && !isNaN(Number(action.lead1)) ? Number(action.lead1) : defaultLead;
+    const lead2 = action.lead2 != null && !isNaN(Number(action.lead2)) ? Number(action.lead2) : defaultLead;
+
+    const rad0 = (fromPose.theta * Math.PI) / 180;
+    const dir0 = action.forwards === false ? -1 : 1;
+    const cp1 = {
+      x: action.cp1X != null && !isNaN(Number(action.cp1X)) ? Number(action.cp1X) : (p0.x + Math.sin(rad0) * lead1 * dir0),
+      y: action.cp1Y != null && !isNaN(Number(action.cp1Y)) ? Number(action.cp1Y) : (p0.y + Math.cos(rad0) * lead1 * dir0),
+    };
+
+    const targetHeading = action.theta != null && !isNaN(Number(action.theta)) ? Number(action.theta) : fromPose.theta;
+    const rad1 = (targetHeading * Math.PI) / 180;
+    const cp2 = {
+      x: action.cp2X != null && !isNaN(Number(action.cp2X)) ? Number(action.cp2X) : (p3.x - Math.sin(rad1) * lead2 * dir0),
+      y: action.cp2Y != null && !isNaN(Number(action.cp2Y)) ? Number(action.cp2Y) : (p3.y - Math.cos(rad1) * lead2 * dir0),
+    };
+
+    return { cp1, cp2, lead1, lead2, targetHeading };
+  }
+
+  /**
+   * Evaluates position, first derivative, second derivative, curvature, and tangent angle
+   * for a cubic Bezier curve at parameter u in [0, 1].
+   */
+  function evalCubicBezier(p0, cp1, cp2, p3, u, forwards = true) {
+    const inv = 1 - u;
+    const inv2 = inv * inv;
+    const inv3 = inv2 * inv;
+    const u2 = u * u;
+    const u3 = u2 * u;
+
+    const x = inv3 * p0.x + 3 * inv2 * u * cp1.x + 3 * inv * u2 * cp2.x + u3 * p3.x;
+    const y = inv3 * p0.y + 3 * inv2 * u * cp1.y + 3 * inv * u2 * cp2.y + u3 * p3.y;
+
+    const dx = 3 * inv2 * (cp1.x - p0.x) + 6 * inv * u * (cp2.x - cp1.x) + 3 * u2 * (p3.x - cp2.x);
+    const dy = 3 * inv2 * (cp1.y - p0.y) + 6 * inv * u * (cp2.y - cp1.y) + 3 * u2 * (p3.y - cp2.y);
+
+    const d2x = 6 * inv * (cp2.x - 2 * cp1.x + p0.x) + 6 * u * (p3.x - 2 * cp2.x + cp1.x);
+    const d2y = 6 * inv * (cp2.y - 2 * cp1.y + p0.y) + 6 * u * (p3.y - 2 * cp2.y + cp1.y);
+
+    const speed = Math.hypot(dx, dy);
+    const curvature = speed > 1e-4 ? (dx * d2y - dy * d2x) / Math.pow(speed, 3) : 0;
+    let thetaDeg = (Math.atan2(dx, dy) * 180) / Math.PI;
+    if (!forwards) thetaDeg = (thetaDeg + 180) % 360;
+
+    return { u, x, y, dx, dy, speed, curvature, thetaDeg };
+  }
+
+  /**
+   * Computes arc length, minimum turning radius, maximum curvature, and control handles
+   * for a Bezier spline action.
+   */
+  function computeBezierMetrics(action, fromPose) {
+    const p0 = { x: fromPose.x, y: fromPose.y };
+    const p3 = { x: action.x, y: action.y };
+    const { cp1, cp2 } = getBezierControlPoints(action, fromPose);
+    const SAMPLES = 100;
+    let prevX = p0.x, prevY = p0.y;
+    let arcLength = 0;
+    let maxCurvature = 0;
+
+    for (let i = 0; i <= SAMPLES; i++) {
+      const u = i / SAMPLES;
+      const pt = evalCubicBezier(p0, cp1, cp2, p3, u, action.forwards !== false);
+      if (i > 0) {
+        arcLength += Math.hypot(pt.x - prevX, pt.y - prevY);
+      }
+      if (Math.abs(pt.curvature) > maxCurvature) {
+        maxCurvature = Math.abs(pt.curvature);
+      }
+      prevX = pt.x;
+      prevY = pt.y;
+    }
+
+    const minRadius = maxCurvature > 1e-4 ? (1 / maxCurvature) : 999.0;
+    return { arcLength, maxCurvature, minRadius, cp1, cp2 };
   }
 
   /**
@@ -1257,6 +1801,140 @@
       return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: null };
     }
 
+    if (action.type === "bezierCurve") {
+      const p0 = { x: fromPose.x, y: fromPose.y };
+      const p3 = { x: action.x, y: action.y };
+      const { cp1, cp2, targetHeading } = getBezierControlPoints(action, fromPose);
+      const reversed = action.forwards === false;
+
+      // Sample curve densely into an arc-length parameterized lookup table
+      const SAMPLES = 200;
+      const table = [];
+      let prevX = p0.x, prevY = p0.y;
+      let totalLength = 0;
+
+      for (let i = 0; i <= SAMPLES; i++) {
+        const u = i / SAMPLES;
+        const pt = evalCubicBezier(p0, cp1, cp2, p3, u, !reversed);
+        if (i > 0) totalLength += Math.hypot(pt.x - prevX, pt.y - prevY);
+        table.push({ ...pt, s: totalLength });
+        prevX = pt.x;
+        prevY = pt.y;
+      }
+
+      function sampleAtDistance(distAlong) {
+        const d = clamp(distAlong, 0, totalLength);
+        let low = 0, high = table.length - 1;
+        while (low <= high) {
+          const mid = (low + high) >> 1;
+          if (table[mid].s < d) low = mid + 1;
+          else high = mid - 1;
+        }
+        const idx = clamp(low, 1, table.length - 1);
+        const pA = table[idx - 1];
+        const pB = table[idx];
+        const span = Math.max(1e-4, pB.s - pA.s);
+        const frac = clamp((d - pA.s) / span, 0, 1);
+        return {
+          x: pA.x + (pB.x - pA.x) * frac,
+          y: pA.y + (pB.y - pA.y) * frac,
+          thetaDeg: normalizeAngle(pA.thetaDeg + angleError(pA.thetaDeg, pB.thetaDeg) * frac),
+          curvature: pA.curvature + (pB.curvature - pA.curvature) * frac,
+        };
+      }
+
+      const mu = Math.max(0.1, Number(b.wheelTraction) || 0.85);
+      const g = 386.09;
+      const maxDecel = phys.maxLinearAccelInSec2;
+      const maxAccel = phys.maxLinearAccelInSec2;
+
+      let sDist = 0;
+      let vLin = 0;
+      let omegaDeg = 0;
+      let isSettled = false;
+
+      while (t < timeoutS) {
+        const remaining = Math.max(0, totalLength - sDist);
+        if (remaining <= (0.5 + earlyExitRange) && t > 0.05) {
+          isSettled = true;
+          break;
+        }
+
+        const curSample = sampleAtDistance(sDist);
+        const kappa = curSample.curvature;
+        const absKappa = Math.abs(kappa);
+
+        // Curvature speed limit based on wheel traction & differential drive geometry
+        const vGrip = Math.sqrt((mu * g) / Math.max(absKappa, 0.001));
+        const vDiff = vMax / (1 + (absKappa * trackWidth) / 2);
+        const vMaxAllowed = Math.min(vMax * maxSpeed, vGrip, vDiff);
+
+        // Smooth deceleration profiling into target
+        const vBrake = Math.sqrt(2 * maxDecel * Math.max(0, remaining));
+        let vTarget = Math.min(vMaxAllowed, vBrake);
+        if (vTarget < minSpeed * vMax && remaining > 1.5) {
+          vTarget = minSpeed * vMax;
+        }
+
+        const prevVLin = vLin;
+        const dV = clamp(vTarget - vLin, -maxDecel * dt, maxAccel * dt);
+        vLin += dV;
+
+        // Kinematic angular velocity from curve curvature & linear speed
+        const targetOmega = (vLin * kappa * (180 / Math.PI));
+        const dW = clamp(((targetOmega - omegaDeg) / tau) * dt, -maxStepW, maxStepW);
+        omegaDeg += dW;
+
+        sDist += Math.max(0.1, vLin) * dt;
+        t += dt;
+
+        pose.x = curSample.x;
+        pose.y = curSample.y;
+        pose.theta = curSample.thetaDeg;
+
+        const stepPhys = calculateStepPhysics(prevVLin, vLin, omegaDeg, dt, phys, b);
+        points.push({
+          x: pose.x,
+          y: pose.y,
+          theta: pose.theta,
+          t,
+          vLin: reversed ? -vLin : vLin,
+          omegaDeg,
+          targetVLin: vTarget,
+          targetOmega,
+          curvature: kappa,
+          ...stepPhys,
+        });
+      }
+
+      pose.x = p3.x;
+      pose.y = p3.y;
+      pose.theta = targetHeading;
+
+      if (isSettled && points.length) {
+        const finalPhys = calculateStepPhysics(0, 0, 0, dt, phys, b);
+        points[points.length - 1] = {
+          x: pose.x,
+          y: pose.y,
+          theta: pose.theta,
+          t,
+          vLin: 0,
+          omegaDeg: 0,
+          targetVLin: 0,
+          targetOmega: 0,
+          ...finalPhys,
+        };
+      }
+
+      return {
+        endPose: pose,
+        path: points,
+        duration: Math.max(t, 0.1),
+        carrot: { x: cp2.x, y: cp2.y },
+        bezierCPs: { cp1, cp2 },
+      };
+    }
+
     if (action.type === "turnToHeading" || action.type === "turnToPoint") {
       let targetHeading = pose.theta;
       if (action.type === "turnToHeading") {
@@ -1415,16 +2093,16 @@
   }
 
   function needsPoint(t) {
-    return ["moveToPoint", "moveToPose", "turnToPoint", "swingToPoint"].includes(t);
+    return ["moveToPoint", "moveToPose", "bezierCurve", "turnToPoint", "swingToPoint"].includes(t);
   }
   function needsHeading(t) {
-    return ["moveToPose", "turnToHeading", "swingToHeading"].includes(t);
+    return ["moveToPose", "bezierCurve", "turnToHeading", "swingToHeading"].includes(t);
   }
   function needsSide(t) {
     return ["swingToPoint", "swingToHeading"].includes(t);
   }
   function isMove(t) {
-    return t === "moveToPoint" || t === "moveToPose";
+    return t === "moveToPoint" || t === "moveToPose" || t === "bezierCurve";
   }
   function isTurn(t) {
     return t === "turnToPoint" || t === "turnToHeading";
@@ -1721,17 +2399,26 @@
   }
 
   // -- Drawing ------------------------------------------------------
-  function drawRobot(x, y, thetaDeg, color, alpha = 1, selected = false) {
+  function drawRobot(x, y, thetaDeg, color, alpha = 1, selected = false, isCollision = false) {
     const { cx, cy } = fieldToCanvas(x, y);
-    const scale = canvas.width / FIELD_IN;
+    const scale = getFieldScale();
     const w = bot.robotW * scale; // Lateral width (in canvas px)
     const l = bot.robotL * scale; // Longitudinal length (in canvas px)
     const rad = screenHeadingRad(thetaDeg);
+
+    if (isCollision) {
+      color = "#ef4444";
+    }
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(cx, cy);
     ctx.rotate(rad);
+
+    if (isCollision) {
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 14;
+    }
 
     const hasImg = bot.botImage && bot.botImageEnabled !== false && botImgReady && botImgElement.complete && (botImgElement.naturalWidth > 0 || botImgElement.width > 0);
 
@@ -1751,15 +2438,15 @@
       } catch (_) {}
       ctx.restore();
 
-      if (bot.botImageShowOutline !== false) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = selected ? 2.5 : 1.5;
+      if (bot.botImageShowOutline !== false || isCollision) {
+        ctx.strokeStyle = isCollision ? "#ef4444" : color;
+        ctx.lineWidth = isCollision ? 3.5 : (selected ? 2.5 : 1.5);
         ctx.beginPath();
         drawRoundedRect(ctx, -l / 2, -w / 2, l, w, 4);
         ctx.stroke();
 
         // Front bumper indicator chevron
-        ctx.fillStyle = "#fbbf24";
+        ctx.fillStyle = isCollision ? "#ef4444" : "#fbbf24";
         ctx.beginPath();
         ctx.moveTo(l * 0.48, 0);
         ctx.lineTo(l * 0.32, -w * 0.22);
@@ -1769,15 +2456,15 @@
         ctx.fill();
       }
     } else {
-      ctx.fillStyle = color;
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 1.5;
+      ctx.fillStyle = isCollision ? "rgba(239, 68, 68, 0.85)" : color;
+      ctx.strokeStyle = isCollision ? "#fee2e2" : "#fff";
+      ctx.lineWidth = isCollision ? 2.5 : 1.5;
       ctx.beginPath();
       drawRoundedRect(ctx, -l / 2, -w / 2, l, w, 4);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = "#fbbf24";
+      ctx.fillStyle = isCollision ? "#fff" : "#fbbf24";
       ctx.beginPath();
       ctx.moveTo(l * 0.45, 0);
       ctx.lineTo(l * 0.15, -w * 0.28);
@@ -1786,7 +2473,7 @@
       ctx.fill();
     }
 
-    if (selected) {
+    if (selected && !isCollision) {
       ctx.strokeStyle = "#60a5fa";
       ctx.lineWidth = 2.5;
       ctx.setLineDash([4, 4]);
@@ -1794,13 +2481,38 @@
       drawRoundedRect(ctx, -l / 2 - 4, -w / 2 - 4, l + 8, w + 8, 6);
       ctx.stroke();
       ctx.setLineDash([]);
+    } else if (isCollision) {
+      // Danger pulse border
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      drawRoundedRect(ctx, -l / 2 - 3, -w / 2 - 3, l + 6, w + 6, 6);
+      ctx.stroke();
     }
 
     // Tracking origin center
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = isCollision ? "#ef4444" : "#fff";
     ctx.beginPath();
     ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
     ctx.fill();
+
+    // Floating Collision Badge above Robot
+    if (isCollision) {
+      ctx.save();
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      drawRoundedRect(ctx, -26, -w / 2 - 20, 52, 16, 4);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("💥 HIT", 0, -w / 2 - 12);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
@@ -1901,6 +2613,262 @@
     ctx.strokeRect(3, 3, w - 6, h - 6);
   }
 
+  /**
+   * Render collidable field elements (wall loaders, mobile goals, ladder)
+   */
+  function drawFieldObstacles(ctx, activeCollidingObstacleIds = new Set()) {
+    if (!ctx || !canvas) return;
+    const scale = getFieldScale();
+
+    // 1. Draw Match Loaders (Screenshots 2 & 3: angled hopper chute attached to perimeter wall)
+    if (collisionConfig.checkLoaders) {
+      for (const loader of FIELD_OBSTACLES.loaders) {
+        if (collisionConfig.disabledObstacleIds[loader.id]) continue;
+        const isHit = activeCollidingObstacleIds.has(loader.id);
+        const tl = fieldToCanvas(loader.minX, loader.maxY);
+        const br = fieldToCanvas(loader.maxX, loader.minY);
+        const w = br.cx - tl.cx;
+        const h = br.cy - tl.cy;
+
+        ctx.save();
+        if (isHit) {
+          ctx.shadowColor = "#ef4444";
+          ctx.shadowBlur = 16;
+        }
+
+        // Background fill for loader intake chute
+        ctx.fillStyle = isHit ? "rgba(239, 68, 68, 0.45)" : (loader.color === "red" ? "rgba(220, 38, 38, 0.20)" : "rgba(37, 99, 235, 0.20)");
+        ctx.strokeStyle = isHit ? "#ef4444" : (loader.color === "red" ? "#ef4444" : "#3b82f6");
+        ctx.lineWidth = isHit ? 2.5 : 1.5;
+
+        // Draw outer bounding zone
+        ctx.beginPath();
+        drawRoundedRect(ctx, tl.cx, tl.cy, w, h, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw realistic loader hardware graphics (metal wall mounting plate & angled hopper guide chute)
+        const plateW = 1.8 * scale;
+        ctx.fillStyle = isHit ? "#ef4444" : (loader.color === "red" ? "#991b1b" : "#1e40af");
+        if (loader.wall === "west") {
+          // Left wall mounting bracket
+          ctx.fillRect(tl.cx, tl.cy + 2, plateW, h - 4);
+          // Angled hopper guide rails narrowing into field
+          ctx.beginPath();
+          ctx.moveTo(tl.cx + plateW, tl.cy + 3);
+          ctx.lineTo(br.cx - 3, tl.cy + h * 0.22);
+          ctx.lineTo(br.cx - 3, br.cy - h * 0.22);
+          ctx.lineTo(tl.cx + plateW, br.cy - 3);
+          ctx.strokeStyle = loader.color === "red" ? "#fca5a5" : "#93c5fd";
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+
+          // Chute mouth bar
+          ctx.beginPath();
+          ctx.moveTo(br.cx - 3, tl.cy + h * 0.22);
+          ctx.lineTo(br.cx - 3, br.cy - h * 0.22);
+          ctx.strokeStyle = loader.color === "red" ? "#ef4444" : "#3b82f6";
+          ctx.lineWidth = 2.0;
+          ctx.stroke();
+        } else {
+          // Right wall mounting bracket
+          ctx.fillRect(br.cx - plateW, tl.cy + 2, plateW, h - 4);
+          // Angled hopper guide rails narrowing into field
+          ctx.beginPath();
+          ctx.moveTo(br.cx - plateW, tl.cy + 3);
+          ctx.lineTo(tl.cx + 3, tl.cy + h * 0.22);
+          ctx.lineTo(tl.cx + 3, br.cy - h * 0.22);
+          ctx.lineTo(br.cx - plateW, br.cy - 3);
+          ctx.strokeStyle = loader.color === "red" ? "#fca5a5" : "#93c5fd";
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+
+          // Chute mouth bar
+          ctx.beginPath();
+          ctx.moveTo(tl.cx + 3, tl.cy + h * 0.22);
+          ctx.lineTo(tl.cx + 3, br.cy - h * 0.22);
+          ctx.strokeStyle = loader.color === "red" ? "#ef4444" : "#3b82f6";
+          ctx.lineWidth = 2.0;
+          ctx.stroke();
+        }
+
+        // Loader Text Label
+        ctx.fillStyle = isHit ? "#fff" : "#f1f5f9";
+        ctx.font = "bold 8.5px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const centerC = fieldToCanvas(loader.center.x, loader.center.y);
+        ctx.fillText(loader.color === "red" ? "RED LOADER" : "BLUE LOADER", centerC.cx, centerC.cy);
+
+        if (isHit) {
+          ctx.font = "bold 12px sans-serif";
+          ctx.fillText("💥", centerC.cx, centerC.cy - 14);
+        }
+        ctx.restore();
+      }
+    }
+
+    // 2. Draw Mobile Goals (Screenshots 1, 4 & 5: Hexagonal base, center hole, colored rim)
+    if (collisionConfig.checkGoals) {
+      for (const goal of FIELD_OBSTACLES.goals) {
+        if (collisionConfig.disabledObstacleIds[goal.id]) continue;
+        const isClamped = !!collisionConfig.clampedObstacleIds[goal.id];
+        const isHit = activeCollidingObstacleIds.has(goal.id);
+        const { cx, cy } = fieldToCanvas(goal.x, goal.y);
+        const r = goal.radius * scale;
+
+        ctx.save();
+        if (isClamped) {
+          ctx.globalAlpha = 0.45;
+        }
+
+        if (isHit) {
+          ctx.shadowColor = "#ef4444";
+          ctx.shadowBlur = 18;
+        }
+
+        // Draw hexagonal base
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3;
+          const px = cx + r * Math.cos(a);
+          const py = cy + r * Math.sin(a);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+
+        // Base color gradient / styling
+        if (isHit) {
+          ctx.fillStyle = "rgba(239, 68, 68, 0.75)";
+          ctx.strokeStyle = "#fff";
+        } else if (goal.color === "red") {
+          ctx.fillStyle = "rgba(220, 38, 38, 0.75)";
+          ctx.strokeStyle = "#fca5a5";
+        } else if (goal.color === "blue") {
+          ctx.fillStyle = "rgba(37, 99, 235, 0.75)";
+          ctx.strokeStyle = "#93c5fd";
+        } else {
+          // Neutral yellow mobile goal (Screen 5: dark body with yellow ring and center pin)
+          ctx.fillStyle = "rgba(30, 41, 59, 0.85)";
+          ctx.strokeStyle = "#eab308";
+        }
+
+        ctx.lineWidth = isHit ? 3.0 : 1.8;
+        ctx.fill();
+        ctx.stroke();
+
+        // Inner circular ring / stake receiver groove
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+        if (!isHit) {
+          if (goal.color === "yellow") {
+            ctx.fillStyle = "#eab308";
+            ctx.fill();
+          } else if (goal.color === "red") {
+            ctx.fillStyle = "#ef4444";
+            ctx.fill();
+          } else if (goal.color === "blue") {
+            ctx.fillStyle = "#3b82f6";
+            ctx.fill();
+          }
+        }
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
+
+        // Center post / stake hole
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.22, 0, Math.PI * 2);
+        ctx.fillStyle = "#0f172a";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Label / indicator
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        if (isHit) {
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 11px sans-serif";
+          ctx.fillText("💥", cx, cy - r - 8);
+        } else if (isClamped) {
+          ctx.fillStyle = "#f59e0b";
+          ctx.font = "bold 8px sans-serif";
+          ctx.fillText("CLAMPED", cx, cy + r + 8);
+        }
+
+        // Safety clearance zone ring if enabled
+        if (collisionConfig.showSafeClearanceZones || collisionConfig.safetyBuffer > 0) {
+          const bufR = (goal.radius + collisionConfig.safetyBuffer) * scale;
+          ctx.beginPath();
+          ctx.arc(cx, cy, bufR, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // 3. Draw Center Ladder Structure
+    if (collisionConfig.checkLadder) {
+      for (const lad of FIELD_OBSTACLES.ladder) {
+        if (collisionConfig.disabledObstacleIds[lad.id]) continue;
+        const isHit = activeCollidingObstacleIds.has(lad.id);
+        const { cx, cy } = fieldToCanvas(lad.x, lad.y);
+        const r = lad.radius * scale;
+
+        ctx.save();
+        if (isHit) {
+          ctx.shadowColor = "#ef4444";
+          ctx.shadowBlur = 18;
+          ctx.strokeStyle = "#ef4444";
+          ctx.lineWidth = 3.0;
+        } else {
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
+          ctx.lineWidth = 1.5;
+        }
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawCollisionPathMarkers(ctx, report) {
+    if (!ctx || !report || !report.collisions || !report.collisions.length) return;
+    ctx.save();
+    for (const col of report.collisions) {
+      if (!col.point) continue;
+      const { cx, cy } = fieldToCanvas(col.point.x, col.point.y);
+      // Pulsing impact beacon on path
+      ctx.shadowColor = "#ef4444";
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      ctx.font = "bold 9px sans-serif";
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.fillText("💥", cx, cy - 8);
+    }
+    ctx.restore();
+  }
+
   function draw() {
     if (!ctx || !canvas) return;
     try {
@@ -1920,6 +2888,26 @@
         p1 = fieldToCanvas(-72, i); p2 = fieldToCanvas(72, i);
         ctx.beginPath(); ctx.moveTo(p1.cx, p1.cy); ctx.lineTo(p2.cx, p2.cy); ctx.stroke();
       }
+
+    // Evaluate routine collisions & collect active colliding obstacle IDs
+    const routineReport = evaluateRoutineCollisions();
+    const liveHitObstacleIds = new Set(routineReport.collidingObstacleIds);
+
+    let simLiveCol = null;
+    if (simRunning && simPath.length) {
+      const curSimP = simPath[Math.min(simIdx, simPath.length - 1)];
+      simLiveCol = checkRobotCollisionAtPose(curSimP.x, curSimP.y, curSimP.theta, collisionConfig.safetyBuffer);
+      if (simLiveCol.hit) {
+        for (const obs of simLiveCol.obstacles) {
+          liveHitObstacleIds.add(obs.id);
+        }
+      }
+    }
+
+    // Render Field Obstacles (Loaders, Mobile Goals, Center Ladder)
+    if (collisionConfig.enabled && collisionConfig.showObstacleOverlays) {
+      drawFieldObstacles(ctx, liveHitObstacleIds);
+    }
 
     buildSimPath();
     const poses = [{ x: pose.x, y: pose.y, theta: pose.theta }];
@@ -1943,6 +2931,29 @@
       }
     }
     ctx.stroke();
+
+    // Render Bezier Spline Curves with vibrant cyan arc highlight
+    for (const seg of simSegments) {
+      if (!seg.action || seg.action.type !== "bezierCurve") continue;
+      if (!seg.points || seg.points.length < 2) continue;
+      ctx.save();
+      ctx.strokeStyle = "#06b6d4";
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      let bPen = false;
+      for (const pt of seg.points) {
+        const c = fieldToCanvas(pt.x, pt.y);
+        if (!bPen) { ctx.moveTo(c.cx, c.cy); bPen = true; }
+        else ctx.lineTo(c.cx, c.cy);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Render Collision Path Markers along the trajectory
+    if (collisionConfig.enabled) {
+      drawCollisionPathMarkers(ctx, routineReport);
+    }
 
     // Visual feedback for multitasking (async) motions along path
     for (const seg of simSegments) {
@@ -1994,6 +3005,79 @@
           ctx.fillStyle = "#fdba74";
           ctx.font = "bold 10px sans-serif";
           ctx.fillText("Carrot", cCarrot.cx + 8, cCarrot.cy + 3);
+        }
+
+        if (a.type === "bezierCurve") {
+          const fromPt = si === 0 ? pose : simSegments[si - 1].endPose;
+          const { cp1, cp2 } = getBezierControlPoints(a, fromPt);
+          const cFrom = fieldToCanvas(fromPt.x, fromPt.y);
+          const cCp1 = fieldToCanvas(cp1.x, cp1.y);
+          const cCp2 = fieldToCanvas(cp2.x, cp2.y);
+          const cTgt = fieldToCanvas(a.x, a.y);
+
+          // Control arm 1: fromPt -> CP1
+          ctx.strokeStyle = "rgba(6, 182, 212, 0.85)";
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(cFrom.cx, cFrom.cy);
+          ctx.lineTo(cCp1.cx, cCp1.cy);
+          ctx.stroke();
+
+          // Control arm 2: Target -> CP2
+          ctx.strokeStyle = "rgba(245, 158, 11, 0.85)";
+          ctx.beginPath();
+          ctx.moveTo(cTgt.cx, cTgt.cy);
+          ctx.lineTo(cCp2.cx, cCp2.cy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // CP1 handle (departure tangent)
+          ctx.fillStyle = "#06b6d4";
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cCp1.cx, cCp1.cy, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#a5f3fc";
+          ctx.font = "bold 10px sans-serif";
+          ctx.fillText("CP1", cCp1.cx + 9, cCp1.cy + 3);
+
+          // CP2 handle (arrival tangent)
+          ctx.fillStyle = "#f59e0b";
+          ctx.strokeStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(cCp2.cx, cCp2.cy, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#fde68a";
+          ctx.fillText("CP2", cCp2.cx + 9, cCp2.cy + 3);
+
+          // Curvature HUD pill on canvas near curve midpoint
+          const metrics = computeBezierMetrics(a, fromPt);
+          const midU = evalCubicBezier(fromPt, cp1, cp2, { x: a.x, y: a.y }, 0.5, a.forwards !== false);
+          const cMid = fieldToCanvas(midU.x, midU.y);
+
+          ctx.save();
+          const hudText = `Arc: ${metrics.arcLength.toFixed(1)}" | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'}`;
+          ctx.font = "600 10px ui-monospace, monospace";
+          const tw = ctx.measureText(hudText).width;
+          ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+          ctx.strokeStyle = "rgba(6, 182, 212, 0.75)";
+          ctx.lineWidth = 1;
+          if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(cMid.cx - tw / 2 - 6, cMid.cy - 18, tw + 12, 18, 4);
+            ctx.fill();
+            ctx.stroke();
+          } else {
+            ctx.fillRect(cMid.cx - tw / 2 - 6, cMid.cy - 18, tw + 12, 18);
+            ctx.strokeRect(cMid.cx - tw / 2 - 6, cMid.cy - 18, tw + 12, 18);
+          }
+          ctx.fillStyle = "#38bdf8";
+          ctx.fillText(hudText, cMid.cx - tw / 2, cMid.cy - 5);
+          ctx.restore();
         }
       }
     }
@@ -2101,21 +3185,23 @@
       }
     }
 
-    drawRobot(pose.x, pose.y, pose.theta, "#22c55e", 0.95, selectedId === "start");
+    const startCol = collisionConfig.enabled ? checkRobotCollisionAtPose(pose.x, pose.y, pose.theta, collisionConfig.safetyBuffer) : { hit: false };
+    drawRobot(pose.x, pose.y, pose.theta, startCol.hit ? "#ef4444" : "#22c55e", 0.95, selectedId === "start", startCol.hit);
     const s = fieldToCanvas(pose.x, pose.y);
-    ctx.fillStyle = "#22c55e";
+    ctx.fillStyle = startCol.hit ? "#ef4444" : "#22c55e";
     ctx.font = "bold 11px sans-serif";
-    ctx.fillText("START", s.cx + 12, s.cy - 10);
+    ctx.fillText(startCol.hit ? "START 💥 COLLISION" : "START", s.cx + 12, s.cy - 10);
 
     if (poses.length > 1) {
       const end = poses[poses.length - 1];
-      drawRobot(end.x, end.y, end.theta, "#f59e0b", 0.65);
+      const endCol = collisionConfig.enabled ? checkRobotCollisionAtPose(end.x, end.y, end.theta, collisionConfig.safetyBuffer) : { hit: false };
+      drawRobot(end.x, end.y, end.theta, endCol.hit ? "#ef4444" : "#f59e0b", 0.65, false, endCol.hit);
       drawEndArrow(end.x, end.y, end.theta);
       const ep = fieldToCanvas(end.x, end.y);
-      ctx.fillStyle = "#fbbf24";
+      ctx.fillStyle = endCol.hit ? "#ef4444" : "#fbbf24";
       ctx.font = "11px ui-monospace, monospace";
       ctx.fillText(
-        `END (${end.x.toFixed(1)}, ${end.y.toFixed(1)}) θ=${end.theta.toFixed(0)}°`,
+        `END (${end.x.toFixed(1)}, ${end.y.toFixed(1)}) θ=${end.theta.toFixed(0)}°${endCol.hit ? " 💥 HIT" : ""}`,
         ep.cx + 14,
         ep.cy + 14
       );
@@ -2123,7 +3209,8 @@
 
     if (simRunning && simPath.length) {
       const p = simPath[Math.min(simIdx, simPath.length - 1)];
-      drawRobot(p.x, p.y, p.theta, "#38bdf8", 1);
+      const isLiveHit = simLiveCol ? simLiveCol.hit : false;
+      drawRobot(p.x, p.y, p.theta, isLiveHit ? "#ef4444" : "#38bdf8", 1, false, isLiveHit);
       // Real-time speed vector
       if (Math.abs(p.vLin || 0) > 1) {
         const cp = fieldToCanvas(p.x, p.y);
@@ -2148,6 +3235,7 @@
     if (type === "ifElse") return "control";
     if (type === "custom") return "custom";
     if (type === "wait") return "wait";
+    if (type === "bezierCurve") return "bezier";
     if (isMove(type)) return "move";
     if (isTurn(type)) return "turn";
     if (isSwing(type)) return "swing";
@@ -2840,8 +3928,9 @@
       }
 
       let catClass = "cat-motion";
-      if (a.type === "moveToPoint" || a.type === "moveToPose") catClass = "cat-motion";
-      if (a.type === "turnToPoint" || a.type === "turnToHeading" || a.type === "swingToPoint" || a.type === "swingToHeading") catClass = "cat-turn";
+      if (a.type === "bezierCurve") catClass = "cat-bezier";
+      else if (a.type === "moveToPoint" || a.type === "moveToPose") catClass = "cat-motion";
+      else if (a.type === "turnToPoint" || a.type === "turnToHeading" || a.type === "swingToPoint" || a.type === "swingToHeading") catClass = "cat-turn";
       else if (a.type === "wait" || a.type === "ifElse" || a.type === "loop") catClass = "cat-control";
       else if (a.type === "custom") {
         if (/clamp|intake|conveyor|flywheel|piston|motor/i.test(a.customCode || "")) catClass = "cat-subsystem";
@@ -3358,6 +4447,34 @@
              </label>`
           : "";
 
+        let bezierBox = "";
+        if (a.type === "bezierCurve") {
+          const { cp1, cp2 } = getBezierControlPoints(a, fromPose);
+          const metrics = computeBezierMetrics(a, fromPose);
+          bezierBox = `
+            <div class="bezier-curvature-hud">
+              <span class="bezier-stat-pill">📏 Arc: <strong>${metrics.arcLength.toFixed(1)}"</strong></span>
+              <span class="bezier-stat-pill">🌀 R_min: <strong>${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : 'Straight'}</strong></span>
+              <span class="bezier-stat-pill">⚡ κ_max: <strong>${metrics.maxCurvature.toFixed(3)}</strong></span>
+            </div>
+            <div class="bezier-handle-box">
+              <div class="bezier-handle-header">
+                <span>🌊 Curvature Handles (Drag on map or adjust)</span>
+                <button type="button" class="bezier-btn-auto" data-act="auto-bezier" data-id="${a.id}">📐 Auto Tangents</button>
+              </div>
+              <div class="row" style="margin-bottom: 6px;">
+                <label style="color:#06b6d4;">CP1 X <input type="number" data-f="cp1X" step="0.5" value="${a.cp1X != null ? a.cp1X : Math.round(cp1.x * 10) / 10}"/></label>
+                <label style="color:#06b6d4;">CP1 Y <input type="number" data-f="cp1Y" step="0.5" value="${a.cp1Y != null ? a.cp1Y : Math.round(cp1.y * 10) / 10}"/></label>
+                <label style="color:#06b6d4;" title="Departure curvature handle length">Lead 1 <input type="number" data-f="lead1" min="2" max="60" step="1" value="${a.lead1 != null ? a.lead1 : 18}"/></label>
+              </div>
+              <div class="row">
+                <label style="color:#f59e0b;">CP2 X <input type="number" data-f="cp2X" step="0.5" value="${a.cp2X != null ? a.cp2X : Math.round(cp2.x * 10) / 10}"/></label>
+                <label style="color:#f59e0b;">CP2 Y <input type="number" data-f="cp2Y" step="0.5" value="${a.cp2Y != null ? a.cp2Y : Math.round(cp2.y * 10) / 10}"/></label>
+                <label style="color:#f59e0b;" title="Arrival curvature handle length">Lead 2 <input type="number" data-f="lead2" min="2" max="60" step="1" value="${a.lead2 != null ? a.lead2 : 18}"/></label>
+              </div>
+            </div>`;
+        }
+
         body = `
           <div class="row">
             ${pointFields}
@@ -3366,6 +4483,7 @@
             ${driftField}
             ${sideField}
           </div>
+          ${bezierBox}
           <div class="speed-timeout-row">
             <div class="st-header">
               <span class="st-label">Speed &amp; Timeout</span>
@@ -3459,6 +4577,7 @@
         summaryText = `if (${a.condition || 'true'}) [${thenCount} blk] : [${elseCount} blk]`;
       } else if (a.type === "moveToPoint") summaryText = `(${a.x}, ${a.y})`;
       else if (a.type === "moveToPose") summaryText = `(${a.x}, ${a.y}, ${a.theta}°)`;
+      else if (a.type === "bezierCurve") summaryText = `Arc (${a.x}, ${a.y}, ${a.theta}°)`;
       else if (a.type === "turnToPoint" || a.type === "swingToPoint") summaryText = `to (${a.x}, ${a.y})`;
       else if (a.type === "turnToHeading" || a.type === "swingToHeading") summaryText = `to ${a.theta}°`;
       else if (a.type === "wait") {
@@ -3475,11 +4594,15 @@
       }
 
       const cleanLbl = cleanCommentText(a.label);
+      const actCol = getActionCollision(a.id);
+      const colBadgeHtml = actCol ? `<span class="badge collision-badge" title="Collision detected: ${escapeHtml(actCol.obstacle.name)}">💥 Collision</span>` : "";
+
       card.innerHTML = `
         <div class="card-title" style="cursor: pointer; user-select: none;">
           <span class="drag-handle" title="Drag to reorder routine or drag into a loop" draggable="true">⠿</span>
           <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type === 'ifElse' ? 'if / else' : a.type}</span>
           ${summaryText ? `<span class="collapsed-summary-badge">${escapeHtml(summaryText)}</span>` : ""}
+          ${colBadgeHtml}
           ${a.async ? '<span class="badge multitask-badge" title="Multitasking: Runs concurrently">⚡ Async</span>' : ""}
           ${a.forwards === false && a.type !== "custom" && a.type !== "ifElse" ? '<span class="badge reverse">REV</span>' : ""}
           <span class="hint-inline ${cleanLbl ? "has-comment" : ""}">${cleanLbl ? `// ${escapeHtml(cleanLbl)}` : ""}</span>
@@ -3489,7 +4612,18 @@
             <button class="icon" data-act="del" title="Delete">×</button>
           </div>
         </div>
-        <div class="card-body">${body}</div>`;
+        <div class="card-body">
+          ${actCol ? `
+            <div class="action-card-collision-alert">
+              <span class="col-icon">💥</span>
+              <div>
+                <div class="col-title">Collision Alert: ${escapeHtml(actCol.obstacle.name)}</div>
+                <div class="col-desc">Chassis collides at (X: ${actCol.point.x.toFixed(1)}", Y: ${actCol.point.y.toFixed(1)}", θ: ${Math.round(actCol.point.theta)}°) at ~${actCol.point.t.toFixed(2)}s. Penetration depth: ~${actCol.penetration.toFixed(1)}".</div>
+              </div>
+            </div>
+          ` : ""}
+          ${body}
+        </div>`;
 
       card.addEventListener("click", (e) => {
         if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("textarea")) return;
@@ -3502,6 +4636,20 @@
         }
         renderFlow();
         draw();
+      });
+
+      card.querySelectorAll('[data-act="auto-bezier"]').forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          a.cp1X = null;
+          a.cp1Y = null;
+          a.cp2X = null;
+          a.cp2Y = null;
+          markDirty();
+          renderFlow();
+          draw();
+          generateCode();
+        });
       });
 
       card.querySelectorAll(".snippet-chip").forEach((btn) => {
@@ -3544,7 +4692,10 @@
           if (el.type === "number" || el.tagName === "TEXTAREA" || el.type === "text") {
             a[f] = el.type === "number" ? Number(el.value) : el.value;
             markDirty();
-            if (["x", "y", "theta"].includes(f)) draw();
+            if (["x", "y", "theta", "cp1X", "cp1Y", "cp2X", "cp2Y", "lead1", "lead2"].includes(f)) {
+              draw();
+              generateCode();
+            }
             if (f === "label") {
               const clean = cleanCommentText(el.value);
               const previewEl = card.querySelector(".move-comment-preview");
@@ -4543,6 +5694,10 @@
       case "moveToPose":
         code += `${ind}chassis.moveToPose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
         break;
+      case "bezierCurve":
+        code += `${ind}// Smooth Bezier Spline Arc to (${num(px)}, ${num(py)}, ${num(pt)}°)\n`;
+        code += `${ind}chassis.moveToPose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
+        break;
       case "turnToPoint":
         code += `${ind}chassis.turnToPoint(${num(px)}, ${num(py)}, ${a.timeout}${paramStr}${asyncArg});${inlineComment}\n`;
         break;
@@ -4801,6 +5956,57 @@
         setDomText(txt, "Simulate");
       }
     }
+
+    // Update Real-Time Collision HUD Chip & Status
+    const hudColChip = document.getElementById("simHudCollision");
+    const hudColStatus = document.getElementById("hudCollisionStatus");
+    if (hudColChip) {
+      if (!collisionConfig.enabled) {
+        setDomClass(hudColChip, "sim-hud-chip chip-collision");
+        setDomText(hudColChip, "🛡️ Off");
+        if (hudColStatus) {
+          hudColStatus.textContent = "Off";
+          hudColStatus.className = "hud-collision-badge";
+        }
+      } else if (elapsed != null && currentPt != null) {
+        // Live simulation collision check
+        const liveCol = checkRobotCollisionAtPose(currentPt.x, currentPt.y, currentPt.theta, collisionConfig.safetyBuffer);
+        if (liveCol.hit) {
+          setDomClass(hudColChip, "sim-hud-chip chip-collision collision-alert");
+          const hitName = liveCol.obstacles.map(o => o.name).join(", ");
+          setDomText(hudColChip, `💥 HIT: ${hitName}`);
+          if (hudColStatus) {
+            hudColStatus.textContent = "HIT!";
+            hudColStatus.className = "hud-collision-badge hit";
+          }
+        } else {
+          setDomClass(hudColChip, "sim-hud-chip chip-collision legal");
+          setDomText(hudColChip, "🛡️ Clear");
+          if (hudColStatus) {
+            hudColStatus.textContent = "Clear";
+            hudColStatus.className = "hud-collision-badge clean";
+          }
+        }
+      } else {
+        // Static trajectory evaluation
+        const rep = evaluateRoutineCollisions();
+        if (rep.totalCollisions === 0) {
+          setDomClass(hudColChip, "sim-hud-chip chip-collision legal");
+          setDomText(hudColChip, "🛡️ Clear");
+          if (hudColStatus) {
+            hudColStatus.textContent = "Clear";
+            hudColStatus.className = "hud-collision-badge clean";
+          }
+        } else {
+          setDomClass(hudColChip, "sim-hud-chip chip-collision collision-alert");
+          setDomText(hudColChip, `⚠️ ${rep.totalCollisions} Hit${rep.totalCollisions > 1 ? "s" : ""}`);
+          if (hudColStatus) {
+            hudColStatus.textContent = `${rep.totalCollisions} Hits`;
+            hudColStatus.className = "hud-collision-badge hit";
+          }
+        }
+      }
+    }
   }
 
   function buildSimPath() {
@@ -4892,6 +6098,21 @@
       simIdx = idx;
       const pt = simPath[simIdx] || { vLin: 0, omegaDeg: 0 };
       const curElapsed = Math.min(elapsed, totalT);
+
+      // Check real-time collision during simulation
+      if (collisionConfig.enabled && collisionConfig.stopSimOnCollision) {
+        const liveCol = checkRobotCollisionAtPose(pt.x, pt.y, pt.theta, collisionConfig.safetyBuffer);
+        if (liveCol.hit) {
+          simRunning = false;
+          updateTimeDisplay(curElapsed, totalEst, 0, 0, pt);
+          draw();
+          drawPidTuningGraph(curElapsed);
+          const hitNames = liveCol.obstacles.map((o) => o.name).join(", ");
+          showToast(`💥 Collision detected: ${hitNames}! Simulation auto-paused.`);
+          return;
+        }
+      }
+
       updateTimeDisplay(curElapsed, totalEst, pt.vLin, pt.omegaDeg, pt);
       draw();
       drawPidTuningGraph(curElapsed);
@@ -5090,11 +6311,26 @@
   // -- Hit testing / drag -------------------------------------------
   function hitTest(cx, cy) {
     const s = fieldToCanvas(pose.x, pose.y);
-    const scale = canvas.width / FIELD_IN;
+    const scale = getFieldScale();
     const botHitR = Math.max(HIT_R + 4, Math.min(bot.robotW, bot.robotL) * scale * 0.48);
     if (Math.hypot(cx - s.cx, cy - s.cy) < botHitR) return { kind: "start" };
 
     const poses = computePoses();
+
+    // Check selected Bezier handles first so they are easy to grab
+    if (selectedId) {
+      const si = actions.findIndex((x) => x.id === selectedId);
+      if (si >= 0 && actions[si].type === "bezierCurve") {
+        const a = actions[si];
+        const fromPt = si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si] || pose);
+        const { cp1, cp2 } = getBezierControlPoints(a, fromPt);
+        const p1 = fieldToCanvas(cp1.x, cp1.y);
+        const p2 = fieldToCanvas(cp2.x, cp2.y);
+        if (Math.hypot(cx - p1.cx, cy - p1.cy) < HIT_R + 4) return { kind: "action", id: a.id, handle: "cp1" };
+        if (Math.hypot(cx - p2.cx, cy - p2.cy) < HIT_R + 4) return { kind: "action", id: a.id, handle: "cp2" };
+      }
+    }
+
     for (let i = actions.length - 1; i >= 0; i--) {
       const a = actions[i];
       if (!needsPoint(a.type) && !isMove(a.type)) continue;
@@ -5153,6 +6389,25 @@
       if (si < 0) return;
       const a = actions[si];
 
+      if (drag.handle === "cp1") {
+        a.cp1X = Number(x.toFixed(1));
+        a.cp1Y = Number(y.toFixed(1));
+        coordsEl.textContent = `CP1 (Departure Tangent): X: ${a.cp1X}  Y: ${a.cp1Y}`;
+        markDirty();
+        renderFlow();
+        draw();
+        return;
+      }
+      if (drag.handle === "cp2") {
+        a.cp2X = Number(x.toFixed(1));
+        a.cp2Y = Number(y.toFixed(1));
+        coordsEl.textContent = `CP2 (Arrival Tangent): X: ${a.cp2X}  Y: ${a.cp2Y}`;
+        markDirty();
+        renderFlow();
+        draw();
+        return;
+      }
+
       if (a.type === "swingToPoint") {
         const poses = computePoses();
         const fromPose = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
@@ -5185,6 +6440,12 @@
         a.y = Number((endC.y + fwdY * dist).toFixed(1));
 
         coordsEl.textContent = `X: ${a.x.toFixed(1)}  Y: ${a.y.toFixed(1)} | θ: ${snappedTheta.toFixed(1)}° (22.5° snap) | Radius: ${dist.toFixed(1)}"`;
+        if (collisionConfig.enabled) {
+          const dragCol = checkRobotCollisionAtPose(a.x, a.y, snappedTheta, collisionConfig.safetyBuffer);
+          if (dragCol.hit) {
+            coordsEl.textContent += ` | ⚠️ COLLISION: ${dragCol.obstacles.map((o) => o.name).join(", ")}`;
+          }
+        }
         markDirty();
         renderFlow();
         draw();
@@ -5192,6 +6453,14 @@
         a.x = Number(x.toFixed(1));
         a.y = Number(y.toFixed(1));
         coordsEl.textContent = `X: ${a.x.toFixed(1)}  Y: ${a.y.toFixed(1)}`;
+        if (collisionConfig.enabled) {
+          const poses = computePoses();
+          const theta = a.theta != null ? a.theta : (poses[si] ? poses[si].theta : 0);
+          const dragCol = checkRobotCollisionAtPose(a.x, a.y, theta, collisionConfig.safetyBuffer);
+          if (dragCol.hit) {
+            coordsEl.textContent += ` | ⚠️ COLLISION: ${dragCol.obstacles.map((o) => o.name).join(", ")}`;
+          }
+        }
         markDirty();
         renderFlow();
         draw();
@@ -5291,6 +6560,24 @@
     } else if (drag.kind === "action") {
       const a = actions.find((z) => z.id === drag.id);
       if (a) {
+        if (drag.handle === "cp1") {
+          a.cp1X = Number(x.toFixed(1));
+          a.cp1Y = Number(y.toFixed(1));
+          markDirty();
+          renderFlow();
+          draw();
+          e.preventDefault();
+          return;
+        }
+        if (drag.handle === "cp2") {
+          a.cp2X = Number(x.toFixed(1));
+          a.cp2Y = Number(y.toFixed(1));
+          markDirty();
+          renderFlow();
+          draw();
+          e.preventDefault();
+          return;
+        }
         a.x = Number(x.toFixed(1));
         a.y = Number(y.toFixed(1));
         markDirty();
@@ -6146,7 +7433,7 @@
     const opacityVal = el("botOpacityVal");
     const showOutline = el("botShowOutline");
 
-    const scale = canvas ? canvas.width / FIELD_IN : 5;
+    const scale = canvas ? getFieldScale() : 5;
     const wPx = (bot.robotW * scale).toFixed(0);
     const lPx = (bot.robotL * scale).toFixed(0);
     const pctField = ((bot.robotW / FIELD_IN) * 100).toFixed(1);
@@ -9738,6 +11025,280 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
 
   /* =================================================================
+     FIELD COLLISION DETECTION & OBSTACLE MANAGER MODAL
+     ================================================================= */
+  function wireCollisionModal() {
+    const modal = document.getElementById("collisionModal");
+    const btnOpenHud = document.getElementById("btnHudCollisionModal");
+    const btnClose = document.getElementById("collisionModalClose");
+    const btnDone = document.getElementById("collisionModalDoneBtn");
+
+    const chkMaster = document.getElementById("chkCollisionMaster");
+    const chkLoaders = document.getElementById("chkCollisionLoaders");
+    const chkGoals = document.getElementById("chkCollisionGoals");
+    const chkWalls = document.getElementById("chkCollisionWalls");
+    const chkLadder = document.getElementById("chkCollisionLadder");
+    const chkOverlays = document.getElementById("chkCollisionOverlays");
+    const chkStopSim = document.getElementById("chkCollisionStopSim");
+    const rngBuffer = document.getElementById("rngCollisionBuffer");
+    const bufferVal = document.getElementById("collisionBufferVal");
+
+    const statusPill = document.getElementById("collisionModalStatusPill");
+    const reportCount = document.getElementById("collisionReportCount");
+    const diagTbody = document.getElementById("collisionDiagTbody");
+    const gridEl = document.getElementById("collisionObstaclesGrid");
+
+    if (!modal) return;
+
+    function openModal() {
+      syncInputs();
+      renderDiagnosticsTable();
+      renderObstaclesGrid();
+      modal.hidden = false;
+      modal.classList.add("open");
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    function syncInputs() {
+      if (chkMaster) chkMaster.checked = !!collisionConfig.enabled;
+      if (chkLoaders) chkLoaders.checked = !!collisionConfig.checkLoaders;
+      if (chkGoals) chkGoals.checked = !!collisionConfig.checkGoals;
+      if (chkWalls) chkWalls.checked = !!collisionConfig.checkWalls;
+      if (chkLadder) chkLadder.checked = !!collisionConfig.checkLadder;
+      if (chkOverlays) chkOverlays.checked = !!collisionConfig.showObstacleOverlays;
+      if (chkStopSim) chkStopSim.checked = !!collisionConfig.stopSimOnCollision;
+      if (rngBuffer) rngBuffer.value = String(collisionConfig.safetyBuffer || 0);
+      if (bufferVal) {
+        const val = Number(collisionConfig.safetyBuffer || 0);
+        bufferVal.textContent = val === 0 ? '0.0" (Exact Chassis Bounding Box)' : `+${val.toFixed(2)}" Safety Cushion`;
+      }
+    }
+
+    function updateConfigAndRedraw() {
+      if (chkMaster) collisionConfig.enabled = chkMaster.checked;
+      if (chkLoaders) collisionConfig.checkLoaders = chkLoaders.checked;
+      if (chkGoals) collisionConfig.checkGoals = chkGoals.checked;
+      if (chkWalls) collisionConfig.checkWalls = chkWalls.checked;
+      if (chkLadder) collisionConfig.checkLadder = chkLadder.checked;
+      if (chkOverlays) collisionConfig.showObstacleOverlays = chkOverlays.checked;
+      if (chkStopSim) collisionConfig.stopSimOnCollision = chkStopSim.checked;
+      if (rngBuffer) {
+        collisionConfig.safetyBuffer = parseFloat(rngBuffer.value) || 0;
+        if (bufferVal) {
+          const val = collisionConfig.safetyBuffer;
+          bufferVal.textContent = val === 0 ? '0.0" (Exact Chassis Bounding Box)' : `+${val.toFixed(2)}" Safety Cushion`;
+        }
+      }
+
+      markDirty();
+      renderFlow();
+      draw();
+      try { updateTimeDisplay(); } catch (_) {}
+      renderDiagnosticsTable();
+    }
+
+    function renderDiagnosticsTable() {
+      const report = evaluateRoutineCollisions();
+      const num = report.totalCollisions;
+
+      if (reportCount) {
+        reportCount.textContent = num === 0 ? "0 collisions (Clean)" : `${num} collision${num > 1 ? "s" : ""} detected`;
+        reportCount.className = `collision-diag-count ${num > 0 ? "danger" : ""}`;
+      }
+
+      if (statusPill) {
+        if (!collisionConfig.enabled) {
+          statusPill.className = "collision-status-pill muted";
+          statusPill.textContent = "🛡️ Collision Engine Disabled";
+        } else if (num === 0) {
+          statusPill.className = "collision-status-pill clean";
+          statusPill.textContent = "🟢 Clean: No Collisions Detected";
+        } else {
+          statusPill.className = "collision-status-pill alert";
+          statusPill.textContent = `💥 Alert: ${num} Collision${num > 1 ? "s" : ""} in Routine`;
+        }
+      }
+
+      if (!diagTbody) return;
+
+      if (!collisionConfig.enabled) {
+        diagTbody.innerHTML = `<tr><td colspan="6" class="collision-empty-row">⚠️ Collision detection is currently disabled. Toggle master switch above to activate checks.</td></tr>`;
+        return;
+      }
+
+      if (num === 0) {
+        diagTbody.innerHTML = `<tr><td colspan="6" class="collision-empty-row">✨ Path is 100% collision-free! Robot clears all walls, loaders, and goals.</td></tr>`;
+        return;
+      }
+
+      let rowsHtml = "";
+      report.collisions.forEach((c) => {
+        rowsHtml += `
+          <tr class="collision-hit-row">
+            <td><strong>#${c.stepIdx + 1}</strong></td>
+            <td><span class="badge ${badgeClass(c.actionType)}">${c.actionType}</span></td>
+            <td>${c.point ? c.point.t.toFixed(2) + "s" : "—"}</td>
+            <td><code>(${c.point ? c.point.x.toFixed(1) : 0}", ${c.point ? c.point.y.toFixed(1) : 0}", ${c.point ? Math.round(c.point.theta) : 0}°)</code></td>
+            <td><strong style="color:#ef4444;">💥 ${escapeHtml(c.obstacle.name)}</strong></td>
+            <td>
+              <button type="button" class="btn-xs-clean col-jump-btn" data-action-id="${c.actionId}" style="color:#38bdf8;cursor:pointer;">
+                🔍 Jump to Step
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+
+      diagTbody.innerHTML = rowsHtml;
+
+      diagTbody.querySelectorAll(".col-jump-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const actId = btn.dataset.actionId;
+          closeModal();
+          selectedId = actId;
+          renderFlow();
+          draw();
+          setTimeout(() => {
+            const cardEl = document.querySelector(`.action-card[data-id="${actId}"]`);
+            if (cardEl) {
+              cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              cardEl.classList.add("selected");
+            }
+          }, 60);
+        });
+      });
+    }
+
+    function renderObstaclesGrid() {
+      if (!gridEl) return;
+      let html = "";
+
+      // 1. Loaders
+      FIELD_OBSTACLES.loaders.forEach((loader) => {
+        const isMuted = !!collisionConfig.disabledObstacleIds[loader.id];
+        const colorTag = loader.color === "red" ? "red" : "blue";
+        html += `
+          <div class="collision-obstacle-card ${isMuted ? 'muted' : ''}">
+            <div class="col-obs-head">
+              <span class="col-obs-tag ${colorTag}">${loader.color.toUpperCase()} LOADER</span>
+              <label class="col-obs-check">
+                <input type="checkbox" data-obs-id="${loader.id}" ${!isMuted ? 'checked' : ''} />
+                <span>Active</span>
+              </label>
+            </div>
+            <div class="col-obs-title">${loader.name}</div>
+            <div class="col-obs-meta">X: [${loader.minX}", ${loader.maxX}"] · Y: [${loader.minY}", ${loader.maxY}"]</div>
+            <div class="col-obs-desc">Official match load chute angled off perimeter wall.</div>
+          </div>
+        `;
+      });
+
+      // 2. Mobile Goals
+      FIELD_OBSTACLES.goals.forEach((goal) => {
+        const isMuted = !!collisionConfig.disabledObstacleIds[goal.id];
+        const isClamped = !!collisionConfig.clampedObstacleIds[goal.id];
+        const colorTag = goal.color === "red" ? "red" : (goal.color === "blue" ? "blue" : "neutral");
+        html += `
+          <div class="collision-obstacle-card ${isMuted ? 'muted' : ''} ${isClamped ? 'clamped' : ''}">
+            <div class="col-obs-head">
+              <span class="col-obs-tag ${colorTag}">${goal.color.toUpperCase()} MOGO</span>
+              <label class="col-obs-check">
+                <input type="checkbox" data-obs-id="${goal.id}" ${!isMuted ? 'checked' : ''} />
+                <span>Active</span>
+              </label>
+            </div>
+            <div class="col-obs-title">${goal.name}</div>
+            <div class="col-obs-meta">Pos: (${goal.x}", ${goal.y}") · Radius: ${goal.radius}"</div>
+            <div class="col-obs-actions">
+              <button type="button" class="btn-clamp-mogo ${isClamped ? 'active' : ''}" data-clamp-id="${goal.id}" title="Toggle clamped status if robot is carrying this mobile goal">
+                ${isClamped ? '🧲 Clamped (Carried)' : '🧲 Clamp to Bot'}
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      // 3. Center Ladder
+      FIELD_OBSTACLES.ladder.forEach((lad) => {
+        const isMuted = !!collisionConfig.disabledObstacleIds[lad.id];
+        html += `
+          <div class="collision-obstacle-card ${isMuted ? 'muted' : ''}">
+            <div class="col-obs-head">
+              <span class="col-obs-tag neutral">FIELD STRUCTURE</span>
+              <label class="col-obs-check">
+                <input type="checkbox" data-obs-id="${lad.id}" ${!isMuted ? 'checked' : ''} />
+                <span>Active</span>
+              </label>
+            </div>
+            <div class="col-obs-title">${lad.name}</div>
+            <div class="col-obs-meta">Center (0", 0") · Radius: ${lad.radius}"</div>
+            <div class="col-obs-desc">Central ladder obstacle uprights and rungs.</div>
+          </div>
+        `;
+      });
+
+      gridEl.innerHTML = html;
+
+      // Bind obstacle enable/disable toggles
+      gridEl.querySelectorAll("input[data-obs-id]").forEach((chk) => {
+        chk.addEventListener("change", (e) => {
+          const obsId = e.target.dataset.obsId;
+          if (e.target.checked) {
+            delete collisionConfig.disabledObstacleIds[obsId];
+          } else {
+            collisionConfig.disabledObstacleIds[obsId] = true;
+          }
+          markDirty();
+          renderFlow();
+          draw();
+          renderDiagnosticsTable();
+          renderObstaclesGrid();
+        });
+      });
+
+      // Bind clamp/carried toggles
+      gridEl.querySelectorAll("button[data-clamp-id]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const gid = btn.dataset.clampId;
+          if (collisionConfig.clampedObstacleIds[gid]) {
+            delete collisionConfig.clampedObstacleIds[gid];
+            showToast(`🧲 Released ${gid} from robot clamp.`);
+          } else {
+            collisionConfig.clampedObstacleIds[gid] = true;
+            showToast(`🧲 Marked ${gid} as clamped/carried by robot.`);
+          }
+          markDirty();
+          renderFlow();
+          draw();
+          renderDiagnosticsTable();
+          renderObstaclesGrid();
+        });
+      });
+    }
+
+    if (btnOpenHud) btnOpenHud.onclick = openModal;
+    if (btnClose) btnClose.onclick = closeModal;
+    if (btnDone) btnDone.onclick = closeModal;
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    [chkMaster, chkLoaders, chkGoals, chkWalls, chkLadder, chkOverlays, chkStopSim].forEach((el) => {
+      if (el) el.addEventListener("change", updateConfigAndRedraw);
+    });
+
+    if (rngBuffer) {
+      rngBuffer.addEventListener("input", updateConfigAndRedraw);
+    }
+  }
+
+
+  /* =================================================================
      BREADCRUMB NAVIGATION & GLOBAL QOL UTILITIES
      ================================================================= */
   function renderBreadcrumbs() {
@@ -10046,6 +11607,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
     const COMMAND_PALETTE_ITEMS = [
       // Category 1: Blocks & Motions
+      { id: "act_bezierCurve", cat: "🧩 Blocks & Motion", title: "Add Bezier Spline Curve(x, y, θ)", desc: "Fluid high-speed sweeping arc with curvature control and tangent handles", keywords: "bezier spline curve arc path fluid smooth", action: () => addActionToFlow("bezierCurve") },
       { id: "act_moveToPose", cat: "🧩 Blocks & Motion", title: "Add moveToPose(x, y, θ)", desc: "Drive chassis to target field position and angle", keywords: "move pose drive motion", action: () => addActionToFlow("moveToPose") },
       { id: "act_moveToPoint", cat: "🧩 Blocks & Motion", title: "Add moveToPoint(x, y)", desc: "Drive chassis to target point without fixed ending angle", keywords: "move point drive motion", action: () => addActionToFlow("moveToPoint") },
       { id: "act_turnToHeading", cat: "🧩 Blocks & Motion", title: "Add turnToHeading(θ)", desc: "Rotate chassis in place to face target heading angle", keywords: "turn heading angle rotate", action: () => addActionToFlow("turnToHeading") },
@@ -10349,6 +11911,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
   wireVideoExportModal();
   wireAllianceMirrorModal();
   wireDrivePhysicsModal();
+  wireCollisionModal();
   wireBreadcrumbs();
   wireCommandPaletteModal();
   loadLocal();

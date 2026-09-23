@@ -10,7 +10,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260923.k3" />
+  <link rel="stylesheet" href="style.css?v=20260923.k20" />
 </head>
 <body>
   <!-- =================================================================
@@ -444,6 +444,7 @@
             <select id="newType">
               <option value="moveToPoint">moveToPoint</option>
               <option value="moveToPose">moveToPose</option>
+              <option value="bezierCurve">🌊 bezierCurve (Spline Arc)</option>
               <option value="turnToPoint">turnToPoint</option>
               <option value="turnToHeading">turnToHeading</option>
               <option value="swingToPoint">swingToPoint</option>
@@ -912,6 +913,7 @@
               <span class="hud-title-tag">SIMULATION &amp; DRIVE DYNAMICS</span>
             </div>
             <div class="hud-action-btns">
+              <button type="button" id="btnHudCollisionModal" class="hud-tool-btn" title="Open Field Collision Detection &amp; Obstacles Manager">🛡️ Collisions (<span id="hudCollisionStatus">Clear</span>)</button>
               <button type="button" id="btnHudPhysicsModal" class="hud-tool-btn" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Physics</button>
               <button type="button" id="btnHudDock" class="hud-tool-btn" title="Dock controls above field canvas so field image is 100% visible">📌 Dock Above</button>
               <button type="button" id="btnHudMinimize" class="hud-tool-btn" title="Minimize or expand controls">―</button>
@@ -958,6 +960,9 @@
               <div class="sim-hud-chip chip-traction" id="simHudTraction" title="Wheel Traction Status on Foam Field Tiles">
                 🛞 Grip 100%
               </div>
+              <div class="sim-hud-chip chip-collision legal" id="simHudCollision" title="Real-Time Collision Detection with Walls, Loaders &amp; Goals">
+                🛡️ Clear
+              </div>
               <div class="sim-hud-chip chip-coords" id="simHudCoords" title="Realtime Field Coordinates (X, Y, θ)">
                 📍 (-60.0", -60.0") θ=0°
               </div>
@@ -972,6 +977,7 @@
           <span class="leg start"></span> Start
           <span class="leg path"></span> Path
           <span class="leg multitask"></span> ⚡ Multitask
+          <span class="leg collision"></span> 💥 Collision
           <span class="leg end"></span> End + dir
           <span class="leg robot"></span> Live
           <span class="leg selected"></span> Selected
@@ -2523,19 +2529,131 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260923.k3"></script>
+  <!-- Field Collision Detection & Obstacle Manager Modal -->
+  <div id="collisionModal" class="modal collision-modal" hidden>
+    <div class="modal-card collision-modal-card">
+      <div class="collision-modal-header">
+        <div class="collision-modal-title-wrap">
+          <span class="collision-badge">VEX High Stakes Field Collision Engine</span>
+          <h2 id="collisionModalTitle">🛡️ Map &amp; Robot Collision Detection</h2>
+        </div>
+        <button type="button" id="collisionModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="collision-modal-body">
+        <p class="collision-modal-desc">
+          Evaluates real-time geometric collisions between your robot's chassis and the official VEX High Stakes field map, including <strong>perimeter walls</strong>, <strong>wall match loaders</strong>, <strong>mobile goals</strong>, and the <strong>center ladder</strong>.
+        </p>
+
+        <!-- Top Master Controls -->
+        <div class="collision-master-panel">
+          <div class="collision-master-row">
+            <label class="collision-toggle-switch">
+              <input type="checkbox" id="chkCollisionMaster" checked />
+              <span class="collision-slider"></span>
+              <span class="collision-toggle-text"><strong>Enable Collision Detection</strong> (Real-time &amp; Trajectory)</span>
+            </label>
+            <div class="collision-status-pill clean" id="collisionModalStatusPill">
+              🟢 Clean: No Collisions Detected
+            </div>
+          </div>
+
+          <div class="collision-config-grid">
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionLoaders" checked />
+              <span>🚪 Check Wall Loaders (4 Match Loaders)</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionGoals" checked />
+              <span>🥅 Check Mobile Goals (8 Field Mogos)</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionWalls" checked />
+              <span>🧱 Check Field Walls (±70.5")</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionLadder" checked />
+              <span>🪜 Check Center Ladder Structure</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionOverlays" checked />
+              <span>👁️ Highlight Obstacles &amp; Hit Zones on Field</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionStopSim" />
+              <span>🛑 Auto-Pause Simulation on Impact</span>
+            </label>
+          </div>
+
+          <div class="collision-buffer-row">
+            <div class="collision-buffer-label">
+              <span>Safety Clearance Cushion:</span>
+              <strong id="collisionBufferVal">0.0" (Exact Chassis Bounding Box)</strong>
+            </div>
+            <input type="range" id="rngCollisionBuffer" min="0" max="3" step="0.25" value="0" class="collision-slider-input" />
+            <span class="collision-buffer-hint">Adds extra clearance margin around your robot bumpers to prevent scraping.</span>
+          </div>
+        </div>
+
+        <!-- Live Collision Diagnostics Summary Table -->
+        <div class="collision-diag-panel">
+          <div class="collision-diag-header">
+            <h3>⚠️ Path Trajectory Collision Report</h3>
+            <span class="collision-diag-count" id="collisionReportCount">0 collisions</span>
+          </div>
+          <div class="collision-diag-table-wrap">
+            <table class="collision-diag-table" id="collisionDiagTable">
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>Action Type</th>
+                  <th>Time</th>
+                  <th>Robot Pose (X, Y, θ)</th>
+                  <th>Obstacle Collided</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="collisionDiagTbody">
+                <tr><td colspan="6" class="collision-empty-row">✨ Path is 100% collision-free! Robot clears all walls, loaders, and goals.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Collidable Field Obstacles Reference & Toggles -->
+        <div class="collision-obstacles-panel">
+          <div class="collision-obstacles-header">
+            <h3>📍 Field Obstacles Reference &amp; Mute/Clamp Toggles</h3>
+            <span style="font-size:0.75rem;color:#94a3b8;">Click "Clamped" on a mobile goal if your robot is carrying it to ignore self-collisions.</span>
+          </div>
+          <div class="collision-obstacles-grid" id="collisionObstaclesGrid">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+
+      <div class="collision-modal-footer">
+        <span style="font-size:0.75rem;color:#94a3b8;">
+          💡 Tip: You can drag any waypoint or start pose directly on the field canvas to see real-time collision feedback.
+        </span>
+        <button type="button" id="collisionModalDoneBtn" class="primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="version.js?v=20260923.k20"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260923.k3"></script>
-  <script src="google-drive-sync.js?v=20260923.k3"></script>
-  <script src="session-guard.js?v=20260923.k3"></script>
-  <script src="v5-brain-serial.js?v=20260923.k3"></script>
-  <script src="project-manager.js?v=20260923.k3"></script>
-  <script src="cpp-parser.js?v=20260923.k3"></script>
-  <script src="app.js?v=20260923.k3"></script>
-  <script src="tutorial.js?v=20260923.k3"></script>
+  <script src="firebase-config.js?v=20260923.k20"></script>
+  <script src="google-drive-sync.js?v=20260923.k20"></script>
+  <script src="session-guard.js?v=20260923.k20"></script>
+  <script src="v5-brain-serial.js?v=20260923.k20"></script>
+  <script src="project-manager.js?v=20260923.k20"></script>
+  <script src="cpp-parser.js?v=20260923.k20"></script>
+  <script src="app.js?v=20260923.k20"></script>
+  <script src="tutorial.js?v=20260923.k20"></script>
   <script>
     (function () {
       var el = document.getElementById("buildNumber");
