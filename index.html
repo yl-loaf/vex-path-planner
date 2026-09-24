@@ -11,7 +11,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260924.k32" />
+  <link rel="stylesheet" href="style.css?v=20260924.k35" />
 </head>
 <body>
   <!-- =================================================================
@@ -2657,20 +2657,20 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260924.k32"></script>
+  <script src="version.js?v=20260924.k35"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260924.k32"></script>
-  <script src="google-drive-sync.js?v=20260924.k32"></script>
-  <script src="session-guard.js?v=20260924.k32"></script>
-  <script src="v5-brain-serial.js?v=20260924.k32"></script>
-  <script src="project-manager.js?v=20260924.k32"></script>
-  <script src="cpp-parser.js?v=20260924.k32"></script>
-  <script src="app.js?v=20260924.k32"></script>
-  <script src="tutorial.js?v=20260924.k32"></script>
+  <script src="firebase-config.js?v=20260924.k35"></script>
+  <script src="google-drive-sync.js?v=20260924.k35"></script>
+  <script src="session-guard.js?v=20260924.k35"></script>
+  <script src="v5-brain-serial.js?v=20260924.k35"></script>
+  <script src="project-manager.js?v=20260924.k35"></script>
+  <script src="cpp-parser.js?v=20260924.k35"></script>
+  <script src="app.js?v=20260924.k35"></script>
+  <script src="tutorial.js?v=20260924.k35"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
@@ -2688,7 +2688,13 @@ void autonomous() {
       if (btn) {
         btn.onclick = async function () {
           try {
-            var r = await fetch("version.js?_=" + Date.now(), { cache: "no-store" });
+            var r = await fetch("version.js?_=" + Date.now(), {
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache"
+              }
+            });
             var t = await r.text();
             var m = t.match(/APP_BUILD\s*=\s*["']([^"']+)["']/);
             var remote = m && m[1];
@@ -2696,7 +2702,7 @@ void autonomous() {
             if (remote && local && remote !== local) {
               if (confirm("Newer build available (" + remote + "). Reload now?")) {
                 if (typeof window.performHardUpdateReload === "function") {
-                  window.performHardUpdateReload(remote);
+                  await window.performHardUpdateReload(remote);
                 } else {
                   try {
                     sessionStorage.setItem("lemlib_reload_in_progress", "true");

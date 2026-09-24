@@ -15,6 +15,12 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store'
+  });
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -668,12 +674,14 @@ app.get('/version.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'version.js'));
 });
 
-// Serve static assets from root with no-cache on HTML files
+// Serve static assets from root with strict no-cache on all files
 app.use(express.static(__dirname, {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html') || filePath.endsWith('version.js')) {
-      res.set(NO_CACHE_HEADERS);
-    }
+  etag: false,
+  lastModified: false,
+  maxAge: 0,
+  cacheControl: false,
+  setHeaders: (res) => {
+    res.set(NO_CACHE_HEADERS);
   }
 }));
 

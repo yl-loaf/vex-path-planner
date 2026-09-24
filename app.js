@@ -11245,6 +11245,17 @@ lemlib::ControllerSettings ${currentMode}_controller(
       }
     } catch (_) {}
 
+    // Proactively fetch updated resources with cache: "reload" to evict browser disk cache
+    try {
+      const b = "?_=" + Date.now();
+      await Promise.allSettled([
+        fetch("version.js" + b, { cache: "reload" }),
+        fetch("app.js" + b, { cache: "reload" }),
+        fetch("session-guard.js" + b, { cache: "reload" }),
+        fetch("project-manager.js" + b, { cache: "reload" })
+      ]);
+    } catch (_) {}
+
     // Unregister any service workers
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
       try {
@@ -11275,7 +11286,13 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
   async function checkForUpdates(manual) {
     try {
-      const r = await fetch("version.js?_=" + Date.now(), { cache: "no-store" });
+      const r = await fetch("version.js?_=" + Date.now(), {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache"
+        }
+      });
       if (!r.ok) return;
       const text = await r.text();
       const m = text.match(/APP_BUILD\s*=\s*["']([^"']+)["']/);

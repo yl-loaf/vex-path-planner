@@ -1,14 +1,26 @@
 {
-  "totalViews": 33,
+  "totalViews": 35,
   "uniqueVisitors": 2,
   "pages": {
-    "home": 28,
+    "home": 30,
     "ide": 4,
     "translator": 0,
     "stats": 1,
     "other": 0
   },
   "visitors": [
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-09-24T11:10:34.745Z",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-09-24T11:10:19.618Z",
+      "userAgent": "Go-http-client/1.1"
+    },
     {
       "ip": "127.0.0.1",
       "page": "ide",

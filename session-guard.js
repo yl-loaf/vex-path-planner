@@ -644,12 +644,26 @@
     const serverResult = await registerWithServer(false);
 
     if (serverResult && serverResult.conflict && serverResult.activeSession) {
+      const prevTabSession = sessionStorage.getItem("lemlib_tab_session_id");
+      if (serverResult.activeSession.sessionId === SESSION_ID || (prevTabSession && serverResult.activeSession.sessionId === prevTabSession)) {
+        console.log(`[SessionGuard] Recognized previous session on reload (${serverResult.activeSession.sessionId}) - auto taking over`);
+        await registerWithServer(true);
+        activateInstance();
+        return;
+      }
       instanceStatus = "CONFLICT_PENDING";
       showConflictModal(serverResult.activeSession);
       return;
     }
 
     if (localConflict && localActiveInfo) {
+      const prevTabSession = sessionStorage.getItem("lemlib_tab_session_id");
+      if (localActiveInfo.sessionId === SESSION_ID || (prevTabSession && localActiveInfo.sessionId === prevTabSession)) {
+        console.log(`[SessionGuard] Recognized previous local session on reload - activating`);
+        await registerWithServer(true);
+        activateInstance();
+        return;
+      }
       instanceStatus = "CONFLICT_PENDING";
       showConflictModal(localActiveInfo);
       return;
