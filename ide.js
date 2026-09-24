@@ -2498,6 +2498,33 @@
       });
     }
 
+    const btnForceRefreshIDE = document.getElementById("btnForceRefreshIDE");
+    if (btnForceRefreshIDE) {
+      btnForceRefreshIDE.addEventListener("click", () => {
+        if (ideProjectMenu) ideProjectMenu.hidden = true;
+        saveCurrentEditorState();
+        if (window.ProjectManager) {
+          window.ProjectManager.saveLocal();
+        }
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            for(let registration of registrations) {
+              registration.unregister();
+            }
+          });
+        }
+        if (window.caches) {
+          caches.keys().then(names => {
+            for (let name of names) {
+              caches.delete(name);
+            }
+          });
+        }
+        const cleanUrl = window.location.href.split('?')[0].split('#')[0];
+        window.location.replace(cleanUrl + '?refresh=' + Date.now());
+      });
+    }
+
     if (btnClearLogs) {
       btnClearLogs.addEventListener("click", () => {
         if (elBuildConsole) elBuildConsole.textContent = "";
@@ -2970,6 +2997,7 @@
     const modal = document.getElementById("githubSyncModal");
     const btnOpen1 = document.getElementById("btnGithubSyncIDE");
     const btnOpen2 = document.getElementById("btnIdeGithubBtn");
+    const btnOpen3 = document.getElementById("btnHeaderGithubSync");
     const btnClose = document.getElementById("btnGithubModalClose");
     const btnDone = document.getElementById("btnGithubModalDone");
 
@@ -3099,6 +3127,7 @@
 
     if (btnOpen1) btnOpen1.onclick = openModal;
     if (btnOpen2) btnOpen2.onclick = openModal;
+    if (btnOpen3) btnOpen3.onclick = openModal;
     if (btnClose) btnClose.onclick = closeModal;
     if (btnDone) btnDone.onclick = closeModal;
 
