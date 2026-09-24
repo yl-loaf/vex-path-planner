@@ -3299,6 +3299,205 @@
       };
     }
 
+    // Client-side direct Git commit & push engine via GitHub REST Git Database API
+    async function performClientSidePush(rawRepo, rawBranch, rawToken, files, commitMessage, onProgress = null) {
+      let cleanRepo = String(rawRepo).trim();
+      cleanRepo = cleanRepo.replace(/^https?:\/\/(www\.)?github\.com\//i, '');
+      cleanRepo = cleanRepo.replace(/\.git$/i, '');
+      cleanRepo = cleanRepo.replace(/\/+$/, '');
+      if (cleanRepo.includes('/tree/')) cleanRepo = cleanRepo.split('/tree/')[0];
+
+      const parts = cleanRepo.split('/').filter(Boolean);
+      if (parts.length < 2) {
+        throw new Error("Invalid repository format. Format must be 'owner/repo' or full GitHub URL.");
+      }
+      const owner = parts[0];
+      const repoName = parts[1];
+      const targetBranch = rawBranch ? String(rawBranch).trim() : 'main';
+      const patToken = String(rawToken).trim();
+
+      const headers = {
+        'Authorization': `token ${patToken}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      };
+
+      if (onProgress) {
+        onProgress({ current: 0, total: 100, pct: 2.00, message: `Connecting to GitHub repository ${owner}/${repoName}...` });
+      }
+
+      async function ghFetch(url, options = {}) {
+        const res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+        const text = await res.text();
+        let json = null;
+        try {
+          json = JSON.parse(text);
+        } catch (_) {}
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            throw new Error("Invalid or expired GitHub Personal Access Token (PAT). Please generate a valid token with 'repo' scope.");
+          }
+          if (res.status === 403) {
+            throw new Error(`Permission denied: PAT lacks write access to '${owner}/${repoName}'. Please verify 'repo' scope permissions.`);
+          }
+          if (res.status === 404) {
+            const err = new Error(`Resource '${url}' not found (HTTP 404).`);
+            err.status = 404;
+            throw err;
+          }
+          if (res.status === 409 || res.status === 422) {
+            const msg = json?.message || text.slice(0, 150);
+            throw new Error(`GitHub rejected commit/push: ${msg}`);
+          }
+          throw new Error(json?.message || `GitHub API error (HTTP ${res.status}): ${text.slice(0, 100)}`);
+        }
+        return json;
+      }
+
+      // Step 1: Resolve branch reference
+      let lastCommitSha = null;
+      let baseTreeSha = null;
+
+      try {
+        const refData = await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/ref/heads/${targetBranch}`);
+        lastCommitSha = refData.object.sha;
+      } catch (refErr) {
+        if (onProgress) {
+          onProgress({ current: 0, total: 100, pct: 5.00, message: `Branch '${targetBranch}' not found, resolving repository default branch...` });
+        }
+        try {
+          const repoInfo = await ghFetch(`https://api.github.com/repos/${owner}/${repoName}`);
+          const defBranch = repoInfo.default_branch || 'main';
+          const defRefData = await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/ref/heads/${defBranch}`);
+          const defCommitSha = defRefData.object.sha;
+
+          if (targetBranch !== defBranch) {
+            if (onProgress) {
+              onProgress({ current: 0, total: 100, pct: 10.00, message: `Creating branch '${targetBranch}' from '${defBranch}'...` });
+            }
+            await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/refs`, {
+              method: 'POST',
+              body: JSON.stringify({ ref: `refs/heads/${targetBranch}`, sha: defCommitSha })
+            });
+            lastCommitSha = defCommitSha;
+          } else {
+            lastCommitSha = defCommitSha;
+          }
+        } catch (emptyRepoErr) {
+          // Repository has zero commits - create initial commit with project README
+          if (onProgress) {
+            onProgress({ current: 0, total: 100, pct: 10.00, message: `Initializing repository with initial commit on '${targetBranch}'...` });
+          }
+          const initContent = btoa(unescape(encodeURIComponent(`# ${repoName}\n\nVEX V5 LemLib Robot Project\n`)));
+          await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/contents/README.md`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              message: "Initial workspace commit",
+              content: initContent,
+              branch: targetBranch
+            })
+          });
+          const newRef = await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/ref/heads/${targetBranch}`);
+          lastCommitSha = newRef.object.sha;
+        }
+      }
+
+      // Step 2: Fetch base tree SHA from last commit
+      if (lastCommitSha) {
+        const commitData = await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/commits/${lastCommitSha}`);
+        baseTreeSha = commitData.tree.sha;
+      }
+
+      // Step 3: Process and build tree entries
+      const entries = Object.entries(files);
+      const totalFiles = entries.length;
+      const treeItems = [];
+
+      if (onProgress) {
+        onProgress({ current: 0, total: totalFiles, pct: 15.00, message: `Encoding ${totalFiles} files for Git commit...` });
+      }
+
+      for (let i = 0; i < totalFiles; i++) {
+        const [filePath, content] = entries[i];
+        const strContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+
+        // Upload large files as blobs first
+        if (strContent.length > 65536) {
+          const blobData = await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/blobs`, {
+            method: 'POST',
+            body: JSON.stringify({ content: strContent, encoding: 'utf-8' })
+          });
+          treeItems.push({
+            path: filePath,
+            mode: '100644',
+            type: 'blob',
+            sha: blobData.sha
+          });
+        } else {
+          treeItems.push({
+            path: filePath,
+            mode: '100644',
+            type: 'blob',
+            content: strContent
+          });
+        }
+
+        const pct = Number((15 + ((i + 1) / totalFiles) * 60).toFixed(2));
+        if (onProgress) {
+          onProgress({ current: i + 1, total: totalFiles, pct, message: `Encoded ${i + 1}/${totalFiles}: ${filePath}` });
+        }
+      }
+
+      // Step 4: Create tree
+      if (onProgress) {
+        onProgress({ current: totalFiles, total: totalFiles, pct: 80.00, message: "Generating Git tree on GitHub..." });
+      }
+      const treeBody = { tree: treeItems };
+      if (baseTreeSha) {
+        treeBody.base_tree = baseTreeSha;
+      }
+      const treeData = await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/trees`, {
+        method: 'POST',
+        body: JSON.stringify(treeBody)
+      });
+      const newTreeSha = treeData.sha;
+
+      // Step 5: Create commit
+      if (onProgress) {
+        onProgress({ current: totalFiles, total: totalFiles, pct: 90.00, message: "Creating Git commit..." });
+      }
+      const newCommitData = await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/commits`, {
+        method: 'POST',
+        body: JSON.stringify({
+          message: commitMessage || 'Sync from VEX Path Planner Workspace 🚀',
+          tree: newTreeSha,
+          parents: lastCommitSha ? [lastCommitSha] : []
+        })
+      });
+      const newCommitSha = newCommitData.sha;
+
+      // Step 6: Update branch ref (push)
+      if (onProgress) {
+        onProgress({ current: totalFiles, total: totalFiles, pct: 96.00, message: `Fast-forwarding branch '${targetBranch}' reference...` });
+      }
+      await ghFetch(`https://api.github.com/repos/${owner}/${repoName}/git/refs/heads/${targetBranch}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ sha: newCommitSha, force: false })
+      });
+
+      if (onProgress) {
+        onProgress({ current: totalFiles, total: totalFiles, pct: 100.00, message: `✓ Successfully pushed commit ${newCommitSha.slice(0, 7)}!` });
+      }
+
+      return {
+        success: true,
+        commitSha: newCommitSha,
+        branch: targetBranch,
+        fileCount: totalFiles
+      };
+    }
+
     // Clone Handler
     if (btnActionClone) {
       btnActionClone.onclick = async () => {
@@ -3449,29 +3648,67 @@
           statusPush.textContent = `⏳ Pushing ${fileKeys.length} files to '${repoVal}' (${branchVal})...`;
         }
 
+        const onPushProgress = (prog) => {
+          if (!prog) return;
+          const pctStr = Number(prog.pct || 0).toFixed(2);
+          if (statusPush) {
+            statusPush.style.display = "block";
+            statusPush.style.background = "rgba(56,189,248,0.12)";
+            statusPush.style.color = "#38bdf8";
+            statusPush.style.border = "1px solid #0284c7";
+            statusPush.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:600;font-size:0.84rem;">
+                <span>⏳ Pushing commit: <strong>${pctStr}%</strong></span>
+                <span style="font-family:monospace;font-size:0.75rem;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#94a3b8;" title="${prog.message || ''}">${prog.message || ''}</span>
+              </div>
+              <div style="width:100%;height:6px;background:rgba(255,255,255,0.15);border-radius:3px;overflow:hidden;">
+                <div style="width:${pctStr}%;height:100%;background:linear-gradient(90deg,#0284c7,#38bdf8);transition:width 0.1s linear;"></div>
+              </div>
+            `;
+          }
+          if (btnActionPush) {
+            btnActionPush.innerHTML = `⏳ Pushing ${pctStr}%...`;
+          }
+        };
+
         try {
+          let data = null;
           const apiUrl = window.getApiUrl ? window.getApiUrl('/api/github/push') : '/api/github/push';
-          const data = await safeFetchJson(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({
-              token: tokenVal,
-              repo: repoVal,
-              branch: branchVal,
-              files: files,
-              commitMessage: msgVal
-            })
-          });
+          
+          if (apiUrl) {
+            try {
+              data = await safeFetchJson(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({
+                  token: tokenVal,
+                  repo: repoVal,
+                  branch: branchVal,
+                  files: files,
+                  commitMessage: msgVal
+                })
+              });
+            } catch (serverErr) {
+              console.warn('[GitHub Push] Server route returned error/HTML, falling back to direct client-side push:', serverErr.message);
+              data = null;
+            }
+          }
+
+          if (!data || !data.success) {
+            // Client-side direct fallback using GitHub REST Git Database API
+            data = await performClientSidePush(repoVal, branchVal, tokenVal, files, msgVal, onPushProgress);
+          }
 
           if (!data || !data.success) {
             throw new Error(data?.error || "Failed to commit & push to GitHub");
           }
 
           if (statusPush) {
+            statusPush.style.display = "block";
             statusPush.style.background = "rgba(34,197,94,0.15)";
             statusPush.style.color = "#4ade80";
             statusPush.style.border = "1px solid #22c55e";
-            statusPush.textContent = `✓ Successfully pushed commit ${data.commitSha ? data.commitSha.slice(0, 7) : ''} to ${repoVal} (${branchVal})!`;
+            statusPush.innerHTML = `✓ Successfully pushed 100.00% (${fileKeys.length} files, commit ${data.commitSha ? data.commitSha.slice(0, 7) : ''}) to ${repoVal} (${branchVal})!`;
           }
 
           if (window.ProjectManager) {
