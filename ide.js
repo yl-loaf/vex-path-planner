@@ -3013,11 +3013,28 @@
       };
     }
 
-    // Client-side fallback clone handler via JSZip & GitHub REST API
-    async function performClientSideClone(rawRepo, rawBranch, rawToken) {
-      if (typeof JSZip === "undefined") {
-        throw new Error("JSZip library is unavailable in browser.");
+    // Safe Fetch JSON helper that validates response text to prevent HTML syntax errors
+    async function safeFetchJson(url, options = {}) {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      const trimmed = text.trim();
+      if (trimmed.startsWith('<') || trimmed.startsWith('<!DOCTYPE')) {
+        throw new Error(`Server returned HTML response (HTTP ${res.status}). Route might be unhandled by backend proxy.`);
       }
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Invalid JSON response from endpoint (HTTP ${res.status})`);
+      }
+      if (!res.ok) {
+        throw new Error(json.error || json.message || `API request failed with HTTP status ${res.status}`);
+      }
+      return json;
+    }
+
+    // Client-side multi-tiered clone engine via Git Trees API, Raw CDN, & JSZip
+    async function performClientSideClone(rawRepo, rawBranch, rawToken) {
       let cleanRepo = String(rawRepo).trim();
       cleanRepo = cleanRepo.replace(/^https?:\/\/(www\.)?github\.com\//i, '');
       cleanRepo = cleanRepo.replace(/\.git$/i, '');
@@ -3032,7 +3049,7 @@
 
       const parts = cleanRepo.split('/').filter(Boolean);
       if (parts.length < 2) {
-        throw new Error("Invalid repository format. Must be 'owner/repo' or full GitHub URL.");
+        throw new Error("Invalid repository format. Format must be 'owner/repo' or full GitHub URL.");
       }
       const owner = parts[0];
       const repoName = parts[1];
@@ -3043,11 +3060,14 @@
       }
 
       let targetBranch = rawBranch ? String(rawBranch).trim() : (urlBranch || null);
+
+      // 1. Resolve default branch if not specified
       if (!targetBranch) {
         try {
           const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, { headers });
-          if (metaRes.ok) {
-            const metaData = await metaRes.json();
+          const metaText = await metaRes.text();
+          if (metaRes.ok && !metaText.trim().startsWith('<')) {
+            const metaData = JSON.parse(metaText);
             targetBranch = metaData.default_branch || 'main';
           } else {
             targetBranch = 'main';
@@ -3057,44 +3077,121 @@
         }
       }
 
-      const zipUrl = `https://api.github.com/repos/${owner}/${repoName}/zipball/${targetBranch}`;
-      const zipRes = await fetch(zipUrl, { headers });
-      if (!zipRes.ok) {
-        const errTxt = await zipRes.text();
-        throw new Error(`Failed to download repository from GitHub (${zipRes.status}): ${errTxt.slice(0, 100)}`);
+      // Strategy A: Try GitHub Git Trees API + Raw Content Download (Zero Zip dependency, CORS friendly)
+      let extractedFiles = null;
+      try {
+        const treeUrl = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${targetBranch}?recursive=1`;
+        const treeRes = await fetch(treeUrl, { headers });
+        const treeText = await treeRes.text();
+
+        if (treeRes.ok && !treeText.trim().startsWith('<')) {
+          const treeData = JSON.parse(treeText);
+          if (treeData && Array.isArray(treeData.tree)) {
+            extractedFiles = {};
+            const relevantEntries = treeData.tree.filter((item) => {
+              if (item.type !== 'blob') return false;
+              const p = item.path;
+              if (typeof isIgnoredFile === "function" && isIgnoredFile(p)) return false;
+              return (
+                p.startsWith('src/') ||
+                p.startsWith('include/') ||
+                p.endsWith('.cpp') ||
+                p.endsWith('.hpp') ||
+                p.endsWith('.h') ||
+                p.endsWith('.c') ||
+                p.endsWith('.cc') ||
+                p.endsWith('.mk') ||
+                p === 'Makefile' ||
+                p === 'project.pbx'
+              );
+            });
+
+            // Concurrently download files in small batches
+            const BATCH_SIZE = 8;
+            for (let i = 0; i < relevantEntries.length; i += BATCH_SIZE) {
+              const batch = relevantEntries.slice(i, i + BATCH_SIZE);
+              await Promise.all(
+                batch.map(async (item) => {
+                  try {
+                    let fileText = null;
+                    if (rawToken && String(rawToken).trim()) {
+                      const contentUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/${item.path}?ref=${targetBranch}`;
+                      const cRes = await fetch(contentUrl, {
+                        headers: { ...headers, 'Accept': 'application/vnd.github.v3.raw' }
+                      });
+                      if (cRes.ok) {
+                        fileText = await cRes.text();
+                      }
+                    } else {
+                      const rawUrl = `https://raw.githubusercontent.com/${owner}/${repoName}/${targetBranch}/${item.path}`;
+                      const rRes = await fetch(rawUrl);
+                      if (rRes.ok) {
+                        fileText = await rRes.text();
+                      }
+                    }
+
+                    if (fileText !== null && !fileText.trim().startsWith('<!DOCTYPE html>') && fileText.indexOf('\0') === -1) {
+                      extractedFiles[item.path] = fileText;
+                    }
+                  } catch (_) {}
+                })
+              );
+            }
+          }
+        }
+      } catch (treeErr) {
+        console.warn('[GitHub Sync] Git Trees API notice:', treeErr.message);
       }
 
-      const blob = await zipRes.blob();
-      const zip = await JSZip.loadAsync(blob);
-      const extractedFiles = {};
+      // Strategy B: JSZip archive fallback if Git Trees API did not retrieve files
+      if (!extractedFiles || Object.keys(extractedFiles).length === 0) {
+        if (typeof JSZip === "undefined") {
+          throw new Error("Could not load repository files directly and JSZip library is unavailable.");
+        }
 
-      let prefixCut = 0;
-      const entryNames = Object.keys(zip.files);
-      if (entryNames.length > 0) {
-        const firstEntry = entryNames[0];
-        const slashIdx = firstEntry.indexOf('/');
-        if (slashIdx !== -1) {
-          prefixCut = slashIdx + 1;
+        const zipUrl = `https://api.github.com/repos/${owner}/${repoName}/zipball/${targetBranch}`;
+        const zipRes = await fetch(zipUrl, { headers });
+
+        if (!zipRes.ok) {
+          const errTxt = await zipRes.text();
+          if (errTxt.trim().startsWith('<')) {
+            throw new Error(`GitHub returned HTTP ${zipRes.status}. Verify repository "${owner}/${repoName}" exists and is public, or provide a Personal Access Token.`);
+          }
+          throw new Error(`Failed to download repository archive (HTTP ${zipRes.status}): ${errTxt.slice(0, 100)}`);
+        }
+
+        const blob = await zipRes.blob();
+        const zip = await JSZip.loadAsync(blob);
+        extractedFiles = {};
+
+        let prefixCut = 0;
+        const entryNames = Object.keys(zip.files);
+        if (entryNames.length > 0) {
+          const firstEntry = entryNames[0];
+          const slashIdx = firstEntry.indexOf('/');
+          if (slashIdx !== -1) {
+            prefixCut = slashIdx + 1;
+          }
+        }
+
+        for (const [relativePath, fileObj] of Object.entries(zip.files)) {
+          if (fileObj.dir) continue;
+          let normPath = prefixCut > 0 ? relativePath.substring(prefixCut) : relativePath;
+          if (!normPath) continue;
+          normPath = normPath.replace(/\\/g, '/');
+
+          if (typeof isIgnoredFile === "function" && isIgnoredFile(normPath)) continue;
+
+          const content = await fileObj.async('string');
+          if (content.indexOf('\0') !== -1) continue;
+          if (content.length > 1.5 * 1024 * 1024) continue;
+
+          extractedFiles[normPath] = content;
         }
       }
 
-      for (const [relativePath, fileObj] of Object.entries(zip.files)) {
-        if (fileObj.dir) continue;
-        let normPath = prefixCut > 0 ? relativePath.substring(prefixCut) : relativePath;
-        if (!normPath) continue;
-        normPath = normPath.replace(/\\/g, '/');
-
-        if (typeof isIgnoredFile === "function" && isIgnoredFile(normPath)) continue;
-
-        const content = await fileObj.async('string');
-        if (content.indexOf('\0') !== -1) continue;
-        if (content.length > 1.5 * 1024 * 1024) continue;
-
-        extractedFiles[normPath] = content;
-      }
-
-      if (Object.keys(extractedFiles).length === 0) {
-        throw new Error('No valid source/header files found in repository archive.');
+      if (!extractedFiles || Object.keys(extractedFiles).length === 0) {
+        throw new Error(`No C++ source/header files found in repository "${owner}/${repoName}". Please check the repository name and branch.`);
       }
 
       return {
@@ -3128,7 +3225,7 @@
         }
 
         btnActionClone.disabled = true;
-        btnActionClone.innerHTML = "⏳ Downloading & Extracting Repository...";
+        btnActionClone.innerHTML = "⏳ Downloading Repository Files...";
         if (statusClone) {
           statusClone.style.display = "block";
           statusClone.style.background = "rgba(56,189,248,0.15)";
@@ -3143,33 +3240,20 @@
 
           if (apiUrl) {
             try {
-              const res = await fetch(apiUrl, {
+              data = await safeFetchJson(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
               });
-
-              const contentType = res.headers.get('content-type') || '';
-              if (contentType.includes('application/json')) {
-                const parsed = await res.json();
-                if (res.ok && parsed && parsed.success) {
-                  data = parsed;
-                } else if (parsed && parsed.error) {
-                  throw new Error(parsed.error);
-                }
-              }
             } catch (srvErr) {
               console.warn('[GitHub Sync] Server clone notice:', srvErr.message);
-              if (srvErr.message && !srvErr.message.includes('fetch')) {
-                throw srvErr;
-              }
             }
           }
 
           // Fall back to direct client-side clone if server route didn't return JSON result
-          if (!data) {
+          if (!data || !data.files) {
             if (statusClone) {
-              statusClone.textContent = `⏳ Extracting directly from GitHub API...`;
+              statusClone.textContent = `⏳ Fetching files directly from GitHub API...`;
             }
             data = await performClientSideClone(repoVal, branchVal, tokenVal);
           }
@@ -3250,7 +3334,7 @@
 
         try {
           const apiUrl = window.getApiUrl ? window.getApiUrl('/api/github/push') : '/api/github/push';
-          const res = await fetch(apiUrl, {
+          const data = await safeFetchJson(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
@@ -3262,15 +3346,8 @@
             })
           });
 
-          const contentType = res.headers.get("content-type") || "";
-          if (!contentType.includes("application/json")) {
-            const text = await res.text();
-            throw new Error(`Server returned non-JSON response (${res.status}): ${text.slice(0, 100)}...`);
-          }
-
-          const data = await res.json();
-          if (!res.ok || !data.success) {
-            throw new Error(data.error || "Failed to commit & push to GitHub");
+          if (!data || !data.success) {
+            throw new Error(data?.error || "Failed to commit & push to GitHub");
           }
 
           if (statusPush) {
