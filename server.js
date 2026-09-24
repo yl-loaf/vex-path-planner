@@ -508,6 +508,12 @@ app.get('/api/session/status', (req, res) => {
   });
 });
 
+// Serve ads.txt directly with text/plain content type
+app.get(['/ads.txt', '/vex-path-planner/ads.txt'], (req, res) => {
+  res.set('Content-Type', 'text/plain');
+  res.sendFile(path.join(__dirname, 'ads.txt'));
+});
+
 // Explicitly serve version.js with no-cache headers so update checks are instant
 app.get('/version.js', (req, res) => {
   res.set({

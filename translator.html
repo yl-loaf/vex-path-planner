@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3909547099822622" crossorigin="anonymous"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>C++ Auton to Blocks Translator · VEX V5 LemLib Path Planner</title>
   <meta name="description" content="Translate raw C++ autonomous routines into visual blocks, multitask concurrency flows, and field trajectories for VEX V5 LemLib." />
   <meta property="og:title" content="C++ Auton to Blocks Translator · VEX V5 LemLib" />
   <meta property="og:description" content="Parse raw C++ autonomous code into visual blocks, synchronized with the user profile and auton slots." />
-  <!-- Google Auto Ads -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3909547099822622" crossorigin="anonymous"></script>
-  <link rel="stylesheet" href="style.css?v=20260923.k25" />
+  <link rel="stylesheet" href="style.css?v=20260924.k1" />
 </head>
 <body class="translator-page-body">
   <div id="app" class="translator-app-container">
@@ -183,6 +182,60 @@ void autonomous() {
       </section>
     </main>
 
+    <!-- Comprehensive Blocks & Auton FAQ Section -->
+    <section class="translator-faq-section" style="max-width:1400px;margin:30px auto;padding:30px;background:#151d2a;border:1px solid #2a3548;border-radius:12px;color:#e8eef7;">
+      <h2 style="font-size:1.5rem;margin-bottom:8px;color:#38bdf8;display:flex;align-items:center;gap:10px;">
+        <span>❓</span> C++ Auton to Visual Blocks &amp; LemLib FAQ
+      </h2>
+      <p style="color:#94a3b8;margin-bottom:24px;font-size:0.95rem;">
+        Everything you need to know about parsing C++ autonomous routines into visual blocks, handling LemLib v0.5+ structs, and synchronizing with your robot slots.
+      </p>
+
+      <div class="faq-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:20px;">
+        <div class="faq-card" style="background:#1a2433;border:1px solid #2a3548;border-radius:8px;padding:20px;">
+          <h3 style="color:#f8fafc;font-size:1.05rem;margin-bottom:8px;">1. How does the C++ parser convert code into visual blocks?</h3>
+          <p style="color:#cbd5e1;font-size:0.9rem;line-height:1.5;">
+            The parser uses robust regex pattern matching to scan your C++ source for LemLib methods like <code>moveToPoint</code>, <code>moveToPose</code>, <code>turnToHeading</code>, and subsystem calls (e.g. <code>clamp.set_value</code>, <code>intake.move</code>). It extracts coordinates, timeouts, and parameter structs (like <code>.forwards</code>, <code>.maxSpeed</code>, <code>.lead</code>) into structured visual action blocks.
+          </p>
+        </div>
+
+        <div class="faq-card" style="background:#1a2433;border:1px solid #2a3548;border-radius:8px;padding:20px;">
+          <h3 style="color:#f8fafc;font-size:1.05rem;margin-bottom:8px;">2. What LemLib v0.5+ syntax is fully supported?</h3>
+          <p style="color:#cbd5e1;font-size:0.9rem;line-height:1.5;">
+            It supports <code>chassis.setPose(x, y, theta)</code>, <code>chassis.moveToPoint(x, y, timeout, opts)</code>, <code>chassis.moveToPose(x, y, theta, timeout, opts)</code>, <code>chassis.turnToHeading(theta, timeout, opts)</code>, <code>chassis.swingToHeading(...)</code>, and designator structs with <code>.forwards</code>, <code>.maxSpeed</code>, <code>.minSpeed</code>, <code>.earlyExitRange</code>, and <code>.lead</code>.
+          </p>
+        </div>
+
+        <div class="faq-card" style="background:#1a2433;border:1px solid #2a3548;border-radius:8px;padding:20px;">
+          <h3 style="color:#f8fafc;font-size:1.05rem;margin-bottom:8px;">3. How are asynchronous tasks &amp; concurrency handled?</h3>
+          <p style="color:#cbd5e1;font-size:0.9rem;line-height:1.5;">
+            When the parser detects <code>pros::Task</code> declarations or <code>{.async = true}</code> flags, it tags the resulting visual block as an <strong>Async Subsystem Task</strong>. This ensures your intake, indexers, or pneumatics spin up concurrently while the chassis executes motion.
+          </p>
+        </div>
+
+        <div class="faq-card" style="background:#1a2433;border:1px solid #2a3548;border-radius:8px;padding:20px;">
+          <h3 style="color:#f8fafc;font-size:1.05rem;margin-bottom:8px;">4. Where do parsed blocks go when I click Apply?</h3>
+          <p style="color:#cbd5e1;font-size:0.9rem;line-height:1.5;">
+            When you click <strong>Apply to Visual Planner &amp; Slot</strong>, the translated actions are saved directly into your selected autonomous slot (e.g. Autonomous Slot 1 - 8) and profile. They instantly populate the Visual Path Planner canvas and simulation timeline!
+          </p>
+        </div>
+
+        <div class="faq-card" style="background:#1a2433;border:1px solid #2a3548;border-radius:8px;padding:20px;">
+          <h3 style="color:#f8fafc;font-size:1.05rem;margin-bottom:8px;">5. Can I edit blocks visually after translating?</h3>
+          <p style="color:#cbd5e1;font-size:0.9rem;line-height:1.5;">
+            Yes! Once loaded into the Visual Path Planner, you can drag waypoint handles on the 144&times;144 field, modify speeds, toggle intake actions, reorder steps, or re-export back to clean C++ code anytime.
+          </p>
+        </div>
+
+        <div class="faq-card" style="background:#1a2433;border:1px solid #2a3548;border-radius:8px;padding:20px;">
+          <h3 style="color:#f8fafc;font-size:1.05rem;margin-bottom:8px;">6. What happens to my custom comments?</h3>
+          <p style="color:#cbd5e1;font-size:0.9rem;line-height:1.5;">
+            Any inline comments (e.g. <code>// score alliance stake</code>) associated with action lines are preserved as description notes on the respective visual blocks for documentation and engineering notebook clarity.
+          </p>
+        </div>
+      </div>
+    </section>
+
     <footer class="build-footer">
       <span>VEX V5 LemLib Autonomous Translator · Build <span id="buildNumber">…</span></span>
       <span class="cloud-sync-footer-indicator" id="footerSyncStatus">Profile: Local Storage / Cloud Sync</span>
@@ -192,15 +245,15 @@ void autonomous() {
   <div id="toastNotification" class="toast-notify"></div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260923.k25"></script>
+  <script src="version.js?v=20260924.k1"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260923.k25"></script>
-  <script src="session-guard.js?v=20260923.k25"></script>
-  <script src="cpp-parser.js?v=20260923.k25"></script>
-  <script src="translator-page.js?v=20260923.k25"></script>
-  <script src="tutorial.js?v=20260923.k25"></script>
+  <script src="firebase-config.js?v=20260924.k1"></script>
+  <script src="session-guard.js?v=20260924.k1"></script>
+  <script src="cpp-parser.js?v=20260924.k1"></script>
+  <script src="translator-page.js?v=20260924.k1"></script>
+  <script src="tutorial.js?v=20260924.k1"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {

@@ -13,7 +13,7 @@
   const TUTORIAL_STEPS = [
     {
       title: "Welcome to LemLib Autonomous Studio",
-      badge: "Step 1 of 6 · Overview",
+      badge: "Step 1 of 7 · Overview",
       icon: "🤖",
       targetSelector: ".neat-planner-header",
       content: `
@@ -41,7 +41,7 @@
     },
     {
       title: "Designing Autonomous Action Flow",
-      badge: "Step 2 of 6 · Path Planning",
+      badge: "Step 2 of 7 · Path Planning",
       icon: "🎯",
       targetSelector: ".flowchart-panel",
       content: `
@@ -72,7 +72,7 @@
     },
     {
       title: "Realistic 2D Kinematics & Match Simulator",
-      badge: "Step 3 of 6 · Simulation",
+      badge: "Step 3 of 7 · Simulation",
       icon: "🏎️",
       targetSelector: ".sim-hud-card",
       content: `
@@ -95,7 +95,7 @@
     },
     {
       title: "Robot Hardware & LemLib PID Tuning",
-      badge: "Step 4 of 6 · Hardware Setup",
+      badge: "Step 4 of 7 · Hardware Setup",
       icon: "🤖",
       targetSelector: "#tabBtnBot",
       content: `
@@ -118,7 +118,7 @@
     },
     {
       title: "PROS C++ Multi-File Studio & Smart Sync",
-      badge: "Step 5 of 6 · Coding & Compiler",
+      badge: "Step 5 of 7 · Coding & Compiler",
       icon: "💻",
       targetSelector: ".header-center-modes",
       content: `
@@ -145,7 +145,7 @@
     },
     {
       title: "VEX V5 Brain USB Flashing & Diagnostics",
-      badge: "Step 6 of 6 · Hardware Integration",
+      badge: "Step 6 of 7 · Hardware Integration",
       icon: "🔌",
       targetSelector: "#bannerBrainStatus",
       content: `
@@ -164,8 +164,35 @@
             <div><strong>1-Click Flashing:</strong> Flash your compiled autonomous routines directly into V5 Brain slots 1 through 8!</div>
           </div>
         </div>
+      `
+    },
+    {
+      title: "Visual Blocks & C++ Auton Translator FAQ",
+      badge: "Step 7 of 7 · Blocks FAQ & Help",
+      icon: "❓",
+      targetSelector: ".neat-planner-header",
+      content: `
+        <p>Comprehensive guide and answers for parsing raw C++ code into visual blocks, managing LemLib v0.5+ parameters, and robot sync.</p>
+        <div class="tutorial-highlights">
+          <div class="tut-hl-item">
+            <span class="tut-hl-icon">📥</span>
+            <div><strong>C++ to Blocks Parsing:</strong> Paste any LemLib C++ routine into the <a href="translator.html" target="_blank" style="color:#38bdf8;">C++ Translator</a> to instantly parse coordinates, Boomerang parameters, and subsystem calls into visual blocks.</div>
+          </div>
+          <div class="tut-hl-item">
+            <span class="tut-hl-icon">⚡</span>
+            <div><strong>Async Tasks &amp; Concurrency:</strong> Concurrency is automatically detected via <code>pros::Task</code> or <code>.async = true</code> designator structs, keeping intake and drive motors synchronized.</div>
+          </div>
+          <div class="tut-hl-item">
+            <span class="tut-hl-icon">💾</span>
+            <div><strong>Slot Synchronization:</strong> Translated routines can be saved to any of the 8 autonomous slots and sync securely with your Google Cloud profile across devices.</div>
+          </div>
+          <div class="tut-hl-item">
+            <span class="tut-hl-icon">🔧</span>
+            <div><strong>Troubleshooting:</strong> If a C++ line fails to parse, ensure it matches standard LemLib v0.5+ syntax (e.g. <code>chassis.moveToPoint(x, y, timeout, opts)</code>). Check inline comments for notes.</div>
+          </div>
+        </div>
         <div style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px;margin-top:10px;font-size:0.82rem;color:#6ee7b7;">
-          🎉 <strong>You're all set!</strong> Start by creating waypoints or explore pre-configured competition routines in the Hub.
+          🎉 <strong>You're all set!</strong> Start designing paths, converting C++ code, or testing simulation physics.
         </div>
       `
     }
