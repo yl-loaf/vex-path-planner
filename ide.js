@@ -3013,6 +3013,98 @@
       };
     }
 
+    // Client-side fallback clone handler via JSZip & GitHub REST API
+    async function performClientSideClone(rawRepo, rawBranch, rawToken) {
+      if (typeof JSZip === "undefined") {
+        throw new Error("JSZip library is unavailable in browser.");
+      }
+      let cleanRepo = String(rawRepo).trim();
+      cleanRepo = cleanRepo.replace(/^https?:\/\/(www\.)?github\.com\//i, '');
+      cleanRepo = cleanRepo.replace(/\.git$/i, '');
+      cleanRepo = cleanRepo.replace(/\/+$/, '');
+
+      let urlBranch = null;
+      if (cleanRepo.includes('/tree/')) {
+        const parts = cleanRepo.split('/tree/');
+        cleanRepo = parts[0];
+        urlBranch = parts[1] ? parts[1].trim() : null;
+      }
+
+      const parts = cleanRepo.split('/').filter(Boolean);
+      if (parts.length < 2) {
+        throw new Error("Invalid repository format. Must be 'owner/repo' or full GitHub URL.");
+      }
+      const owner = parts[0];
+      const repoName = parts[1];
+
+      const headers = { 'Accept': 'application/vnd.github.v3+json' };
+      if (rawToken && String(rawToken).trim()) {
+        headers['Authorization'] = `token ${String(rawToken).trim()}`;
+      }
+
+      let targetBranch = rawBranch ? String(rawBranch).trim() : (urlBranch || null);
+      if (!targetBranch) {
+        try {
+          const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, { headers });
+          if (metaRes.ok) {
+            const metaData = await metaRes.json();
+            targetBranch = metaData.default_branch || 'main';
+          } else {
+            targetBranch = 'main';
+          }
+        } catch (_) {
+          targetBranch = 'main';
+        }
+      }
+
+      const zipUrl = `https://api.github.com/repos/${owner}/${repoName}/zipball/${targetBranch}`;
+      const zipRes = await fetch(zipUrl, { headers });
+      if (!zipRes.ok) {
+        const errTxt = await zipRes.text();
+        throw new Error(`Failed to download repository from GitHub (${zipRes.status}): ${errTxt.slice(0, 100)}`);
+      }
+
+      const blob = await zipRes.blob();
+      const zip = await JSZip.loadAsync(blob);
+      const extractedFiles = {};
+
+      let prefixCut = 0;
+      const entryNames = Object.keys(zip.files);
+      if (entryNames.length > 0) {
+        const firstEntry = entryNames[0];
+        const slashIdx = firstEntry.indexOf('/');
+        if (slashIdx !== -1) {
+          prefixCut = slashIdx + 1;
+        }
+      }
+
+      for (const [relativePath, fileObj] of Object.entries(zip.files)) {
+        if (fileObj.dir) continue;
+        let normPath = prefixCut > 0 ? relativePath.substring(prefixCut) : relativePath;
+        if (!normPath) continue;
+        normPath = normPath.replace(/\\/g, '/');
+
+        if (typeof isIgnoredFile === "function" && isIgnoredFile(normPath)) continue;
+
+        const content = await fileObj.async('string');
+        if (content.indexOf('\0') !== -1) continue;
+        if (content.length > 1.5 * 1024 * 1024) continue;
+
+        extractedFiles[normPath] = content;
+      }
+
+      if (Object.keys(extractedFiles).length === 0) {
+        throw new Error('No valid source/header files found in repository archive.');
+      }
+
+      return {
+        repoName,
+        branch: targetBranch,
+        fileCount: Object.keys(extractedFiles).length,
+        files: extractedFiles
+      };
+    }
+
     // Clone Handler
     if (btnActionClone) {
       btnActionClone.onclick = async () => {
@@ -3026,7 +3118,7 @@
             statusClone.style.background = "rgba(239,68,68,0.15)";
             statusClone.style.color = "#fca5a5";
             statusClone.style.border = "1px solid #ef4444";
-            statusClone.textContent = "❌ Please specify a GitHub repository (e.g. LemLib/LemLib)";
+            statusClone.textContent = "❌ Please specify a GitHub repository (e.g. LemLib/LemLib or URL)";
           }
           return;
         }
@@ -3042,20 +3134,44 @@
           statusClone.style.background = "rgba(56,189,248,0.15)";
           statusClone.style.color = "#38bdf8";
           statusClone.style.border = "1px solid #0284c7";
-          statusClone.textContent = `⏳ Connecting to GitHub API to clone '${repoVal}'...`;
+          statusClone.textContent = `⏳ Connecting to GitHub to clone '${repoVal}'...`;
         }
 
         try {
+          let data = null;
           const apiUrl = window.getApiUrl ? window.getApiUrl('/api/github/clone') : '/api/github/clone';
-          const res = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
-          });
 
-          const data = await res.json();
-          if (!res.ok || !data.success) {
-            throw new Error(data.error || "Failed to clone repository from GitHub");
+          if (apiUrl) {
+            try {
+              const res = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
+              });
+
+              const contentType = res.headers.get('content-type') || '';
+              if (contentType.includes('application/json')) {
+                const parsed = await res.json();
+                if (res.ok && parsed && parsed.success) {
+                  data = parsed;
+                } else if (parsed && parsed.error) {
+                  throw new Error(parsed.error);
+                }
+              }
+            } catch (srvErr) {
+              console.warn('[GitHub Sync] Server clone notice:', srvErr.message);
+              if (srvErr.message && !srvErr.message.includes('fetch')) {
+                throw srvErr;
+              }
+            }
+          }
+
+          // Fall back to direct client-side clone if server route didn't return JSON result
+          if (!data) {
+            if (statusClone) {
+              statusClone.textContent = `⏳ Extracting directly from GitHub API...`;
+            }
+            data = await performClientSideClone(repoVal, branchVal, tokenVal);
           }
 
           if (statusClone) {
@@ -3136,7 +3252,7 @@
           const apiUrl = window.getApiUrl ? window.getApiUrl('/api/github/push') : '/api/github/push';
           const res = await fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
               token: tokenVal,
               repo: repoVal,
@@ -3145,6 +3261,12 @@
               commitMessage: msgVal
             })
           });
+
+          const contentType = res.headers.get("content-type") || "";
+          if (!contentType.includes("application/json")) {
+            const text = await res.text();
+            throw new Error(`Server returned non-JSON response (${res.status}): ${text.slice(0, 100)}...`);
+          }
 
           const data = await res.json();
           if (!res.ok || !data.success) {

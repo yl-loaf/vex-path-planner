@@ -389,7 +389,8 @@ app.post('/api/session/release', (req, res) => {
 
 // Git Integration API - Direct Commit & Push without repository cloning
 app.post('/api/github/push', async (req, res) => {
-  const { token, repo, branch, files, commitMessage } = req.body;
+  res.type('application/json');
+  const { token, repo, branch, files, commitMessage } = req.body || {};
   if (!token || !repo || !files || typeof files !== 'object') {
     return res.status(400).json({ error: 'Missing token, repo, or files payload' });
   }
@@ -397,10 +398,18 @@ app.post('/api/github/push', async (req, res) => {
   const targetBranch = branch || 'main';
   const msg = commitMessage || 'Sync from VEX Path Planner Workspace 🚀';
 
-  const [owner, repoName] = repo.split('/');
-  if (!owner || !repoName) {
-    return res.status(400).json({ error: 'Invalid repo name format. Must be "owner/repo"' });
+  let cleanRepo = String(repo).trim();
+  cleanRepo = cleanRepo.replace(/^https?:\/\/(www\.)?github\.com\//i, '');
+  cleanRepo = cleanRepo.replace(/\.git$/i, '');
+  cleanRepo = cleanRepo.replace(/\/+$/, '');
+  if (cleanRepo.includes('/tree/')) cleanRepo = cleanRepo.split('/tree/')[0];
+
+  const parts = cleanRepo.split('/').filter(Boolean);
+  if (parts.length < 2) {
+    return res.status(400).json({ error: 'Invalid repo name format. Must be "owner/repo" or GitHub URL' });
   }
+  const owner = parts[0];
+  const repoName = parts[1];
 
   const headers = {
     'Authorization': `token ${token}`,
@@ -495,6 +504,7 @@ app.post('/api/github/push', async (req, res) => {
 
 // Git Integration API - Direct Repository Cloning
 app.post('/api/github/clone', async (req, res) => {
+  res.type('application/json');
   const { repo, branch, token } = req.body || {};
   if (!repo) {
     return res.status(400).json({ error: 'Missing repository parameter (e.g. "owner/repo" or full GitHub URL)' });
@@ -502,13 +512,20 @@ app.post('/api/github/clone', async (req, res) => {
 
   // Sanitize repo input
   let cleanRepo = String(repo).trim();
-  cleanRepo = cleanRepo.replace(/^https?:\/\/github\.com\//i, '');
+  cleanRepo = cleanRepo.replace(/^https?:\/\/(www\.)?github\.com\//i, '');
   cleanRepo = cleanRepo.replace(/\.git$/i, '');
   cleanRepo = cleanRepo.replace(/\/+$/, '');
 
-  const parts = cleanRepo.split('/');
+  let urlBranch = null;
+  if (cleanRepo.includes('/tree/')) {
+    const parts = cleanRepo.split('/tree/');
+    cleanRepo = parts[0];
+    urlBranch = parts[1] ? parts[1].trim() : null;
+  }
+
+  const parts = cleanRepo.split('/').filter(Boolean);
   if (parts.length < 2) {
-    return res.status(400).json({ error: 'Invalid repository name. Format must be "owner/repo"' });
+    return res.status(400).json({ error: 'Invalid repository name. Format must be "owner/repo" or GitHub URL' });
   }
   const owner = parts[0];
   const repoName = parts[1];
@@ -522,7 +539,7 @@ app.post('/api/github/clone', async (req, res) => {
   }
 
   try {
-    let targetBranch = branch ? String(branch).trim() : null;
+    let targetBranch = branch ? String(branch).trim() : (urlBranch || null);
 
     // If branch is not specified, query repository metadata to determine default branch
     if (!targetBranch) {
