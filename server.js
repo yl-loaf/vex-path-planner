@@ -652,35 +652,55 @@ app.get(['/ads.txt', '/vex-path-planner/ads.txt'], (req, res) => {
   res.sendFile(path.join(__dirname, 'ads.txt'));
 });
 
+// HTTP No-Cache Headers for all HTML files and version.js to ensure instant, reliable updates
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
+
 // Explicitly serve version.js with no-cache headers so update checks are instant
 app.get('/version.js', (req, res) => {
   res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
+    ...NO_CACHE_HEADERS,
     'Content-Type': 'application/javascript; charset=utf-8'
   });
   res.sendFile(path.join(__dirname, 'version.js'));
 });
 
-// Serve static assets from root
-app.use(express.static(__dirname));
+// Serve static assets from root with no-cache on HTML files
+app.use(express.static(__dirname, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html') || filePath.endsWith('version.js')) {
+      res.set(NO_CACHE_HEADERS);
+    }
+  }
+}));
 
 // Route to serve IDE directly
-app.get('/ide', (req, res) => {
+app.get(['/ide', '/ide.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'ide.html'));
 });
 
-app.get('/translator', (req, res) => {
+app.get(['/translator', '/translator.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'translator.html'));
 });
 
-app.get('/stats', (req, res) => {
+app.get(['/stats', '/stats.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'stats.html'));
 });
 
-// Fallback to index.html
+app.get(['/', '/index.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Fallback to index.html with no-cache
 app.get('*', (req, res) => {
+  res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 

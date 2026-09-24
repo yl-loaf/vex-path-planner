@@ -11,7 +11,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260924.k11" />
+  <link rel="stylesheet" href="style.css?v=20260924.k32" />
 </head>
 <body>
   <!-- =================================================================
@@ -2657,22 +2657,31 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260924.k11"></script>
+  <script src="version.js?v=20260924.k32"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260924.k11"></script>
-  <script src="google-drive-sync.js?v=20260924.k11"></script>
-  <script src="session-guard.js?v=20260924.k11"></script>
-  <script src="v5-brain-serial.js?v=20260924.k11"></script>
-  <script src="project-manager.js?v=20260924.k11"></script>
-  <script src="cpp-parser.js?v=20260924.k11"></script>
-  <script src="app.js?v=20260924.k11"></script>
-  <script src="tutorial.js?v=20260924.k11"></script>
+  <script src="firebase-config.js?v=20260924.k32"></script>
+  <script src="google-drive-sync.js?v=20260924.k32"></script>
+  <script src="session-guard.js?v=20260924.k32"></script>
+  <script src="v5-brain-serial.js?v=20260924.k32"></script>
+  <script src="project-manager.js?v=20260924.k32"></script>
+  <script src="cpp-parser.js?v=20260924.k32"></script>
+  <script src="app.js?v=20260924.k32"></script>
+  <script src="tutorial.js?v=20260924.k32"></script>
   <script>
     (function () {
+      if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
+        try {
+          var clean = new URL(window.location.href);
+          clean.searchParams.delete("reload");
+          clean.searchParams.delete("v");
+          window.history.replaceState({}, document.title, clean.pathname + (clean.search ? clean.search : "") + clean.hash);
+        } catch (_) {}
+      }
+
       var el = document.getElementById("buildNumber");
       if (el) el.textContent = window.APP_BUILD || "unknown";
       var btn = document.getElementById("btnCheckUpdate");
@@ -2685,7 +2694,17 @@ void autonomous() {
             var remote = m && m[1];
             var local = window.APP_BUILD || "";
             if (remote && local && remote !== local) {
-              if (confirm("Newer build available (" + remote + "). Reload now?")) location.reload();
+              if (confirm("Newer build available (" + remote + "). Reload now?")) {
+                if (typeof window.performHardUpdateReload === "function") {
+                  window.performHardUpdateReload(remote);
+                } else {
+                  try {
+                    sessionStorage.setItem("lemlib_reload_in_progress", "true");
+                    sessionStorage.setItem("lemlib_last_update_prompt_at", Date.now().toString());
+                  } catch (_) {}
+                  location.replace(location.pathname + "?v=" + remote + "&reload=" + Date.now());
+                }
+              }
             } else {
               alert("Latest build: " + (remote || local || "unknown"));
             }

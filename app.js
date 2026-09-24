@@ -11236,6 +11236,43 @@ lemlib::ControllerSettings ${currentMode}_controller(
     el.textContent = b;
   }
 
+  async function performHardUpdateReload(remoteVersion) {
+    try {
+      sessionStorage.setItem("lemlib_last_update_prompt_at", Date.now().toString());
+      sessionStorage.setItem("lemlib_reload_in_progress", "true");
+      if (window.ProjectManager && typeof window.ProjectManager.saveLocal === "function") {
+        window.ProjectManager.saveLocal();
+      }
+    } catch (_) {}
+
+    // Unregister any service workers
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const reg of regs) {
+          await reg.unregister();
+        }
+      } catch (_) {}
+    }
+
+    // Clear caches
+    if (typeof window !== "undefined" && window.caches) {
+      try {
+        const keys = await caches.keys();
+        for (const key of keys) {
+          await caches.delete(key);
+        }
+      } catch (_) {}
+    }
+
+    // Force reload with cache-busting version query string
+    const targetUrl = new URL(window.location.href);
+    targetUrl.searchParams.set("v", remoteVersion || Date.now().toString());
+    targetUrl.searchParams.set("reload", Date.now().toString());
+    window.location.replace(targetUrl.toString());
+  }
+  window.performHardUpdateReload = performHardUpdateReload;
+
   async function checkForUpdates(manual) {
     try {
       const r = await fetch("version.js?_=" + Date.now(), { cache: "no-store" });
@@ -11255,11 +11292,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
           }
         }
 
-        if (confirm("A newer build is available (" + remote + ").\\nReload now?")) {
-          try {
-            sessionStorage.setItem("lemlib_last_update_prompt_at", Date.now().toString());
-          } catch (_) {}
-          location.reload(true);
+        if (confirm("A newer build is available (" + remote + ").\nReload now?")) {
+          await performHardUpdateReload(remote);
         }
       } else if (manual) {
         alert("You are on the latest build (" + (local || remote) + ").");

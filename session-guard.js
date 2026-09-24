@@ -5,7 +5,17 @@
 (function (global) {
   "use strict";
 
-  const SESSION_ID = "sess_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+  let tabSessionId = "";
+  try {
+    tabSessionId = sessionStorage.getItem("lemlib_tab_session_id");
+  } catch (_) {}
+  if (!tabSessionId) {
+    tabSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+    try {
+      sessionStorage.setItem("lemlib_tab_session_id", tabSessionId);
+    } catch (_) {}
+  }
+  const SESSION_ID = tabSessionId;
   const SESSION_CHANNEL_NAME = "lemlib_single_account_session_bus";
   const LOCAL_STORAGE_ACTIVE_KEY_PREFIX = "lemlib_active_session_";
   const HEARTBEAT_INTERVAL_MS = 8000;
@@ -596,6 +606,22 @@
       displayName: user.displayName || user.email || "User"
     };
 
+    // Check if an intentional reload is in progress (update reload, force refresh, etc.)
+    let isReloading = false;
+    try {
+      if (sessionStorage.getItem("lemlib_reload_in_progress") === "true") {
+        isReloading = true;
+        sessionStorage.removeItem("lemlib_reload_in_progress");
+      }
+    } catch (_) {}
+
+    if (isReloading) {
+      console.log(`[SessionGuard] Reload in progress for ${currentUser?.email} - automatically taking over active session without conflict modal`);
+      await registerWithServer(true);
+      activateInstance();
+      return;
+    }
+
     // 1. Check local storage first for instant cross-tab collision check in same browser
     const userKey = getUserKey(currentUser);
     let localConflict = false;
@@ -635,6 +661,11 @@
 
   // Clean release on tab unload
   window.addEventListener("beforeunload", () => {
+    // If a reload is in progress, do not release so the same session ID smoothly continues
+    try {
+      if (sessionStorage.getItem("lemlib_reload_in_progress") === "true") return;
+    } catch (_) {}
+
     if (currentUser && instanceStatus === "ACTIVE") {
       try {
         fetch(getApiUrl("/api/session/release"), {

@@ -2502,6 +2502,10 @@
     if (btnForceRefreshIDE) {
       btnForceRefreshIDE.addEventListener("click", () => {
         if (ideProjectMenu) ideProjectMenu.hidden = true;
+        try {
+          sessionStorage.setItem("lemlib_reload_in_progress", "true");
+          sessionStorage.setItem("lemlib_last_update_prompt_at", Date.now().toString());
+        } catch (_) {}
         saveCurrentEditorState();
         if (window.ProjectManager) {
           window.ProjectManager.saveLocal();
