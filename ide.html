@@ -9,7 +9,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>PROS & LemLib C++ IDE · VEX V5 Path Planner</title>
   <meta name="description" content="Dedicated multi-file C++ coding IDE for VEX V5 robotics with LemLib, full project compiler, and cloud persistence." />
-  <link rel="stylesheet" href="style.css?v=20260924.k35" />
+  <link rel="stylesheet" href="style.css?v=20260924.k50" />
 </head>
 <body class="ide-page-body">
   <div id="app" class="ide-app-container">
@@ -49,10 +49,8 @@
           </button>
         </div>
 
-        <!-- Quick GitHub Push / Pull Button -->
-        <button type="button" id="btnHeaderGithubSync" class="btn-ide-github-quick" title="Push or Pull code to/from GitHub repository" style="background:#0f172a;border:1px solid #334155;color:#38bdf8;padding:6px 12px;border-radius:6px;font-size:0.8rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;cursor:pointer;transition:all 0.15s;">
-          🐙 Push / Pull GitHub
-        </button>
+        <!-- Quick GitHub Push / Pull Button (Consolidated into Project Menu, kept hidden for JS ref) -->
+        <button type="button" id="btnHeaderGithubSync" hidden></button>
 
         <!-- Consolidated Project & Cloud Menu -->
         <div class="compact-dropdown-wrap">
@@ -709,17 +707,17 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20260924.k35"></script>
+  <script src="version.js?v=20260924.k50"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260924.k35"></script>
-  <script src="google-drive-sync.js?v=20260924.k35"></script>
-  <script src="session-guard.js?v=20260924.k35"></script>
-  <script src="v5-brain-serial.js?v=20260924.k35"></script>
-  <script src="project-manager.js?v=20260924.k35"></script>
-  <script src="ide.js?v=20260924.k35"></script>
-  <script src="tutorial.js?v=20260924.k35"></script>
+  <script src="firebase-config.js?v=20260924.k50"></script>
+  <script src="google-drive-sync.js?v=20260924.k50"></script>
+  <script src="session-guard.js?v=20260924.k50"></script>
+  <script src="v5-brain-serial.js?v=20260924.k50"></script>
+  <script src="project-manager.js?v=20260924.k50"></script>
+  <script src="ide.js?v=20260924.k50"></script>
+  <script src="tutorial.js?v=20260924.k50"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {

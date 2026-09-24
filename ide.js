@@ -271,6 +271,15 @@
     wireEditor();
     wireNavGuard();
     wireGithubSync();
+    updateDiagnosticsUI();
+
+    // Check URL parameters for direct file & line navigation (e.g. from Diagnostics)
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramFile = urlParams.get("file");
+    const paramLine = parseInt(urlParams.get("line"), 10);
+    if (paramFile && ProjectManager && ProjectManager.getFile(paramFile)) {
+      switchToFile(paramFile, paramLine || 1);
+    }
 
     ProjectManager.addListener((pm, reason) => {
       renderProjectHeader();
@@ -1143,7 +1152,7 @@
     }
   };
 
-  function switchToFile(filename) {
+  function switchToFile(filename, lineNum) {
     saveCurrentEditorState();
     if (autosaveEnabled && window.ProjectManager && window.ProjectManager.isDirty) {
       triggerAutosave(true);
@@ -1155,6 +1164,23 @@
     renderFileTree();
     renderTabs();
     loadFile(filename);
+    updateDiagnosticsUI();
+
+    if (lineNum && elCodeEditor) {
+      setTimeout(() => {
+        const lines = elCodeEditor.value.split("\n");
+        let charIndex = 0;
+        const targetLine = Math.min(Math.max(1, lineNum), lines.length);
+        for (let i = 0; i < targetLine - 1; i++) {
+          charIndex += lines[i].length + 1;
+        }
+        elCodeEditor.focus();
+        elCodeEditor.setSelectionRange(charIndex, charIndex + (lines[targetLine - 1] ? lines[targetLine - 1].length : 0));
+        const lineHeight = 20;
+        elCodeEditor.scrollTop = Math.max(0, (targetLine - 5) * lineHeight);
+        updateCursorAndCharCount();
+      }, 50);
+    }
   }
 
   function closeTab(filename) {
@@ -1169,6 +1195,7 @@
     renderTabs();
     renderFileTree();
     loadFile(activeFile);
+    updateDiagnosticsUI();
   }
 
   function loadFile(filename) {
@@ -1846,6 +1873,7 @@
     updateCursorAndCharCount();
     scheduleSyntaxHighlight();
     triggerAutosave(false);
+    debouncedUpdateDiagnostics();
   }
 
   let intelInputTimer = null;
@@ -2023,6 +2051,61 @@
   }
 
   // -------------------------------------------------------------
+  // Live Diagnostics Engine for IDE
+  // -------------------------------------------------------------
+  let diagDebounceTimer = null;
+  function debouncedUpdateDiagnostics() {
+    if (diagDebounceTimer) clearTimeout(diagDebounceTimer);
+    diagDebounceTimer = setTimeout(() => {
+      diagDebounceTimer = null;
+      updateDiagnosticsUI();
+    }, 200);
+  }
+
+  function updateDiagnosticsUI() {
+    const pm = window.ProjectManager;
+    if (!pm || !activeFile) return;
+    saveCurrentEditorState();
+    const content = (elCodeEditor && activeFile) ? elCodeEditor.value : (pm.getFile(activeFile) || "");
+    if (typeof pm.indexVariables === "function") {
+      pm.indexVariables();
+    }
+    const res = pm.analyzeCodeDiagnostics(activeFile, content);
+
+    const errCount = (res.errors || []).length;
+    const warnCount = (res.warnings || []).length;
+
+    if (elDiagCount) elDiagCount.textContent = errCount + warnCount;
+    if (elDiagnosticsList) {
+      if (errCount === 0 && warnCount === 0) {
+        elDiagnosticsList.innerHTML = `<div class="ide-diag-empty">✅ No syntax errors or warnings in <strong>${escapeHtml(activeFile)}</strong>.</div>`;
+      } else {
+        elDiagnosticsList.innerHTML = `
+          <div class="ide-diag-current-file-badge" style="font-size:0.75rem; color:#94a3b8; padding:4px 8px; border-bottom:1px solid #1e293b; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+            <span>Current File: <code style="color:#38bdf8;">${escapeHtml(activeFile)}</code></span>
+            <span style="color:#ef4444; font-weight:600;">${errCount} error${errCount === 1 ? '' : 's'}, ${warnCount} warning${warnCount === 1 ? '' : 's'}</span>
+          </div>
+        `;
+        (res.errors || []).forEach(err => {
+          const row = document.createElement("div");
+          row.className = "ide-diag-item error";
+          row.innerHTML = `<span class="ide-diag-badge">ERROR</span> <strong class="ide-diag-file">${escapeHtml(err.file)}:${err.line}</strong> - <span>${escapeHtml(err.message)}</span>`;
+          row.onclick = () => switchToFile(err.file, err.line);
+          elDiagnosticsList.appendChild(row);
+        });
+        (res.warnings || []).forEach(warn => {
+          const row = document.createElement("div");
+          row.className = "ide-diag-item warning";
+          row.innerHTML = `<span class="ide-diag-badge">WARN</span> <strong class="ide-diag-file">${escapeHtml(warn.file)}:${warn.line}</strong> - <span>${escapeHtml(warn.message)}</span>`;
+          row.onclick = () => switchToFile(warn.file, warn.line);
+          elDiagnosticsList.appendChild(row);
+        });
+      }
+    }
+    return res;
+  }
+
+  // -------------------------------------------------------------
   // Tab Bar Switching for Bottom Output Panel
   // -------------------------------------------------------------
   function wireTabs() {
@@ -2035,6 +2118,10 @@
         const targetId = tab.dataset.tab === "build" ? "tabContentBuild" : tab.dataset.tab === "diagnostics" ? "tabContentDiagnostics" : "tabContentMemory";
         const targetEl = document.getElementById(targetId);
         if (targetEl) targetEl.classList.add("active");
+
+        if (tab.dataset.tab === "diagnostics") {
+          updateDiagnosticsUI();
+        }
       });
     });
   }
@@ -2855,32 +2942,8 @@
         const res = pm.compileProject();
         elBuildConsole.textContent = res.logs || "Compilation complete.";
 
-        const errCount = (res.errors || []).length;
-        const warnCount = (res.warnings || []).length;
-
-        // Update Diagnostics
-        if (elDiagCount) elDiagCount.textContent = errCount + warnCount;
-        if (elDiagnosticsList) {
-          if (errCount === 0 && warnCount === 0) {
-            elDiagnosticsList.innerHTML = `<div class="ide-diag-empty">✅ No syntax errors or warnings found across all project files.</div>`;
-          } else {
-            elDiagnosticsList.innerHTML = "";
-            (res.errors || []).forEach(err => {
-              const row = document.createElement("div");
-              row.className = "ide-diag-item error";
-              row.innerHTML = `<span class="ide-diag-badge">ERROR</span> <strong class="ide-diag-file">${err.file}:${err.line}</strong> - <span>${err.message}</span>`;
-              row.onclick = () => switchToFile(err.file);
-              elDiagnosticsList.appendChild(row);
-            });
-            (res.warnings || []).forEach(warn => {
-              const row = document.createElement("div");
-              row.className = "ide-diag-item warning";
-              row.innerHTML = `<span class="ide-diag-badge">WARN</span> <strong class="ide-diag-file">${warn.file}:${warn.line}</strong> - <span>${warn.message}</span>`;
-              row.onclick = () => switchToFile(warn.file);
-              elDiagnosticsList.appendChild(row);
-            });
-          }
-        }
+        // Only diagnose the current opened file in the Diagnostics tab
+        updateDiagnosticsUI();
 
         // Update Memory Map
         if (res.stats) {

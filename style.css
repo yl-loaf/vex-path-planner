@@ -6061,6 +6061,46 @@ kbd {
   background: #1e293b;
   margin: 3px 0;
 }
+.tools-menu-header {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #38bdf8;
+  padding: 6px 10px 2px;
+  user-select: none;
+}
+
+.preset-segmented-group {
+  display: flex;
+  background: #0d131f;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 3px;
+  margin-top: 6px;
+}
+.preset-segmented-group button.preset {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 5px;
+  transition: all 0.15s ease;
+}
+.preset-segmented-group button.preset:hover {
+  background: #1e293b;
+  color: #f8fafc;
+}
+.preset-segmented-group button.preset.active {
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
 
 /* ==========================================================================
    CODE MERGE & DIFF MODAL STYLES

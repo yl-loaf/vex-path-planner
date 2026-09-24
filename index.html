@@ -11,7 +11,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260924.k37" />
+  <link rel="stylesheet" href="style.css?v=20260924.k50" />
 </head>
 <body>
   <!-- =================================================================
@@ -235,14 +235,14 @@
        ================================================================= -->
   <div id="app" style="display:flex; flex-direction:column; gap:12px;">
     <header class="neat-planner-header">
-      <!-- Left: Home Button & App Title -->
+      <!-- Left: Home Hub Button & App Title -->
       <div class="header-left">
         <button type="button" id="btnReturnHomeHub" class="btn-nav-home" title="View Competition Dashboard Hub">
           🏠 Hub
         </button>
         <div class="header-titles">
           <h1>VEX V5 LemLib Planner</h1>
-          <span class="header-project-pill" id="headerProjectBadge">📁 Override_LemLib_Bot</span>
+          <button type="button" class="header-project-pill" id="headerProjectBadge" title="Click to manage project workspace">📁 Override_LemLib_Bot</button>
         </div>
       </div>
 
@@ -259,43 +259,49 @@
 
       <!-- Right: Actions & Tools -->
       <div class="header-actions">
-        <!-- Quick Start Onboarding Tour for Beginners -->
-        <button id="btnStartQuickTour" type="button" class="btn-quick-tour" title="Interactive Step-by-Step Guided Tour for Beginners">🎓 Quick Tour</button>
-        
-        <!-- Project Workspace Menu -->
-        <button id="btnLoadProject" type="button" class="btn-nav-compact" title="Open Project Workspace Manager">📁 Project</button>
-        <button id="btnOpenCommandPalette" type="button" class="btn-cmd-palette" title="Open Command Palette (Ctrl+K)">🔍 <span class="cmd-kbd">Ctrl+K</span></button>
-        
         <!-- Hardware Brain Link & Quick Connect -->
         <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB">
           <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
           <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
           <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
           <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">🔌 Connect</button>
-          <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;">🚀 Upload & Run</button>
+          <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;">🚀 Upload &amp; Run</button>
         </div>
 
-        <!-- Tools Dropdown Menu -->
+        <!-- Consolidated Tools & Project Menu -->
         <div class="tools-dropdown-wrap">
-          <button type="button" id="btnToolsDropdown" class="btn-nav-tools" title="Additional Engineering Tools &amp; Guides">
-            ⚙️ Tools ▾
+          <button type="button" id="btnToolsDropdown" class="btn-nav-tools" title="Project, Engineering Tools &amp; Guides">
+            ⚙️ Workspace Tools ▾
           </button>
           <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden>
-            <button type="button" id="btnToggleDebug" class="tools-menu-item">🐞 Live Debugger &amp; Inspector</button>
-            <button type="button" id="btnOpenTutorial" class="tools-menu-item">🎓 Interactive LemLib Tutorial</button>
+            <div class="tools-menu-header">📁 Project &amp; Workspace</div>
+            <button type="button" id="btnLoadProject" class="tools-menu-item">📁 Project Manager</button>
+            <button type="button" id="btnSyncProjectToCloud" class="tools-menu-item">☁️ Sync Cloud Workspace</button>
+            <button type="button" id="btnVersionHistoryBanner" class="tools-menu-item">📜 Version History (<span id="bannerVersionCount">0</span>)</button>
+            <button type="button" id="btnCompileProjectBanner" class="tools-menu-item">⚡ Compile Project (pros make)</button>
+            <button type="button" id="btnOpenCommandPalette" class="tools-menu-item">🔍 Command Palette (<span class="cmd-kbd">Ctrl+K</span>)</button>
+            <button type="button" id="btnStartQuickTour" class="tools-menu-item">🎓 Guided Quick Tour</button>
+
             <div class="tools-menu-divider"></div>
-            <a href="translator.html" class="tools-menu-item">📥 C++ Code Translator</a>
+            <div class="tools-menu-header">🛠️ Engineering Analysis</div>
+            <button type="button" id="btnToggleDebug" class="tools-menu-item">🐞 Live Debugger &amp; Inspector</button>
             <button type="button" id="btnToolsAllianceMirror" class="tools-menu-item">🪞 Alliance Routine Mirror</button>
+            <button type="button" id="btnToolsDrivePhysics" class="tools-menu-item">⚡ Real-Time Drive Dyno &amp; Physics</button>
             <button type="button" id="btnToolsSharpTurns" class="tools-menu-item">⚡ Sharp Turn Velocity Analyzer</button>
-            <button type="button" id="btnToolsDrivePhysics" class="tools-menu-item">⚡ Real-Time Drive Physics</button>
             <button type="button" id="btnPidTuner" class="tools-menu-item">🎛️ PID Gain Tuner</button>
             <button type="button" id="btnExportVideo" class="tools-menu-item">🎥 Export .mp4 Video</button>
-            <a href="stats.html" class="tools-menu-item">📊 Site &amp; User Stats</a>
+
             <div class="tools-menu-divider"></div>
+            <div class="tools-menu-header">📂 Import / Export</div>
             <button type="button" id="btnImport" class="tools-menu-item">📂 Import .vpath</button>
             <button type="button" id="btnExport" class="tools-menu-item">💾 Export .vpath</button>
+            <a href="translator.html" class="tools-menu-item">📥 C++ Code Translator</a>
             <button type="button" id="btnClear" class="tools-menu-item danger-item">🗑️ Clear Current Routine</button>
+
             <div class="tools-menu-divider"></div>
+            <div class="tools-menu-header">📖 Guides &amp; Analytics</div>
+            <button type="button" id="btnOpenTutorial" class="tools-menu-item">🎓 Interactive LemLib Tutorial</button>
+            <a href="stats.html" class="tools-menu-item">📊 Site &amp; User Stats</a>
             <button type="button" id="btnHelp" class="tools-menu-item">❓ Help &amp; Guides</button>
           </div>
         </div>
@@ -312,26 +318,17 @@
       </div>
     </header>
 
-    <!-- Project Status Bar -->
+    <!-- Streamlined Project Status Ribbon -->
     <div class="project-banner" id="projectBanner">
       <div class="project-banner-left">
-        <span class="project-badge">📁 PROS PROJECT</span>
         <strong class="project-name-label" id="bannerProjectName">Override_LemLib_Bot</strong>
-        <span class="project-file-label">Synced File: <code style="color:#38bdf8;background:rgba(56,189,248,0.12);padding:2px 6px;border-radius:4px;font-weight:600;">src/autons.cpp</code></span>
+        <span class="project-file-label">Synced File: <code>src/autons.cpp</code></span>
         <span class="project-variable-pill" id="bannerVariableCount" title="Variables and devices indexed across robot-config.h and other project files">0 devices indexed</span>
-        <span class="project-raw-badge" id="bannerRawBadge" style="display:none;background:rgba(16,185,129,0.18);border:1px solid #10b981;color:#10b981;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;cursor:pointer;align-items:center;gap:4px;" title="Raw C++ code preserved from IDE. Click to view versions.">🛡️ Raw C++ Preserved</span>
+        <span class="project-raw-badge" id="bannerRawBadge" style="display:none;" title="Raw C++ code preserved from IDE. Click to view versions.">🛡️ Raw C++ Preserved</span>
       </div>
-      <div class="project-banner-right">
-        <button type="button" id="btnCompileProjectBanner" class="btn-xs-compile" title="Compile entire project workspace (pros make)">⚡ Compile Project</button>
-        <!-- Consolidated Project Options Menu -->
-        <div class="compact-dropdown-wrap">
-          <button type="button" id="btnProjectActionsDropdown" class="btn-xs-sync" title="Project options, version history &amp; sync">📁 Project Menu ▾</button>
-          <div class="compact-dropdown-menu" id="projectActionsMenu" hidden>
-            <button type="button" id="btnSyncProjectToCloud" title="Sync entire multi-file project to cloud">☁️ Sync Cloud</button>
-            <button type="button" id="btnVersionHistoryBanner" title="View C++ Code Version History, Backups &amp; Snapshots">📜 Version History (<span id="bannerVersionCount">0</span>)</button>
-            <a href="ide.html" class="compact-menu-link" title="Open complete project files in dedicated C++ IDE">💻 Open Full C++ IDE ↗</a>
-          </div>
-        </div>
+      <div class="project-banner-right" style="display:none;">
+        <button type="button" id="btnProjectActionsDropdown" hidden></button>
+        <div id="projectActionsMenu" hidden></div>
       </div>
     </div>
 
@@ -370,13 +367,13 @@
             </label>
             <div class="path-btn-group">
               <button type="button" id="btnPathAdd" class="btn-routine-primary" title="Create new autonomous routine">+ New</button>
-              <button type="button" id="btnOpenAllianceMirror" class="btn-routine-mirror" title="Mirror or Invert Routine (Red/Blue Alliance symmetry or field rotation)">🪞 Mirror</button>
               <div class="compact-dropdown-wrap">
                 <button type="button" id="btnRoutineMenuDropdown" class="btn-routine-more" title="More routine actions (Rename, Duplicate, Mirror, Delete)">⋯</button>
                 <div class="compact-dropdown-menu" id="routineActionsMenu" hidden>
                   <button type="button" id="btnPathRename">✏️ Rename Routine</button>
                   <button type="button" id="btnPathDup">📋 Duplicate Routine</button>
-                  <button type="button" id="btnPathMirror">🪞 Alliance Mirroring...</button>
+                  <button type="button" id="btnOpenAllianceMirror">🪞 Alliance Mirroring...</button>
+                  <button type="button" id="btnPathMirror" style="display:none;">🪞 Mirroring</button>
                   <div class="compact-dropdown-divider"></div>
                   <button type="button" id="btnPathDel" class="danger-item">🗑️ Delete Routine</button>
                 </div>
@@ -399,9 +396,9 @@
                 <button type="button" class="cat-chip cat-custom" data-cat="custom">🔴 C++ Code</button>
               </div>
             </div>
-            <div class="palette-search-container" style="padding: 6px 12px; background: rgba(15,23,42,0.5); border-bottom: 1px solid #2a3548; display: flex; align-items: center; gap: 8px;">
-              <input type="text" id="paletteSearchInput" placeholder="🔍 Search blocks (e.g. moveTo, clamp, intake, turn, loop)..." autocomplete="off" style="width: 100%; padding: 6px 10px; font-size: 0.82rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc;" />
-              <button type="button" id="paletteSearchClear" title="Clear search" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.9rem; display: none;">✕</button>
+            <div class="palette-search-container">
+              <input type="text" id="paletteSearchInput" placeholder="🔍 Search blocks (e.g. moveTo, clamp, intake, turn, loop)..." autocomplete="off" />
+              <button type="button" id="paletteSearchClear" title="Clear search" style="display: none;">✕</button>
             </div>
             <div class="palette-block-list">
               <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPoint" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point">🔵 moveToPoint(x, y)</button>
@@ -433,7 +430,7 @@
               <label>Y <input type="number" id="startY" step="0.1" value="-60" /></label>
               <label>θ° <input type="number" id="startTheta" step="1" value="0" /></label>
             </div>
-            <div class="btn-row compact">
+            <div class="btn-row compact preset-segmented-group">
               <button class="preset" data-preset="redL">Red L</button>
               <button class="preset" data-preset="redR">Red R</button>
               <button class="preset" data-preset="blueL">Blue L</button>
@@ -460,7 +457,7 @@
               <option value="ifElse">🔀 if / else (Scratch Block)</option>
               <option value="custom">Custom Code</option>
             </select>
-            <button id="btnAddAction" class="primary">+ Add</button>
+            <button id="btnAddAction" class="primary">+ Add Block</button>
           </div>
         </div>
 
@@ -2657,20 +2654,20 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260924.k37"></script>
+  <script src="version.js?v=20260924.k50"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260924.k37"></script>
-  <script src="google-drive-sync.js?v=20260924.k37"></script>
-  <script src="session-guard.js?v=20260924.k37"></script>
-  <script src="v5-brain-serial.js?v=20260924.k37"></script>
-  <script src="project-manager.js?v=20260924.k37"></script>
-  <script src="cpp-parser.js?v=20260924.k37"></script>
-  <script src="app.js?v=20260924.k37"></script>
-  <script src="tutorial.js?v=20260924.k37"></script>
+  <script src="firebase-config.js?v=20260924.k50"></script>
+  <script src="google-drive-sync.js?v=20260924.k50"></script>
+  <script src="session-guard.js?v=20260924.k50"></script>
+  <script src="v5-brain-serial.js?v=20260924.k50"></script>
+  <script src="project-manager.js?v=20260924.k50"></script>
+  <script src="cpp-parser.js?v=20260924.k50"></script>
+  <script src="app.js?v=20260924.k50"></script>
+  <script src="tutorial.js?v=20260924.k50"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

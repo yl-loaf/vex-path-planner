@@ -13658,7 +13658,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       });
     }
 
-    // Diagnostics Compilation Check
+    // Diagnostics Compilation Check (Scoped to Current Opened Auton Routine File)
     function refreshDebugDiagnostics() {
       const summary = document.getElementById("debugDiagSummary");
       const list = document.getElementById("debugDiagList");
@@ -13666,24 +13666,26 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (!list || !window.ProjectManager) return;
 
       syncPlannerIntoProjectManager();
-      const res = window.ProjectManager.compileProject();
+      const currentAutonFile = (window.ProjectManager && window.ProjectManager.syncedAutonFile) || "src/autons.cpp";
+      const content = window.ProjectManager.getFile(currentAutonFile) || "";
+      const res = window.ProjectManager.analyzeCodeDiagnostics(currentAutonFile, content);
       list.innerHTML = "";
 
       const totalIssues = res.errors.length + res.warnings.length;
       if (badge) badge.textContent = totalIssues;
 
       if (summary) {
-        if (res.success) {
-          summary.innerHTML = `<span class="debug-diag-status-dot green"></span><strong>Project Workspace: All Files Clean (0 Errors)</strong>`;
+        if (res.errors.length === 0) {
+          summary.innerHTML = `<span class="debug-diag-status-dot green"></span><strong>Current File (${escapeHtml(currentAutonFile)}): Clean (0 Errors)</strong>`;
         } else {
-          summary.innerHTML = `<span class="debug-diag-status-dot red"></span><strong>Build Failed: ${res.errors.length} error(s)</strong>`;
+          summary.innerHTML = `<span class="debug-diag-status-dot red"></span><strong>${escapeHtml(currentAutonFile)}: ${res.errors.length} error(s)</strong>`;
         }
       }
 
       if (totalIssues === 0) {
         list.innerHTML = `
           <div style="font-size:0.75rem;color:#22c55e;background:rgba(34,197,94,0.1);padding:10px;border-radius:6px;border:1px solid rgba(34,197,94,0.3);">
-            ✅ No syntax, missing semicolon, or unresolved variable errors detected across any project script.
+            ✅ No syntax, missing semicolon, or bracket errors in <strong>${escapeHtml(currentAutonFile)}</strong>.
           </div>
         `;
         return;
@@ -13692,14 +13694,24 @@ lemlib::ControllerSettings ${currentMode}_controller(
       res.errors.forEach((err) => {
         const item = document.createElement("div");
         item.className = "ide-diag-item error";
+        item.style.cursor = "pointer";
+        item.title = `Click to view ${err.file}:${err.line} in C++ IDE`;
         item.innerHTML = `<span class="ide-diag-badge">ERROR</span> <span class="ide-diag-file">${escapeHtml(err.file)}:${err.line}</span> — ${escapeHtml(err.message)}`;
+        item.onclick = () => {
+          window.location.href = `ide.html?file=${encodeURIComponent(err.file)}&line=${err.line}`;
+        };
         list.appendChild(item);
       });
 
       res.warnings.forEach((warn) => {
         const item = document.createElement("div");
         item.className = "ide-diag-item warning";
+        item.style.cursor = "pointer";
+        item.title = `Click to view ${warn.file}:${warn.line} in C++ IDE`;
         item.innerHTML = `<span class="ide-diag-badge">WARN</span> <span class="ide-diag-file">${escapeHtml(warn.file)}:${warn.line}</span> — ${escapeHtml(warn.message)}`;
+        item.onclick = () => {
+          window.location.href = `ide.html?file=${encodeURIComponent(warn.file)}&line=${warn.line}`;
+        };
         list.appendChild(item);
       });
     }

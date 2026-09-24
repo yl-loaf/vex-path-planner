@@ -2177,6 +2177,392 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     // -------------------------------------------------------------
+    // Comprehensive Multi-File C++ Syntax Analysis & Diagnostics Engine
+    // -------------------------------------------------------------
+    analyzeCodeDiagnostics(fileName, content, declaredSymbols = null) {
+      const errors = [];
+      const warnings = [];
+      if (!content || typeof content !== "string") return { errors, warnings };
+
+      const lines = content.split("\n");
+      let inBlockComment = false;
+      let blockCommentStartLine = 0;
+
+      // Symbol set for variables, devices, and types
+      const symbolSet = declaredSymbols || new Set([
+        ...(this.symbols?.motors || []).map(m => m.name),
+        ...(this.symbols?.pistons || []).map(p => p.name),
+        ...(this.symbols?.sensors || []).map(s => s.name),
+        ...(this.symbols?.chassis || []).map(c => c.name),
+        ...(this.symbols?.functions || []).map(f => f.name),
+        "chassis", "pros", "lemlib", "delay", "printf", "Master", "Controller", "intake", "clamp", "piston"
+      ]);
+
+      const validTypesAndKeywords = new Set([
+        "int", "double", "float", "bool", "char", "auto", "void", "uint8_t", "uint16_t", "uint32_t", "int8_t", "int16_t", "int32_t", "size_t",
+        "return", "break", "continue", "goto", "using", "namespace", "typedef", "struct", "class", "enum", "union",
+        "if", "else", "while", "for", "switch", "case", "default", "try", "catch", "public", "private", "protected",
+        "const", "static", "volatile", "extern", "unsigned", "signed", "inline", "virtual", "override", "constexpr",
+        "pros", "lemlib", "chassis", "Motor", "ADIPiston", "Imu", "Distance", "Optical", "Rotation", "Controller",
+        "ControllerSettings", "Drivetrain", "OdomSensors", "TrackingWheel", "Pose"
+      ]);
+
+      // Global bracket stack to detect nesting mismatches across block structures
+      const globalBracketStack = [];
+
+      lines.forEach((rawLine, idx) => {
+        const lineNum = idx + 1;
+        let line = rawLine.trim();
+
+        // 1. Handle block comments /* ... */
+        if (inBlockComment) {
+          if (line.includes("*/")) {
+            inBlockComment = false;
+            line = line.substring(line.indexOf("*/") + 2).trim();
+          } else {
+            return;
+          }
+        }
+
+        if (line.includes("/*")) {
+          const commentStartIdx = line.indexOf("/*");
+          const commentEndIdx = line.indexOf("*/", commentStartIdx + 2);
+          if (commentEndIdx !== -1) {
+            line = (line.substring(0, commentStartIdx) + " " + line.substring(commentEndIdx + 2)).trim();
+          } else {
+            inBlockComment = true;
+            blockCommentStartLine = lineNum;
+            line = line.substring(0, commentStartIdx).trim();
+          }
+        }
+
+        // Strip inline comments //
+        let codePart = line;
+        if (codePart.includes("//")) {
+          codePart = codePart.substring(0, codePart.indexOf("//")).trim();
+        }
+
+        if (!codePart) return;
+
+        // 2. Pre-processor Directives (#include, #define, #pragma, etc.)
+        if (codePart.startsWith("#")) {
+          if (codePart.startsWith("#include")) {
+            const matchInc = codePart.match(/#include\s+([<"][^>"]+[>"])/);
+            if (!matchInc) {
+              errors.push({
+                file: fileName,
+                line: lineNum,
+                message: `SyntaxError: #include filename must be enclosed in <...> or "..." (got '${codePart}')`,
+              });
+            }
+          } else if (codePart === "#define" || /^#define\s*$/.test(codePart)) {
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: Expected macro name after #define`,
+            });
+          }
+          return;
+        }
+
+        // 3. String literal validation & string stripping
+        let codeWithoutStrings = "";
+        let inString = false;
+        let stringQuote = "";
+
+        for (let i = 0; i < codePart.length; i++) {
+          const ch = codePart[i];
+          const prevCh = i > 0 ? codePart[i - 1] : "";
+
+          if (inString) {
+            if (ch === stringQuote && prevCh !== "\\") {
+              inString = false;
+            }
+          } else {
+            if (ch === '"' || ch === "'") {
+              inString = true;
+              stringQuote = ch;
+            } else {
+              codeWithoutStrings += ch;
+            }
+          }
+        }
+
+        if (inString) {
+          errors.push({
+            file: fileName,
+            line: lineNum,
+            message: `SyntaxError: Unclosed string literal (${stringQuote})`,
+          });
+        }
+
+        // 4. Bracket Nesting Stack & Matching ([{ }])
+        const lineBracketStack = [];
+        for (let i = 0; i < codeWithoutStrings.length; i++) {
+          const c = codeWithoutStrings[i];
+          if (c === "{" || c === "(" || c === "[") {
+            const item = { char: c, line: lineNum };
+            lineBracketStack.push(item);
+            globalBracketStack.push(item);
+          } else if (c === "}" || c === ")" || c === "]") {
+            const expectedChar = c === "}" ? "{" : c === ")" ? "(" : "[";
+
+            if (lineBracketStack.length > 0) {
+              const top = lineBracketStack.pop();
+              if (top.char !== expectedChar) {
+                errors.push({
+                  file: fileName,
+                  line: lineNum,
+                  message: `SyntaxError: Mismatched bracket '${c}' (expected '${top.char === "{" ? "}" : top.char === "(" ? ")" : "]"}' to close '${top.char}')`,
+                });
+              }
+            }
+
+            if (globalBracketStack.length > 0) {
+              const topG = globalBracketStack.pop();
+              if (topG.char !== expectedChar && lineBracketStack.length === 0) {
+                if (topG.line !== lineNum) {
+                  errors.push({
+                    file: fileName,
+                    line: lineNum,
+                    message: `SyntaxError: Mismatched bracket '${c}' (opened '${topG.char}' at line ${topG.line})`,
+                  });
+                }
+              }
+            } else {
+              errors.push({
+                file: fileName,
+                line: lineNum,
+                message: `SyntaxError: Unexpected closing bracket '${c}' without matching opening bracket`,
+              });
+            }
+          }
+        }
+
+        // Single-line unclosed bracket check
+        const lineParenOpen = (codeWithoutStrings.match(/\(/g) || []).length;
+        const lineParenClose = (codeWithoutStrings.match(/\)/g) || []).length;
+        if (lineParenOpen > lineParenClose && !codeWithoutStrings.endsWith("{") && !codeWithoutStrings.endsWith(",") && !codeWithoutStrings.endsWith("\\")) {
+          errors.push({
+            file: fileName,
+            line: lineNum,
+            message: `SyntaxError: Unclosed parenthesis '(' in statement '${codePart}'`,
+          });
+        }
+
+        const lineBracketOpen = (codeWithoutStrings.match(/\[/g) || []).length;
+        const lineBracketClose = (codeWithoutStrings.match(/\]/g) || []).length;
+        if (lineBracketOpen > lineBracketClose && !codeWithoutStrings.endsWith("{") && !codeWithoutStrings.endsWith(",") && !codeWithoutStrings.endsWith("\\")) {
+          errors.push({
+            file: fileName,
+            line: lineNum,
+            message: `SyntaxError: Unclosed square bracket '[' in statement '${codePart}'`,
+          });
+        }
+
+        // 5. Check Double Operators & Syntax Typos
+        if (/,,/.test(codeWithoutStrings)) {
+          errors.push({
+            file: fileName,
+            line: lineNum,
+            message: `SyntaxError: Unexpected consecutive commas ',,' in expression`,
+          });
+        }
+
+        // 6. Check assignment operator '=' inside conditional if/while
+        const ifCondMatch = codeWithoutStrings.match(/\b(if|while)\s*\(([^)]+)\)/);
+        if (ifCondMatch) {
+          const cond = ifCondMatch[2].trim();
+          if (!cond) {
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: Empty condition inside '${ifCondMatch[1]}()'`,
+            });
+          } else if (/\b[a-zA-Z0-9_]+\s*=\s*[^=!]/.test(cond) && !/==|<=|>=|!=/.test(cond)) {
+            warnings.push({
+              file: fileName,
+              line: lineNum,
+              message: `Warning: Single assignment '=' inside '${ifCondMatch[1]}' condition. Did you mean '=='?`,
+            });
+          }
+        }
+
+        // 7. Random Letters / Gibberish Statements & Missing Semicolon Check
+        const isControlStructure = /^(if|else|while|for|switch|case|default|try|catch|namespace|class|struct|enum|public|private|protected|typedef|using)\b/.test(codeWithoutStrings);
+        const isLineEndingValid = codeWithoutStrings.endsWith(";") || codeWithoutStrings.endsWith("{") || codeWithoutStrings.endsWith("}") || codeWithoutStrings.endsWith(":") || codeWithoutStrings.endsWith(",") || codeWithoutStrings.endsWith("\\");
+
+        if (!isControlStructure && !isLineEndingValid) {
+          errors.push({
+            file: fileName,
+            line: lineNum,
+            message: `SyntaxError: Expected ';' at end of statement: '${codePart}'`,
+          });
+        } else if (codeWithoutStrings.endsWith(";")) {
+          const stmtBody = codeWithoutStrings.replace(/;$/, "").trim();
+          if (stmtBody) {
+            const isFunctionCall = /[a-zA-Z0-9_:]+\s*\([^)]*\)/.test(stmtBody);
+            const isAssignmentOrOp = /=|\+=|-=|\*=|\/=|%=|\+\+|--|<<|>>/.test(stmtBody);
+            const isReturnOrBreak = /^(return|break|continue|goto)\b/.test(stmtBody);
+            const isDeclaration = /^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+)*([a-zA-Z0-9_:]+)\s+([a-zA-Z0-9_]+)/.test(stmtBody);
+
+            if (!isFunctionCall && !isAssignmentOrOp && !isReturnOrBreak) {
+              if (!isDeclaration) {
+                errors.push({
+                  file: fileName,
+                  line: lineNum,
+                  message: `SyntaxError: Invalid C++ statement or unknown identifier '${stmtBody}'`,
+                });
+              } else {
+                const declMatch = stmtBody.match(/^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+)*([a-zA-Z0-9_:]+)\s+([a-zA-Z0-9_]+)/);
+                if (declMatch) {
+                  const typeToken = declMatch[1];
+                  const varToken = declMatch[2];
+                  const isKnownType = validTypesAndKeywords.has(typeToken) ||
+                                      typeToken.includes("::") ||
+                                      symbolSet.has(typeToken) ||
+                                      /^[A-Z][a-zA-Z0-9_]*$/.test(typeToken);
+                  if (!isKnownType) {
+                    errors.push({
+                      file: fileName,
+                      line: lineNum,
+                      message: `SyntaxError: Unknown type or invalid statement '${typeToken} ${varToken}'`,
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 8. LemLib API Parameter Count Validation
+        const mtPoint = codeWithoutStrings.match(/chassis\.moveToPoint\s*\(([^)]*)\)/);
+        if (mtPoint) {
+          const args = mtPoint[1].split(",").map(a => a.trim()).filter(Boolean);
+          if (args.length < 2) {
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: chassis.moveToPoint requires at least 2 arguments (x, y). Received ${args.length}`,
+            });
+          }
+        }
+
+        const mtPose = codeWithoutStrings.match(/chassis\.moveToPose\s*\(([^)]*)\)/);
+        if (mtPose) {
+          const args = mtPose[1].split(",").map(a => a.trim()).filter(Boolean);
+          if (args.length < 3) {
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: chassis.moveToPose requires at least 3 arguments (x, y, theta). Received ${args.length}`,
+            });
+          }
+        }
+
+        const ttHeading = codeWithoutStrings.match(/chassis\.turnToHeading\s*\(([^)]*)\)/);
+        if (ttHeading) {
+          const args = ttHeading[1].split(",").map(a => a.trim()).filter(Boolean);
+          if (args.length < 1) {
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: chassis.turnToHeading requires heading angle argument theta`,
+            });
+          }
+        }
+
+        const ttPoint = codeWithoutStrings.match(/chassis\.turnToPoint\s*\(([^)]*)\)/);
+        if (ttPoint) {
+          const args = ttPoint[1].split(",").map(a => a.trim()).filter(Boolean);
+          if (args.length < 2) {
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: chassis.turnToPoint requires at least 2 arguments (x, y). Received ${args.length}`,
+            });
+          }
+        }
+
+        const setPose = codeWithoutStrings.match(/chassis\.setPose\s*\(([^)]*)\)/);
+        if (setPose) {
+          const args = setPose[1].split(",").map(a => a.trim()).filter(Boolean);
+          if (args.length < 3) {
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: chassis.setPose requires at least 3 arguments (x, y, theta). Received ${args.length}`,
+            });
+          }
+        }
+
+        // LemLib method capitalization typos
+        const typoMatch = codeWithoutStrings.match(/chassis\.(movetopoint|movetoPose|turntoheading|turntopoint|setpose)\s*\(/i);
+        if (typoMatch) {
+          const called = typoMatch[1];
+          if (!["moveToPoint", "moveToPose", "turnToHeading", "turnToPoint", "setPose", "swingToPoint", "swingToHeading", "waitUntil", "waitUntilDone"].includes(called)) {
+            warnings.push({
+              file: fileName,
+              line: lineNum,
+              message: `Warning: Case typo in 'chassis.${called}'. LemLib API methods are camelCase`,
+            });
+          }
+        }
+
+        // 9. VEX V5 Smart Port Range Checks
+        const motorPortMatch = codeWithoutStrings.match(/pros::Motor\s+[a-zA-Z0-9_]+\s*\(\s*(-?\d+)\s*/);
+        if (motorPortMatch) {
+          const port = parseInt(motorPortMatch[1], 10);
+          const absPort = Math.abs(port);
+          if (absPort < 1 || absPort > 21) {
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: Invalid VEX V5 Smart Port ${port}. Smart ports must be between 1 and 21 (or negative for reversed)`,
+            });
+          }
+        }
+
+        // 10. Undefined Symbol Check
+        if (fileName.endsWith(".cpp") || fileName.endsWith(".c")) {
+          const tokenMatch = codeWithoutStrings.match(/([a-zA-Z0-9_]+)\.(move|set_value|get_value|moveToPoint|moveToPose|turnToHeading)/);
+          if (tokenMatch && tokenMatch[1]) {
+            const varName = tokenMatch[1];
+            if (!symbolSet.has(varName)) {
+              warnings.push({
+                file: fileName,
+                line: lineNum,
+                message: `'${varName}' was used but not explicitly declared in robot-config.h`,
+              });
+            }
+          }
+        }
+      });
+
+      // End-of-file checks
+      if (inBlockComment) {
+        errors.push({
+          file: fileName,
+          line: blockCommentStartLine || lines.length,
+          message: `SyntaxError: Unclosed block comment '/*' starting at line ${blockCommentStartLine}`,
+        });
+      }
+
+      if (globalBracketStack.length > 0) {
+        globalBracketStack.forEach(unclosed => {
+          const closingChar = unclosed.char === "{" ? "}" : unclosed.char === "(" ? ")" : "]";
+          errors.push({
+            file: fileName,
+            line: unclosed.line,
+            message: `SyntaxError: Unclosed bracket '${unclosed.char}' (expected matching '${closingChar}')`,
+          });
+        });
+      }
+
+      return { errors, warnings };
+    }
+
+    // -------------------------------------------------------------
     // Multi-File Project Compiler Engine (Emulates `pros make`)
     // -------------------------------------------------------------
     compileProject() {
@@ -2216,59 +2602,18 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         "chassis", "pros", "lemlib", "delay", "printf"
       ]);
 
-      // Scan each .cpp file
+      // Scan all project source and header files for diagnostics
       const cppFiles = fileNames.filter(f => f.endsWith(".cpp") || f.endsWith(".c"));
+      const projectFilesToScan = fileNames.filter(f => f.endsWith(".cpp") || f.endsWith(".c") || f.endsWith(".h") || f.endsWith(".hpp"));
 
-      cppFiles.forEach(fileName => {
+      projectFilesToScan.forEach(fileName => {
         const content = files[fileName];
         logs.push(`CXX ${fileName}`);
         if (!content || typeof content !== "string") return;
 
-        const lines = content.split("\n");
-        let openBraces = 0;
-
-        lines.forEach((rawLine, idx) => {
-          const line = rawLine.trim();
-          const lineNum = idx + 1;
-
-          // Brace balance
-          for (const char of line) {
-            if (char === "{") openBraces++;
-            if (char === "}") openBraces--;
-          }
-
-          // Semicolon check on expressions
-          if (line && !line.startsWith("//") && !line.startsWith("#") && !line.startsWith("/*") && !line.endsWith(";") && !line.endsWith("{") && !line.endsWith("}") && !line.endsWith(":")) {
-            if (line.includes("chassis.") || line.includes(".move(") || line.includes(".set_value(")) {
-              errors.push({
-                file: fileName,
-                line: lineNum,
-                message: `Expected ';' at end of statement: '${line}'`,
-              });
-            }
-          }
-
-          // Undefined symbol detection in statements
-          const tokenMatch = line.match(/([a-zA-Z0-9_]+)\.(move|set_value|get_value|moveToPoint|moveToPose|turnToHeading)/);
-          if (tokenMatch && tokenMatch[1]) {
-            const varName = tokenMatch[1];
-            if (!declaredSymbols.has(varName)) {
-              warnings.push({
-                file: fileName,
-                line: lineNum,
-                message: `'${varName}' was used but not explicitly declared in robot-config.h`,
-              });
-            }
-          }
-        });
-
-        if (openBraces !== 0) {
-          errors.push({
-            file: fileName,
-            line: lines.length,
-            message: `Unbalanced braces in file (mismatch of ${Math.abs(openBraces)} '${openBraces > 0 ? '{' : '}'}')`,
-          });
-        }
+        const diag = this.analyzeCodeDiagnostics(fileName, content, declaredSymbols);
+        errors.push(...diag.errors);
+        warnings.push(...diag.warnings);
       });
 
       // Link step
