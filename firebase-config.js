@@ -15,13 +15,13 @@ window.FIREBASE_ENABLED = true;
 
 // Utility to resolve backend API URLs (supporting cross-origin static hosts like GitHub Pages)
 window.getApiUrl = function(path) {
-  const host = window.location.hostname;
-  if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app")) {
-    return path;
-  }
-  // On third-party static hosts (e.g. GitHub Pages), Cloud Run server endpoints are restricted by origin policies.
+  const host = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname : "";
+  // On pure static third-party hosts (e.g. GitHub Pages), Cloud Run server endpoints are restricted by origin policies.
   // Return null so clients cleanly bypass server fetch and rely 100% on Firebase Firestore directly.
-  return null;
+  if (host.includes("github.io")) {
+    return null;
+  }
+  return path;
 };
 
 // Auto-initialize default Firebase App if compat SDK is present

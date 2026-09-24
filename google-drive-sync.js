@@ -107,13 +107,13 @@
     }
   }
 
-  async function saveProjectToDrive(projectData, customFilename = null) {
+  async function saveProjectToDrive(projectData, customFilename = null, forceNew = false) {
     const folderId = await getOrCreateDriveFolder();
-    const name = customFilename || (projectData.name ? `${projectData.name}.vexproj.json` : "MyVEXProject.vexproj.json");
+    let name = customFilename || (projectData.name ? `${projectData.name}.vexproj.json` : "MyVEXProject.vexproj.json");
     const content = JSON.stringify(projectData, null, 2);
 
     let fileId = null;
-    if (folderId) {
+    if (folderId && !forceNew) {
       try {
         const q = `'${folderId}' in parents and name='${name}' and trashed=false`;
         const checkUrl = "https://www.googleapis.com/drive/v3/files?" + new URLSearchParams({ q, fields: "files(id, name)" });
@@ -125,7 +125,7 @@
       } catch (e) {}
     }
 
-    if (fileId) {
+    if (fileId && !forceNew) {
       // Update existing file
       const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
       await fetchWithAuth(updateUrl, {

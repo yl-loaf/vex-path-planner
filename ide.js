@@ -56,6 +56,208 @@
   let isAutosaving = false;
   let lastSaveTimestamp = null;
 
+  // -------------------------------------------------------------
+  // Universal Multi-File Project Ignore & Import Manager
+  // -------------------------------------------------------------
+  function isIgnoredFile(path, size = 0) {
+    if (!path) return true;
+    const lower = path.toLowerCase().replace(/\\/g, "/");
+    const base = path.split(/[\/\\]/).pop();
+    if (base.startsWith(".") && base !== ".gitignore" && base !== ".editorconfig") return true;
+    if (
+      lower.includes("/.git/") || lower.startsWith(".git/") ||
+      lower.includes("/.vscode/") || lower.startsWith(".vscode/") ||
+      lower.includes("/.idea/") || lower.startsWith(".idea/") ||
+      lower.includes("/.cache/") || lower.startsWith(".cache/") ||
+      lower.includes("/.clangd/") || lower.startsWith(".clangd/") ||
+      lower.includes("/.pros/") || lower.startsWith(".pros/") ||
+      lower.includes("/bin/") || lower.startsWith("bin/") ||
+      lower.includes("/build/") || lower.startsWith("build/") ||
+      lower.includes("/firmware/") || lower.startsWith("firmware/") ||
+      lower.includes("/node_modules/") || lower.startsWith("node_modules/") ||
+      lower.includes("/__macosx/") || lower.startsWith("__macosx/")
+    ) return true;
+    if (lower.endsWith(".o") || lower.endsWith(".elf") || lower.endsWith(".bin") || lower.endsWith(".hex") || lower.endsWith(".map") || lower.endsWith(".a") || lower.endsWith(".lib") || lower.endsWith(".so") || lower.endsWith(".dylib") || lower.endsWith(".ds_store") || lower.endsWith(".zip") || lower.endsWith(".tar.gz") || lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".ico") || lower.endsWith(".pdf") || lower.endsWith(".woff") || lower.endsWith(".woff2") || lower.endsWith(".ttf")) return true;
+    if (size && size > 2 * 1024 * 1024) return true;
+    return false;
+  }
+  window.isIgnoredFile = isIgnoredFile;
+
+  function applyNewImportedProject(projName, filesMap) {
+    // Clean up common root prefix if files are double-nested like "MyProject/src/main.cpp"
+    const paths = Object.keys(filesMap || {});
+    if (paths.length > 0) {
+      const firstSegment = paths[0].split("/")[0];
+      if (firstSegment && paths.length > 1 && paths.every(p => p.startsWith(firstSegment + "/"))) {
+        const cleanedMap = {};
+        const prefix = firstSegment + "/";
+        for (const [k, v] of Object.entries(filesMap)) {
+          cleanedMap[k.substring(prefix.length)] = v;
+        }
+        filesMap = cleanedMap;
+      }
+    }
+
+    const fileCount = Object.keys(filesMap).length;
+    if (fileCount === 0) {
+      alert("No valid source files found in selected project folder.");
+      return;
+    }
+
+    const currentProjectName = (window.ProjectManager && window.ProjectManager.project && window.ProjectManager.project.name) || "";
+    const isDifferentName = !currentProjectName || (projName && currentProjectName.trim().toLowerCase() !== projName.trim().toLowerCase());
+
+    window.promptWipeChallenge(`${projName} (${fileCount} files)`, async () => {
+      const totalBytes = Object.values(filesMap).reduce((sum, content) => sum + (typeof content === "string" ? content.length : 0), 0);
+
+      if (window.ImportProgressModal) {
+        window.ImportProgressModal.show({
+          title: isDifferentName ? "Creating New Project Workspace" : "Importing Project Workspace",
+          subtitle: `Project "${projName}" (${fileCount} files)`,
+          totalBytes: totalBytes,
+          totalFiles: fileCount
+        });
+      }
+
+      if (window.ProjectManager) {
+        window.ProjectManager.wipeProject();
+        window.ProjectManager.project = {
+          name: projName,
+          version: "1.0.0",
+          target: "v5",
+          kernel: "4.1.0",
+          lemlibVersion: "0.5.4",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          files: filesMap,
+          activeAuton: "red_rush_auton",
+          cloudSynced: false,
+          isDefault: false
+        };
+        window.ProjectManager._hasUserEdited = true;
+      }
+
+      if (window.ImportProgressModal) {
+        window.ImportProgressModal.update({
+          phase: 2,
+          pct: 25,
+          currentBytes: Math.round(totalBytes * 0.25),
+          totalBytes: totalBytes,
+          message: "Indexing C++ motor/sensor devices & LemLib symbols..."
+        });
+      }
+
+      if (window.ProjectManager) {
+        window.ProjectManager.indexVariables();
+      }
+
+      if (window.ImportProgressModal) {
+        window.ImportProgressModal.update({
+          phase: 3,
+          pct: 45,
+          currentBytes: Math.round(totalBytes * 0.45),
+          totalBytes: totalBytes,
+          message: "Writing workspace files to IndexedDB..."
+        });
+      }
+
+      updateAutosaveUI("saving", null, window.ProjectManager ? window.ProjectManager.formatSavingProgress(Math.round(totalBytes * 0.20), totalBytes) : "20%");
+
+      if (window.ProjectManager) {
+        await window.ProjectManager.saveWithProgress((curr, total, progStr) => {
+          updateAutosaveUI("saving", null, progStr);
+          if (window.ImportProgressModal) {
+            const progressBytes = Math.round(totalBytes * 0.45 + (curr / (total || 1)) * (totalBytes * 0.50));
+            const pct = Math.min(95, Math.round((progressBytes / totalBytes) * 100));
+            window.ImportProgressModal.update({
+              phase: 3,
+              pct: pct,
+              currentBytes: progressBytes,
+              totalBytes: totalBytes,
+              message: `Persisting to database: ${progStr}`
+            });
+          }
+        });
+      }
+
+      if (window.ImportProgressModal) {
+        window.ImportProgressModal.update({
+          phase: 4,
+          pct: 98,
+          currentBytes: totalBytes,
+          totalBytes: totalBytes,
+          message: "Finalizing workspace & autonomous routines..."
+        });
+      }
+
+      const finalStr = window.ProjectManager ? window.ProjectManager.formatSavingProgress(totalBytes, totalBytes) : `${(totalBytes / 1024).toFixed(1)} KB`;
+      updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
+      renderProjectHeader();
+      renderFileTree();
+      renderTabs();
+
+      const fileList = Object.keys(filesMap);
+      const mainCpp = fileList.find(f => f === "src/autons.cpp" || f === "src/main.cpp") ||
+                      fileList.find(f => f.startsWith("src/") && f.endsWith(".cpp")) ||
+                      fileList.find(f => f.endsWith(".cpp") || f.endsWith(".hpp") || f.endsWith(".h")) ||
+                      fileList[0];
+
+      if (mainCpp) loadFile(mainCpp);
+      renderSymbols();
+
+      if (window.ImportProgressModal) {
+        window.ImportProgressModal.finish({
+          bytesSynced: totalBytes,
+          totalBytes: totalBytes,
+          message: `✓ Synced ${fileCount} files (${finalStr})`
+        });
+      }
+
+      // If the folder name is different, create a brand new project and a new Google Drive file!
+      if (window.GoogleDriveSync && window.ProjectManager && window.ProjectManager.project) {
+        try {
+          const hasDriveAuth = !!(localStorage.getItem("gdrive_access_token") || (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser));
+          if (hasDriveAuth) {
+            const driveFileName = `${projName}.vexproj.json`;
+            const driveRes = await window.GoogleDriveSync.saveProject(window.ProjectManager.project, driveFileName, isDifferentName);
+            if (driveRes && driveRes.fileId) {
+              window.ProjectManager.project.gdriveFileId = driveRes.fileId;
+              await window.ProjectManager.saveLocal(true);
+              console.log(`[GoogleDriveSync] Created new Google Drive file for project "${projName}": ${driveRes.fileId}`);
+              if (typeof showToast === "function") {
+                showToast(`📁 Created new project "${projName}" and new file in Google Drive!`);
+              }
+            }
+          }
+        } catch (driveErr) {
+          console.warn("[GoogleDriveSync] Notice on new file creation:", driveErr.message);
+        }
+      }
+
+      const currentUser = cloudUser || (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) || (localStorage.getItem("lemlib_saved_google_user") ? JSON.parse(localStorage.getItem("lemlib_saved_google_user")) : null);
+      if (currentUser && window.ProjectManager) {
+        try {
+          updateAutosaveUI("saving", null, "☁️ Syncing to server...");
+          await window.ProjectManager.saveToCloud(null, false);
+          updateAutosaveUI("synced", null, finalStr);
+          if (typeof showToast === "function") {
+            showToast(`💥 Workspace imported & synced to server! "${projName}" (${fileCount} files).`);
+          }
+        } catch (cloudErr) {
+          console.error("Cloud sync on import failed:", cloudErr);
+          if (typeof showToast === "function") {
+            showToast(`💥 Workspace imported locally (${fileCount} files). Cloud sync notice: ${cloudErr.message}`);
+          }
+        }
+      } else {
+        if (typeof showToast === "function") {
+          showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}). Log in with Google to sync across devices.`);
+        }
+      }
+    });
+  }
+  window.applyNewImportedProject = applyNewImportedProject;
+
   function init() {
     initAuth();
     initAutosave();
@@ -1927,165 +2129,6 @@
     // -------------------------------------------------------------
     // Multi-File Project Folder & Archive Import / Export System
     // -------------------------------------------------------------
-    function isIgnoredFile(path, size = 0) {
-      if (!path) return true;
-      const lower = path.toLowerCase().replace(/\\/g, "/");
-      const base = path.split(/[\/\\]/).pop();
-      if (base.startsWith(".") && base !== ".gitignore" && base !== ".editorconfig") return true;
-      if (
-        lower.includes("/.git/") || lower.startsWith(".git/") ||
-        lower.includes("/.vscode/") || lower.startsWith(".vscode/") ||
-        lower.includes("/.idea/") || lower.startsWith(".idea/") ||
-        lower.includes("/.cache/") || lower.startsWith(".cache/") ||
-        lower.includes("/.clangd/") || lower.startsWith(".clangd/") ||
-        lower.includes("/.pros/") || lower.startsWith(".pros/") ||
-        lower.includes("/bin/") || lower.startsWith("bin/") ||
-        lower.includes("/build/") || lower.startsWith("build/") ||
-        lower.includes("/firmware/") || lower.startsWith("firmware/") ||
-        lower.includes("/node_modules/") || lower.startsWith("node_modules/") ||
-        lower.includes("/__macosx/") || lower.startsWith("__macosx/")
-      ) return true;
-      if (lower.endsWith(".o") || lower.endsWith(".elf") || lower.endsWith(".bin") || lower.endsWith(".hex") || lower.endsWith(".map") || lower.endsWith(".a") || lower.endsWith(".lib") || lower.endsWith(".so") || lower.endsWith(".dylib") || lower.endsWith(".ds_store") || lower.endsWith(".zip") || lower.endsWith(".tar.gz") || lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".ico") || lower.endsWith(".pdf") || lower.endsWith(".woff") || lower.endsWith(".woff2") || lower.endsWith(".ttf")) return true;
-      if (size && size > 2 * 1024 * 1024) return true;
-      return false;
-    }
-
-    function applyNewImportedProject(projName, filesMap) {
-      // Clean up common root prefix if files are double-nested like "MyProject/src/main.cpp"
-      const paths = Object.keys(filesMap);
-      if (paths.length > 0) {
-        const firstSegment = paths[0].split("/")[0];
-        if (firstSegment && paths.length > 1 && paths.every(p => p.startsWith(firstSegment + "/"))) {
-          const cleanedMap = {};
-          const prefix = firstSegment + "/";
-          for (const [k, v] of Object.entries(filesMap)) {
-            cleanedMap[k.substring(prefix.length)] = v;
-          }
-          filesMap = cleanedMap;
-        }
-      }
-
-      const fileCount = Object.keys(filesMap).length;
-      if (fileCount === 0) {
-        alert("No valid source files found in selected project folder.");
-        return;
-      }
-      window.promptWipeChallenge(`${projName} (${fileCount} files)`, async () => {
-        const totalBytes = Object.values(filesMap).reduce((sum, content) => sum + (typeof content === "string" ? content.length : 0), 0);
-
-        if (window.ImportProgressModal) {
-          window.ImportProgressModal.show({
-            title: "Importing Project Workspace",
-            subtitle: `Importing "${projName}" (${fileCount} files)`,
-            totalBytes: totalBytes,
-            totalFiles: fileCount
-          });
-        }
-
-        ProjectManager.wipeProject();
-        ProjectManager.project = {
-          name: projName,
-          version: "1.0.0",
-          target: "v5",
-          kernel: "4.1.0",
-          lemlibVersion: "0.5.4",
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          files: filesMap,
-          activeAuton: "red_rush_auton",
-          cloudSynced: false,
-          isDefault: false
-        };
-
-        if (window.ImportProgressModal) {
-          window.ImportProgressModal.update({
-            phase: 2,
-            pct: 25,
-            currentBytes: Math.round(totalBytes * 0.25),
-            totalBytes: totalBytes,
-            message: "Indexing C++ motor/sensor devices & LemLib symbols..."
-          });
-        }
-
-        ProjectManager.indexVariables();
-
-        if (window.ImportProgressModal) {
-          window.ImportProgressModal.update({
-            phase: 3,
-            pct: 45,
-            currentBytes: Math.round(totalBytes * 0.45),
-            totalBytes: totalBytes,
-            message: "Writing workspace files to IndexedDB..."
-          });
-        }
-
-        updateAutosaveUI("saving", null, ProjectManager.formatSavingProgress(Math.round(totalBytes * 0.20), totalBytes));
-
-        await ProjectManager.saveWithProgress((curr, total, progStr) => {
-          updateAutosaveUI("saving", null, progStr);
-          if (window.ImportProgressModal) {
-            const progressBytes = Math.round(totalBytes * 0.45 + (curr / (total || 1)) * (totalBytes * 0.50));
-            const pct = Math.min(95, Math.round((progressBytes / totalBytes) * 100));
-            window.ImportProgressModal.update({
-              phase: 3,
-              pct: pct,
-              currentBytes: progressBytes,
-              totalBytes: totalBytes,
-              message: `Persisting to database: ${progStr}`
-            });
-          }
-        });
-
-        if (window.ImportProgressModal) {
-          window.ImportProgressModal.update({
-            phase: 4,
-            pct: 98,
-            currentBytes: totalBytes,
-            totalBytes: totalBytes,
-            message: "Finalizing workspace & autonomous routines..."
-          });
-        }
-
-        const finalStr = ProjectManager.formatSavingProgress(totalBytes, totalBytes);
-        updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
-        renderProjectHeader();
-        renderFileTree();
-        renderTabs();
-
-        const fileList = Object.keys(filesMap);
-        const mainCpp = fileList.find(f => f === "src/autons.cpp" || f === "src/main.cpp") ||
-                        fileList.find(f => f.startsWith("src/") && f.endsWith(".cpp")) ||
-                        fileList.find(f => f.endsWith(".cpp") || f.endsWith(".hpp") || f.endsWith(".h")) ||
-                        fileList[0];
-
-        if (mainCpp) loadFile(mainCpp);
-        renderSymbols();
-
-        if (window.ImportProgressModal) {
-          window.ImportProgressModal.finish({
-            bytesSynced: totalBytes,
-            totalBytes: totalBytes,
-            message: `✓ Synced ${fileCount} files (${finalStr})`
-          });
-        }
-
-        const currentUser = cloudUser || (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) || (localStorage.getItem("lemlib_saved_google_user") ? JSON.parse(localStorage.getItem("lemlib_saved_google_user")) : null);
-        if (currentUser) {
-          try {
-            updateAutosaveUI("saving", null, "☁️ Syncing to server...");
-            await ProjectManager.saveToCloud(null, false);
-            updateAutosaveUI("synced", null, finalStr);
-            showToast(`💥 Workspace imported & synced to server! "${projName}" (${fileCount} files).`);
-          } catch (cloudErr) {
-            console.error("Cloud sync on import failed:", cloudErr);
-            showToast(`💥 Workspace imported locally (${fileCount} files). Cloud sync notice: ${cloudErr.message}`);
-          }
-        } else {
-          showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}). Log in with Google to sync across devices.`);
-        }
-      });
-    }
-
     async function processFolderFiles(fileList) {
       if (!fileList || fileList.length === 0) return;
       const validFiles = Array.from(fileList).filter(f => !isIgnoredFile(f.webkitRelativePath || f.name, f.size));
@@ -3034,7 +3077,7 @@
     }
 
     // Client-side multi-tiered clone engine via Git Trees API, Raw CDN, & JSZip
-    async function performClientSideClone(rawRepo, rawBranch, rawToken) {
+    async function performClientSideClone(rawRepo, rawBranch, rawToken, onProgress = null) {
       let cleanRepo = String(rawRepo).trim();
       cleanRepo = cleanRepo.replace(/^https?:\/\/(www\.)?github\.com\//i, '');
       cleanRepo = cleanRepo.replace(/\.git$/i, '');
@@ -3061,6 +3104,10 @@
 
       let targetBranch = rawBranch ? String(rawBranch).trim() : (urlBranch || null);
 
+      if (onProgress) {
+        onProgress({ current: 0, total: 100, pct: 1.00, filename: "Resolving repository branch..." });
+      }
+
       // 1. Resolve default branch if not specified
       if (!targetBranch) {
         try {
@@ -3080,6 +3127,9 @@
       // Strategy A: Try GitHub Git Trees API + Raw Content Download (Zero Zip dependency, CORS friendly)
       let extractedFiles = null;
       try {
+        if (onProgress) {
+          onProgress({ current: 0, total: 100, pct: 3.50, filename: "Fetching repository tree index..." });
+        }
         const treeUrl = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${targetBranch}?recursive=1`;
         const treeRes = await fetch(treeUrl, { headers });
         const treeText = await treeRes.text();
@@ -3101,42 +3151,68 @@
                 p.endsWith('.c') ||
                 p.endsWith('.cc') ||
                 p.endsWith('.mk') ||
+                p.endsWith('.txt') ||
+                p.endsWith('.md') ||
+                p.endsWith('.json') ||
                 p === 'Makefile' ||
+                p === 'project.pros' ||
                 p === 'project.pbx'
               );
             });
 
-            // Concurrently download files in small batches
-            const BATCH_SIZE = 8;
-            for (let i = 0; i < relevantEntries.length; i += BATCH_SIZE) {
-              const batch = relevantEntries.slice(i, i + BATCH_SIZE);
-              await Promise.all(
-                batch.map(async (item) => {
-                  try {
-                    let fileText = null;
-                    if (rawToken && String(rawToken).trim()) {
-                      const contentUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/${item.path}?ref=${targetBranch}`;
-                      const cRes = await fetch(contentUrl, {
-                        headers: { ...headers, 'Accept': 'application/vnd.github.v3.raw' }
-                      });
-                      if (cRes.ok) {
-                        fileText = await cRes.text();
-                      }
-                    } else {
-                      const rawUrl = `https://raw.githubusercontent.com/${owner}/${repoName}/${targetBranch}/${item.path}`;
-                      const rRes = await fetch(rawUrl);
-                      if (rRes.ok) {
-                        fileText = await rRes.text();
-                      }
-                    }
+            const total = relevantEntries.length;
+            let completed = 0;
+            const CONCURRENCY = 20;
+            let curIdx = 0;
 
-                    if (fileText !== null && !fileText.trim().startsWith('<!DOCTYPE html>') && fileText.indexOf('\0') === -1) {
-                      extractedFiles[item.path] = fileText;
-                    }
-                  } catch (_) {}
-                })
-              );
+            if (onProgress) {
+              onProgress({ current: 0, total, pct: 5.00, filename: "Starting parallel download pool..." });
             }
+
+            async function worker() {
+              while (curIdx < relevantEntries.length) {
+                const idx = curIdx++;
+                const item = relevantEntries[idx];
+                try {
+                  let fileText = null;
+                  const timeoutSignal = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined;
+                  if (rawToken && String(rawToken).trim()) {
+                    const contentUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/${item.path}?ref=${targetBranch}`;
+                    const cRes = await fetch(contentUrl, {
+                      headers: { ...headers, 'Accept': 'application/vnd.github.v3.raw' },
+                      signal: timeoutSignal
+                    });
+                    if (cRes.ok) {
+                      fileText = await cRes.text();
+                    }
+                  } else {
+                    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repoName}/${targetBranch}/${item.path}`;
+                    const rRes = await fetch(rawUrl, { signal: timeoutSignal });
+                    if (rRes.ok) {
+                      fileText = await rRes.text();
+                    }
+                  }
+
+                  if (fileText !== null && !fileText.trim().startsWith('<!DOCTYPE html>') && fileText.indexOf('\0') === -1) {
+                    extractedFiles[item.path] = fileText;
+                  }
+                } catch (e) {
+                  console.warn(`[GitHub Clone] Skipped file ${item.path}:`, e.message);
+                } finally {
+                  completed++;
+                  const pct = total > 0 ? Number(((completed / total) * 100).toFixed(2)) : 100.00;
+                  if (onProgress) {
+                    onProgress({ current: completed, total, pct, filename: item.path });
+                  }
+                }
+              }
+            }
+
+            const workers = [];
+            for (let w = 0; w < Math.min(CONCURRENCY, relevantEntries.length); w++) {
+              workers.push(worker());
+            }
+            await Promise.all(workers);
           }
         }
       } catch (treeErr) {
@@ -3149,6 +3225,10 @@
           throw new Error("Could not load repository files directly and JSZip library is unavailable.");
         }
 
+        if (onProgress) {
+          onProgress({ current: 0, total: 100, pct: 15.00, filename: "Downloading repository zipball archive..." });
+        }
+
         const zipUrl = `https://api.github.com/repos/${owner}/${repoName}/zipball/${targetBranch}`;
         const zipRes = await fetch(zipUrl, { headers });
 
@@ -3158,6 +3238,10 @@
             throw new Error(`GitHub returned HTTP ${zipRes.status}. Verify repository "${owner}/${repoName}" exists and is public, or provide a Personal Access Token.`);
           }
           throw new Error(`Failed to download repository archive (HTTP ${zipRes.status}): ${errTxt.slice(0, 100)}`);
+        }
+
+        if (onProgress) {
+          onProgress({ current: 50, total: 100, pct: 50.00, filename: "Decompressing zip archive..." });
         }
 
         const blob = await zipRes.blob();
@@ -3174,6 +3258,10 @@
           }
         }
 
+        let processed = 0;
+        const nonDirEntries = Object.keys(zip.files).filter(k => !zip.files[k].dir);
+        const totalEntries = nonDirEntries.length || 1;
+
         for (const [relativePath, fileObj] of Object.entries(zip.files)) {
           if (fileObj.dir) continue;
           let normPath = prefixCut > 0 ? relativePath.substring(prefixCut) : relativePath;
@@ -3184,14 +3272,23 @@
 
           const content = await fileObj.async('string');
           if (content.indexOf('\0') !== -1) continue;
-          if (content.length > 1.5 * 1024 * 1024) continue;
+          if (content.length > 2 * 1024 * 1024) continue;
 
           extractedFiles[normPath] = content;
+          processed++;
+          const pct = Number(((processed / totalEntries) * 100).toFixed(2));
+          if (onProgress) {
+            onProgress({ current: processed, total: totalEntries, pct, filename: normPath });
+          }
         }
       }
 
       if (!extractedFiles || Object.keys(extractedFiles).length === 0) {
         throw new Error(`No C++ source/header files found in repository "${owner}/${repoName}". Please check the repository name and branch.`);
+      }
+
+      if (onProgress) {
+        onProgress({ current: Object.keys(extractedFiles).length, total: Object.keys(extractedFiles).length, pct: 100.00, filename: "Download complete!" });
       }
 
       return {
@@ -3234,6 +3331,29 @@
           statusClone.textContent = `⏳ Connecting to GitHub to clone '${repoVal}'...`;
         }
 
+        const onCloneProgress = (prog) => {
+          if (!prog) return;
+          const pctStr = Number(prog.pct || 0).toFixed(2);
+          if (statusClone) {
+            statusClone.style.display = "block";
+            statusClone.style.background = "rgba(56,189,248,0.12)";
+            statusClone.style.color = "#38bdf8";
+            statusClone.style.border = "1px solid #0284c7";
+            statusClone.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:600;font-size:0.84rem;">
+                <span>⏳ Fetching files: <strong>${pctStr}%</strong> (${prog.current || 0}/${prog.total || 0})</span>
+                <span style="font-family:monospace;font-size:0.75rem;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#94a3b8;" title="${prog.filename || ''}">${prog.filename || ''}</span>
+              </div>
+              <div style="width:100%;height:6px;background:rgba(255,255,255,0.15);border-radius:3px;overflow:hidden;">
+                <div style="width:${pctStr}%;height:100%;background:linear-gradient(90deg,#0284c7,#38bdf8);transition:width 0.1s linear;"></div>
+              </div>
+            `;
+          }
+          if (btnActionClone) {
+            btnActionClone.innerHTML = `⏳ Downloading ${pctStr}%...`;
+          }
+        };
+
         try {
           let data = null;
           const apiUrl = window.getApiUrl ? window.getApiUrl('/api/github/clone') : '/api/github/clone';
@@ -3252,17 +3372,14 @@
 
           // Fall back to direct client-side clone if server route didn't return JSON result
           if (!data || !data.files) {
-            if (statusClone) {
-              statusClone.textContent = `⏳ Fetching files directly from GitHub API...`;
-            }
-            data = await performClientSideClone(repoVal, branchVal, tokenVal);
+            data = await performClientSideClone(repoVal, branchVal, tokenVal, onCloneProgress);
           }
 
           if (statusClone) {
             statusClone.style.background = "rgba(34,197,94,0.15)";
             statusClone.style.color = "#4ade80";
             statusClone.style.border = "1px solid #22c55e";
-            statusClone.textContent = `✓ Successfully downloaded ${data.fileCount} files from branch '${data.branch}'! Importing...`;
+            statusClone.innerHTML = `✓ Successfully downloaded 100.00% (${data.fileCount} files) from branch '${data.branch}'! Importing...`;
           }
 
           closeModal();
