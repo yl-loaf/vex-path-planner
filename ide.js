@@ -68,6 +68,7 @@
     wireTabs();
     wireEditor();
     wireNavGuard();
+    wireGithubSync();
 
     ProjectManager.addListener((pm, reason) => {
       renderProjectHeader();
@@ -2917,6 +2918,266 @@
         ProjectManager.saveLocal();
       }
     });
+  }
+
+  // -------------------------------------------------------------
+  // GitHub Integration Modal & Operations
+  // -------------------------------------------------------------
+  function wireGithubSync() {
+    const modal = document.getElementById("githubSyncModal");
+    const btnOpen1 = document.getElementById("btnGithubSyncIDE");
+    const btnOpen2 = document.getElementById("btnIdeGithubBtn");
+    const btnClose = document.getElementById("btnGithubModalClose");
+    const btnDone = document.getElementById("btnGithubModalDone");
+
+    const tabClone = document.getElementById("btnGithubTabClone");
+    const tabPush = document.getElementById("btnGithubTabPush");
+    const bodyClone = document.getElementById("githubCloneTabBody");
+    const bodyPush = document.getElementById("githubPushTabBody");
+
+    const inputCloneRepo = document.getElementById("inputGithubCloneRepo");
+    const inputCloneBranch = document.getElementById("inputGithubCloneBranch");
+    const inputCloneToken = document.getElementById("inputGithubCloneToken");
+    const btnActionClone = document.getElementById("btnGithubActionClone");
+    const statusClone = document.getElementById("githubCloneStatus");
+
+    const inputPushRepo = document.getElementById("inputGithubPushRepo");
+    const inputPushBranch = document.getElementById("inputGithubPushBranch");
+    const inputPushMsg = document.getElementById("inputGithubPushMsg");
+    const inputPushToken = document.getElementById("inputGithubPushToken");
+    const btnActionPush = document.getElementById("btnGithubActionPush");
+    const statusPush = document.getElementById("githubPushStatus");
+
+    // Restore saved PAT token
+    const savedToken = localStorage.getItem("github_pat_token") || "";
+    if (savedToken) {
+      if (inputCloneToken) inputCloneToken.value = savedToken;
+      if (inputPushToken) inputPushToken.value = savedToken;
+    }
+
+    // Auto-fill push repo from current project name if formatted as owner/repo or default
+    if (inputPushRepo && window.ProjectManager && window.ProjectManager.project) {
+      const projName = window.ProjectManager.project.name || "";
+      if (projName.includes("/")) {
+        inputPushRepo.value = projName;
+      }
+    }
+
+    const openModal = () => {
+      if (modal) {
+        modal.removeAttribute("hidden");
+        modal.style.display = "flex";
+      }
+    };
+
+    const closeModal = () => {
+      if (modal) {
+        modal.setAttribute("hidden", "true");
+        modal.style.display = "none";
+      }
+    };
+
+    if (btnOpen1) btnOpen1.onclick = openModal;
+    if (btnOpen2) btnOpen2.onclick = openModal;
+    if (btnClose) btnClose.onclick = closeModal;
+    if (btnDone) btnDone.onclick = closeModal;
+
+    if (modal) {
+      modal.onclick = (e) => {
+        if (e.target === modal) closeModal();
+      };
+    }
+
+    // Switch tabs
+    if (tabClone && tabPush && bodyClone && bodyPush) {
+      tabClone.onclick = () => {
+        tabClone.classList.add("active");
+        tabClone.style.color = "#38bdf8";
+        tabClone.style.borderBottom = "2px solid #38bdf8";
+        tabPush.classList.remove("active");
+        tabPush.style.color = "#94a3b8";
+        tabPush.style.borderBottom = "none";
+        bodyClone.style.display = "block";
+        bodyPush.style.display = "none";
+      };
+
+      tabPush.onclick = () => {
+        tabPush.classList.add("active");
+        tabPush.style.color = "#22c55e";
+        tabPush.style.borderBottom = "2px solid #22c55e";
+        tabClone.classList.remove("active");
+        tabClone.style.color = "#94a3b8";
+        tabClone.style.borderBottom = "none";
+        bodyPush.style.display = "block";
+        bodyClone.style.display = "none";
+      };
+    }
+
+    // Clone Handler
+    if (btnActionClone) {
+      btnActionClone.onclick = async () => {
+        const repoVal = inputCloneRepo ? inputCloneRepo.value.trim() : "";
+        const branchVal = inputCloneBranch ? inputCloneBranch.value.trim() : "";
+        const tokenVal = inputCloneToken ? inputCloneToken.value.trim() : "";
+
+        if (!repoVal) {
+          if (statusClone) {
+            statusClone.style.display = "block";
+            statusClone.style.background = "rgba(239,68,68,0.15)";
+            statusClone.style.color = "#fca5a5";
+            statusClone.style.border = "1px solid #ef4444";
+            statusClone.textContent = "❌ Please specify a GitHub repository (e.g. LemLib/LemLib)";
+          }
+          return;
+        }
+
+        if (tokenVal) {
+          localStorage.setItem("github_pat_token", tokenVal);
+        }
+
+        btnActionClone.disabled = true;
+        btnActionClone.innerHTML = "⏳ Downloading & Extracting Repository...";
+        if (statusClone) {
+          statusClone.style.display = "block";
+          statusClone.style.background = "rgba(56,189,248,0.15)";
+          statusClone.style.color = "#38bdf8";
+          statusClone.style.border = "1px solid #0284c7";
+          statusClone.textContent = `⏳ Connecting to GitHub API to clone '${repoVal}'...`;
+        }
+
+        try {
+          const apiUrl = window.getApiUrl ? window.getApiUrl('/api/github/clone') : '/api/github/clone';
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || "Failed to clone repository from GitHub");
+          }
+
+          if (statusClone) {
+            statusClone.style.background = "rgba(34,197,94,0.15)";
+            statusClone.style.color = "#4ade80";
+            statusClone.style.border = "1px solid #22c55e";
+            statusClone.textContent = `✓ Successfully downloaded ${data.fileCount} files from branch '${data.branch}'! Importing...`;
+          }
+
+          closeModal();
+          applyNewImportedProject(data.repoName || "GitHub_Project", data.files);
+        } catch (err) {
+          if (statusClone) {
+            statusClone.style.display = "block";
+            statusClone.style.background = "rgba(239,68,68,0.15)";
+            statusClone.style.color = "#fca5a5";
+            statusClone.style.border = "1px solid #ef4444";
+            statusClone.textContent = `❌ Clone Error: ${err.message}`;
+          }
+        } finally {
+          btnActionClone.disabled = false;
+          btnActionClone.innerHTML = "⚡ Clone Repository into Workspace";
+        }
+      };
+    }
+
+    // Push Handler
+    if (btnActionPush) {
+      btnActionPush.onclick = async () => {
+        saveCurrentEditorState();
+        const repoVal = inputPushRepo ? inputPushRepo.value.trim() : "";
+        const branchVal = inputPushBranch ? inputPushBranch.value.trim() : "main";
+        const msgVal = inputPushMsg ? inputPushMsg.value.trim() : "Sync from VEX Path Planner Workspace 🚀";
+        const tokenVal = inputPushToken ? inputPushToken.value.trim() : "";
+
+        if (!repoVal || !repoVal.includes("/")) {
+          if (statusPush) {
+            statusPush.style.display = "block";
+            statusPush.style.background = "rgba(239,68,68,0.15)";
+            statusPush.style.color = "#fca5a5";
+            statusPush.style.border = "1px solid #ef4444";
+            statusPush.textContent = "❌ Target repository format must be 'owner/repo'";
+          }
+          return;
+        }
+
+        if (!tokenVal) {
+          if (statusPush) {
+            statusPush.style.display = "block";
+            statusPush.style.background = "rgba(239,68,68,0.15)";
+            statusPush.style.color = "#fca5a5";
+            statusPush.style.border = "1px solid #ef4444";
+            statusPush.textContent = "❌ GitHub Personal Access Token (PAT) with repo scope is required to push edits.";
+          }
+          return;
+        }
+
+        localStorage.setItem("github_pat_token", tokenVal);
+
+        const files = window.ProjectManager?.project?.files || {};
+        const fileKeys = Object.keys(files);
+        if (fileKeys.length === 0) {
+          alert("Workspace is empty. Nothing to push.");
+          return;
+        }
+
+        btnActionPush.disabled = true;
+        btnActionPush.innerHTML = "⏳ Pushing Git Commit to GitHub...";
+        if (statusPush) {
+          statusPush.style.display = "block";
+          statusPush.style.background = "rgba(56,189,248,0.15)";
+          statusPush.style.color = "#38bdf8";
+          statusPush.style.border = "1px solid #0284c7";
+          statusPush.textContent = `⏳ Pushing ${fileKeys.length} files to '${repoVal}' (${branchVal})...`;
+        }
+
+        try {
+          const apiUrl = window.getApiUrl ? window.getApiUrl('/api/github/push') : '/api/github/push';
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token: tokenVal,
+              repo: repoVal,
+              branch: branchVal,
+              files: files,
+              commitMessage: msgVal
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || "Failed to commit & push to GitHub");
+          }
+
+          if (statusPush) {
+            statusPush.style.background = "rgba(34,197,94,0.15)";
+            statusPush.style.color = "#4ade80";
+            statusPush.style.border = "1px solid #22c55e";
+            statusPush.textContent = `✓ Successfully pushed commit ${data.commitSha ? data.commitSha.slice(0, 7) : ''} to ${repoVal} (${branchVal})!`;
+          }
+
+          if (window.ProjectManager) {
+            window.ProjectManager.markDirty(false);
+            renderProjectHeader();
+          }
+
+          showToast(`🚀 Successfully pushed ${fileKeys.length} files to GitHub (${repoVal})!`);
+        } catch (err) {
+          if (statusPush) {
+            statusPush.style.display = "block";
+            statusPush.style.background = "rgba(239,68,68,0.15)";
+            statusPush.style.color = "#fca5a5";
+            statusPush.style.border = "1px solid #ef4444";
+            statusPush.textContent = `❌ Push Error: ${err.message}`;
+          }
+        } finally {
+          btnActionPush.disabled = false;
+          btnActionPush.innerHTML = "🚀 Commit & Push to GitHub";
+        }
+      };
+    }
   }
 
   function showToast(message, type = "success") {

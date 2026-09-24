@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PROS & LemLib C++ IDE · VEX V5 Path Planner</title>
   <meta name="description" content="Dedicated multi-file C++ coding IDE for VEX V5 robotics with LemLib, full project compiler, and cloud persistence." />
-  <link rel="stylesheet" href="style.css?v=20260924.k1" />
+  <link rel="stylesheet" href="style.css?v=20260924.k7" />
 </head>
 <body class="ide-page-body">
   <div id="app" class="ide-app-container">
@@ -58,6 +58,9 @@
             <button type="button" id="btnLoadGoogleDrive" title="Open and load project file directly from your Google Drive">
               📂 Open from Google Drive
             </button>
+            <button type="button" id="btnGithubSyncIDE" title="Clone from or Push edits directly to GitHub repositories">
+              🐙 GitHub / Git Sync
+            </button>
             <button type="button" id="btnVersionHistoryIDE" title="View Code Version History, Backups &amp; Snapshots">
               📜 Version History (<span id="ideVersionCount">0</span>)
             </button>
@@ -99,6 +102,7 @@
             <h3>PROJECT EXPLORER</h3>
             <div class="ide-sidebar-btns">
               <button type="button" id="btnIdeNewFile" title="Add new C++ source or header file">+ File</button>
+              <button type="button" id="btnIdeGithubBtn" title="Clone repository directly from GitHub">🐙 GitHub</button>
               <button type="button" id="btnIdeImportProject" title="Import complete project folder or ZIP archive">📂 Import Folder</button>
               <input type="file" id="ideFolderFileInput" webkitdirectory directory mozdirectory hidden />
               <input type="file" id="ideZipFileInput" accept=".zip,.tar.gz,.pros,.vpath,.json" hidden />
@@ -558,19 +562,110 @@
     </div>
   </div>
 
+  <!-- GitHub Clone & Push Integration Modal -->
+  <div id="githubSyncModal" class="modal-backdrop" hidden>
+    <div class="modal-card" style="max-width:580px;background:#0b1329;border:1px solid #334155;border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);overflow:hidden;padding:0;">
+      <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;background:#0f172a;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.5rem;">🐙</span>
+          <div>
+            <h3 style="margin:0;font-size:1.1rem;color:#f8fafc;font-weight:700;">GitHub Repository Sync</h3>
+            <span style="font-size:0.75rem;color:#94a3b8;">Clone repositories into workspace or push project commits</span>
+          </div>
+        </div>
+        <button type="button" id="btnGithubModalClose" class="modal-close" style="background:none;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;">✕</button>
+      </div>
+
+      <!-- Tab Buttons -->
+      <div style="display:flex;background:#09111e;border-bottom:1px solid #1e293b;padding:0 20px;">
+        <button type="button" id="btnGithubTabClone" class="ide-out-tab active" style="padding:10px 16px;border:none;background:none;color:#38bdf8;font-weight:600;font-size:0.85rem;cursor:pointer;border-bottom:2px solid #38bdf8;">📥 Clone / Import Repo</button>
+        <button type="button" id="btnGithubTabPush" class="ide-out-tab" style="padding:10px 16px;border:none;background:none;color:#94a3b8;font-weight:600;font-size:0.85rem;cursor:pointer;">🚀 Push Workspace Edits</button>
+      </div>
+
+      <div class="modal-body" style="padding:20px;color:#e2e8f0;">
+        <!-- Clone Tab Body -->
+        <div id="githubCloneTabBody">
+          <p style="margin:0 0 14px 0;font-size:0.85rem;color:#94a3b8;line-height:1.4;">
+            Clone any PROS or LemLib C++ repository directly into your project workspace without manual unzipping.
+          </p>
+
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Repository (Owner/Repo or URL):</label>
+            <input type="text" id="inputGithubCloneRepo" placeholder="e.g. LemLib/LemLib or https://github.com/owner/repo" style="width:100%;padding:9px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.9rem;" />
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div>
+              <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Branch (Optional):</label>
+              <input type="text" id="inputGithubCloneBranch" placeholder="main (default)" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
+            </div>
+            <div>
+              <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Personal Access Token (PAT):</label>
+              <input type="password" id="inputGithubCloneToken" placeholder="Optional for public repos" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
+            </div>
+          </div>
+
+          <div id="githubCloneStatus" style="display:none;padding:10px;border-radius:6px;font-size:0.82rem;margin-bottom:12px;"></div>
+
+          <button type="button" id="btnGithubActionClone" class="primary" style="width:100%;padding:10px;font-size:0.9rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;">
+            ⚡ Clone Repository into Workspace
+          </button>
+        </div>
+
+        <!-- Push Tab Body -->
+        <div id="githubPushTabBody" style="display:none;">
+          <p style="margin:0 0 14px 0;font-size:0.85rem;color:#94a3b8;line-height:1.4;">
+            Commit and push your current workspace files directly to your GitHub repository in one click.
+          </p>
+
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Target Repository (Owner/Repo):</label>
+            <input type="text" id="inputGithubPushRepo" placeholder="e.g. username/vex-robot-code" style="width:100%;padding:9px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.9rem;" />
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Target Branch:</label>
+            <input type="text" id="inputGithubPushBranch" placeholder="main" value="main" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Commit Message:</label>
+            <input type="text" id="inputGithubPushMsg" placeholder="Sync from VEX Path Planner Workspace 🚀" value="Sync from VEX Path Planner Workspace 🚀" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-size:0.85rem;" />
+          </div>
+
+          <div style="margin-bottom:14px;">
+            <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">GitHub Personal Access Token (PAT): <span style="color:#ef4444;">*Required</span></label>
+            <input type="password" id="inputGithubPushToken" placeholder="ghp_..." style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
+            <span style="font-size:0.72rem;color:#64748b;display:block;margin-top:4px;">Token requires 'repo' write permission. Stored locally in your browser session.</span>
+          </div>
+
+          <div id="githubPushStatus" style="display:none;padding:10px;border-radius:6px;font-size:0.82rem;margin-bottom:12px;"></div>
+
+          <button type="button" id="btnGithubActionPush" class="primary" style="width:100%;padding:10px;font-size:0.9rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;background:#16a34a;border-color:#22c55e;">
+            🚀 Commit &amp; Push to GitHub
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding:12px 20px;background:#09111e;border-top:1px solid #1e293b;display:flex;justify-content:flex-end;">
+        <button type="button" id="btnGithubModalDone" class="btn-subtle" style="padding:7px 16px;font-size:0.8rem;">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260924.k1"></script>
-  <script src="google-drive-sync.js?v=20260924.k1"></script>
-  <script src="session-guard.js?v=20260924.k1"></script>
-  <script src="v5-brain-serial.js?v=20260924.k1"></script>
-  <script src="project-manager.js?v=20260924.k1"></script>
-  <script src="ide.js?v=20260924.k1"></script>
-  <script src="tutorial.js?v=20260924.k1"></script>
+  <script src="firebase-config.js?v=20260924.k7"></script>
+  <script src="google-drive-sync.js?v=20260924.k7"></script>
+  <script src="session-guard.js?v=20260924.k7"></script>
+  <script src="v5-brain-serial.js?v=20260924.k7"></script>
+  <script src="project-manager.js?v=20260924.k7"></script>
+  <script src="ide.js?v=20260924.k7"></script>
+  <script src="tutorial.js?v=20260924.k7"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {

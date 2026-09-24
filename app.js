@@ -458,6 +458,62 @@
   let isSimPathDirty = true;
   let tuningGraphType = "linear";
 
+  // -- Trajectory Drawing Animation State -----------------------------
+  let pathAnimProgress = 1.0;
+  let pathAnimStartTime = 0;
+  let pathAnimDuration = 600; // ms for trajectory draw animation
+  let pathAnimFrameId = null;
+  let isPathAnimating = false;
+
+  function triggerPathAnimation(duration = 600) {
+    if (typeof drag !== "undefined" && drag != null) {
+      pathAnimProgress = 1.0;
+      isPathAnimating = false;
+      if (pathAnimFrameId) {
+        cancelAnimationFrame(pathAnimFrameId);
+        pathAnimFrameId = null;
+      }
+      return;
+    }
+    if (simRunning) {
+      pathAnimProgress = 1.0;
+      isPathAnimating = false;
+      if (pathAnimFrameId) {
+        cancelAnimationFrame(pathAnimFrameId);
+        pathAnimFrameId = null;
+      }
+      return;
+    }
+
+    pathAnimDuration = duration;
+    pathAnimStartTime = performance.now();
+    pathAnimProgress = 0.0;
+    isPathAnimating = true;
+
+    if (pathAnimFrameId) {
+      cancelAnimationFrame(pathAnimFrameId);
+    }
+
+    function animStep(now) {
+      if (!isPathAnimating) return;
+      const elapsed = now - pathAnimStartTime;
+      const rawT = Math.min(1.0, elapsed / pathAnimDuration);
+      // Cubic ease-out curve for smooth decelerating trajectory sweep
+      pathAnimProgress = 1.0 - Math.pow(1.0 - rawT, 3);
+      draw();
+      if (rawT < 1.0 && isPathAnimating) {
+        pathAnimFrameId = requestAnimationFrame(animStep);
+      } else {
+        pathAnimProgress = 1.0;
+        isPathAnimating = false;
+        pathAnimFrameId = null;
+        draw();
+      }
+    }
+
+    pathAnimFrameId = requestAnimationFrame(animStep);
+  }
+
   // -- Condition Manager State (Boolean Variables & Flags) ------------
   const DEFAULT_CONDITIONS = [
     { id: "cond_isGoalLoaded", name: "isGoalLoaded", value: true, description: "Mobile goal clamp loaded / locked", type: "boolean" },
@@ -2915,39 +2971,72 @@
       poses.push({ ...seg.endPose });
     }
 
-    // Render the simulated differential-drive path from LemLib kinematics
+    // Calculate total points across all segments for progressive drawing animation
+    let allTrajectoryPoints = [];
+    for (const seg of simSegments) {
+      if (!seg.action || seg.action.type === "custom") continue;
+      if (seg.points && seg.points.length) {
+        for (let pi = 0; pi < seg.points.length; pi++) {
+          allTrajectoryPoints.push({
+            pt: seg.points[pi],
+            actionType: seg.action.type,
+            async: !!seg.action.async,
+            seg: seg,
+          });
+        }
+      }
+    }
+
+    const totalPoints = allTrajectoryPoints.length;
+    const activePointLimit = (pathAnimProgress >= 1.0 || totalPoints === 0)
+      ? totalPoints
+      : Math.max(1, Math.floor(totalPoints * pathAnimProgress));
+
+    // Render the simulated differential-drive path from LemLib kinematics up to activePointLimit
     ctx.strokeStyle = "#3b82f6";
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
     let pen = false;
+    let pointCounter = 0;
+
     for (const seg of simSegments) {
       if (!seg.action || seg.action.type === "custom") continue;
+      if (!seg.points) continue;
       for (const pt of seg.points) {
+        if (pointCounter >= activePointLimit) break;
+        pointCounter++;
         const c = fieldToCanvas(pt.x, pt.y);
         if (!pen) { ctx.moveTo(c.cx, c.cy); pen = true; }
         else ctx.lineTo(c.cx, c.cy);
       }
+      if (pointCounter >= activePointLimit) break;
     }
     ctx.stroke();
 
-    // Render Bezier Spline Curves with vibrant cyan arc highlight
+    // Render Bezier Spline Curves with vibrant cyan arc highlight up to activePointLimit
+    pointCounter = 0;
     for (const seg of simSegments) {
-      if (!seg.action || seg.action.type !== "bezierCurve") continue;
-      if (!seg.points || seg.points.length < 2) continue;
-      ctx.save();
-      ctx.strokeStyle = "#06b6d4";
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      let bPen = false;
-      for (const pt of seg.points) {
-        const c = fieldToCanvas(pt.x, pt.y);
-        if (!bPen) { ctx.moveTo(c.cx, c.cy); bPen = true; }
-        else ctx.lineTo(c.cx, c.cy);
+      if (!seg.action || seg.action.type === "custom") continue;
+      const isBezier = seg.action.type === "bezierCurve";
+      if (isBezier && seg.points && seg.points.length >= 2) {
+        ctx.save();
+        ctx.strokeStyle = "#06b6d4";
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        let bPen = false;
+        for (const pt of seg.points) {
+          if (pointCounter >= activePointLimit) break;
+          const c = fieldToCanvas(pt.x, pt.y);
+          if (!bPen) { ctx.moveTo(c.cx, c.cy); bPen = true; }
+          else ctx.lineTo(c.cx, c.cy);
+        }
+        ctx.stroke();
+        ctx.restore();
       }
-      ctx.stroke();
-      ctx.restore();
+      if (seg.points) pointCounter += seg.points.length;
+      if (pointCounter >= activePointLimit) break;
     }
 
     // Render Collision Path Markers along the trajectory
@@ -2956,23 +3045,53 @@
     }
 
     // Visual feedback for multitasking (async) motions along path
+    pointCounter = 0;
     for (const seg of simSegments) {
-      if (!seg.action || seg.action.type === "custom" || !seg.action.async) continue;
-      if (!seg.points || seg.points.length < 2) continue;
-      ctx.save();
-      ctx.strokeStyle = "#c084fc";
-      ctx.lineWidth = 4;
-      ctx.globalAlpha = 0.65;
-      ctx.setLineDash([6, 5]);
-      ctx.beginPath();
-      let segPen = false;
-      for (const pt of seg.points) {
-        const c = fieldToCanvas(pt.x, pt.y);
-        if (!segPen) { ctx.moveTo(c.cx, c.cy); segPen = true; }
-        else ctx.lineTo(c.cx, c.cy);
+      if (!seg.action || seg.action.type === "custom") continue;
+      if (seg.action.async && seg.points && seg.points.length >= 2) {
+        ctx.save();
+        ctx.strokeStyle = "#c084fc";
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.65;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        let segPen = false;
+        for (const pt of seg.points) {
+          if (pointCounter >= activePointLimit) break;
+          const c = fieldToCanvas(pt.x, pt.y);
+          if (!segPen) { ctx.moveTo(c.cx, c.cy); segPen = true; }
+          else ctx.lineTo(c.cx, c.cy);
+        }
+        ctx.stroke();
+        ctx.restore();
       }
-      ctx.stroke();
-      ctx.restore();
+      if (seg.points) pointCounter += seg.points.length;
+      if (pointCounter >= activePointLimit) break;
+    }
+
+    // Glowing tracer head spark at the leading edge of drawing animation
+    if (pathAnimProgress < 1.0 && totalPoints > 0 && activePointLimit > 0) {
+      const tipObj = allTrajectoryPoints[Math.min(activePointLimit - 1, totalPoints - 1)];
+      if (tipObj && tipObj.pt) {
+        const tipC = fieldToCanvas(tipObj.pt.x, tipObj.pt.y);
+        ctx.save();
+        ctx.shadowColor = tipObj.actionType === "bezierCurve" ? "#22d3ee" : "#60a5fa";
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = tipObj.actionType === "bezierCurve" ? "#06b6d4" : "#3b82f6";
+        ctx.beginPath();
+        ctx.arc(tipC.cx, tipC.cy, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(tipC.cx, tipC.cy, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     // LemLib Boomerang visual feedback for selected action
@@ -3111,6 +3230,17 @@
       ctx.fillStyle = "#fff";
       ctx.font = "11px sans-serif";
       ctx.fillText(String(i) + (isRev ? "R" : "") + (isAsync ? "⚡" : ""), p.cx + 8, p.cy - 6);
+
+      // Sharp angle transition badge on canvas waypoint
+      const canvasSharpTurns = analyzeSharpAngleTransitions();
+      const canvasSharpTurn = canvasSharpTurns.find((st) => st.cornerWaypointNum === i);
+      if (canvasSharpTurn) {
+        ctx.save();
+        ctx.fillStyle = "#f59e0b";
+        ctx.font = "bold 10px sans-serif";
+        ctx.fillText(`⚡ ${canvasSharpTurn.angleDelta}°`, p.cx + 8, p.cy + 10);
+        ctx.restore();
+      }
 
       // Target aim visualization for swingToPoint and turnToPoint
       if (a.type === "swingToPoint" || a.type === "turnToPoint") {
@@ -4597,12 +4727,17 @@
       const actCol = getActionCollision(a.id);
       const colBadgeHtml = actCol ? `<span class="badge collision-badge" title="Collision detected: ${escapeHtml(actCol.obstacle.name)}">💥 Collision</span>` : "";
 
+      const activeSharpTurns = analyzeSharpAngleTransitions();
+      const sharpItem = activeSharpTurns.find((st) => st.actionId === a.id);
+      const sharpBadgeHtml = sharpItem ? `<span class="badge sharp-turn-badge" title="Sharp angle transition (${sharpItem.angleDelta}°): LemLib chassis brakes to 0 in/s">⚡ ${sharpItem.angleDelta}° Sharp</span>` : "";
+
       card.innerHTML = `
         <div class="card-title" style="cursor: pointer; user-select: none;">
           <span class="drag-handle" title="Drag to reorder routine or drag into a loop" draggable="true">⠿</span>
           <span class="badge ${badgeClass(a.type)}">${idx + 1}. ${a.type === 'ifElse' ? 'if / else' : a.type}</span>
           ${summaryText ? `<span class="collapsed-summary-badge">${escapeHtml(summaryText)}</span>` : ""}
           ${colBadgeHtml}
+          ${sharpBadgeHtml}
           ${a.async ? '<span class="badge multitask-badge" title="Multitasking: Runs concurrently">⚡ Async</span>' : ""}
           ${a.forwards === false && a.type !== "custom" && a.type !== "ifElse" ? '<span class="badge reverse">REV</span>' : ""}
           <span class="hint-inline ${cleanLbl ? "has-comment" : ""}">${cleanLbl ? `// ${escapeHtml(cleanLbl)}` : ""}</span>
@@ -4622,8 +4757,30 @@
               </div>
             </div>
           ` : ""}
+          ${sharpItem ? `
+            <div class="action-card-sharp-turn-alert">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.1rem;color:#f59e0b;">⚡</span>
+                <div>
+                  <strong style="color:#fef08a;font-size:0.8rem;">Velocity Drop Warning: ${sharpItem.angleDelta}° Sharp Transition</strong>
+                  <p style="margin:2px 0 6px 0;font-size:0.75rem;color:#cbd5e1;">
+                    Path changes heading from ${sharpItem.inHeading}° to ${sharpItem.outHeading}°. LemLib chassis brakes to 0 in/s at Waypoint #${sharpItem.cornerWaypointNum}.
+                  </p>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:4px;">
+                <button type="button" class="btn-xs-fix-bezier" data-act-fix="bezier" data-id="${a.id}">
+                  ✨ Convert to Bezier Spline Arc
+                </button>
+                <button type="button" class="btn-xs-fix-exit" data-act-fix="earlyExit" data-id="${a.id}">
+                  🏃 Set 6" Early Exit Range
+                </button>
+              </div>
+            </div>
+          ` : ""}
           ${body}
         </div>`;
+
 
       card.addEventListener("click", (e) => {
         if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("textarea")) return;
@@ -4649,6 +4806,20 @@
           renderFlow();
           draw();
           generateCode();
+        });
+      });
+
+      card.querySelectorAll('[data-act-fix="bezier"]').forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          fixSharpTurnToBezier(btn.dataset.id);
+        });
+      });
+
+      card.querySelectorAll('[data-act-fix="earlyExit"]').forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          fixSharpTurnEarlyExit(btn.dataset.id, 6);
         });
       });
 
@@ -5945,6 +6116,18 @@
       }
     }
 
+    const sharpHud = document.getElementById("simHudSharpTurn");
+    if (sharpHud) {
+      const sharpList = analyzeSharpAngleTransitions();
+      if (sharpList.length > 0) {
+        setDomClass(sharpHud, "sim-hud-chip chip-sharp-turn");
+        setDomText(sharpHud, `⚡ ${sharpList.length} Sharp ${sharpList.length === 1 ? 'Turn' : 'Turns'}`);
+      } else {
+        setDomClass(sharpHud, "sim-hud-chip chip-sharp-turn clean");
+        setDomText(sharpHud, `✨ Smooth Transitions`);
+      }
+    }
+
     if (btnSimF) {
       if (simRunning) {
         if (!btnSimF.classList.contains("playing")) btnSimF.classList.add("playing");
@@ -6011,6 +6194,7 @@
 
   function buildSimPath() {
     if (!isSimPathDirty && simSegments.length > 0) return;
+    const wasDirty = isSimPathDirty;
     simSegments = [];
     simPath = [];
     let cur = { x: pose.x, y: pose.y, theta: pose.theta };
@@ -6055,9 +6239,19 @@
       cur = { ...seg.endPose };
     }
     isSimPathDirty = false;
+
+    if (wasDirty && (typeof drag === "undefined" || drag == null) && !simRunning && !isPathAnimating) {
+      triggerPathAnimation();
+    }
   }
 
   function startSim() {
+    pathAnimProgress = 1.0;
+    isPathAnimating = false;
+    if (pathAnimFrameId) {
+      cancelAnimationFrame(pathAnimFrameId);
+      pathAnimFrameId = null;
+    }
     if (!actions.length) {
       showToast("⚠️ Add at least one movement action to simulate.");
       return;
@@ -6734,6 +6928,58 @@
       }
     });
   }
+
+  // Block Palette Search & Category Filtering
+  const paletteSearchInput = document.getElementById("paletteSearchInput");
+  const paletteSearchClear = document.getElementById("paletteSearchClear");
+  const catChips = document.querySelectorAll(".palette-bar .cat-chip");
+  const paletteButtons = document.querySelectorAll(".palette-block-list .palette-block-btn");
+
+  let activeCategory = "all";
+
+  function filterPalette() {
+    const query = paletteSearchInput ? paletteSearchInput.value.trim().toLowerCase() : "";
+    if (paletteSearchClear) {
+      paletteSearchClear.style.display = query ? "block" : "none";
+    }
+
+    paletteButtons.forEach(btn => {
+      const cat = btn.getAttribute("data-category") || "";
+      const keywords = (btn.getAttribute("data-keywords") || "").toLowerCase();
+      const text = btn.textContent.toLowerCase();
+
+      const matchesCategory = (activeCategory === "all" || cat === activeCategory);
+      const matchesQuery = (!query || keywords.includes(query) || text.includes(query));
+
+      if (matchesCategory && matchesQuery) {
+        btn.style.display = "inline-flex";
+      } else {
+        btn.style.display = "none";
+      }
+    });
+  }
+
+  if (paletteSearchInput) {
+    paletteSearchInput.addEventListener("input", filterPalette);
+  }
+  if (paletteSearchClear) {
+    paletteSearchClear.addEventListener("click", () => {
+      if (paletteSearchInput) {
+        paletteSearchInput.value = "";
+        filterPalette();
+        paletteSearchInput.focus();
+      }
+    });
+  }
+
+  catChips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      catChips.forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      activeCategory = chip.getAttribute("data-cat") || "all";
+      filterPalette();
+    });
+  });
 
   document.getElementById("btnClear").onclick = () => {
     openClearModal();
@@ -11126,22 +11372,24 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (!diagTbody) return;
 
       if (!collisionConfig.enabled) {
-        diagTbody.innerHTML = `<tr><td colspan="6" class="collision-empty-row">⚠️ Collision detection is currently disabled. Toggle master switch above to activate checks.</td></tr>`;
+        diagTbody.innerHTML = `<tr><td colspan="7" class="collision-empty-row">⚠️ Collision detection is currently disabled. Toggle master switch above to activate checks.</td></tr>`;
         return;
       }
 
       if (num === 0) {
-        diagTbody.innerHTML = `<tr><td colspan="6" class="collision-empty-row">✨ Path is 100% collision-free! Robot clears all walls, loaders, and goals.</td></tr>`;
+        diagTbody.innerHTML = `<tr><td colspan="7" class="collision-empty-row">✨ Path is 100% collision-free! Robot clears all walls, loaders, and goals.</td></tr>`;
         return;
       }
 
       let rowsHtml = "";
       report.collisions.forEach((c) => {
+        const sev = getCollisionSeverity(c);
         rowsHtml += `
           <tr class="collision-hit-row">
             <td><strong>#${c.stepIdx + 1}</strong></td>
             <td><span class="badge ${badgeClass(c.actionType)}">${c.actionType}</span></td>
-            <td>${c.point ? c.point.t.toFixed(2) + "s" : "—"}</td>
+            <td><strong>${c.point ? c.point.t.toFixed(2) + "s" : "—"}</strong></td>
+            <td><span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:0.75rem; font-weight:700; ${sev.badgeCss}">${sev.label}</span></td>
             <td><code>(${c.point ? c.point.x.toFixed(1) : 0}", ${c.point ? c.point.y.toFixed(1) : 0}", ${c.point ? Math.round(c.point.theta) : 0}°)</code></td>
             <td><strong style="color:#ef4444;">💥 ${escapeHtml(c.obstacle.name)}</strong></td>
             <td>
@@ -11295,6 +11543,337 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (rngBuffer) {
       rngBuffer.addEventListener("input", updateConfigAndRedraw);
     }
+
+    const btnExportPdf = document.getElementById("btnExportCollisionPdf");
+    if (btnExportPdf) {
+      btnExportPdf.onclick = () => {
+        generateCollisionPdfReport();
+      };
+    }
+  }
+
+  function getCollisionSeverity(c) {
+    if (!c) return { level: "UNKNOWN", label: "—", color: "#94a3b8", badgeCss: "background:#334155;color:#cbd5e1;" };
+    const obsType = c.obstacle ? c.obstacle.type : "";
+    const obsName = c.obstacle ? (c.obstacle.name || "").toLowerCase() : "";
+    const pen = c.penetration || 0;
+
+    if (obsType === "wall" || obsName.includes("wall") || obsName.includes("ladder") || pen >= 1.5) {
+      return {
+        level: "CRITICAL",
+        label: "🛑 CRITICAL",
+        color: "#ef4444",
+        bg: "rgba(239, 68, 68, 0.18)",
+        border: "#f87171",
+        badgeCss: "background:rgba(239, 68, 68, 0.2); border:1px solid #ef4444; color:#fca5a5;"
+      };
+    } else if (pen >= 0.5 || obsType === "goal" || obsType === "loader") {
+      return {
+        level: "MAJOR",
+        label: "⚠️ MAJOR",
+        color: "#f97316",
+        bg: "rgba(249, 115, 22, 0.18)",
+        border: "#fb923c",
+        badgeCss: "background:rgba(249, 115, 22, 0.2); border:1px solid #f97316; color:#fdba74;"
+      };
+    } else {
+      return {
+        level: "MINOR",
+        label: "🟡 MINOR",
+        color: "#eab308",
+        bg: "rgba(234, 179, 8, 0.18)",
+        border: "#fde047",
+        badgeCss: "background:rgba(234, 179, 8, 0.2); border:1px solid #eab308; color:#fef08a;"
+      };
+    }
+  }
+
+  function generateCollisionPdfReport() {
+    const report = evaluateRoutineCollisions();
+    const curPath = typeof activePath === "function" ? activePath() : null;
+    const routineName = (curPath && curPath.name) ? curPath.name : ((autonSlots && autonSlots[activeSlotIndex] && autonSlots[activeSlotIndex].name) ? autonSlots[activeSlotIndex].name : "Autonomous Routine");
+    const slotNum = (typeof activeSlotIndex !== "undefined" ? activeSlotIndex : 0) + 1;
+    const dateStr = new Date().toLocaleString();
+    const bufVal = collisionConfig.safetyBuffer || 0;
+
+    let critCount = 0;
+    let majCount = 0;
+    let minCount = 0;
+
+    report.collisions.forEach((c) => {
+      const sev = getCollisionSeverity(c);
+      if (sev.level === "CRITICAL") critCount++;
+      else if (sev.level === "MAJOR") majCount++;
+      else if (sev.level === "MINOR") minCount++;
+    });
+
+    if (window.jspdf && window.jspdf.jsPDF) {
+      try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        let y = 15;
+
+        // Header Banner
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, pageWidth, 28, "F");
+
+        doc.setTextColor(56, 189, 248);
+        doc.setFontSize(15);
+        doc.setFont("helvetica", "bold");
+        doc.text("VEX High Stakes Trajectory Collision & Safety Report", 14, 12);
+
+        doc.setFontSize(9.5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(203, 213, 225);
+        doc.text(`Generated: ${dateStr} · VEX V5 LemLib Suite Engine`, 14, 20);
+
+        y = 36;
+
+        // Routine Info Card
+        doc.setDrawColor(51, 65, 85);
+        doc.setFillColor(241, 245, 249);
+        doc.roundedRect(14, y, pageWidth - 28, 26, 3, 3, "FD");
+
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Routine: ${routineName} (Slot #${slotNum})`, 18, y + 8);
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(71, 85, 105);
+        const botWidth = bot ? (bot.bumperWidth || bot.trackWidth || 13) : 13;
+        const botLen = bot ? (bot.bumperLength || bot.wheelBase || 13) : 13;
+        doc.text(`Robot Dimensions: ${botWidth}" W × ${botLen}" L  |  Safety Buffer Clearance: +${bufVal.toFixed(2)}"  |  Actions: ${actions ? actions.length : 0} steps`, 18, y + 16);
+        doc.text(`Collision Master: ${collisionConfig.enabled ? 'ENABLED' : 'DISABLED'}  |  Obstacles Checked: Perimeter Walls, Match Loaders, Mogos, Center Ladder`, 18, y + 21);
+
+        y += 32;
+
+        // Executive Summary Box
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(15, 23, 42);
+        doc.text("Executive Safety Summary", 14, y);
+        y += 5;
+
+        const isClean = report.totalCollisions === 0;
+        doc.setFillColor(isClean ? 240 : 254, isClean ? 253 : 242, isClean ? 244 : 242);
+        doc.setDrawColor(isClean ? 34 : 239, isClean ? 197 : 68, isClean ? 94 : 68);
+        doc.roundedRect(14, y, pageWidth - 28, 22, 3, 3, "FD");
+
+        doc.setFontSize(10.5);
+        doc.setFont("helvetica", "bold");
+        if (isClean) {
+          doc.setTextColor(22, 101, 52);
+          doc.text("STATUS: PASSED — 100% CLEAN TRAJECTORY (0 Collisions Detected)", 18, y + 9);
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "normal");
+          doc.text("The simulated trajectory clears all field perimeter walls, match loaders, mobile goals, and ladder structures.", 18, y + 16);
+        } else {
+          doc.setTextColor(153, 27, 27);
+          doc.text(`STATUS: ACTION REQUIRED — ${report.totalCollisions} TRAJECTORY COLLISION(S) DETECTED`, 18, y + 9);
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "normal");
+          doc.text(`Severity Breakdown: ${critCount} Critical Impact(s)  |  ${majCount} Major Overlap(s)  |  ${minCount} Minor Clearance Breach(es)`, 18, y + 16);
+        }
+
+        y += 28;
+
+        // Detailed Table Header
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(15, 23, 42);
+        doc.text("Detailed Collision Log & Timestamps", 14, y);
+        y += 6;
+
+        if (report.totalCollisions === 0) {
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "italic");
+          doc.setTextColor(100, 116, 139);
+          doc.text("No collisions recorded along trajectory.", 14, y);
+        } else {
+          // Table Header
+          doc.setFillColor(30, 41, 59);
+          doc.rect(14, y, pageWidth - 28, 8, "F");
+
+          doc.setFontSize(8.5);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(255, 255, 255);
+          doc.text("Step #", 16, y + 5.5);
+          doc.text("Action Type", 32, y + 5.5);
+          doc.text("Timestamp", 62, y + 5.5);
+          doc.text("Severity", 85, y + 5.5);
+          doc.text("Robot Pose (X, Y, Theta)", 112, y + 5.5);
+          doc.text("Obstacle Collided", 155, y + 5.5);
+
+          y += 8;
+
+          doc.setFontSize(8);
+          doc.setFont("helvetica", "normal");
+
+          report.collisions.forEach((c, idx) => {
+            if (y > pageHeight - 20) {
+              doc.addPage();
+              y = 15;
+              doc.setFillColor(30, 41, 59);
+              doc.rect(14, y, pageWidth - 28, 8, "F");
+              doc.setFontSize(8.5);
+              doc.setFont("helvetica", "bold");
+              doc.setTextColor(255, 255, 255);
+              doc.text("Step #", 16, y + 5.5);
+              doc.text("Action Type", 32, y + 5.5);
+              doc.text("Timestamp", 62, y + 5.5);
+              doc.text("Severity", 85, y + 5.5);
+              doc.text("Robot Pose (X, Y, Theta)", 112, y + 5.5);
+              doc.text("Obstacle Collided", 155, y + 5.5);
+              y += 8;
+              doc.setFontSize(8);
+              doc.setFont("helvetica", "normal");
+            }
+
+            const sev = getCollisionSeverity(c);
+            const rowBg = idx % 2 === 0 ? 255 : 248;
+            doc.setFillColor(rowBg, rowBg, rowBg);
+            doc.rect(14, y, pageWidth - 28, 7.5, "F");
+
+            doc.setTextColor(15, 23, 42);
+            doc.setFont("helvetica", "bold");
+            doc.text(`#${c.stepIdx + 1}`, 16, y + 5);
+
+            doc.setFont("helvetica", "normal");
+            doc.text(c.actionType.substring(0, 16), 32, y + 5);
+
+            const tsStr = c.point ? c.point.t.toFixed(2) + "s" : (c.t ? c.t.toFixed(2) + "s" : "0.00s");
+            doc.text(tsStr, 62, y + 5);
+
+            // Severity Badge
+            if (sev.level === "CRITICAL") doc.setTextColor(220, 38, 38);
+            else if (sev.level === "MAJOR") doc.setTextColor(234, 88, 12);
+            else doc.setTextColor(161, 98, 7);
+            doc.setFont("helvetica", "bold");
+            doc.text(sev.level, 85, y + 5);
+
+            doc.setTextColor(15, 23, 42);
+            doc.setFont("helvetica", "normal");
+            const poseStr = `(${c.point ? c.point.x.toFixed(1) : 0}", ${c.point ? c.point.y.toFixed(1) : 0}", ${c.point ? Math.round(c.point.theta) : 0}°)`;
+            doc.text(poseStr, 112, y + 5);
+
+            const obsNameStr = (c.obstacle ? c.obstacle.name : "Field Obstacle").substring(0, 24);
+            doc.text(obsNameStr, 155, y + 5);
+
+            doc.setDrawColor(226, 232, 240);
+            doc.line(14, y + 7.5, pageWidth - 14, y + 7.5);
+
+            y += 7.5;
+          });
+        }
+
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.setFontSize(8);
+          doc.setTextColor(148, 163, 184);
+          doc.text(`Page ${i} of ${pageCount} · VEX High Stakes LemLib Collision Engine`, 14, pageHeight - 8);
+        }
+
+        const fileName = `VEX_Collision_Report_${routineName.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+        doc.save(fileName);
+        showToast("📄 Downloaded trajectory collision report PDF!");
+        return;
+      } catch (err) {
+        console.warn("jsPDF export error, falling back to print window:", err);
+      }
+    }
+
+    openPrintWindowFallback(report, routineName, slotNum, dateStr, bufVal, critCount, majCount, minCount);
+  }
+
+  function openPrintWindowFallback(report, routineName, slotNum, dateStr, bufVal, critCount, majCount, minCount) {
+    const win = window.open("", "_blank");
+    if (!win) {
+      showToast("⚠️ Popup blocked! Please allow popups to view/print PDF report.");
+      return;
+    }
+
+    let rowsHtml = "";
+    if (report.totalCollisions === 0) {
+      rowsHtml = `<tr><td colspan="6" style="padding:16px;text-align:center;color:#166534;font-weight:600;">✨ Path is 100% collision-free! Robot clears all walls, loaders, and goals.</td></tr>`;
+    } else {
+      report.collisions.forEach((c) => {
+        const sev = getCollisionSeverity(c);
+        const poseStr = `(${c.point ? c.point.x.toFixed(1) : 0}", ${c.point ? c.point.y.toFixed(1) : 0}", ${c.point ? Math.round(c.point.theta) : 0}°)`;
+        rowsHtml += `
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:8px;font-weight:bold;">#${c.stepIdx + 1}</td>
+            <td style="padding:8px;">${escapeHtml(c.actionType)}</td>
+            <td style="padding:8px;font-weight:bold;">${c.point ? c.point.t.toFixed(2) + "s" : "—"}</td>
+            <td style="padding:8px;font-weight:bold;color:${sev.color};">${sev.label}</td>
+            <td style="padding:8px;"><code>${poseStr}</code></td>
+            <td style="padding:8px;font-weight:bold;">💥 ${escapeHtml(c.obstacle.name)}</td>
+          </tr>
+        `;
+      });
+    }
+
+    const isClean = report.totalCollisions === 0;
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>VEX High Stakes Collision Report - ${escapeHtml(routineName)}</title>
+        <style>
+          body { font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 900px; margin: 0 auto; }
+          .header { background: #0f172a; color: #38bdf8; padding: 18px 24px; border-radius: 8px; margin-bottom: 20px; }
+          .header h1 { margin: 0; font-size: 1.4rem; }
+          .meta { font-size: 0.85rem; color: #cbd5e1; margin-top: 4px; }
+          .summary { padding: 16px; border-radius: 8px; margin-bottom: 24px; background: ${isClean ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${isClean ? '#22c55e' : '#ef4444'}; }
+          .summary h2 { margin: 0 0 6px 0; font-size: 1.1rem; color: ${isClean ? '#166534' : '#991b1b'}; }
+          table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+          th { background: #1e293b; color: #fff; padding: 10px; text-align: left; }
+          td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
+          @media print {
+            body { padding: 0; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>🛡️ VEX High Stakes Trajectory Collision &amp; Safety Report</h1>
+          <div class="meta">Routine: ${escapeHtml(routineName)} (Slot #${slotNum}) · Generated ${dateStr}</div>
+        </div>
+        <div class="summary">
+          <h2>STATUS: ${isClean ? 'PASSED (0 Collisions)' : `ACTION REQUIRED (${report.totalCollisions} Collisions Detected)`}</h2>
+          <p style="margin:0;font-size:0.9rem;">
+            ${isClean ? 'Path clears all field perimeter walls, match loaders, mobile goals, and ladder structures.' : `Critical: ${critCount} · Major: ${majCount} · Minor: ${minCount} · Safety Buffer Clearance: +${bufVal.toFixed(2)}"`}
+          </p>
+        </div>
+        <h3>Detailed Trajectory Collision Log</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Step #</th>
+              <th>Action</th>
+              <th>Timestamp</th>
+              <th>Severity</th>
+              <th>Robot Pose (X, Y, θ)</th>
+              <th>Obstacle Collided</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+        <div style="margin-top:24px;text-align:right;">
+          <button onclick="window.print()" style="padding:10px 20px;background:#38bdf8;border:none;border-radius:6px;color:#0f172a;font-weight:bold;cursor:pointer;">🖨️ Print / Save as PDF</button>
+        </div>
+      </body>
+      </html>
+    `);
+    win.document.close();
   }
 
 
@@ -13733,6 +14312,249 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (e.target.tagName === "INPUT") validateInput(e.target);
     });
   }
+
+  // =========================================================================
+  // LEMLIB VELOCITY & SHARP ANGLE TRANSITION ANALYSIS HELPER
+  // =========================================================================
+  function analyzeSharpAngleTransitions() {
+    const sharpTurns = [];
+    if (!actions || !actions.length) return sharpTurns;
+
+    const poses = [{ x: pose.x, y: pose.y, theta: pose.theta }];
+    for (const seg of simSegments) {
+      if (seg.endPose) poses.push({ ...seg.endPose });
+    }
+
+    for (let i = 0; i < actions.length - 1; i++) {
+      const a1 = actions[i];
+      const a2 = actions[i + 1];
+      if (!a1 || !a2) continue;
+      if (a1.type === "custom" || a2.type === "custom" || a1.type === "wait" || a2.type === "wait" || a1.type === "ifElse" || a2.type === "ifElse" || a1.type === "loop" || a2.type === "loop") continue;
+
+      const isMove1 = isMove(a1.type);
+      const isMove2 = isMove(a2.type);
+      if (!isMove1 || !isMove2) continue;
+
+      const pFrom = poses[i] || pose;
+      const pCorner = poses[i + 1] || pFrom;
+      const pNext = poses[i + 2] || pCorner;
+
+      let inDeg = angleToPoint(pFrom.x, pFrom.y, pCorner.x, pCorner.y);
+      if (a1.forwards === false) inDeg = normalizeAngle(inDeg + 180);
+      if (a1.type === "moveToPose" && a1.theta != null) inDeg = a1.theta;
+
+      let outDeg = angleToPoint(pCorner.x, pCorner.y, pNext.x, pNext.y);
+      if (a2.forwards === false) outDeg = normalizeAngle(outDeg + 180);
+
+      if (a2.type === "bezierCurve") {
+        const { cp1 } = getBezierControlPoints(a2, pCorner);
+        outDeg = angleToPoint(pCorner.x, pCorner.y, cp1.x, cp1.y);
+      }
+
+      const angleDelta = Math.abs(angleError(inDeg, outDeg));
+
+      if (angleDelta >= 35) {
+        const hasEarlyExit = (a1.earlyExitRange || 0) >= 4;
+        const isBezierPair = a1.type === "bezierCurve" && a2.type === "bezierCurve";
+
+        sharpTurns.push({
+          actionIndex: i,
+          actionId: a1.id,
+          nextActionId: a2.id,
+          cornerWaypointNum: i + 1,
+          cornerPose: { ...pCorner },
+          inHeading: Math.round(inDeg),
+          outHeading: Math.round(outDeg),
+          angleDelta: Math.round(angleDelta),
+          hasEarlyExit,
+          isBezierPair,
+          actionType1: a1.type,
+          actionType2: a2.type,
+          estimatedTimeLossSec: Number(((angleDelta / 180) * 0.4 + 0.12).toFixed(2)),
+        });
+      }
+    }
+
+    return sharpTurns;
+  }
+
+  function fixSharpTurnToBezier(actionId) {
+    const idx = actions.findIndex((x) => x.id === actionId);
+    if (idx < 0) return;
+    const a = actions[idx];
+
+    a.type = "bezierCurve";
+    a.cp1X = null;
+    a.cp1Y = null;
+    a.cp2X = null;
+    a.cp2Y = null;
+    a.lead1 = 18;
+    a.lead2 = 18;
+
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+
+    showToast(`✨ Converted Waypoint #${idx + 1} to a smooth Bezier spline arc!`);
+  }
+
+  function fixSharpTurnEarlyExit(actionId, rangeInches) {
+    const r = rangeInches != null ? rangeInches : 6;
+    const idx = actions.findIndex((x) => x.id === actionId);
+    if (idx < 0) return;
+    const a = actions[idx];
+    a.earlyExitRange = r;
+
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+
+    showToast(`🏃 Added ${r}" earlyExitRange to Waypoint #${idx + 1}!`);
+  }
+
+  function fixAllSharpTurnsAutomatically() {
+    const report = analyzeSharpAngleTransitions();
+    if (!report.length) {
+      showToast("✨ Path is already smooth!");
+      return;
+    }
+
+    let count = 0;
+    for (const item of report) {
+      const a = actions[item.actionIndex];
+      if (!a) continue;
+      if (a.type !== "bezierCurve") {
+        a.type = "bezierCurve";
+        a.cp1X = null; a.cp1Y = null; a.cp2X = null; a.cp2Y = null;
+        a.lead1 = 18; a.lead2 = 18;
+      } else {
+        a.earlyExitRange = 6;
+      }
+      count++;
+    }
+
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+
+    const modal = document.getElementById("sharpTurnModal");
+    if (modal) modal.style.display = "none";
+    showToast(`⚡ Automatically optimized ${count} sharp turn transitions!`);
+  }
+
+  function renderSharpTurnModal() {
+    const modal = document.getElementById("sharpTurnModal");
+    if (!modal) return;
+    const tbody = document.getElementById("sharpTurnModalTbody");
+    const iconEl = document.getElementById("sharpTurnModalIcon");
+    const titleEl = document.getElementById("sharpTurnModalTitle");
+    const subEl = document.getElementById("sharpTurnModalSub");
+    const btnFixAll = document.getElementById("btnFixAllSharpTurnsModal");
+
+    const report = analyzeSharpAngleTransitions();
+
+    if (!report.length) {
+      if (iconEl) iconEl.textContent = "✨";
+      if (titleEl) titleEl.textContent = "0 Sharp Turns Detected";
+      if (subEl) subEl.textContent = "All waypoint transitions maintain smooth continuous velocity.";
+      if (btnFixAll) btnFixAll.style.display = "none";
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:#34d399;font-weight:600;">✨ All movement transitions are smooth! Chassis maintains linear velocity.</td></tr>`;
+      }
+      return;
+    }
+
+    if (iconEl) iconEl.textContent = "⚡";
+    if (titleEl) titleEl.textContent = `${report.length} Sharp ${report.length === 1 ? 'Turn' : 'Turns'} Detected`;
+    if (subEl) subEl.textContent = `Chassis must brake to 0 in/s at sharp corner transitions. Convert to Bezier curves or set early exit.`;
+    if (btnFixAll) btnFixAll.style.display = "inline-block";
+
+    if (tbody) {
+      tbody.innerHTML = report.map((item) => {
+        return `
+          <tr style="border-bottom:1px solid #1e293b;background:rgba(15,23,42,0.4);">
+            <td style="padding:10px 12px;font-weight:700;color:#f8fafc;">
+              Waypoint #${item.cornerWaypointNum}
+              <div style="font-size:0.7rem;color:#94a3b8;font-weight:normal;">(${item.cornerPose.x.toFixed(1)}", ${item.cornerPose.y.toFixed(1)}")</div>
+            </td>
+            <td style="padding:10px 12px;">
+              <span class="badge warning-badge" style="background:rgba(245,158,11,0.2);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);padding:2px 6px;border-radius:4px;font-weight:700;">
+                ⚡ ${item.angleDelta}° Sharp
+              </span>
+            </td>
+            <td style="padding:10px 12px;color:#cbd5e1;font-family:ui-monospace, monospace;">
+              ${item.inHeading}° → ${item.outHeading}°
+            </td>
+            <td style="padding:10px 12px;color:#f87171;font-weight:600;">
+              Brakes to 0 in/s (~+${item.estimatedTimeLossSec}s)
+            </td>
+            <td style="padding:10px 12px;text-align:right;">
+              <div style="display:flex;gap:6px;justify-content:flex-end;">
+                <button type="button" class="btn-xs-fix-bezier" data-fix-act="bezier" data-id="${item.actionId}">
+                  ✨ Bezier Curve
+                </button>
+                <button type="button" class="btn-xs-fix-exit" data-fix-act="exit" data-id="${item.actionId}">
+                  🏃 6" Early Exit
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      tbody.querySelectorAll('[data-fix-act="bezier"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          fixSharpTurnToBezier(btn.dataset.id);
+          renderSharpTurnModal();
+        });
+      });
+
+      tbody.querySelectorAll('[data-fix-act="exit"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          fixSharpTurnEarlyExit(btn.dataset.id, 6);
+          renderSharpTurnModal();
+        });
+      });
+    }
+  }
+
+  function openSharpTurnModal() {
+    const modal = document.getElementById("sharpTurnModal");
+    if (!modal) return;
+    renderSharpTurnModal();
+    modal.style.display = "flex";
+  }
+
+  function setupSharpTurnAnalyzer() {
+    const btnSharpHud = document.getElementById("simHudSharpTurn");
+    if (btnSharpHud) btnSharpHud.addEventListener("click", openSharpTurnModal);
+
+    const btnToolsSharp = document.getElementById("btnToolsSharpTurns");
+    if (btnToolsSharp) btnToolsSharp.addEventListener("click", openSharpTurnModal);
+
+    const btnCloseModal = document.getElementById("btnSharpTurnModalClose");
+    if (btnCloseModal) btnCloseModal.addEventListener("click", () => {
+      const modal = document.getElementById("sharpTurnModal");
+      if (modal) modal.style.display = "none";
+    });
+
+    const btnDoneModal = document.getElementById("btnSharpTurnModalDone");
+    if (btnDoneModal) btnDoneModal.addEventListener("click", () => {
+      const modal = document.getElementById("sharpTurnModal");
+      if (modal) modal.style.display = "none";
+    });
+
+    const btnFixAll = document.getElementById("btnFixAllSharpTurnsModal");
+    if (btnFixAll) btnFixAll.addEventListener("click", fixAllSharpTurnsAutomatically);
+  }
+
+  setupSharpTurnAnalyzer();
 
   // 3. INTERACTIVE "GETTING STARTED" WALKTHROUGH
   function setupGuidedTour() {

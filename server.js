@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import JSZip from 'jszip';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -489,6 +490,126 @@ app.post('/api/github/push', async (req, res) => {
   } catch (err) {
     console.error('[GitHub Sync Error]:', err);
     res.status(500).json({ error: err.message || 'Internal server error during GitHub sync' });
+  }
+});
+
+// Git Integration API - Direct Repository Cloning
+app.post('/api/github/clone', async (req, res) => {
+  const { repo, branch, token } = req.body || {};
+  if (!repo) {
+    return res.status(400).json({ error: 'Missing repository parameter (e.g. "owner/repo" or full GitHub URL)' });
+  }
+
+  // Sanitize repo input
+  let cleanRepo = String(repo).trim();
+  cleanRepo = cleanRepo.replace(/^https?:\/\/github\.com\//i, '');
+  cleanRepo = cleanRepo.replace(/\.git$/i, '');
+  cleanRepo = cleanRepo.replace(/\/+$/, '');
+
+  const parts = cleanRepo.split('/');
+  if (parts.length < 2) {
+    return res.status(400).json({ error: 'Invalid repository name. Format must be "owner/repo"' });
+  }
+  const owner = parts[0];
+  const repoName = parts[1];
+
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'VEX-Path-Planner-Cloud-Sync'
+  };
+  if (token && String(token).trim()) {
+    headers['Authorization'] = `token ${String(token).trim()}`;
+  }
+
+  try {
+    let targetBranch = branch ? String(branch).trim() : null;
+
+    // If branch is not specified, query repository metadata to determine default branch
+    if (!targetBranch) {
+      const repoMetaUrl = `https://api.github.com/repos/${owner}/${repoName}`;
+      const repoMetaRes = await fetch(repoMetaUrl, { headers });
+      if (!repoMetaRes.ok) {
+        const errTxt = await repoMetaRes.text();
+        return res.status(repoMetaRes.status).json({ error: `Failed to fetch GitHub repo metadata (${repoMetaRes.status}): ${errTxt}` });
+      }
+      const repoMetaData = await repoMetaRes.json();
+      targetBranch = repoMetaData.default_branch || 'main';
+    }
+
+    // Download repository ZIP archive
+    const zipUrl = `https://api.github.com/repos/${owner}/${repoName}/zipball/${targetBranch}`;
+    const zipRes = await fetch(zipUrl, { headers, redirect: 'follow' });
+    if (!zipRes.ok) {
+      const errTxt = await zipRes.text();
+      return res.status(zipRes.status).json({ error: `Failed to download repository zip archive (${zipRes.status}): ${errTxt}` });
+    }
+
+    const arrayBuffer = await zipRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const zip = await JSZip.loadAsync(buffer);
+
+    const IGNORED_PATH_PREFIXES = [
+      '.cache/', '.clangd/', '.vscode/', '.git/', 'bin/', 'build/', 'firmware/', 'dist/', 'node_modules/'
+    ];
+    const IGNORED_EXTENSIONS = [
+      '.idx', '.bin', '.elf', '.o', '.a', '.d', '.map', '.gch', '.pch', '.so', '.dylib', '.dll', '.exe', '.zip', '.tar', '.gz', '.7z', '.iso', '.png', '.jpg', '.jpeg'
+    ];
+
+    const extractedFiles = {};
+
+    // GitHub zipball has a top-level folder like owner-repo-sha/
+    let prefixCut = 0;
+    const entryNames = Object.keys(zip.files);
+    if (entryNames.length > 0) {
+      const firstEntry = entryNames[0];
+      const slashIdx = firstEntry.indexOf('/');
+      if (slashIdx !== -1) {
+        prefixCut = slashIdx + 1;
+      }
+    }
+
+    for (const [relativePath, fileObj] of Object.entries(zip.files)) {
+      if (fileObj.dir) continue;
+
+      let normPath = prefixCut > 0 ? relativePath.substring(prefixCut) : relativePath;
+      if (!normPath) continue;
+      normPath = normPath.replace(/\\/g, '/');
+
+      // Check ignored prefixes
+      if (IGNORED_PATH_PREFIXES.some(prefix => normPath.startsWith(prefix) || normPath.includes('/' + prefix))) {
+        continue;
+      }
+      // Check ignored extensions
+      const lower = normPath.toLowerCase();
+      if (IGNORED_EXTENSIONS.some(ext => lower.endsWith(ext))) {
+        continue;
+      }
+
+      const content = await fileObj.async('string');
+      // Skip binary null bytes or oversized files
+      if (content.indexOf('\0') !== -1) continue;
+      if (content.length > 1.5 * 1024 * 1024) continue;
+
+      extractedFiles[normPath] = content;
+    }
+
+    if (Object.keys(extractedFiles).length === 0) {
+      return res.status(400).json({ error: 'No valid source/header files found in repository zip.' });
+    }
+
+    res.json({
+      success: true,
+      owner,
+      repo: `${owner}/${repoName}`,
+      repoName,
+      branch: targetBranch,
+      fileCount: Object.keys(extractedFiles).length,
+      files: extractedFiles
+    });
+  } catch (err) {
+    console.error('[GitHub Clone Error]:', err);
+    res.status(500).json({ error: err.message || 'Internal server error while cloning repository' });
   }
 });
 

@@ -10224,6 +10224,70 @@ kbd {
   border-top: 1px solid #334155;
 }
 
+/* Sharp Angle Transition & Velocity Analyzer Styles */
+.sim-hud-chip.chip-sharp-turn {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+.sim-hud-chip.chip-sharp-turn.clean {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+.sim-hud-chip.chip-sharp-turn:hover {
+  background: rgba(245, 158, 11, 0.25);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.action-card-sharp-turn-alert {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+.badge.sharp-turn-badge {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fef08a;
+}
+
+.btn-xs-fix-bezier {
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-xs-fix-bezier:hover {
+  background: #0369a1;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.btn-xs-fix-exit {
+  background: #7c3aed;
+  color: #ffffff;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-xs-fix-exit:hover {
+  background: #6d28d9;
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.4);
+}
+
+
 
 
 
