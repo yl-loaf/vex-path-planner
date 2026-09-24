@@ -6876,8 +6876,9 @@
       if (btnBlock) {
         const type = btnBlock.getAttribute("data-act-type");
         const a = defaultAction(type);
+        if (!a) return;
         const poses = computePoses();
-        const last = poses[poses.length - 1];
+        const last = poses[poses.length - 1] || { x: (start ? start.x : 0), y: (start ? start.y : 0), theta: (start ? start.theta : 0) };
         if (needsPoint(type) || isMove(type)) {
           a.x = Number((last.x + 12).toFixed(1));
           a.y = Number(last.y.toFixed(1));
@@ -6915,16 +6916,31 @@
         renderFlow();
         draw();
         generateCode();
+        try { updateTimeDisplay(); } catch (_) {}
+        switchPlannerTab("flowchart");
+        showToast(`➕ Added '${type}' block to routine!`);
+        setTimeout(() => {
+          const cardEl = document.querySelector(`.action-card[data-id="${a.id}"]`);
+          if (cardEl) cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 50);
       } else if (btnSnip) {
         const snipCode = btnSnip.getAttribute("data-snip-add");
         const a = defaultAction("custom");
         a.customCode = snipCode;
+        a.label = btnSnip.textContent.trim().replace(/^[🟢🟣🔵🟡🔴🔁]\s*/, "") || "subsystem command";
         actions.push(a);
         selectedId = a.id;
         markDirty();
         renderFlow();
         draw();
         generateCode();
+        try { updateTimeDisplay(); } catch (_) {}
+        switchPlannerTab("flowchart");
+        showToast(`🟢 Inserted subsystem '${a.label}'!`);
+        setTimeout(() => {
+          const cardEl = document.querySelector(`.action-card[data-id="${a.id}"]`);
+          if (cardEl) cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 50);
       }
     });
   }

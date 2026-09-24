@@ -11,7 +11,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260924.k35" />
+  <link rel="stylesheet" href="style.css?v=20260924.k37" />
 </head>
 <body>
   <!-- =================================================================
@@ -404,14 +404,14 @@
               <button type="button" id="paletteSearchClear" title="Clear search" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.9rem; display: none;">✕</button>
             </div>
             <div class="palette-block-list">
-              <button type="button" class="palette-block-btn btn-motion" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point">🔵 moveToPoint(x, y)</button>
-              <button type="button" class="palette-block-btn btn-motion" data-category="motion" data-keywords="movetopose moveToPose x y theta heading motion pose">🔵 moveToPose(x, y, θ)</button>
-              <button type="button" class="palette-block-btn btn-turn" data-category="turn" data-keywords="turntoheading turnToHeading theta heading turn rotate">🟣 turnToHeading(θ)</button>
-              <button type="button" class="palette-block-btn btn-turn" data-category="turn" data-keywords="turntopoint turnToPoint x y turn rotate point">🟣 turnToPoint(x, y)</button>
-              <button type="button" class="palette-block-btn btn-turn" data-category="turn" data-keywords="swingtoheading swingToHeading theta swing rotate">🟣 swingToHeading(θ)</button>
-              <button type="button" class="palette-block-btn btn-control" data-category="control" data-keywords="wait delay pause timer">🟡 wait / delay</button>
-              <button type="button" class="palette-block-btn btn-control" data-category="control" data-keywords="ifelse if else scratch condition branch">🟡 If / Else (Scratch)</button>
-              <button type="button" class="palette-block-btn btn-control" data-category="control" data-keywords="loop for until forever repeat">🔁 Loop (for/until/forever)</button>
+              <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPoint" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point">🔵 moveToPoint(x, y)</button>
+              <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPose" data-category="motion" data-keywords="movetopose moveToPose x y theta heading motion pose">🔵 moveToPose(x, y, θ)</button>
+              <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToHeading" data-category="turn" data-keywords="turntoheading turnToHeading theta heading turn rotate">🟣 turnToHeading(θ)</button>
+              <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToPoint" data-category="turn" data-keywords="turntopoint turnToPoint x y turn rotate point">🟣 turnToPoint(x, y)</button>
+              <button type="button" class="palette-block-btn btn-turn" data-act-type="swingToHeading" data-category="turn" data-keywords="swingtoheading swingToHeading theta swing rotate">🟣 swingToHeading(θ)</button>
+              <button type="button" class="palette-block-btn btn-control" data-act-type="wait" data-category="control" data-keywords="wait delay pause timer">🟡 wait / delay</button>
+              <button type="button" class="palette-block-btn btn-control" data-act-type="ifElse" data-category="control" data-keywords="ifelse if else scratch condition branch">🟡 If / Else (Scratch)</button>
+              <button type="button" class="palette-block-btn btn-control" data-act-type="loop" data-category="control" data-keywords="loop for until forever repeat">🔁 Loop (for/until/forever)</button>
               <button type="button" class="palette-block-btn btn-subsystem" data-category="subsystem" data-keywords="clamp goal pneumatic pneumatics set_value" data-snip-add="clamp.set_value(true);">🟢 clamp goal</button>
               <button type="button" class="palette-block-btn btn-subsystem" data-category="subsystem" data-keywords="intake move motor rollers" data-snip-add="intake.move(127);">🟢 intake on</button>
               <button type="button" class="palette-block-btn btn-custom" data-category="custom" data-keywords="custom cpp code snippet" data-act-type="custom">🔴 custom C++</button>
@@ -2657,20 +2657,20 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260924.k35"></script>
+  <script src="version.js?v=20260924.k37"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260924.k35"></script>
-  <script src="google-drive-sync.js?v=20260924.k35"></script>
-  <script src="session-guard.js?v=20260924.k35"></script>
-  <script src="v5-brain-serial.js?v=20260924.k35"></script>
-  <script src="project-manager.js?v=20260924.k35"></script>
-  <script src="cpp-parser.js?v=20260924.k35"></script>
-  <script src="app.js?v=20260924.k35"></script>
-  <script src="tutorial.js?v=20260924.k35"></script>
+  <script src="firebase-config.js?v=20260924.k37"></script>
+  <script src="google-drive-sync.js?v=20260924.k37"></script>
+  <script src="session-guard.js?v=20260924.k37"></script>
+  <script src="v5-brain-serial.js?v=20260924.k37"></script>
+  <script src="project-manager.js?v=20260924.k37"></script>
+  <script src="cpp-parser.js?v=20260924.k37"></script>
+  <script src="app.js?v=20260924.k37"></script>
+  <script src="tutorial.js?v=20260924.k37"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
