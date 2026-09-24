@@ -2998,6 +2998,83 @@
       if (inputPushToken) inputPushToken.value = savedToken;
     }
 
+    const btnToggleCloneToken = document.getElementById("btnToggleCloneToken");
+    const btnTogglePushToken = document.getElementById("btnTogglePushToken");
+
+    const EYE_OPEN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+    const EYE_SLASH_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+
+    function setupPasswordToggle(inputEl, btnEl) {
+      if (!inputEl || !btnEl) return;
+      btnEl.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const isPass = inputEl.type === "password";
+        inputEl.type = isPass ? "text" : "password";
+        btnEl.innerHTML = isPass ? EYE_SLASH_SVG : EYE_OPEN_SVG;
+        btnEl.style.color = isPass ? "#38bdf8" : "#94a3b8";
+        btnEl.setAttribute("title", isPass ? "Hide PAT" : "Show PAT");
+        btnEl.setAttribute("aria-label", isPass ? "Hide PAT" : "Show PAT");
+      };
+      btnEl.onmouseenter = () => {
+        btnEl.style.color = "#f8fafc";
+      };
+      btnEl.onmouseleave = () => {
+        btnEl.style.color = inputEl.type === "text" ? "#38bdf8" : "#94a3b8";
+      };
+    }
+
+    setupPasswordToggle(inputCloneToken, btnToggleCloneToken);
+    setupPasswordToggle(inputPushToken, btnTogglePushToken);
+
+    // Sync tokens between Clone and Push tabs in real-time
+    if (inputCloneToken && inputPushToken) {
+      inputCloneToken.addEventListener("input", () => {
+        inputPushToken.value = inputCloneToken.value;
+        if (inputCloneToken.value.trim()) {
+          localStorage.setItem("github_pat_token", inputCloneToken.value.trim());
+        }
+      });
+      inputPushToken.addEventListener("input", () => {
+        inputCloneToken.value = inputPushToken.value;
+        if (inputPushToken.value.trim()) {
+          localStorage.setItem("github_pat_token", inputPushToken.value.trim());
+        }
+      });
+    }
+
+    // PAT Help Modal wiring
+    const patHelpModal = document.getElementById("patHelpModal");
+    const btnPatHelpClose = document.getElementById("btnPatHelpModalClose");
+    const btnPatHelpDone = document.getElementById("btnPatHelpModalDone");
+    const helpButtons = document.querySelectorAll(".btnPatHelp");
+
+    const openPatHelp = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      if (patHelpModal) {
+        patHelpModal.removeAttribute("hidden");
+        patHelpModal.style.display = "flex";
+      }
+    };
+
+    const closePatHelp = () => {
+      if (patHelpModal) {
+        patHelpModal.setAttribute("hidden", "true");
+        patHelpModal.style.display = "none";
+      }
+    };
+
+    helpButtons.forEach(btn => {
+      btn.onclick = openPatHelp;
+    });
+    if (btnPatHelpClose) btnPatHelpClose.onclick = closePatHelp;
+    if (btnPatHelpDone) btnPatHelpDone.onclick = closePatHelp;
+    if (patHelpModal) {
+      patHelpModal.onclick = (e) => {
+        if (e.target === patHelpModal) closePatHelp();
+      };
+    }
+
     // Auto-fill push repo from current project name if formatted as owner/repo or default
     if (inputPushRepo && window.ProjectManager && window.ProjectManager.project) {
       const projName = window.ProjectManager.project.name || "";
