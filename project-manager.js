@@ -2209,6 +2209,8 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       // Global bracket stack to detect nesting mismatches across block structures
       const globalBracketStack = [];
+      let statementBuffer = "";
+      let statementStartLine = 0;
 
       lines.forEach((rawLine, idx) => {
         const lineNum = idx + 1;
@@ -2339,25 +2341,19 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           }
         }
 
-        // Single-line unclosed bracket check
-        const lineParenOpen = (codeWithoutStrings.match(/\(/g) || []).length;
-        const lineParenClose = (codeWithoutStrings.match(/\)/g) || []).length;
-        if (lineParenOpen > lineParenClose && !codeWithoutStrings.endsWith("{") && !codeWithoutStrings.endsWith(",") && !codeWithoutStrings.endsWith("\\")) {
-          errors.push({
-            file: fileName,
-            line: lineNum,
-            message: `SyntaxError: Unclosed parenthesis '(' in statement '${codePart}'`,
-          });
-        }
+        const isInsideParensOrBrackets = globalBracketStack.some(item => item.char === "(" || item.char === "[");
+        const isForLoopHeader = /\bfor\s*\([^)]*$/.test(statementBuffer ? (statementBuffer + " " + codeWithoutStrings) : codeWithoutStrings);
 
-        const lineBracketOpen = (codeWithoutStrings.match(/\[/g) || []).length;
-        const lineBracketClose = (codeWithoutStrings.match(/\]/g) || []).length;
-        if (lineBracketOpen > lineBracketClose && !codeWithoutStrings.endsWith("{") && !codeWithoutStrings.endsWith(",") && !codeWithoutStrings.endsWith("\\")) {
-          errors.push({
-            file: fileName,
-            line: lineNum,
-            message: `SyntaxError: Unclosed square bracket '[' in statement '${codePart}'`,
-          });
+        // If a statement terminates with ';' on this line but has unclosed parenthesis/bracket on this statement
+        if (codeWithoutStrings.endsWith(";") && !isForLoopHeader) {
+          if (lineBracketStack.length > 0) {
+            const unclosed = lineBracketStack[lineBracketStack.length - 1];
+            errors.push({
+              file: fileName,
+              line: lineNum,
+              message: `SyntaxError: Unclosed '${unclosed.char}' before ';' in statement '${codePart}'`,
+            });
+          }
         }
 
         // 5. Check Double Operators & Syntax Typos
@@ -2388,9 +2384,25 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           }
         }
 
-        // 7. Random Letters / Gibberish Statements & Missing Semicolon Check
+        // 7. Statement Completion & Syntax Validation
         const isControlStructure = /^(if|else|while|for|switch|case|default|try|catch|namespace|class|struct|enum|public|private|protected|typedef|using)\b/.test(codeWithoutStrings);
-        const isLineEndingValid = codeWithoutStrings.endsWith(";") || codeWithoutStrings.endsWith("{") || codeWithoutStrings.endsWith("}") || codeWithoutStrings.endsWith(":") || codeWithoutStrings.endsWith(",") || codeWithoutStrings.endsWith("\\");
+        const isLineEndingValid =
+          codeWithoutStrings.endsWith(";") ||
+          codeWithoutStrings.endsWith("{") ||
+          codeWithoutStrings.endsWith("}") ||
+          codeWithoutStrings.endsWith(":") ||
+          codeWithoutStrings.endsWith(",") ||
+          codeWithoutStrings.endsWith("\\") ||
+          codeWithoutStrings.endsWith("(") ||
+          codeWithoutStrings.endsWith("[") ||
+          codeWithoutStrings.endsWith("+") ||
+          codeWithoutStrings.endsWith("-") ||
+          codeWithoutStrings.endsWith("*") ||
+          codeWithoutStrings.endsWith("/") ||
+          codeWithoutStrings.endsWith("=") ||
+          codeWithoutStrings.endsWith("&") ||
+          codeWithoutStrings.endsWith("|") ||
+          isInsideParensOrBrackets;
 
         if (!isControlStructure && !isLineEndingValid) {
           errors.push({
@@ -2398,23 +2410,39 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
             line: lineNum,
             message: `SyntaxError: Expected ';' at end of statement: '${codePart}'`,
           });
-        } else if (codeWithoutStrings.endsWith(";")) {
-          const stmtBody = codeWithoutStrings.replace(/;$/, "").trim();
-          if (stmtBody) {
-            const isFunctionCall = /[a-zA-Z0-9_:]+\s*\([^)]*\)/.test(stmtBody);
-            const isAssignmentOrOp = /=|\+=|-=|\*=|\/=|%=|\+\+|--|<<|>>/.test(stmtBody);
-            const isReturnOrBreak = /^(return|break|continue|goto)\b/.test(stmtBody);
-            const isDeclaration = /^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+)*([a-zA-Z0-9_:]+)\s+([a-zA-Z0-9_]+)/.test(stmtBody);
+          statementBuffer = "";
+          statementStartLine = 0;
+        }
+
+        // Accumulate multi-line statements
+        if (!statementBuffer) {
+          statementStartLine = lineNum;
+        }
+        statementBuffer += (statementBuffer ? " " : "") + codeWithoutStrings;
+
+        // When a statement finishes at ';' and we are not inside multi-line parens/brackets
+        if (codeWithoutStrings.endsWith(";") && !isInsideParensOrBrackets) {
+          const fullStmt = statementBuffer.replace(/;$/, "").trim();
+          const startLine = statementStartLine || lineNum;
+          statementBuffer = "";
+          statementStartLine = 0;
+
+          if (fullStmt && !/^[)\]}\s]+$/.test(fullStmt)) {
+            const isFunctionCall = /[a-zA-Z0-9_:]+\s*\([^)]*\)/.test(fullStmt);
+            const isAssignmentOrOp = /=|\+=|-=|\*=|\/=|%=|\+\+|--|<<|>>/.test(fullStmt);
+            const isReturnOrBreak = /^(return|break|continue|goto)\b/.test(fullStmt);
+            const isDeclaration = /^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+)*([a-zA-Z0-9_:]+)\s+([a-zA-Z0-9_]+)/.test(fullStmt);
 
             if (!isFunctionCall && !isAssignmentOrOp && !isReturnOrBreak) {
               if (!isDeclaration) {
+                const shortStmt = fullStmt.length > 45 ? fullStmt.slice(0, 42) + "..." : fullStmt;
                 errors.push({
                   file: fileName,
-                  line: lineNum,
-                  message: `SyntaxError: Invalid C++ statement or unknown identifier '${stmtBody}'`,
+                  line: startLine,
+                  message: `SyntaxError: Invalid C++ statement or unknown identifier '${shortStmt}'`,
                 });
               } else {
-                const declMatch = stmtBody.match(/^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+)*([a-zA-Z0-9_:]+)\s+([a-zA-Z0-9_]+)/);
+                const declMatch = fullStmt.match(/^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+)*([a-zA-Z0-9_:]+)\s+([a-zA-Z0-9_]+)/);
                 if (declMatch) {
                   const typeToken = declMatch[1];
                   const varToken = declMatch[2];
@@ -2425,7 +2453,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
                   if (!isKnownType) {
                     errors.push({
                       file: fileName,
-                      line: lineNum,
+                      line: startLine,
                       message: `SyntaxError: Unknown type or invalid statement '${typeToken} ${varToken}'`,
                     });
                   }
@@ -2433,6 +2461,9 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
               }
             }
           }
+        } else if (codeWithoutStrings.endsWith("{") || codeWithoutStrings.endsWith("}")) {
+          statementBuffer = "";
+          statementStartLine = 0;
         }
 
         // 8. LemLib API Parameter Count Validation

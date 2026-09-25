@@ -139,66 +139,6 @@
     </div>
 
     <!-- Overview Cards -->
-    <div class="stats-section" style="background: rgba(34,197,94,0.05); border-color: rgba(34,197,94,0.2); margin-bottom: 30px;">
-      <h3 style="color: var(--green); margin-bottom: 8px;">💡 Multi-Device Tracking Fix (Google Apps Script)</h3>
-      <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 12px;">
-        If you only see 1 user across multiple devices, ensure your Google Sheet Apps Script code correctly processes unique client IDs. Paste this updated script into your Google Sheet (Extensions > Apps Script) and <strong>re-deploy as a New Version</strong>:
-      </p>
-      <details style="cursor: pointer;">
-        <summary style="font-weight: 600; color: var(--cyan); font-size: 0.9rem; margin-bottom: 8px;">Click to view updated Apps Script code</summary>
-        <textarea readonly style="width: 100%; height: 180px; background: #0b0f14; color: #22c55e; border: 1px solid var(--border); padding: 10px; font-family: monospace; font-size: 0.75rem; border-radius: 6px; margin-top: 8px;">
-function doGet(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var params = e && e.parameter ? e.parameter : {};
-  var action = params.action || 'get';
-  var callback = params.callback;
-  
-  if (action === 'track') {
-    var page = params.page || 'home';
-    var clientId = params.clientId || 'anonymous';
-    var ua = params.ua || 'Unknown';
-    sheet.appendRow([new Date(), page, clientId, ua]);
-  }
-  
-  var rows = sheet.getDataRange().getValues();
-  var totalViews = rows.length > 1 ? rows.length - 1 : 0;
-  var pages = { home: 0, ide: 0, translator: 0, stats: 0, other: 0 };
-  var uniqueClients = {};
-  var recentVisitors = [];
-  
-  for (var i = 1; i < rows.length; i++) {
-    var rowDate = rows[i][0];
-    var rowPage = rows[i][1] || 'home';
-    var rowClient = rows[i][2] || 'anonymous';
-    var rowUa = rows[i][3] || 'Unknown';
-    
-    if (pages[rowPage] !== undefined) pages[rowPage]++;
-    else pages['other']++;
-    
-    uniqueClients[rowClient] = true;
-    
-    if (recentVisitors.length < 25) {
-      recentVisitors.unshift({ timestamp: rowDate, page: rowPage, userAgent: rowUa, ip: 'Device ID: ' + String(rowClient).substring(0, 6) + '...' });
-    }
-  }
-  
-  var result = { 
-    totalViews: totalViews, 
-    uniqueVisitors: Math.max(1, Object.keys(uniqueClients).length), 
-    pages: pages, 
-    visitors: recentVisitors 
-  };
-  
-  var jsonString = JSON.stringify(result);
-  if (callback) {
-    return ContentService.createTextOutput(callback + '(' + jsonString + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-  return ContentService.createTextOutput(jsonString).setMimeType(ContentService.MimeType.JSON);
-}
-        </textarea>
-      </details>
-    </div>
-
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-card-title">Total Page Views</div>
