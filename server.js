@@ -701,6 +701,20 @@ app.get(['/stats', '/stats.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'stats.html'));
 });
 
+// Google Search Console HTML File verification route
+app.get(['/googlec50c21e43ad27747.html', '/google:code.html'], (req, res, next) => {
+  const target = req.params.code ? `google${req.params.code}.html` : 'googlec50c21e43ad27747.html';
+  const filePath = path.join(__dirname, target);
+  if (fs.existsSync(filePath)) {
+    res.set({
+      ...NO_CACHE_HEADERS,
+      'Content-Type': 'text/html; charset=utf-8'
+    });
+    return res.sendFile(filePath);
+  }
+  next();
+});
+
 app.get(['/root-domain-index.html', '/root-domain-index'], (req, res) => {
   res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'root-domain-index.html'));
