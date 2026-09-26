@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Google AdSense Crawler
+User-agent: Mediapartners-Google
+Allow: /
+
+Sitemap: https://yl-loaf.github.io/vex-path-planner/sitemap.xml

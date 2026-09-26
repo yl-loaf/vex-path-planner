@@ -701,6 +701,23 @@ app.get(['/stats', '/stats.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'stats.html'));
 });
 
+// Google Search Console & SEO Routes
+app.get(['/sitemap.xml', '/sitemap'], (req, res) => {
+  res.set({
+    ...NO_CACHE_HEADERS,
+    'Content-Type': 'application/xml; charset=utf-8'
+  });
+  res.sendFile(path.join(__dirname, 'sitemap.xml'));
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.set({
+    ...NO_CACHE_HEADERS,
+    'Content-Type': 'text/plain; charset=utf-8'
+  });
+  res.sendFile(path.join(__dirname, 'robots.txt'));
+});
+
 // Google Search Console HTML File verification route
 app.get(['/googlec50c21e43ad27747.html', '/google:code.html'], (req, res, next) => {
   const target = req.params.code ? `google${req.params.code}.html` : 'googlec50c21e43ad27747.html';
