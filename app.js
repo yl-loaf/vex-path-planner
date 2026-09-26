@@ -202,6 +202,8 @@
   let activePathId = "p_default";
   let selectedId = null;
   let drag = null;
+  let bezierToolActive = false;
+  let hoveredHit = null;
 
   function activePath() {
     return paths.find((p) => p.id === activePathId) || paths[0];
@@ -1420,31 +1422,59 @@
   /**
    * Evaluates or derives Cubic Bezier control points and heading vectors.
    * Auto-computes departure and arrival curvature handles along the robot's
-   * tangent headings when custom control points are not specified.
+   * tangent headings with intuitive arc bulge offset support.
    */
   function getBezierControlPoints(action, fromPose) {
     const p0 = { x: fromPose.x, y: fromPose.y };
     const p3 = { x: action.x, y: action.y };
-    const dist = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+    const dx = p3.x - p0.x;
+    const dy = p3.y - p0.y;
+    const dist = Math.hypot(dx, dy) || 1e-4;
     const defaultLead = Math.max(8, Math.min(36, dist * 0.45));
     const lead1 = action.lead1 != null && !isNaN(Number(action.lead1)) ? Number(action.lead1) : defaultLead;
     const lead2 = action.lead2 != null && !isNaN(Number(action.lead2)) ? Number(action.lead2) : defaultLead;
 
     const rad0 = (fromPose.theta * Math.PI) / 180;
     const dir0 = action.forwards === false ? -1 : 1;
-    const cp1 = {
-      x: action.cp1X != null && !isNaN(Number(action.cp1X)) ? Number(action.cp1X) : (p0.x + Math.sin(rad0) * lead1 * dir0),
-      y: action.cp1Y != null && !isNaN(Number(action.cp1Y)) ? Number(action.cp1Y) : (p0.y + Math.cos(rad0) * lead1 * dir0),
-    };
-
     const targetHeading = action.theta != null && !isNaN(Number(action.theta)) ? Number(action.theta) : fromPose.theta;
     const rad1 = (targetHeading * Math.PI) / 180;
-    const cp2 = {
-      x: action.cp2X != null && !isNaN(Number(action.cp2X)) ? Number(action.cp2X) : (p3.x - Math.sin(rad1) * lead2 * dir0),
-      y: action.cp2Y != null && !isNaN(Number(action.cp2Y)) ? Number(action.cp2Y) : (p3.y - Math.cos(rad1) * lead2 * dir0),
+
+    // Base tangent positions
+    const baseCp1 = {
+      x: p0.x + Math.sin(rad0) * lead1 * dir0,
+      y: p0.y + Math.cos(rad0) * lead1 * dir0,
+    };
+    const baseCp2 = {
+      x: p3.x - Math.sin(rad1) * lead2 * dir0,
+      y: p3.y - Math.cos(rad1) * lead2 * dir0,
     };
 
-    return { cp1, cp2, lead1, lead2, targetHeading };
+    // Normal unit vector perpendicular to chord (pointing to the right of travel direction)
+    const nx = dy / dist;
+    const ny = -dx / dist;
+
+    const commonBulge = action.bulge != null && !isNaN(Number(action.bulge)) ? Number(action.bulge) : 0;
+    const b1 = action.bulge1 != null && !isNaN(Number(action.bulge1)) ? Number(action.bulge1) : commonBulge;
+    const b2 = action.bulge2 != null && !isNaN(Number(action.bulge2)) ? Number(action.bulge2) : commonBulge;
+
+    let cp1 = {
+      x: baseCp1.x + nx * b1,
+      y: baseCp1.y + ny * b1,
+    };
+    let cp2 = {
+      x: baseCp2.x + nx * b2,
+      y: baseCp2.y + ny * b2,
+    };
+
+    // If freeHandles is enabled and explicit custom coordinates exist, use them
+    if (action.freeHandles === true) {
+      if (action.cp1X != null && !isNaN(Number(action.cp1X))) cp1.x = Number(action.cp1X);
+      if (action.cp1Y != null && !isNaN(Number(action.cp1Y))) cp1.y = Number(action.cp1Y);
+      if (action.cp2X != null && !isNaN(Number(action.cp2X))) cp2.x = Number(action.cp2X);
+      if (action.cp2Y != null && !isNaN(Number(action.cp2Y))) cp2.y = Number(action.cp2Y);
+    }
+
+    return { cp1, cp2, lead1, lead2, targetHeading, bulge: commonBulge, b1, b2, dist, nx, ny };
   }
 
   /**
@@ -3094,7 +3124,7 @@
       }
     }
 
-    // LemLib Boomerang visual feedback for selected action
+    // Visual feedback for selected action Boomerang carrot
     if (selectedId) {
       const si = actions.findIndex((x) => x.id === selectedId);
       if (si >= 0 && simSegments[si]) {
@@ -3125,79 +3155,192 @@
           ctx.font = "bold 10px sans-serif";
           ctx.fillText("Carrot", cCarrot.cx + 8, cCarrot.cy + 3);
         }
+      }
+    }
 
-        if (a.type === "bezierCurve") {
-          const fromPt = si === 0 ? pose : simSegments[si - 1].endPose;
-          const { cp1, cp2 } = getBezierControlPoints(a, fromPt);
-          const cFrom = fieldToCanvas(fromPt.x, fromPt.y);
-          const cCp1 = fieldToCanvas(cp1.x, cp1.y);
-          const cCp2 = fieldToCanvas(cp2.x, cp2.y);
-          const cTgt = fieldToCanvas(a.x, a.y);
+    // Interactive Bezier Spline Curves: Control Handles, Tangents & Apex Midpoints
+    for (let i = 0; i < actions.length; i++) {
+      const a = actions[i];
+      if (a.type === "custom") continue;
+      const fromPt = i === 0 ? pose : (simSegments[i - 1]?.endPose || poses[i] || pose);
+      const isSelected = a.id === selectedId;
+      const isHovered = hoveredHit && hoveredHit.id === a.id;
+      const showControls = a.type === "bezierCurve" && (isSelected || bezierToolActive || isHovered);
 
-          // Control arm 1: fromPt -> CP1
-          ctx.strokeStyle = "rgba(6, 182, 212, 0.85)";
-          ctx.lineWidth = 1.8;
-          ctx.setLineDash([4, 4]);
+      if (showControls) {
+        const { cp1, cp2, lead1, lead2, bulge } = getBezierControlPoints(a, fromPt);
+        const cFrom = fieldToCanvas(fromPt.x, fromPt.y);
+        const cCp1 = fieldToCanvas(cp1.x, cp1.y);
+        const cCp2 = fieldToCanvas(cp2.x, cp2.y);
+        const cTgt = fieldToCanvas(a.x, a.y);
+
+        // Control arm 1: fromPt -> CP1 (Departure Tangent)
+        ctx.save();
+        ctx.strokeStyle = "rgba(6, 182, 212, 0.85)";
+        ctx.lineWidth = 2.0;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(cFrom.cx, cFrom.cy);
+        ctx.lineTo(cCp1.cx, cCp1.cy);
+        ctx.stroke();
+
+        // Control arm 2: Target -> CP2 (Arrival Tangent)
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.85)";
+        ctx.beginPath();
+        ctx.moveTo(cTgt.cx, cTgt.cy);
+        ctx.lineTo(cCp2.cx, cCp2.cy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // CP1 handle (departure tangent)
+        const isCp1Active = (hoveredHit && hoveredHit.id === a.id && hoveredHit.handle === "cp1") || (drag && drag.id === a.id && drag.handle === "cp1");
+        ctx.save();
+        if (isCp1Active || isSelected) {
+          // Large interactive hit halo
+          ctx.fillStyle = isCp1Active ? "rgba(6, 182, 212, 0.35)" : "rgba(6, 182, 212, 0.15)";
           ctx.beginPath();
-          ctx.moveTo(cFrom.cx, cFrom.cy);
-          ctx.lineTo(cCp1.cx, cCp1.cy);
-          ctx.stroke();
-
-          // Control arm 2: Target -> CP2
-          ctx.strokeStyle = "rgba(245, 158, 11, 0.85)";
-          ctx.beginPath();
-          ctx.moveTo(cTgt.cx, cTgt.cy);
-          ctx.lineTo(cCp2.cx, cCp2.cy);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // CP1 handle (departure tangent)
-          ctx.fillStyle = "#06b6d4";
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(cCp1.cx, cCp1.cy, 6, 0, Math.PI * 2);
+          ctx.arc(cCp1.cx, cCp1.cy, 18, 0, Math.PI * 2);
           ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = "#a5f3fc";
-          ctx.font = "bold 10px sans-serif";
-          ctx.fillText("CP1", cCp1.cx + 9, cCp1.cy + 3);
+        }
+        if (isCp1Active) {
+          ctx.shadowColor = "#22d3ee";
+          ctx.shadowBlur = 14;
+        }
+        ctx.fillStyle = "#06b6d4";
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(cCp1.cx, cCp1.cy, isCp1Active ? 10 : 7.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
 
-          // CP2 handle (arrival tangent)
-          ctx.fillStyle = "#f59e0b";
-          ctx.strokeStyle = "#ffffff";
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(cCp1.cx, cCp1.cy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#a5f3fc";
+        ctx.font = "bold 10px ui-monospace, monospace";
+        ctx.fillText(`CP1 · L1:${Math.round(lead1)}"`, cCp1.cx + 12, cCp1.cy + 3);
+        ctx.restore();
+
+        // CP2 handle (arrival tangent)
+        const isCp2Active = (hoveredHit && hoveredHit.id === a.id && hoveredHit.handle === "cp2") || (drag && drag.id === a.id && drag.handle === "cp2");
+        ctx.save();
+        if (isCp2Active || isSelected) {
+          ctx.fillStyle = isCp2Active ? "rgba(245, 158, 11, 0.35)" : "rgba(245, 158, 11, 0.15)";
           ctx.beginPath();
-          ctx.arc(cCp2.cx, cCp2.cy, 6, 0, Math.PI * 2);
+          ctx.arc(cCp2.cx, cCp2.cy, 18, 0, Math.PI * 2);
           ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = "#fde68a";
-          ctx.fillText("CP2", cCp2.cx + 9, cCp2.cy + 3);
+        }
+        if (isCp2Active) {
+          ctx.shadowColor = "#f59e0b";
+          ctx.shadowBlur = 14;
+        }
+        ctx.fillStyle = "#f59e0b";
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(cCp2.cx, cCp2.cy, isCp2Active ? 10 : 7.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
 
-          // Curvature HUD pill on canvas near curve midpoint
-          const metrics = computeBezierMetrics(a, fromPt);
-          const midU = evalCubicBezier(fromPt, cp1, cp2, { x: a.x, y: a.y }, 0.5, a.forwards !== false);
-          const cMid = fieldToCanvas(midU.x, midU.y);
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(cCp2.cx, cCp2.cy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
 
-          ctx.save();
-          const hudText = `Arc: ${metrics.arcLength.toFixed(1)}" | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'}`;
-          ctx.font = "600 10px ui-monospace, monospace";
+        ctx.fillStyle = "#fde68a";
+        ctx.font = "bold 10px ui-monospace, monospace";
+        ctx.fillText(`CP2 · L2:${Math.round(lead2)}"`, cCp2.cx + 12, cCp2.cy + 3);
+        ctx.restore();
+
+        // Midpoint Arc Bend Handle & Curvature HUD
+        const metrics = computeBezierMetrics(a, fromPt);
+        const midU = evalCubicBezier(fromPt, cp1, cp2, { x: a.x, y: a.y }, 0.5, a.forwards !== false);
+        const cMid = fieldToCanvas(midU.x, midU.y);
+        const isMidActive = (hoveredHit && hoveredHit.id === a.id && hoveredHit.handle === "curveMid") || (drag && drag.id === a.id && drag.handle === "curveMid");
+
+        ctx.save();
+        if (isMidActive || isSelected) {
+          ctx.fillStyle = isMidActive ? "rgba(56, 189, 248, 0.35)" : "rgba(56, 189, 248, 0.16)";
+          ctx.beginPath();
+          ctx.arc(cMid.cx, cMid.cy, 20, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (isMidActive) {
+          ctx.shadowColor = "#38bdf8";
+          ctx.shadowBlur = 14;
+        }
+        ctx.fillStyle = isMidActive ? "#38bdf8" : "rgba(14, 165, 233, 0.95)";
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(cMid.cx, cMid.cy, isMidActive ? 9.5 : 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        if (isSelected || isMidActive || bezierToolActive) {
+          const bendStr = bulge !== 0 ? `Bend: ${bulge > 0 ? '+' : ''}${bulge}" | ` : "";
+          const hudText = `⤹ ${bendStr}Arc: ${metrics.arcLength.toFixed(1)}" | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'}`;
+          ctx.font = "600 10.5px ui-monospace, monospace";
           const tw = ctx.measureText(hudText).width;
-          ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
-          ctx.strokeStyle = "rgba(6, 182, 212, 0.75)";
-          ctx.lineWidth = 1;
+          ctx.fillStyle = "rgba(10, 20, 36, 0.94)";
+          ctx.strokeStyle = isMidActive ? "rgba(56, 189, 248, 0.95)" : "rgba(6, 182, 212, 0.8)";
+          ctx.lineWidth = 1.2;
           if (ctx.roundRect) {
             ctx.beginPath();
-            ctx.roundRect(cMid.cx - tw / 2 - 6, cMid.cy - 18, tw + 12, 18, 4);
+            ctx.roundRect(cMid.cx - tw / 2 - 8, cMid.cy - 22, tw + 16, 20, 5);
             ctx.fill();
             ctx.stroke();
           } else {
-            ctx.fillRect(cMid.cx - tw / 2 - 6, cMid.cy - 18, tw + 12, 18);
-            ctx.strokeRect(cMid.cx - tw / 2 - 6, cMid.cy - 18, tw + 12, 18);
+            ctx.fillRect(cMid.cx - tw / 2 - 8, cMid.cy - 22, tw + 16, 20);
+            ctx.strokeRect(cMid.cx - tw / 2 - 8, cMid.cy - 22, tw + 16, 20);
+          }
+          ctx.fillStyle = isMidActive ? "#ffffff" : "#38bdf8";
+          ctx.fillText(hudText, cMid.cx - tw / 2, cMid.cy - 8);
+        }
+        ctx.restore();
+      }
+
+      // Straight motion segment bend-to-curve indicators
+      if ((a.type === "moveToPoint" || a.type === "moveToPose") && (bezierToolActive || isHovered)) {
+        const cFrom = fieldToCanvas(fromPt.x, fromPt.y);
+        const cTgt = fieldToCanvas(a.x, a.y);
+        const midCx = (cFrom.cx + cTgt.cx) / 2;
+        const midCy = (cFrom.cy + cTgt.cy) / 2;
+        const isHoverMid = hoveredHit && hoveredHit.id === a.id && hoveredHit.kind === "convertToBezier";
+
+        ctx.save();
+        ctx.fillStyle = isHoverMid ? "#06b6d4" : "rgba(6, 182, 212, 0.65)";
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(midCx, midCy, isHoverMid ? 7 : 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        if (isHoverMid || bezierToolActive) {
+          const tip = isHoverMid ? "⤹ Drag to Curve" : "⤹ Curve";
+          ctx.font = "bold 9px sans-serif";
+          const tw = ctx.measureText(tip).width;
+          ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+          ctx.strokeStyle = "rgba(6, 182, 212, 0.6)";
+          ctx.lineWidth = 1;
+          if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(midCx - tw / 2 - 4, midCy - 16, tw + 8, 14, 3);
+            ctx.fill();
+            ctx.stroke();
+          } else {
+            ctx.fillRect(midCx - tw / 2 - 4, midCy - 16, tw + 8, 14);
+            ctx.strokeRect(midCx - tw / 2 - 4, midCy - 16, tw + 8, 14);
           }
           ctx.fillStyle = "#38bdf8";
-          ctx.fillText(hudText, cMid.cx - tw / 2, cMid.cy - 5);
-          ctx.restore();
+          ctx.fillText(tip, midCx - tw / 2, midCy - 5);
         }
+        ctx.restore();
       }
     }
 
@@ -3354,6 +3497,9 @@
         ctx.lineTo(cp.cx + Math.cos(sRad) * arrowLen * dir, cp.cy + Math.sin(sRad) * arrowLen * dir);
         ctx.stroke();
       }
+      try {
+        updateBezierQuickBar();
+      } catch (_) {}
     }
     } catch (err) {
       console.warn("Error rendering simulation canvas:", err);
@@ -4579,29 +4725,94 @@
 
         let bezierBox = "";
         if (a.type === "bezierCurve") {
-          const { cp1, cp2 } = getBezierControlPoints(a, fromPose);
+          const { cp1, cp2, lead1, lead2, bulge } = getBezierControlPoints(a, fromPose);
           const metrics = computeBezierMetrics(a, fromPose);
+          const isTangentLocked = a.freeHandles !== true;
+          const curBulge = a.bulge != null ? Number(a.bulge) : 0;
+          const curLead1 = a.lead1 != null ? Number(a.lead1) : lead1;
+          const curLead2 = a.lead2 != null ? Number(a.lead2) : lead2;
+
+          let rClass = "status-smooth";
+          let rBadge = "🟢 Smooth & Fast";
+          if (metrics.minRadius < 15) {
+            rClass = "status-sharp";
+            rBadge = "🛑 Sharp Turn (<15\")";
+          } else if (metrics.minRadius < 25) {
+            rClass = "status-moderate";
+            rBadge = "🟡 Moderate (15\"-25\")";
+          }
+
           bezierBox = `
             <div class="bezier-curvature-hud">
               <span class="bezier-stat-pill">📏 Arc: <strong>${metrics.arcLength.toFixed(1)}"</strong></span>
-              <span class="bezier-stat-pill">🌀 R_min: <strong>${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : 'Straight'}</strong></span>
+              <span class="bezier-stat-pill ${rClass}">🌀 R_min: <strong>${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : 'Straight'}</strong> (${rBadge})</span>
               <span class="bezier-stat-pill">⚡ κ_max: <strong>${metrics.maxCurvature.toFixed(3)}</strong></span>
             </div>
             <div class="bezier-handle-box">
               <div class="bezier-handle-header">
-                <span>🌊 Curvature Handles (Drag on map or adjust)</span>
-                <button type="button" class="bezier-btn-auto" data-act="auto-bezier" data-id="${a.id}">📐 Auto Tangents</button>
+                <span>🌊 Easy Arc Curvature &amp; Trajectory</span>
+                <span style="font-size:0.7rem;color:#94a3b8;">${isTangentLocked ? '🔒 Tangent Locked (Smooth)' : '🔓 Free Handles'}</span>
               </div>
-              <div class="row" style="margin-bottom: 6px;">
-                <label style="color:#06b6d4;">CP1 X <input type="number" data-f="cp1X" step="0.5" value="${a.cp1X != null ? a.cp1X : Math.round(cp1.x * 10) / 10}"/></label>
-                <label style="color:#06b6d4;">CP1 Y <input type="number" data-f="cp1Y" step="0.5" value="${a.cp1Y != null ? a.cp1Y : Math.round(cp1.y * 10) / 10}"/></label>
-                <label style="color:#06b6d4;" title="Departure curvature handle length">Lead 1 <input type="number" data-f="lead1" min="2" max="60" step="1" value="${a.lead1 != null ? a.lead1 : 18}"/></label>
+
+              <!-- Quick One-Click Presets -->
+              <div class="bezier-preset-bar">
+                <button type="button" class="bezier-preset-btn" data-act-bz="bend-left" data-id="${a.id}" title="Bend path left">↶ Bend Left</button>
+                <button type="button" class="bezier-preset-btn" data-act-bz="straight" data-id="${a.id}" title="Reset to straight line">📏 Straight</button>
+                <button type="button" class="bezier-preset-btn" data-act-bz="bend-right" data-id="${a.id}" title="Bend path right">↷ Bend Right</button>
+                <button type="button" class="bezier-preset-btn" data-act-bz="flip" data-id="${a.id}" title="Flip curve direction">🔄 Flip Arc</button>
+                <button type="button" class="bezier-preset-btn" data-act-bz="scurve" data-id="${a.id}" title="Create S-curve chicane">〰️ S-Curve</button>
+                <button type="button" class="bezier-preset-btn" data-act-bz="auto" data-id="${a.id}" title="Auto-tune tangents for optimal speed">📐 Auto Tangents</button>
               </div>
-              <div class="row">
-                <label style="color:#f59e0b;">CP2 X <input type="number" data-f="cp2X" step="0.5" value="${a.cp2X != null ? a.cp2X : Math.round(cp2.x * 10) / 10}"/></label>
-                <label style="color:#f59e0b;">CP2 Y <input type="number" data-f="cp2Y" step="0.5" value="${a.cp2Y != null ? a.cp2Y : Math.round(cp2.y * 10) / 10}"/></label>
-                <label style="color:#f59e0b;" title="Arrival curvature handle length">Lead 2 <input type="number" data-f="lead2" min="2" max="60" step="1" value="${a.lead2 != null ? a.lead2 : 18}"/></label>
+
+              <!-- Smooth Bulge / Curvature Slider -->
+              <div class="bezier-slider-container">
+                <div class="bezier-slider-head">
+                  <span>Arc Bulge / Curvature:</span>
+                  <strong data-readout="bulge">${curBulge > 0 ? `+${curBulge}" (Right)` : curBulge < 0 ? `${curBulge}" (Left)` : '0" (Straight)'}</strong>
+                </div>
+                <input type="range" class="bezier-bulge-slider" data-act-bz-slider="${a.id}" min="-40" max="40" step="1" value="${curBulge}" title="Drag slider to bend the trajectory smoothly"/>
               </div>
+
+              <!-- Tangent Mode & Leads -->
+              <div class="bezier-tangent-toggle-bar">
+                <span style="font-size:0.72rem;font-weight:600;color:#94a3b8;">Tangents:</span>
+                <button type="button" class="bezier-tangent-btn ${isTangentLocked ? 'active' : ''}" data-act-bz="lock-tangents" data-id="${a.id}" title="Keep trajectory aligned with robot headings to prevent jerks">
+                  🔒 Tangent Locked (Smooth)
+                </button>
+                <button type="button" class="bezier-tangent-btn ${!isTangentLocked ? 'active' : ''}" data-act-bz="free-tangents" data-id="${a.id}" title="Unlock independent 2D control point coordinates">
+                  🔓 Free 2D Handles
+                </button>
+              </div>
+
+              <div class="bezier-lead-grid">
+                <div class="bezier-lead-box">
+                  <div class="bezier-lead-head" style="color:#06b6d4;">
+                    <span>Departure Lead (L1)</span>
+                    <strong data-readout="lead1">${curLead1}"</strong>
+                  </div>
+                  <input type="range" data-f="lead1" min="4" max="60" step="1" value="${curLead1}" title="How far robot follows start heading before curving"/>
+                </div>
+                <div class="bezier-lead-box">
+                  <div class="bezier-lead-head" style="color:#f59e0b;">
+                    <span>Arrival Lead (L2)</span>
+                    <strong data-readout="lead2">${curLead2}"</strong>
+                  </div>
+                  <input type="range" data-f="lead2" min="4" max="60" step="1" value="${curLead2}" title="How early robot aligns with target heading"/>
+                </div>
+              </div>
+
+              <!-- Collapsible Raw Coordinates for Power Users -->
+              <details class="bezier-advanced-details">
+                <summary>⚙️ Advanced: Raw Control Points (CP1, CP2)</summary>
+                <div class="row" style="margin-top:6px;margin-bottom:6px;">
+                  <label style="color:#06b6d4;">CP1 X <input type="number" data-f="cp1X" step="0.5" value="${a.cp1X != null ? a.cp1X : Math.round(cp1.x * 10) / 10}"/></label>
+                  <label style="color:#06b6d4;">CP1 Y <input type="number" data-f="cp1Y" step="0.5" value="${a.cp1Y != null ? a.cp1Y : Math.round(cp1.y * 10) / 10}"/></label>
+                </div>
+                <div class="row">
+                  <label style="color:#f59e0b;">CP2 X <input type="number" data-f="cp2X" step="0.5" value="${a.cp2X != null ? a.cp2X : Math.round(cp2.x * 10) / 10}"/></label>
+                  <label style="color:#f59e0b;">CP2 Y <input type="number" data-f="cp2Y" step="0.5" value="${a.cp2Y != null ? a.cp2Y : Math.round(cp2.y * 10) / 10}"/></label>
+                </div>
+              </details>
             </div>`;
         }
 
@@ -4795,17 +5006,20 @@
         draw();
       });
 
-      card.querySelectorAll('[data-act="auto-bezier"]').forEach((btn) => {
+      card.querySelectorAll('[data-act-bz]').forEach((btn) => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
-          a.cp1X = null;
-          a.cp1Y = null;
-          a.cp2X = null;
-          a.cp2Y = null;
-          markDirty();
-          renderFlow();
-          draw();
-          generateCode();
+          handleBezierAction(a.id, btn.dataset.actBz);
+        });
+      });
+
+      card.querySelectorAll('[data-act-bz-slider]').forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          e.stopPropagation();
+          const val = Number(slider.value);
+          setBezierBulge(a.id, val);
+          const ro = card.querySelector('[data-readout="bulge"]');
+          if (ro) ro.textContent = val > 0 ? `+${val}" (Right)` : val < 0 ? `${val}" (Left)` : '0" (Straight)';
         });
       });
 
@@ -4845,7 +5059,7 @@
           let v;
           if (el.type === "checkbox") {
             v = el.dataset.invert ? !el.checked : el.checked;
-          } else if (el.type === "number") v = Number(el.value);
+          } else if (el.type === "number" || el.type === "range") v = Number(el.value);
           else v = el.value;
           a[f] = v;
           if (f === "async") {
@@ -4860,10 +5074,14 @@
 
         el.addEventListener("input", () => {
           const f = el.dataset.f;
-          if (el.type === "number" || el.tagName === "TEXTAREA" || el.type === "text") {
-            a[f] = el.type === "number" ? Number(el.value) : el.value;
+          if (el.type === "number" || el.type === "range" || el.tagName === "TEXTAREA" || el.type === "text") {
+            a[f] = (el.type === "number" || el.type === "range") ? Number(el.value) : el.value;
             markDirty();
-            if (["x", "y", "theta", "cp1X", "cp1Y", "cp2X", "cp2Y", "lead1", "lead2"].includes(f)) {
+            if (["x", "y", "theta", "cp1X", "cp1Y", "cp2X", "cp2Y", "lead1", "lead2", "bulge", "bulge1", "bulge2"].includes(f)) {
+              if (f === "lead1" || f === "lead2") {
+                const ro = card.querySelector(`[data-readout="${f}"]`);
+                if (ro) ro.textContent = `${el.value}"`;
+              }
               draw();
               generateCode();
             }
@@ -6502,6 +6720,214 @@
     }
   }
 
+  function distToSegment(px, py, x1, y1, x2, y2) {
+    const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+    if (l2 === 0) return Math.hypot(px - x1, py - y1);
+    let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+  }
+
+  function convertActionToBezier(actionId, bendPoint) {
+    const idx = actions.findIndex((x) => x.id === actionId);
+    if (idx < 0) return null;
+    const a = actions[idx];
+    const poses = computePoses();
+    const fromPose = (idx === 0 ? pose : (simSegments[idx - 1]?.endPose || poses[idx])) || pose;
+    const p0 = { x: fromPose.x, y: fromPose.y };
+    const p3 = { x: a.x, y: a.y };
+    const chordLen = Math.hypot(p3.x - p0.x, p3.y - p0.y) || 1e-4;
+
+    a.type = "bezierCurve";
+    a.lead1 = Math.max(8, Math.min(36, Math.round(chordLen * 0.45)));
+    a.lead2 = Math.max(8, Math.min(36, Math.round(chordLen * 0.45)));
+    a.freeHandles = false;
+    a.cp1X = null;
+    a.cp1Y = null;
+    a.cp2X = null;
+    a.cp2Y = null;
+
+    if (bendPoint) {
+      const nx = (p3.y - p0.y) / chordLen;
+      const ny = -(p3.x - p0.x) / chordLen;
+      const mx = (p0.x + p3.x) / 2;
+      const my = (p0.y + p3.y) / 2;
+      const perpDist = (bendPoint.x - mx) * nx + (bendPoint.y - my) * ny;
+      a.bulge = Number(clamp(perpDist * (4 / 3), -45, 45).toFixed(1));
+    } else {
+      a.bulge = 10; // natural gentle curve preview
+    }
+    a.bulge1 = a.bulge;
+    a.bulge2 = a.bulge;
+
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+    return a;
+  }
+
+  function setBezierTool(active) {
+    bezierToolActive = !!active;
+    const btn = document.getElementById("btnToolBezier");
+    const banner = document.getElementById("bezierBanner");
+    if (btn) btn.classList.toggle("active", bezierToolActive);
+    if (banner) banner.style.display = bezierToolActive ? "flex" : "none";
+    if (canvas) {
+      canvas.style.cursor = bezierToolActive ? "crosshair" : "default";
+    }
+    draw();
+    if (bezierToolActive) {
+      showToast("🌊 Bezier Curve Tool enabled! Click & drag between waypoints to shape smooth curves.");
+    }
+  }
+
+  function setBezierBulge(actionId, val) {
+    const a = actions.find((x) => x.id === actionId);
+    if (!a) return;
+    a.bulge = Number(val);
+    a.bulge1 = a.bulge;
+    a.bulge2 = a.bulge;
+    a.freeHandles = false;
+    a.cp1X = null;
+    a.cp1Y = null;
+    a.cp2X = null;
+    a.cp2Y = null;
+    markDirty();
+    renderFlow();
+    draw();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+  }
+
+  function handleBezierAction(actionId, act) {
+    const a = actions.find((x) => x.id === actionId);
+    if (!a) return;
+    const curBulge = a.bulge != null ? Number(a.bulge) : 0;
+
+    if (act === "bend-left") {
+      const nextBulge = curBulge <= -40 ? -40 : (curBulge > 0 ? -10 : curBulge - 10);
+      setBezierBulge(actionId, nextBulge);
+      showToast(`↶ Bent curve left (${nextBulge}")`);
+    } else if (act === "bend-right") {
+      const nextBulge = curBulge >= 40 ? 40 : (curBulge < 0 ? 10 : curBulge + 10);
+      setBezierBulge(actionId, nextBulge);
+      showToast(`↷ Bent curve right (+${nextBulge}")`);
+    } else if (act === "straight") {
+      a.bulge = 0;
+      a.bulge1 = 0;
+      a.bulge2 = 0;
+      a.freeHandles = false;
+      a.cp1X = null;
+      a.cp1Y = null;
+      a.cp2X = null;
+      a.cp2Y = null;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      showToast("📏 Straightened trajectory");
+    } else if (act === "flip") {
+      const nextBulge = -(curBulge || 10);
+      setBezierBulge(actionId, nextBulge);
+      showToast(`🔄 Flipped curve arc (${nextBulge > 0 ? '+' : ''}${nextBulge}")`);
+    } else if (act === "scurve") {
+      a.bulge = 0;
+      a.bulge1 = -12;
+      a.bulge2 = 12;
+      a.freeHandles = false;
+      a.cp1X = null;
+      a.cp1Y = null;
+      a.cp2X = null;
+      a.cp2Y = null;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      showToast("〰️ Created smooth S-curve chicane");
+    } else if (act === "auto") {
+      a.bulge = 0;
+      a.bulge1 = 0;
+      a.bulge2 = 0;
+      a.freeHandles = false;
+      a.cp1X = null;
+      a.cp1Y = null;
+      a.cp2X = null;
+      a.cp2Y = null;
+      const idx = actions.findIndex((x) => x.id === actionId);
+      const poses = computePoses();
+      const fromPt = (idx === 0 ? pose : (simSegments[idx - 1]?.endPose || poses[idx])) || pose;
+      const dist = Math.hypot(a.x - fromPt.x, a.y - fromPt.y);
+      const optLead = Math.max(10, Math.min(36, Math.round(dist * 0.45)));
+      a.lead1 = optLead;
+      a.lead2 = optLead;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      showToast(`📐 Auto-tuned tangents: Leads set to ${optLead}"`);
+    } else if (act === "lock-tangents") {
+      a.freeHandles = false;
+      a.cp1X = null;
+      a.cp1Y = null;
+      a.cp2X = null;
+      a.cp2Y = null;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      showToast("🔒 Tangents locked: Robot trajectory guaranteed smooth");
+    } else if (act === "free-tangents") {
+      a.freeHandles = true;
+      const idx = actions.findIndex((x) => x.id === actionId);
+      const poses = computePoses();
+      const fromPt = (idx === 0 ? pose : (simSegments[idx - 1]?.endPose || poses[idx])) || pose;
+      const { cp1, cp2 } = getBezierControlPoints(a, fromPt);
+      a.cp1X = Number(cp1.x.toFixed(1));
+      a.cp1Y = Number(cp1.y.toFixed(1));
+      a.cp2X = Number(cp2.x.toFixed(1));
+      a.cp2Y = Number(cp2.y.toFixed(1));
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      showToast("🔓 Free 2D handles enabled: Drag control points freely");
+    }
+  }
+
+  function updateBezierQuickBar() {
+    const qBar = document.getElementById("bezierQuickBar");
+    if (!qBar) return;
+    if (!selectedId) {
+      qBar.style.display = "none";
+      return;
+    }
+    const idx = actions.findIndex((x) => x.id === selectedId);
+    if (idx < 0 || actions[idx].type !== "bezierCurve") {
+      qBar.style.display = "none";
+      return;
+    }
+    const a = actions[idx];
+    qBar.style.display = "flex";
+
+    const label = document.getElementById("bzbLabel");
+    if (label) label.textContent = `🌊 Waypoint #${idx + 1} Arc`;
+
+    const slider = document.getElementById("bzbSlider");
+    const valEl = document.getElementById("bzbVal");
+    const curBulge = a.bulge != null ? Number(a.bulge) : 0;
+    if (slider) slider.value = curBulge;
+    if (valEl) valEl.textContent = `${curBulge > 0 ? '+' : ''}${curBulge}"`;
+
+    const tBtn = document.getElementById("btnBzLockTangent");
+    if (tBtn) {
+      const isLocked = a.freeHandles !== true;
+      tBtn.textContent = isLocked ? "🔒 Tangents: Locked" : "🔓 Tangents: Free";
+      tBtn.classList.toggle("locked", isLocked);
+    }
+  }
+
   // -- Hit testing / drag -------------------------------------------
   function hitTest(cx, cy) {
     const s = fieldToCanvas(pose.x, pose.y);
@@ -6510,8 +6936,10 @@
     if (Math.hypot(cx - s.cx, cy - s.cy) < botHitR) return { kind: "start" };
 
     const poses = computePoses();
+    const HIT_CP_R = 24; // generous hit zone for CP1/CP2
+    const HIT_MID_R = 26; // generous hit zone for Apex bend handle
 
-    // Check selected Bezier handles first so they are easy to grab
+    // 1. Check selected Bezier handles first so they are easiest to grab
     if (selectedId) {
       const si = actions.findIndex((x) => x.id === selectedId);
       if (si >= 0 && actions[si].type === "bezierCurve") {
@@ -6520,22 +6948,76 @@
         const { cp1, cp2 } = getBezierControlPoints(a, fromPt);
         const p1 = fieldToCanvas(cp1.x, cp1.y);
         const p2 = fieldToCanvas(cp2.x, cp2.y);
-        if (Math.hypot(cx - p1.cx, cy - p1.cy) < HIT_R + 4) return { kind: "action", id: a.id, handle: "cp1" };
-        if (Math.hypot(cx - p2.cx, cy - p2.cy) < HIT_R + 4) return { kind: "action", id: a.id, handle: "cp2" };
+        if (Math.hypot(cx - p1.cx, cy - p1.cy) < HIT_CP_R) return { kind: "action", id: a.id, handle: "cp1", fromPose: fromPt };
+        if (Math.hypot(cx - p2.cx, cy - p2.cy) < HIT_CP_R) return { kind: "action", id: a.id, handle: "cp2", fromPose: fromPt };
+
+        // Midpoint curve handle
+        const midU = evalCubicBezier(fromPt, cp1, cp2, { x: a.x, y: a.y }, 0.5, a.forwards !== false);
+        const cMid = fieldToCanvas(midU.x, midU.y);
+        if (Math.hypot(cx - cMid.cx, cy - cMid.cy) < HIT_MID_R) return { kind: "action", id: a.id, handle: "curveMid", fromPose: fromPt };
       }
     }
 
+    // 2. Check CP1, CP2, and curveMid handles for ALL other bezierCurve actions
+    for (let i = actions.length - 1; i >= 0; i--) {
+      const a = actions[i];
+      if (a.type !== "bezierCurve") continue;
+      if (a.id === selectedId) continue;
+
+      const fromPt = i === 0 ? pose : (simSegments[i - 1]?.endPose || poses[i] || pose);
+      const { cp1, cp2 } = getBezierControlPoints(a, fromPt);
+      const p1 = fieldToCanvas(cp1.x, cp1.y);
+      const p2 = fieldToCanvas(cp2.x, cp2.y);
+      if (Math.hypot(cx - p1.cx, cy - p1.cy) < HIT_CP_R) return { kind: "action", id: a.id, handle: "cp1", fromPose: fromPt };
+      if (Math.hypot(cx - p2.cx, cy - p2.cy) < HIT_CP_R) return { kind: "action", id: a.id, handle: "cp2", fromPose: fromPt };
+
+      const midU = evalCubicBezier(fromPt, cp1, cp2, { x: a.x, y: a.y }, 0.5, a.forwards !== false);
+      const cMid = fieldToCanvas(midU.x, midU.y);
+      if (Math.hypot(cx - cMid.cx, cy - cMid.cy) < HIT_MID_R) return { kind: "action", id: a.id, handle: "curveMid", fromPose: fromPt };
+    }
+
+    // 3. Check waypoint endpoints
     for (let i = actions.length - 1; i >= 0; i--) {
       const a = actions[i];
       if (!needsPoint(a.type) && !isMove(a.type)) continue;
       const p = fieldToCanvas(a.x, a.y);
       if (Math.hypot(cx - p.cx, cy - p.cy) < HIT_R) return { kind: "action", id: a.id, handle: "target" };
-      // Also allow clicking on the robot settled pose for turn/swing
       if (poses[i + 1]) {
         const rp = fieldToCanvas(poses[i + 1].x, poses[i + 1].y);
         if (Math.hypot(cx - rp.cx, cy - rp.cy) < HIT_R) return { kind: "action", id: a.id, handle: "robot" };
       }
     }
+
+    // 4. Check curve bodies & straight segments between waypoints (for bending into smooth curves)
+    for (let i = 0; i < actions.length; i++) {
+      const a = actions[i];
+      if (!needsPoint(a.type) && !isMove(a.type)) continue;
+      const fromPt = i === 0 ? pose : (simSegments[i - 1]?.endPose || poses[i] || pose);
+
+      if (a.type === "bezierCurve") {
+        const { cp1, cp2 } = getBezierControlPoints(a, fromPt);
+        let minD = 999;
+        const SAMPLES = 28;
+        for (let s = 0; s <= SAMPLES; s++) {
+          const pt = evalCubicBezier(fromPt, cp1, cp2, { x: a.x, y: a.y }, s / SAMPLES, a.forwards !== false);
+          const cp = fieldToCanvas(pt.x, pt.y);
+          const d = Math.hypot(cx - cp.cx, cy - cp.cy);
+          if (d < minD) minD = d;
+        }
+        if (minD < (bezierToolActive ? 24 : 18)) {
+          return { kind: "action", id: a.id, handle: "curveMid", fromPose: fromPt };
+        }
+      } else if (a.type === "moveToPoint" || a.type === "moveToPose") {
+        const c0 = fieldToCanvas(fromPt.x, fromPt.y);
+        const c3 = fieldToCanvas(a.x, a.y);
+        const dSeg = distToSegment(cx, cy, c0.cx, c0.cy, c3.cx, c3.cy);
+        const hitThresh = bezierToolActive ? 22 : 15;
+        if (dSeg < hitThresh) {
+          return { kind: "convertToBezier", id: a.id, actionIndex: i, fromPose: fromPt };
+        }
+      }
+    }
+
     return null;
   }
 
@@ -6553,16 +7035,55 @@
   canvas.addEventListener("mousedown", (e) => {
     const { cx, cy } = canvasCoords(e);
     const hit = hitTest(cx, cy);
+
     if (hit) {
-      // snapshot before drag so undo restores pre-drag pose/waypoint
       historyDragBaseline = cloneState();
+
+      if (hit.kind === "convertToBezier") {
+        const { x, y } = canvasToField(cx, cy);
+        const a = convertActionToBezier(hit.id, { x, y });
+        if (a) {
+          selectedId = a.id;
+          drag = { kind: "action", id: a.id, handle: "curveMid", fromPose: hit.fromPose };
+          showToast("🌊 Converted straight line to smooth Bezier curve! Drag to adjust curvature.");
+        }
+        renderFlow();
+        draw();
+        e.preventDefault();
+        return;
+      }
+
       drag = hit;
       selectedId = hit.kind === "start" ? "start" : hit.id;
       renderFlow();
       draw();
       e.preventDefault();
+      return;
     }
-    // Empty click does NOT create moves — use + Add button only
+
+    // When Bezier tool is active, clicking empty field adds a new curved waypoint!
+    if (!hit && bezierToolActive) {
+      const { x, y } = canvasToField(cx, cy);
+      historyDragBaseline = cloneState();
+      const poses = computePoses();
+      const last = poses[poses.length - 1] || pose;
+      const angle = Math.round(angleToPoint(last.x, last.y, x, y));
+      const newAct = defaultAction("bezierCurve");
+      newAct.x = Number(x.toFixed(1));
+      newAct.y = Number(y.toFixed(1));
+      newAct.theta = angle;
+      newAct.lead1 = 18;
+      newAct.lead2 = 18;
+      actions.push(newAct);
+      selectedId = newAct.id;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      try { updateTimeDisplay(); } catch (_) {}
+      showToast(`🌊 Added Bezier curve waypoint #${actions.length} at (${newAct.x}, ${newAct.y}, ${newAct.theta}°)`);
+      e.preventDefault();
+    }
   });
 
   window.addEventListener("mousemove", (e) => {
@@ -6570,7 +7091,30 @@
     const { x, y } = canvasToField(cx, cy);
     coordsEl.textContent = `X: ${x.toFixed(1)}  Y: ${y.toFixed(1)}`;
 
-    if (!drag) return;
+    if (!drag) {
+      const hoverHit = hitTest(cx, cy);
+      const prevHover = hoveredHit;
+      hoveredHit = hoverHit;
+
+      if (hoverHit) {
+        if (hoverHit.handle === "cp1" || hoverHit.handle === "cp2" || hoverHit.handle === "curveMid" || hoverHit.kind === "convertToBezier") {
+          canvas.style.cursor = "grab";
+        } else {
+          canvas.style.cursor = "pointer";
+        }
+      } else {
+        canvas.style.cursor = bezierToolActive ? "crosshair" : "default";
+      }
+
+      const changed = (prevHover?.id !== hoverHit?.id) || (prevHover?.handle !== hoverHit?.handle) || (prevHover?.kind !== hoverHit?.kind);
+      if (changed) {
+        draw();
+      }
+      return;
+    }
+
+    canvas.style.cursor = "grabbing";
+
     if (drag.kind === "start") {
       const snapped = snapToWall(x, y);
       pose.x = snapped.x;
@@ -6584,18 +7128,101 @@
       const a = actions[si];
 
       if (drag.handle === "cp1") {
-        a.cp1X = Number(x.toFixed(1));
-        a.cp1Y = Number(y.toFixed(1));
-        coordsEl.textContent = `CP1 (Departure Tangent): X: ${a.cp1X}  Y: ${a.cp1Y}`;
+        const poses = computePoses();
+        const fromPt = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+        const rad0 = (fromPt.theta * Math.PI) / 180;
+        const dir0 = a.forwards === false ? -1 : 1;
+        const rayX = Math.sin(rad0) * dir0;
+        const rayY = Math.cos(rad0) * dir0;
+
+        if (e.shiftKey || a.freeHandles) {
+          a.freeHandles = true;
+          a.cp1X = Number(x.toFixed(1));
+          a.cp1Y = Number(y.toFixed(1));
+          a.lead1 = Math.round(Math.hypot(a.cp1X - fromPt.x, a.cp1Y - fromPt.y));
+          coordsEl.textContent = `CP1 (Free Tangent): X: ${a.cp1X}  Y: ${a.cp1Y} | Lead: ${a.lead1}"`;
+        } else {
+          const proj = (x - fromPt.x) * rayX + (y - fromPt.y) * rayY;
+          a.lead1 = Math.max(4, Math.min(80, Math.round(proj)));
+          a.cp1X = null;
+          a.cp1Y = null;
+          coordsEl.textContent = `CP1 (Departure Tangent): Lead: ${a.lead1}" | 🔒 Tangent Locked (Hold Shift for Free Angle)`;
+        }
         markDirty();
         renderFlow();
         draw();
         return;
       }
       if (drag.handle === "cp2") {
-        a.cp2X = Number(x.toFixed(1));
-        a.cp2Y = Number(y.toFixed(1));
-        coordsEl.textContent = `CP2 (Arrival Tangent): X: ${a.cp2X}  Y: ${a.cp2Y}`;
+        const targetHeading = a.theta != null ? Number(a.theta) : pose.theta;
+        const rad1 = (targetHeading * Math.PI) / 180;
+        const dir0 = a.forwards === false ? -1 : 1;
+        const rayX = -Math.sin(rad1) * dir0;
+        const rayY = -Math.cos(rad1) * dir0;
+
+        if (e.shiftKey || a.freeHandles) {
+          a.freeHandles = true;
+          a.cp2X = Number(x.toFixed(1));
+          a.cp2Y = Number(y.toFixed(1));
+          a.lead2 = Math.round(Math.hypot(a.x - a.cp2X, a.y - a.cp2Y));
+          coordsEl.textContent = `CP2 (Free Tangent): X: ${a.cp2X}  Y: ${a.cp2Y} | Lead: ${a.lead2}"`;
+        } else {
+          const proj = (x - a.x) * rayX + (y - a.y) * rayY;
+          a.lead2 = Math.max(4, Math.min(80, Math.round(proj)));
+          a.cp2X = null;
+          a.cp2Y = null;
+          coordsEl.textContent = `CP2 (Arrival Tangent): Lead: ${a.lead2}" | 🔒 Tangent Locked (Hold Shift for Free Angle)`;
+        }
+        markDirty();
+        renderFlow();
+        draw();
+        return;
+      }
+      if (drag.handle === "curveMid") {
+        const poses = computePoses();
+        const fromPt = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+        const p0 = { x: fromPt.x, y: fromPt.y };
+        const p3 = { x: a.x, y: a.y };
+        const dx = p3.x - p0.x;
+        const dy = p3.y - p0.y;
+        const chordLen = Math.hypot(dx, dy) || 1e-4;
+        const nx = dy / chordLen;
+        const ny = -dx / chordLen;
+        const mx = (p0.x + p3.x) / 2;
+        const my = (p0.y + p3.y) / 2;
+        const perpDist = (x - mx) * nx + (y - my) * ny;
+
+        const rad0 = (fromPt.theta * Math.PI) / 180;
+        const dir0 = a.forwards === false ? -1 : 1;
+        const l1 = a.lead1 != null ? Number(a.lead1) : Math.max(8, Math.min(36, chordLen * 0.45));
+        const l2 = a.lead2 != null ? Number(a.lead2) : Math.max(8, Math.min(36, chordLen * 0.45));
+        const tgtTh = a.theta != null ? Number(a.theta) : fromPt.theta;
+        const rad1 = (tgtTh * Math.PI) / 180;
+
+        const baseCp1 = { x: p0.x + Math.sin(rad0) * l1 * dir0, y: p0.y + Math.cos(rad0) * l1 * dir0 };
+        const baseCp2 = { x: p3.x - Math.sin(rad1) * l2 * dir0, y: p3.y - Math.cos(rad1) * l2 * dir0 };
+        const baseMid = evalCubicBezier(p0, baseCp1, baseCp2, p3, 0.5, a.forwards !== false);
+        const basePerp = (baseMid.x - mx) * nx + (baseMid.y - my) * ny;
+
+        const targetBulge = (perpDist - basePerp) * (4 / 3);
+        a.bulge = Number(clamp(targetBulge, -45, 45).toFixed(1));
+        a.bulge1 = a.bulge;
+        a.bulge2 = a.bulge;
+        a.freeHandles = false;
+        a.cp1X = null;
+        a.cp1Y = null;
+        a.cp2X = null;
+        a.cp2Y = null;
+
+        const metrics = computeBezierMetrics(a, fromPt);
+        const bendDir = a.bulge > 0 ? "Right ↷" : a.bulge < 0 ? "Left ↶" : "Straight 📏";
+        coordsEl.textContent = `🌊 Arc Bend: ${a.bulge > 0 ? '+' : ''}${a.bulge}" (${bendDir}) | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'} | Arc: ${metrics.arcLength.toFixed(1)}"`;
+
+        const quickSlider = document.getElementById("bzbSlider");
+        const quickVal = document.getElementById("bzbVal");
+        if (quickSlider) quickSlider.value = a.bulge;
+        if (quickVal) quickVal.textContent = `${a.bulge > 0 ? '+' : ''}${a.bulge}"`;
+
         markDirty();
         renderFlow();
         draw();
@@ -6644,8 +7271,12 @@
         renderFlow();
         draw();
       } else {
+        const dPtX = Number(x.toFixed(1)) - a.x;
+        const dPtY = Number(y.toFixed(1)) - a.y;
         a.x = Number(x.toFixed(1));
         a.y = Number(y.toFixed(1));
+        if (a.cp2X != null) a.cp2X = Number((a.cp2X + dPtX).toFixed(1));
+        if (a.cp2Y != null) a.cp2Y = Number((a.cp2Y + dPtY).toFixed(1));
         coordsEl.textContent = `X: ${a.x.toFixed(1)}  Y: ${a.y.toFixed(1)}`;
         if (collisionConfig.enabled) {
           const poses = computePoses();
@@ -6680,6 +7311,12 @@
         return;
       }
       closeClearModal();
+      return;
+    }
+
+    if ((e.key === "b" || e.key === "B") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      setBezierTool(!bezierToolActive);
       return;
     }
 
@@ -6719,20 +7356,65 @@
       historyDragBaseline = null;
     }
     drag = null;
+    if (canvas) {
+      canvas.style.cursor = bezierToolActive ? "crosshair" : (hoveredHit ? "grab" : "default");
+    }
+    draw();
   });
 
-  // Touch support for dragging points on mobile / touch displays
+  // Touch support for dragging points and Bezier handles on mobile / touch displays
   canvas.addEventListener("touchstart", (e) => {
     if (!e.touches || e.touches.length !== 1) return;
     const t = e.touches[0];
     const { cx, cy } = canvasCoords(t);
     const hit = hitTest(cx, cy);
+
     if (hit) {
       historyDragBaseline = cloneState();
+
+      if (hit.kind === "convertToBezier") {
+        const { x, y } = canvasToField(cx, cy);
+        const a = convertActionToBezier(hit.id, { x, y });
+        if (a) {
+          selectedId = a.id;
+          drag = { kind: "action", id: a.id, handle: "curveMid", fromPose: hit.fromPose };
+          showToast("🌊 Converted straight line to smooth Bezier curve! Drag to adjust curvature.");
+        }
+        renderFlow();
+        draw();
+        e.preventDefault();
+        return;
+      }
+
       drag = hit;
       selectedId = hit.kind === "start" ? "start" : hit.id;
       renderFlow();
       draw();
+      e.preventDefault();
+      return;
+    }
+
+    // Touch on empty canvas in Bezier mode adds a curve
+    if (!hit && bezierToolActive) {
+      const { x, y } = canvasToField(cx, cy);
+      historyDragBaseline = cloneState();
+      const poses = computePoses();
+      const last = poses[poses.length - 1] || pose;
+      const angle = Math.round(angleToPoint(last.x, last.y, x, y));
+      const newAct = defaultAction("bezierCurve");
+      newAct.x = Number(x.toFixed(1));
+      newAct.y = Number(y.toFixed(1));
+      newAct.theta = angle;
+      newAct.lead1 = 18;
+      newAct.lead2 = 18;
+      actions.push(newAct);
+      selectedId = newAct.id;
+      markDirty();
+      renderFlow();
+      draw();
+      generateCode();
+      try { updateTimeDisplay(); } catch (_) {}
+      showToast(`🌊 Added Bezier curve waypoint #${actions.length} at (${newAct.x}, ${newAct.y}, ${newAct.theta}°)`);
       e.preventDefault();
     }
   }, { passive: false });
@@ -6752,32 +7434,121 @@
       markDirty();
       draw();
     } else if (drag.kind === "action") {
-      const a = actions.find((z) => z.id === drag.id);
-      if (a) {
-        if (drag.handle === "cp1") {
+      const si = actions.findIndex((z) => z.id === drag.id);
+      if (si < 0) return;
+      const a = actions[si];
+
+      if (drag.handle === "cp1") {
+        const poses = computePoses();
+        const fromPt = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+        const rad0 = (fromPt.theta * Math.PI) / 180;
+        const dir0 = a.forwards === false ? -1 : 1;
+        const rayX = Math.sin(rad0) * dir0;
+        const rayY = Math.cos(rad0) * dir0;
+
+        if (a.freeHandles) {
           a.cp1X = Number(x.toFixed(1));
           a.cp1Y = Number(y.toFixed(1));
-          markDirty();
-          renderFlow();
-          draw();
-          e.preventDefault();
-          return;
+          a.lead1 = Math.round(Math.hypot(a.cp1X - fromPt.x, a.cp1Y - fromPt.y));
+          coordsEl.textContent = `CP1 (Free Tangent): X: ${a.cp1X}  Y: ${a.cp1Y} | Lead: ${a.lead1}"`;
+        } else {
+          const proj = (x - fromPt.x) * rayX + (y - fromPt.y) * rayY;
+          a.lead1 = Math.max(4, Math.min(80, Math.round(proj)));
+          a.cp1X = null;
+          a.cp1Y = null;
+          coordsEl.textContent = `CP1 (Departure Tangent): Lead: ${a.lead1}" | 🔒 Tangent Locked`;
         }
-        if (drag.handle === "cp2") {
-          a.cp2X = Number(x.toFixed(1));
-          a.cp2Y = Number(y.toFixed(1));
-          markDirty();
-          renderFlow();
-          draw();
-          e.preventDefault();
-          return;
-        }
-        a.x = Number(x.toFixed(1));
-        a.y = Number(y.toFixed(1));
         markDirty();
         renderFlow();
         draw();
+        e.preventDefault();
+        return;
       }
+      if (drag.handle === "cp2") {
+        const targetHeading = a.theta != null ? Number(a.theta) : pose.theta;
+        const rad1 = (targetHeading * Math.PI) / 180;
+        const dir0 = a.forwards === false ? -1 : 1;
+        const rayX = -Math.sin(rad1) * dir0;
+        const rayY = -Math.cos(rad1) * dir0;
+
+        if (a.freeHandles) {
+          a.cp2X = Number(x.toFixed(1));
+          a.cp2Y = Number(y.toFixed(1));
+          a.lead2 = Math.round(Math.hypot(a.x - a.cp2X, a.y - a.cp2Y));
+          coordsEl.textContent = `CP2 (Free Tangent): X: ${a.cp2X}  Y: ${a.cp2Y} | Lead: ${a.lead2}"`;
+        } else {
+          const proj = (x - a.x) * rayX + (y - a.y) * rayY;
+          a.lead2 = Math.max(4, Math.min(80, Math.round(proj)));
+          a.cp2X = null;
+          a.cp2Y = null;
+          coordsEl.textContent = `CP2 (Arrival Tangent): Lead: ${a.lead2}" | 🔒 Tangent Locked`;
+        }
+        markDirty();
+        renderFlow();
+        draw();
+        e.preventDefault();
+        return;
+      }
+      if (drag.handle === "curveMid") {
+        const poses = computePoses();
+        const fromPt = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+        const p0 = { x: fromPt.x, y: fromPt.y };
+        const p3 = { x: a.x, y: a.y };
+        const dx = p3.x - p0.x;
+        const dy = p3.y - p0.y;
+        const chordLen = Math.hypot(dx, dy) || 1e-4;
+        const nx = dy / chordLen;
+        const ny = -dx / chordLen;
+        const mx = (p0.x + p3.x) / 2;
+        const my = (p0.y + p3.y) / 2;
+        const perpDist = (x - mx) * nx + (y - my) * ny;
+
+        const rad0 = (fromPt.theta * Math.PI) / 180;
+        const dir0 = a.forwards === false ? -1 : 1;
+        const l1 = a.lead1 != null ? Number(a.lead1) : Math.max(8, Math.min(36, chordLen * 0.45));
+        const l2 = a.lead2 != null ? Number(a.lead2) : Math.max(8, Math.min(36, chordLen * 0.45));
+        const tgtTh = a.theta != null ? Number(a.theta) : fromPt.theta;
+        const rad1 = (tgtTh * Math.PI) / 180;
+
+        const baseCp1 = { x: p0.x + Math.sin(rad0) * l1 * dir0, y: p0.y + Math.cos(rad0) * l1 * dir0 };
+        const baseCp2 = { x: p3.x - Math.sin(rad1) * l2 * dir0, y: p3.y - Math.cos(rad1) * l2 * dir0 };
+        const baseMid = evalCubicBezier(p0, baseCp1, baseCp2, p3, 0.5, a.forwards !== false);
+        const basePerp = (baseMid.x - mx) * nx + (baseMid.y - my) * ny;
+
+        const targetBulge = (perpDist - basePerp) * (4 / 3);
+        a.bulge = Number(clamp(targetBulge, -45, 45).toFixed(1));
+        a.bulge1 = a.bulge;
+        a.bulge2 = a.bulge;
+        a.freeHandles = false;
+        a.cp1X = null;
+        a.cp1Y = null;
+        a.cp2X = null;
+        a.cp2Y = null;
+
+        const metrics = computeBezierMetrics(a, fromPt);
+        const bendDir = a.bulge > 0 ? "Right ↷" : a.bulge < 0 ? "Left ↶" : "Straight 📏";
+        coordsEl.textContent = `🌊 Arc Bend: ${a.bulge > 0 ? '+' : ''}${a.bulge}" (${bendDir}) | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'} | Arc: ${metrics.arcLength.toFixed(1)}"`;
+
+        const quickSlider = document.getElementById("bzbSlider");
+        const quickVal = document.getElementById("bzbVal");
+        if (quickSlider) quickSlider.value = a.bulge;
+        if (quickVal) quickVal.textContent = `${a.bulge > 0 ? '+' : ''}${a.bulge}"`;
+
+        markDirty();
+        renderFlow();
+        draw();
+        e.preventDefault();
+        return;
+      }
+      const dPtX = Number(x.toFixed(1)) - a.x;
+      const dPtY = Number(y.toFixed(1)) - a.y;
+      a.x = Number(x.toFixed(1));
+      a.y = Number(y.toFixed(1));
+      if (a.cp2X != null) a.cp2X = Number((a.cp2X + dPtX).toFixed(1));
+      if (a.cp2Y != null) a.cp2Y = Number((a.cp2Y + dPtY).toFixed(1));
+      markDirty();
+      renderFlow();
+      draw();
     }
     e.preventDefault();
   }, { passive: false });
@@ -7032,6 +7803,59 @@
   if (btnSimField) btnSimField.onclick = startSim;
   const btnStopField = document.getElementById("btnStopField");
   if (btnStopField) btnStopField.onclick = stopSim;
+
+  const btnToolBezier = document.getElementById("btnToolBezier");
+  if (btnToolBezier) {
+    btnToolBezier.onclick = (e) => {
+      e.stopPropagation();
+      setBezierTool(!bezierToolActive);
+    };
+  }
+  const btnExitBezierTool = document.getElementById("btnExitBezierTool");
+  if (btnExitBezierTool) {
+    btnExitBezierTool.onclick = (e) => {
+      e.stopPropagation();
+      setBezierTool(false);
+    };
+  }
+
+  // Floating On-Canvas Bezier Quick Actions Bar
+  const btnBzBendLeft = document.getElementById("btnBzBendLeft");
+  if (btnBzBendLeft) btnBzBendLeft.onclick = (e) => { e.stopPropagation(); if (selectedId) handleBezierAction(selectedId, "bend-left"); };
+
+  const btnBzStraight = document.getElementById("btnBzStraight");
+  if (btnBzStraight) btnBzStraight.onclick = (e) => { e.stopPropagation(); if (selectedId) handleBezierAction(selectedId, "straight"); };
+
+  const btnBzBendRight = document.getElementById("btnBzBendRight");
+  if (btnBzBendRight) btnBzBendRight.onclick = (e) => { e.stopPropagation(); if (selectedId) handleBezierAction(selectedId, "bend-right"); };
+
+  const btnBzFlip = document.getElementById("btnBzFlip");
+  if (btnBzFlip) btnBzFlip.onclick = (e) => { e.stopPropagation(); if (selectedId) handleBezierAction(selectedId, "flip"); };
+
+  const btnBzSCurve = document.getElementById("btnBzSCurve");
+  if (btnBzSCurve) btnBzSCurve.onclick = (e) => { e.stopPropagation(); if (selectedId) handleBezierAction(selectedId, "scurve"); };
+
+  const btnBzLockTangent = document.getElementById("btnBzLockTangent");
+  if (btnBzLockTangent) {
+    btnBzLockTangent.onclick = (e) => {
+      e.stopPropagation();
+      if (selectedId) {
+        const a = actions.find((x) => x.id === selectedId);
+        if (a) handleBezierAction(selectedId, a.freeHandles ? "lock-tangents" : "free-tangents");
+      }
+    };
+  }
+
+  const btnBzAuto = document.getElementById("btnBzAuto");
+  if (btnBzAuto) btnBzAuto.onclick = (e) => { e.stopPropagation(); if (selectedId) handleBezierAction(selectedId, "auto"); };
+
+  const bzbSlider = document.getElementById("bzbSlider");
+  if (bzbSlider) {
+    bzbSlider.oninput = (e) => {
+      e.stopPropagation();
+      if (selectedId) setBezierBulge(selectedId, Number(bzbSlider.value));
+    };
+  }
 
   // Segmented Tab Switcher for Left Sidebar (Routine, Conditions, Bot & PID, C++ Code)
   let newCondInitialVal = true;

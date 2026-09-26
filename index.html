@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="google-site-verification" content="pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs" />
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3909547099822622" crossorigin="anonymous"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -11,7 +12,7 @@
   <meta name="description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
   <meta property="og:description" content="Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field." />
-  <link rel="stylesheet" href="style.css?v=20260925.k3" />
+  <link rel="stylesheet" href="style.css?v=20260926.k1" />
 </head>
 <body>
   <!-- =================================================================
@@ -227,6 +228,35 @@
           </div>
         </div>
       </section>
+
+      <!-- SEO Site Verification & Search Indexing Section -->
+      <section class="home-seo-verification-section" style="margin-top: 40px; padding: 24px; background: rgba(6, 182, 212, 0.05); border: 1px solid rgba(6, 182, 212, 0.15); border-radius: 12px; margin-bottom: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <span style="font-size: 0.75rem; font-weight: 700; color: #06b6d4; text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; margin-bottom: 4px; background: rgba(6,182,212,0.15); padding: 2px 8px; border-radius: 4px;">Search Engine Optimization</span>
+            <h3 style="font-size: 1.3rem; font-weight: 700; color: var(--text); margin: 0 0 4px 0;">🔍 Google Search Verification &amp; Indexing</h3>
+            <p style="color: var(--muted); font-size: 0.9rem; margin: 0; line-height: 1.5;">
+              To verify and index this application or your <strong>root domain site</strong> on Google Search, you can use the pre-configured verification meta tag below. Copy and paste it directly into your site's HTML.
+            </p>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span style="font-size: 0.8rem; font-family: monospace; color: var(--muted); font-weight: bold;">Google Verification HTML Tag</span>
+              <button type="button" id="btnHomeCopyMetaTag" style="padding: 4px 12px; font-size: 0.8rem; background: #22c55e; color: black; border: none; font-weight: bold; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                📋 Copy Meta Tag
+              </button>
+            </div>
+            <pre style="margin: 0; font-family: monospace; font-size: 0.85rem; color: #22d3ee; white-space: pre-wrap; word-break: break-all; overflow-x: auto; background: none; border: none; padding: 4px; user-select: all;">&lt;meta name="google-site-verification" content="pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs" /&gt;</pre>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.85rem;">
+            <span style="color: var(--muted);">Verification Code:</span>
+            <code style="font-family: monospace; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: #f59e0b;">pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs</code>
+            <button type="button" id="btnHomeCopyRawToken" style="background: none; border: 1px solid var(--border); color: var(--text); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">📋 Copy Code Only</button>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -403,6 +433,7 @@
             <div class="palette-block-list">
               <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPoint" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point">🔵 moveToPoint(x, y)</button>
               <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPose" data-category="motion" data-keywords="movetopose moveToPose x y theta heading motion pose">🔵 moveToPose(x, y, θ)</button>
+              <button type="button" class="palette-block-btn btn-bezier" data-act-type="bezierCurve" data-category="motion" data-keywords="bezier curve spline arc control point smooth curved trajectory" style="background:linear-gradient(135deg,rgba(14,116,144,0.35),rgba(8,145,178,0.35));border-color:#06b6d4;color:#cffafe;">🌊 bezierCurve(x, y, θ)</button>
               <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToHeading" data-category="turn" data-keywords="turntoheading turnToHeading theta heading turn rotate">🟣 turnToHeading(θ)</button>
               <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToPoint" data-category="turn" data-keywords="turntopoint turnToPoint x y turn rotate point">🟣 turnToPoint(x, y)</button>
               <button type="button" class="palette-block-btn btn-turn" data-act-type="swingToHeading" data-category="turn" data-keywords="swingtoheading swingToHeading theta swing rotate">🟣 swingToHeading(θ)</button>
@@ -917,6 +948,7 @@
               <span class="hud-title-tag">SIMULATION &amp; DRIVE DYNAMICS</span>
             </div>
             <div class="hud-action-btns">
+              <button type="button" id="btnToolBezier" class="hud-tool-btn bezier-tool-btn" title="Toggle Bezier Curve Path Tool (Hotkey: B) - Drag control points between waypoints to create smooth curves">🌊 Bezier Tool <kbd style="font-size:0.65rem;background:rgba(255,255,255,0.15);padding:1px 4px;border-radius:3px;margin-left:2px;">B</kbd></button>
               <button type="button" id="btnHudCollisionModal" class="hud-tool-btn" title="Open Field Collision Detection &amp; Obstacles Manager">🛡️ Collisions (<span id="hudCollisionStatus">Clear</span>)</button>
               <button type="button" id="btnHudPhysicsModal" class="hud-tool-btn" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Physics</button>
               <button type="button" id="btnHudDock" class="hud-tool-btn" title="Dock controls above field canvas so field image is 100% visible">📌 Dock Above</button>
@@ -977,12 +1009,45 @@
           </div>
         </div>
 
+        <!-- Floating Bezier Tool Banner -->
+        <div id="bezierBanner" class="bezier-mode-banner" style="display: none;">
+          <div class="bezier-banner-left">
+            <span class="bezier-pulse-dot"></span>
+            <span class="bezier-banner-title">🌊 Bezier Curve Tool Active</span>
+            <span class="bezier-banner-hint">Drag any curve or line to bend · Drag CP1/CP2 along tangent rays (Hold Shift for free angle) · Click field to add curve</span>
+          </div>
+          <button type="button" id="btnExitBezierTool" class="btn-bezier-exit" title="Exit Bezier curve tool (Press B)">Done (B)</button>
+        </div>
+
+        <!-- Floating On-Canvas Quick Bar for Selected Bezier Curve -->
+        <div id="bezierQuickBar" class="bezier-quick-bar" style="display: none;">
+          <div class="bezier-quick-title">
+            <span class="bezier-quick-badge" id="bzbLabel">🌊 Curve Arc</span>
+          </div>
+          <div class="bezier-quick-actions">
+            <button type="button" class="btn-bz-quick" id="btnBzBendLeft" title="Bend curve left (↶)">↶ Left</button>
+            <button type="button" class="btn-bz-quick" id="btnBzStraight" title="Straighten arc to direct line (📏)">📏 Straight</button>
+            <button type="button" class="btn-bz-quick" id="btnBzBendRight" title="Bend curve right (↷)">↷ Right</button>
+            <button type="button" class="btn-bz-quick" id="btnBzFlip" title="Flip curve bulge direction (🔄)">🔄 Flip</button>
+            <button type="button" class="btn-bz-quick" id="btnBzSCurve" title="Create smooth S-curve chicane (〰️)">〰️ S-Curve</button>
+            <button type="button" class="btn-bz-quick btn-bz-tangent" id="btnBzLockTangent" title="Toggle Tangent Locking: Keeps trajectory smooth along robot headings">🔒 Tangents: Locked</button>
+            <button type="button" class="btn-bz-quick" id="btnBzAuto" title="Auto-tune tangent leads for optimal robot speed (📐)">📐 Auto</button>
+          </div>
+          <div class="bezier-quick-slider-wrap">
+            <span class="bz-slider-label">Bulge:</span>
+            <input type="range" id="bzbSlider" min="-35" max="35" step="1" value="0" title="Slide to bend curve left/right smoothly" />
+            <span id="bzbVal" class="bz-slider-val">0"</span>
+          </div>
+        </div>
+
         <canvas id="field" width="900" height="900"></canvas>
         <div id="coords">X: -60.0  Y: -60.0</div>
         <div id="timeEst">Est. time: —</div>
         <div id="legend">
           <span class="leg start"></span> Start
-          <span class="leg path"></span> Path
+          <span class="leg path"></span> Straight
+          <span class="leg" style="background:#06b6d4;box-shadow:0 0 4px #06b6d4;"></span> Bezier Arc
+          <span class="leg" style="background:#f59e0b;box-shadow:0 0 4px #f59e0b;"></span> CP1 / CP2
           <span class="leg multitask"></span> ⚡ Multitask
           <span class="leg collision"></span> 💥 Collision
           <span class="leg end"></span> End + dir
@@ -2088,6 +2153,11 @@ void autonomous() {
                 <td>Starts or stops the live path simulator.</td>
               </tr>
               <tr>
+                <td><kbd>B</kbd></td>
+                <td>Toggle Bezier Curve Path Tool</td>
+                <td>Enables Bezier curve path tool to drag control points and shape smooth curves between waypoints.</td>
+              </tr>
+              <tr>
                 <td><kbd>Shift</kbd> (hold while dragging)</td>
                 <td>Free Angle Drag</td>
                 <td>Bypasses the 22.5° angle snap for <code>swingToPoint</code>.</td>
@@ -2654,20 +2724,20 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260925.k3"></script>
+  <script src="version.js?v=20260926.k1"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260925.k3"></script>
-  <script src="google-drive-sync.js?v=20260925.k3"></script>
-  <script src="session-guard.js?v=20260925.k3"></script>
-  <script src="v5-brain-serial.js?v=20260925.k3"></script>
-  <script src="project-manager.js?v=20260925.k3"></script>
-  <script src="cpp-parser.js?v=20260925.k3"></script>
-  <script src="app.js?v=20260925.k3"></script>
-  <script src="tutorial.js?v=20260925.k3"></script>
+  <script src="firebase-config.js?v=20260926.k1"></script>
+  <script src="google-drive-sync.js?v=20260926.k1"></script>
+  <script src="session-guard.js?v=20260926.k1"></script>
+  <script src="v5-brain-serial.js?v=20260926.k1"></script>
+  <script src="project-manager.js?v=20260926.k1"></script>
+  <script src="cpp-parser.js?v=20260926.k1"></script>
+  <script src="app.js?v=20260926.k1"></script>
+  <script src="tutorial.js?v=20260926.k1"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
@@ -2790,6 +2860,31 @@ void autonomous() {
       }
       updateGlobalVisitorBadge();
       setInterval(updateGlobalVisitorBadge, 15000);
+
+      // Event listeners for home page Google site verification copy-paste buttons
+      var btnHomeCopyMeta = document.getElementById('btnHomeCopyMetaTag');
+      if (btnHomeCopyMeta) {
+        btnHomeCopyMeta.addEventListener('click', function() {
+          var code = '<meta name="google-site-verification" content="pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs" />';
+          navigator.clipboard.writeText(code).then(function() {
+            var origText = btnHomeCopyMeta.innerHTML;
+            btnHomeCopyMeta.innerHTML = '✅ Copied!';
+            setTimeout(function() { btnHomeCopyMeta.innerHTML = origText; }, 2000);
+          });
+        });
+      }
+
+      var btnHomeCopyRaw = document.getElementById('btnHomeCopyRawToken');
+      if (btnHomeCopyRaw) {
+        btnHomeCopyRaw.addEventListener('click', function() {
+          var token = 'pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs';
+          navigator.clipboard.writeText(token).then(function() {
+            var origText = btnHomeCopyRaw.innerHTML;
+            btnHomeCopyRaw.innerHTML = '✅ Copied!';
+            setTimeout(function() { btnHomeCopyRaw.innerHTML = origText; }, 2000);
+          });
+        });
+      }
     })();
   </script>
 

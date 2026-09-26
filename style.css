@@ -170,21 +170,159 @@ header h1 { font-size: 1.35rem; font-weight: 700; }
 .bezier-stat-pill strong {
   color: #38bdf8;
 }
+.bezier-stat-pill.status-smooth {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.4);
+}
+.bezier-stat-pill.status-moderate {
+  color: #facc15;
+  border-color: rgba(250, 204, 21, 0.4);
+}
+.bezier-stat-pill.status-sharp {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+}
 .bezier-handle-box {
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px dashed rgba(6, 182, 212, 0.35);
-  border-radius: 6px;
-  padding: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  border-radius: 8px;
+  padding: 10px;
   margin-top: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 .bezier-handle-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
-  font-size: 0.75rem;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
   font-weight: 700;
+  color: #38bdf8;
+}
+.bezier-preset-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.bezier-preset-btn {
+  background: rgba(14, 116, 144, 0.25);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  color: #cffafe;
+  border-radius: 12px;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+}
+.bezier-preset-btn:hover {
+  background: rgba(6, 182, 212, 0.35);
+  border-color: #38bdf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+.bezier-preset-btn:active {
+  transform: translateY(0);
+}
+.bezier-slider-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  background: rgba(8, 51, 68, 0.3);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.bezier-slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: #a5f3fc;
+}
+.bezier-slider-head strong {
+  font-family: ui-monospace, monospace;
+  color: #38bdf8;
+}
+.bezier-bulge-slider {
+  width: 100%;
+  accent-color: #06b6d4;
+  cursor: ew-resize;
+  height: 6px;
+}
+.bezier-tangent-toggle-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.bezier-tangent-btn {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: #94a3b8;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.bezier-tangent-btn.active {
+  background: rgba(6, 182, 212, 0.25);
+  border-color: #06b6d4;
+  color: #38bdf8;
+}
+.bezier-lead-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.bezier-lead-box {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bezier-lead-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.bezier-lead-box input[type="range"] {
+  width: 100%;
+  cursor: ew-resize;
+  height: 5px;
+}
+.bezier-advanced-details {
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 6px;
+  margin-top: 6px;
+}
+.bezier-advanced-details summary {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+}
+.bezier-advanced-details summary:hover {
   color: #38bdf8;
 }
 .bezier-btn-auto {
@@ -200,6 +338,213 @@ header h1 { font-size: 1.35rem; font-weight: 700; }
 .bezier-btn-auto:hover {
   background: rgba(6, 182, 212, 0.35);
   color: #fff;
+}
+
+/* Floating On-Canvas Quick Bar for Active Curve */
+.bezier-quick-bar {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 20, 36, 0.94);
+  border: 1px solid rgba(6, 182, 212, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 5px 12px;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(6, 182, 212, 0.3);
+  max-width: 95%;
+  flex-wrap: wrap;
+  pointer-events: auto;
+  animation: bezierQuickBarPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes bezierQuickBarPop {
+  from { opacity: 0; transform: translate(-50%, -6px) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+.bezier-quick-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.bezier-quick-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #38bdf8;
+  white-space: nowrap;
+}
+.bezier-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.btn-bz-quick {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn-bz-quick:hover {
+  background: rgba(6, 182, 212, 0.3);
+  border-color: #38bdf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+.btn-bz-quick:active {
+  transform: translateY(0);
+}
+.btn-bz-quick.btn-bz-tangent.locked {
+  background: rgba(6, 182, 212, 0.25);
+  border-color: #06b6d4;
+  color: #38bdf8;
+}
+.bezier-quick-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.75);
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.bz-slider-label {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.bz-slider-val {
+  font-size: 0.7rem;
+  color: #38bdf8;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  min-width: 28px;
+  text-align: right;
+}
+
+/* Bezier Curve Path Tool HUD Button & Active Glow */
+.hud-tool-btn.bezier-tool-btn {
+  background: rgba(14, 116, 144, 0.35);
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  color: #cffafe;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.hud-tool-btn.bezier-tool-btn:hover {
+  background: rgba(14, 116, 144, 0.6);
+  border-color: #22d3ee;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+}
+.hud-tool-btn.bezier-tool-btn.active {
+  background: linear-gradient(135deg, #0891b2, #06b6d4) !important;
+  border-color: #a5f3fc !important;
+  color: #082f49 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.8), inset 0 0 4px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Floating Bezier Mode Banner across Canvas */
+.bezier-mode-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(8, 51, 68, 0.92);
+  border: 1px solid rgba(6, 182, 212, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 6px 14px;
+  border-radius: 30px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(6, 182, 212, 0.35);
+  max-width: 90%;
+  pointer-events: auto;
+  animation: bezierBannerSlideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes bezierBannerSlideDown {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.bezier-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bezier-pulse-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22d3ee;
+  box-shadow: 0 0 8px #22d3ee;
+  animation: bezierDotPulse 1.4s ease-in-out infinite alternate;
+}
+@keyframes bezierDotPulse {
+  0% { transform: scale(0.85); opacity: 0.6; }
+  100% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px #38bdf8; }
+}
+.bezier-banner-title {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #38bdf8;
+  letter-spacing: 0.3px;
+}
+.bezier-banner-hint {
+  font-size: 0.73rem;
+  color: #cbd5e1;
+}
+.btn-bezier-exit {
+  background: rgba(6, 182, 212, 0.2);
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  color: #a5f3fc;
+  border-radius: 14px;
+  padding: 2px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.btn-bezier-exit:hover {
+  background: #06b6d4;
+  color: #082f49;
+  border-color: #fff;
+}
+.btn-to-bezier {
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  color: #38bdf8;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-to-bezier:hover {
+  background: rgba(6, 182, 212, 0.28);
+  border-color: #38bdf8;
+  color: #ffffff;
 }
 
 /* ==========================================================================
