@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <!-- Primary SEO Meta Tags for Google Search Indexing -->
+  <title>VEX V5 LemLib Suite · Autonomous Path Planner &amp; PROS C++ IDE</title>
+  <meta name="title" content="VEX V5 LemLib Suite · Autonomous Path Planner &amp; PROS C++ IDE" />
+  <meta name="description" content="Next-generation autonomous path planning, LemLib odometry simulation, and online PROS C++ IDE for VEX V5 Robotics Competition teams." />
+  <meta name="keywords" content="VEX Robotics, VEX V5, LemLib, Path Planner, PROS C++, Autonomous, Pure Pursuit, Boomerang, Robotics Simulator, V5 Brain, VRC" />
+  <meta name="author" content="VEX V5 LemLib Suite" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="canonical" href="https://yl-loaf.github.io/vex-path-planner/" />
+
+  <!-- Google Site Verification for Search Console Indexing -->
+  <meta name="google-site-verification" content="pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs" />
+
+  <!-- Google Auto Ads Code Snippet for AdSense Site Review -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3909547099822622" crossorigin="anonymous"></script>
+
+  <!-- Open Graph / Social Sharing -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://yl-loaf.github.io/vex-path-planner/" />
+  <meta property="og:title" content="VEX V5 LemLib Suite · Autonomous Path Planner &amp; PROS C++ IDE" />
+  <meta property="og:description" content="Next-generation autonomous path planning, LemLib odometry simulation, and online PROS C++ IDE for VEX V5 Robotics Competition teams." />
+  <meta property="og:site_name" content="VEX V5 LemLib Suite" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="VEX V5 LemLib Suite · Autonomous Path Planner &amp; PROS C++ IDE" />
+  <meta name="twitter:description" content="Next-generation autonomous path planning, LemLib odometry simulation, and online PROS C++ IDE for VEX V5 Robotics Competition teams." />
+
+  <!-- Theme Colors -->
+  <meta name="theme-color" content="#0b1120" />
+  <meta name="color-scheme" content="dark" />
+
+  <!-- Structured Data (JSON-LD) for Search Engine Rich Snippets -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "VEX V5 LemLib Suite",
+    "url": "https://yl-loaf.github.io/vex-path-planner/",
+    "description": "Comprehensive autonomous path planner, simulator, and PROS C++ IDE for VEX V5 robotics teams using LemLib.",
+    "applicationCategory": "EducationalApplication",
+    "operatingSystem": "All modern browsers",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0b1120;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(148, 163, 184, 0.15);
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --accent: #06b6d4;
+      --success: #22c55e;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0b1120 70%);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 40%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .lead {
+      color: var(--muted);
+      font-size: 1.1rem;
+      max-width: 680px;
+      margin: 0 auto 24px;
+    }
+    /* Auto-redirect countdown banner */
+    .redirect-card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      padding: 18px 24px;
+      margin-bottom: 36px;
+      text-align: center;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .redirect-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .progress-bar-wrap {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 9999px;
+      margin: 14px 0 16px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--primary));
+      transform-origin: left;
+      animation: countdown 3s linear forwards;
+    }
+    @keyframes countdown {
+      from { transform: scaleX(1); }
+      to { transform: scaleX(0); }
+    }
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #0b1120;
+      border: none;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+    }
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+    }
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--primary);
+    }
+    /* Feature Hub Cards */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-bottom: 40px;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+    }
+    .feature-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .feature-icon {
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+    }
+    .feature-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .feature-desc {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.5;
+      flex-grow: 1;
+    }
+    .feature-link {
+      margin-top: 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--primary);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    /* Comprehensive Informational Content for Googlebot */
+    .seo-info {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 24px;
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .seo-info h2 {
+      font-size: 1.25rem;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">🤖 VEX Robotics Override 2026-27</div>
+      <h1>VEX V5 LemLib Suite</h1>
+      <p class="lead">Autonomous Path Planning, Field Simulation, and PROS C++ Development Hub for VEX V5 Robotics Competition.</p>
+    </header>
+
+    <!-- Graceful Automatic Redirection Box -->
+    <div class="redirect-card">
+      <div class="redirect-title">
+        <span>🚀</span> Redirecting to VEX V5 Path Planner in <span id="countdownText" style="color: var(--primary); font-weight: bold;">3</span>s...
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="actions">
+        <a href="https://yl-loaf.github.io/vex-path-planner/" class="btn btn-primary" id="btnLaunchNow">
+          Open Path Planner Now ➔
+        </a>
+        <button type="button" class="btn btn-outline" id="btnCancelRedirect">
+          Stay on Portal
+        </button>
+      </div>
+    </div>
+
+    <!-- Semantic Feature Navigation Hub for Crawlers and Users -->
+    <section>
+      <h2 style="font-size: 1.3rem; margin-bottom: 16px; color: var(--text);">Suite Modules &amp; Tools</h2>
+      <div class="features-grid">
+        <a href="https://yl-loaf.github.io/vex-path-planner/" class="feature-card">
+          <div class="feature-icon">🗺️</div>
+          <div class="feature-title">Autonomous Path Planner</div>
+          <div class="feature-desc">Visual waypoint sequencing, Bezier path curves, LemLib moveToPoint &amp; boomerang generator, and real-time collision detection.</div>
+          <div class="feature-link">Launch Planner ➔</div>
+        </a>
+
+        <a href="https://yl-loaf.github.io/vex-path-planner/ide.html" class="feature-card">
+          <div class="feature-icon">💻</div>
+          <div class="feature-title">PROS C++ Cloud IDE</div>
+          <div class="feature-desc">Full-featured Monaco C++ code editor with syntax highlighting, live syntax analysis, and instant LemLib project generation.</div>
+          <div class="feature-link">Open IDE ➔</div>
+        </a>
+
+        <a href="https://yl-loaf.github.io/vex-path-planner/translator.html" class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <div class="feature-title">C++ Code Translator</div>
+          <div class="feature-desc">Two-way parser converting existing PROS C++ autonomous routines into visual draggable waypoints and vice-versa.</div>
+          <div class="feature-link">Open Translator ➔</div>
+        </a>
+
+        <a href="https://yl-loaf.github.io/vex-path-planner/stats.html" class="feature-card">
+          <div class="feature-icon">📊</div>
+          <div class="feature-title">Traffic &amp; Analytics</div>
+          <div class="feature-desc">Real-time visitor counts, traffic breakdown by module, and Google Search Console indexing verification helpers.</div>
+          <div class="feature-link">View Stats ➔</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- Comprehensive Indexable Content for Googlebot & AdSense Review -->
+    <article class="seo-info">
+      <h2>About the VEX V5 LemLib Suite</h2>
+      <p>
+        The VEX V5 LemLib Suite provides high school and collegiate robotics teams competing in the VEX Robotics Competition (VRC) with advanced autonomous motion profiling. Leveraging LemLib's pure pursuit algorithms and odometry tracking, users can build reliable 15-second autonomous win-point routines and 60-second programming skills runs on the Override game field.
+      </p>
+      <p style="margin-top: 10px;">
+        Designed for teams using PROS 3 and PROS 4 with modern C++, this suite combines visual drag-and-drop spline editing with direct source code synchronization, USB V5 Brain telemetry streaming, and automated Google Drive autonomous backups.
+      </p>
+    </article>
+
+    <footer>
+      <p>© 2026 VEX V5 LemLib Suite · Powered by LemLib &amp; PROS C++</p>
+    </footer>
+  </div>
+
+  <script>
+    (function() {
+      var targetUrl = 'https://yl-loaf.github.io/vex-path-planner/';
+      var secondsLeft = 3;
+      var countdownEl = document.getElementById('countdownText');
+      var progressBar = document.getElementById('progressBar');
+      var cancelled = false;
+
+      // Timer countdown for smooth automatic transition
+      var timer = setInterval(function() {
+        if (cancelled) return;
+        secondsLeft -= 1;
+        if (countdownEl) countdownEl.textContent = secondsLeft;
+        if (secondsLeft <= 0) {
+          clearInterval(timer);
+          window.location.replace(targetUrl);
+        }
+      }, 1000);
+
+      // Allow user to cancel auto-redirect to browse the hub
+      var cancelBtn = document.getElementById('btnCancelRedirect');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+          cancelled = true;
+          clearInterval(timer);
+          if (progressBar) progressBar.style.animation = 'none';
+          var redirectTitle = document.querySelector('.redirect-title');
+          if (redirectTitle) redirectTitle.innerHTML = '✨ Automatic redirect paused. Explore the suite below:';
+          cancelBtn.style.display = 'none';
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

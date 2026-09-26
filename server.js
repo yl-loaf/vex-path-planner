@@ -701,6 +701,11 @@ app.get(['/stats', '/stats.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'stats.html'));
 });
 
+app.get(['/root-domain-index.html', '/root-domain-index'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
+  res.sendFile(path.join(__dirname, 'root-domain-index.html'));
+});
+
 app.get(['/', '/index.html'], (req, res) => {
   res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'index.html'));

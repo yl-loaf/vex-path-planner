@@ -158,32 +158,6 @@
       </div>
     </div>
 
-    <!-- Google Search Indexing & Verification Tool -->
-    <div class="stats-section" style="border: 1px solid rgba(6,182,212,0.3); background: rgba(6,182,212,0.02);">
-      <h3 style="color: #06b6d4; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-        <span>🔍</span> Google Search Site Verification &amp; Indexing Helper
-      </h3>
-      <p style="color: var(--muted); margin-bottom: 16px; font-size: 0.9rem; line-height: 1.4;">
-        This app has been pre-configured with Google Search Console site-verification. To enable Google Search indexation for your <strong>root domain site</strong> (or any other domain), copy the HTML verification tag below and paste it into your root website's <code>&lt;head&gt;</code> section.
-      </p>
-      
-      <div style="display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.4); padding: 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 700;">HTML Meta Tag for Root Domain Indexing</span>
-          <button type="button" id="btnCopyMetaTag" style="padding: 4px 10px; font-size: 0.75rem; background: #22c55e; color: black; border: none; font-weight: bold; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
-            📋 Copy Meta Tag
-          </button>
-        </div>
-        <pre id="metaCodeSnippet" style="margin: 0; font-family: monospace; font-size: 0.85rem; color: #22d3ee; white-space: pre-wrap; word-break: break-all; padding: 4px; user-select: all;">&lt;meta name="google-site-verification" content="pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs" /&gt;</pre>
-      </div>
-
-      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-        <span style="font-size: 0.85rem; color: var(--muted);">Direct Verification Token:</span>
-        <code style="font-family: monospace; background: rgba(255,255,255,0.08); padding: 4px 8px; border-radius: 4px; color: #f59e0b; font-size: 0.85rem;" id="rawVerificationToken">pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs</code>
-        <button type="button" id="btnCopyRawToken" style="background: none; border: 1px solid var(--border); color: var(--text); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;">📋 Copy Token</button>
-      </div>
-    </div>
-
     <!-- Page Breakdown Section -->
     <div class="stats-section">
       <h3>📑 Traffic by Page Module</h3>
@@ -370,27 +344,6 @@
 
     fetchStats();
     setInterval(fetchStats, 10000);
-
-    // Event listeners for copy-paste operations
-    document.getElementById('btnCopyMetaTag').addEventListener('click', () => {
-      const code = '<meta name="google-site-verification" content="pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs" />';
-      navigator.clipboard.writeText(code).then(() => {
-        const btn = document.getElementById('btnCopyMetaTag');
-        const origText = btn.innerHTML;
-        btn.innerHTML = '✅ Copied!';
-        setTimeout(() => { btn.innerHTML = origText; }, 2000);
-      });
-    });
-
-    document.getElementById('btnCopyRawToken').addEventListener('click', () => {
-      const token = 'pSCqEODA2fTIrcV1Q5gvwN6UF4hmRj6gAmH0DEuUVqs';
-      navigator.clipboard.writeText(token).then(() => {
-        const btn = document.getElementById('btnCopyRawToken');
-        const origText = btn.innerHTML;
-        btn.innerHTML = '✅ Copied!';
-        setTimeout(() => { btn.innerHTML = origText; }, 2000);
-      });
-    });
   </script>
 </body>
 </html>
