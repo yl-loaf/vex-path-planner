@@ -153,6 +153,7 @@
         </button>
         <a href="/" class="btn-nav">🗺️ Visual Planner</a>
         <a href="ide.html" class="btn-nav">💻 PROS IDE</a>
+        <a href="tools.html" class="btn-nav" id="btnStatsOpenTools">🛠️ Tools Suite</a>
         <a href="translator.html" class="btn-nav">🔄 C++ Translator</a>
       </div>
     </div>
@@ -362,6 +363,23 @@
 
     fetchStats();
     setInterval(fetchStats, 10000);
+
+    const btnTools = document.getElementById('btnStatsOpenTools');
+    if (btnTools) {
+      btnTools.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetUrl = 'tools.html#fullscreen';
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().then(() => {
+            window.location.href = targetUrl;
+          }).catch(() => {
+            window.location.href = targetUrl;
+          });
+        } else {
+          window.location.href = targetUrl;
+        }
+      });
+    }
   </script>
   <script src="theme.js"></script>
 </body>

@@ -145,6 +145,7 @@ app.use((req, res, next) => {
     pathUrl === '/ide' ||
     pathUrl === '/translator' ||
     pathUrl === '/stats' ||
+    pathUrl === '/tools' ||
     pathUrl === '/api/track'
   ) {
     const stats = getStats();
@@ -155,6 +156,7 @@ app.use((req, res, next) => {
     else if (pathUrl.includes('ide')) pageKey = 'ide';
     else if (pathUrl.includes('translator')) pageKey = 'translator';
     else if (pathUrl.includes('stats')) pageKey = 'stats';
+    else if (pathUrl.includes('tools')) pageKey = 'tools';
 
     stats.pages[pageKey] = (stats.pages[pageKey] || 0) + 1;
 
@@ -699,6 +701,11 @@ app.get(['/translator', '/translator.html'], (req, res) => {
 app.get(['/stats', '/stats.html'], (req, res) => {
   res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'stats.html'));
+});
+
+app.get(['/tools', '/tools.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
+  res.sendFile(path.join(__dirname, 'tools.html'));
 });
 
 // Google Search Console & SEO Routes

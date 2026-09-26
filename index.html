@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260926.k16" />
+  <link rel="stylesheet" href="style.css?v=20260926.k26" />
   <script>
     (function () {
       try {
@@ -296,6 +296,7 @@
         <nav class="header-mode-nav">
           <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation & Visual Path Planner">🗺️ Planner &amp; Sim</button>
           <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
+          <button type="button" class="mode-nav-btn" id="navModeTools" title="Open Full Engineering Tools Suite (Opens in Fullscreen)">🛠️ Tools Suite</button>
           <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB & Telemetry">🔌 Brain</button>
           <!-- Secondary modes kept accessible in Tools menu -->
           <button type="button" id="navModePidTuner" hidden></button>
@@ -329,6 +330,7 @@
 
             <div class="tools-menu-divider"></div>
             <div class="tools-menu-header">🛠️ Engineering Analysis</div>
+            <button type="button" id="btnToolsSuiteDropdown" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">🛠️ All Tools Suite (Fullscreen) ⛶</button>
             <button type="button" id="btnToggleDebug" class="tools-menu-item">🐞 Live Debugger &amp; Inspector</button>
             <button type="button" id="btnToolsAllianceMirror" class="tools-menu-item">🪞 Alliance Routine Mirror</button>
             <button type="button" id="btnToolsDrivePhysics" class="tools-menu-item">⚡ Real-Time Drive Dyno &amp; Physics</button>
@@ -435,9 +437,12 @@
           <!-- Pinned Block Palette Toolbar -->
           <div class="palette-bar">
             <div class="palette-header">
-              <span class="palette-title">
-                <span>🧩</span> Block Palette
-              </span>
+              <div class="palette-title-group">
+                <span class="palette-title">
+                  <span>🧩</span> Block Palette
+                </span>
+                <span class="palette-drag-hint" title="Drag any block directly into the action flow below, or click to append">✨ Drag blocks into flow or click</span>
+              </div>
               <div class="category-chips">
                 <button type="button" class="cat-chip cat-all active" data-cat="all">✨ All</button>
                 <button type="button" class="cat-chip cat-motion" data-cat="motion">🔵 Motion</button>
@@ -452,18 +457,18 @@
               <button type="button" id="paletteSearchClear" title="Clear search" style="display: none;">✕</button>
             </div>
             <div class="palette-block-list">
-              <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPoint" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point">🔵 moveToPoint(x, y)</button>
-              <button type="button" class="palette-block-btn btn-motion" data-act-type="moveToPose" data-category="motion" data-keywords="movetopose moveToPose x y theta heading motion pose">🔵 moveToPose(x, y, θ)</button>
-              <button type="button" class="palette-block-btn btn-bezier" data-act-type="bezierCurve" data-category="motion" data-keywords="bezier curve spline arc control point smooth curved trajectory" style="background:linear-gradient(135deg,rgba(14,116,144,0.35),rgba(8,145,178,0.35));border-color:#06b6d4;color:#cffafe;">🌊 bezierCurve(x, y, θ)</button>
-              <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToHeading" data-category="turn" data-keywords="turntoheading turnToHeading theta heading turn rotate">🟣 turnToHeading(θ)</button>
-              <button type="button" class="palette-block-btn btn-turn" data-act-type="turnToPoint" data-category="turn" data-keywords="turntopoint turnToPoint x y turn rotate point">🟣 turnToPoint(x, y)</button>
-              <button type="button" class="palette-block-btn btn-turn" data-act-type="swingToHeading" data-category="turn" data-keywords="swingtoheading swingToHeading theta swing rotate">🟣 swingToHeading(θ)</button>
-              <button type="button" class="palette-block-btn btn-control" data-act-type="wait" data-category="control" data-keywords="wait delay pause timer">🟡 wait / delay</button>
-              <button type="button" class="palette-block-btn btn-control" data-act-type="ifElse" data-category="control" data-keywords="ifelse if else scratch condition branch">🟡 If / Else (Scratch)</button>
-              <button type="button" class="palette-block-btn btn-control" data-act-type="loop" data-category="control" data-keywords="loop for until forever repeat">🔁 Loop (for/until/forever)</button>
-              <button type="button" class="palette-block-btn btn-subsystem" data-category="subsystem" data-keywords="clamp goal pneumatic pneumatics set_value" data-snip-add="clamp.set_value(true);">🟢 clamp goal</button>
-              <button type="button" class="palette-block-btn btn-subsystem" data-category="subsystem" data-keywords="intake move motor rollers" data-snip-add="intake.move(127);">🟢 intake on</button>
-              <button type="button" class="palette-block-btn btn-custom" data-category="custom" data-keywords="custom cpp code snippet" data-act-type="custom">🔴 custom C++</button>
+              <button type="button" class="palette-block-btn btn-motion" draggable="true" data-act-type="moveToPoint" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point" title="Drag into action flow or click to add">🔵 moveToPoint(x, y)</button>
+              <button type="button" class="palette-block-btn btn-motion" draggable="true" data-act-type="moveToPose" data-category="motion" data-keywords="movetopose moveToPose x y theta heading motion pose" title="Drag into action flow or click to add">🔵 moveToPose(x, y, θ)</button>
+              <button type="button" class="palette-block-btn btn-bezier" draggable="true" data-act-type="bezierCurve" data-category="motion" data-keywords="bezier curve spline arc control point smooth curved trajectory" style="background:linear-gradient(135deg,rgba(14,116,144,0.35),rgba(8,145,178,0.35));border-color:#06b6d4;color:#cffafe;" title="Drag into action flow or click to add">🌊 bezierCurve(x, y, θ)</button>
+              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="turnToHeading" data-category="turn" data-keywords="turntoheading turnToHeading theta heading turn rotate" title="Drag into action flow or click to add">🟣 turnToHeading(θ)</button>
+              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="turnToPoint" data-category="turn" data-keywords="turntopoint turnToPoint x y turn rotate point" title="Drag into action flow or click to add">🟣 turnToPoint(x, y)</button>
+              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="swingToHeading" data-category="turn" data-keywords="swingtoheading swingToHeading theta swing rotate" title="Drag into action flow or click to add">🟣 swingToHeading(θ)</button>
+              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="wait" data-category="control" data-keywords="wait delay pause timer" title="Drag into action flow or click to add">🟡 wait / delay</button>
+              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="ifElse" data-category="control" data-keywords="ifelse if else scratch condition branch" title="Drag into action flow or click to add">🟡 If / Else (Scratch)</button>
+              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="loop" data-category="control" data-keywords="loop for until forever repeat" title="Drag into action flow or click to add">🔁 Loop (for/until/forever)</button>
+              <button type="button" class="palette-block-btn btn-subsystem" draggable="true" data-category="subsystem" data-keywords="clamp goal pneumatic pneumatics set_value" data-snip-add="clamp.set_value(true);" title="Drag into action flow or click to add">🟢 clamp goal</button>
+              <button type="button" class="palette-block-btn btn-subsystem" draggable="true" data-category="subsystem" data-keywords="intake move motor rollers" data-snip-add="intake.move(127);" title="Drag into action flow or click to add">🟢 intake on</button>
+              <button type="button" class="palette-block-btn btn-custom" draggable="true" data-category="custom" data-keywords="custom cpp code snippet" data-act-type="custom" title="Drag into action flow or click to add">🔴 custom C++</button>
             </div>
           </div>
 
@@ -1211,23 +1216,123 @@
 
           <!-- PID Tuning Graph Tab -->
           <div class="debug-pane" id="debugPaneTuning">
-            <div class="debug-sec-desc">Real-time target vs actual velocity during simulation. Useful for tuning LemLib lateral and angular PID constants.</div>
-            <div style="display:flex; justify-content:center; gap:6px; margin-bottom:8px;">
-              <button type="button" id="btnTuningLinear" class="tuning-type-btn active" style="font-size:0.65rem; padding:3px 8px; border-radius:4px; border:1px solid #475569; background:#1e293b; color:#fff; cursor:pointer;">Linear (in/s)</button>
-              <button type="button" id="btnTuningAngular" class="tuning-type-btn" style="font-size:0.65rem; padding:3px 8px; border-radius:4px; border:1px solid #475569; background:#0f172a; color:#94a3b8; cursor:pointer;">Angular (deg/s)</button>
+            <!-- New Real-Time Velocity vs Target & 15s+ Acceleration Bottleneck Analyzer -->
+            <div class="bottleneck-analyzer-card">
+              <div class="bottleneck-analyzer-header">
+                <div class="bottleneck-title-row">
+                  <span class="bottleneck-icon">⚡</span>
+                  <div>
+                    <h3 class="bottleneck-title">Velocity vs. Target (15s+ Bottlenecks)</h3>
+                    <p class="bottleneck-desc">Real-time velocity tracking vs target profile during 15s+ simulation to pinpoint acceleration bottlenecks &amp; slew limits.</p>
+                  </div>
+                </div>
+
+                <!-- Run / Duration Controls -->
+                <div class="bottleneck-controls-bar">
+                  <div class="bottleneck-btn-group">
+                    <button type="button" id="btnRun15sBenchmark" class="btn-benchmark-run" title="Run 15s Autonomous Simulation Benchmark">
+                      <span>▶</span> Run 15s Run
+                    </button>
+                    <button type="button" id="btnStop15sBenchmark" class="btn-benchmark-reset" title="Reset Simulation Timeline">
+                      <span>⏹</span> Reset
+                    </button>
+                  </div>
+                  <div class="bottleneck-window-picker">
+                    <label for="bottleneckDurationSelect">Window:</label>
+                    <select id="bottleneckDurationSelect" class="bottleneck-select">
+                      <option value="15" selected>15s Auton</option>
+                      <option value="30">30s Extended</option>
+                      <option value="60">60s Skills</option>
+                      <option value="full">Full Routine</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Toggles for Bottleneck Highlights & Acceleration Overlay -->
+                <div class="bottleneck-toggles-bar">
+                  <label class="bottleneck-toggle-item" title="Highlight acceleration saturation, lag, and slew rate bottlenecks">
+                    <input type="checkbox" id="chkHighlightBottlenecks" checked />
+                    <span>⚠️ Bottlenecks</span>
+                  </label>
+                  <label class="bottleneck-toggle-item" title="Overlay instantaneous robot acceleration curve in in/s²">
+                    <input type="checkbox" id="chkShowAccelCurve" />
+                    <span>📈 Accel (in/s²)</span>
+                  </label>
+                  <button type="button" id="btnClearBottleneckCanvas" class="btn-xs-clean" title="Clear and redraw chart" style="margin-left:auto; font-size:0.65rem; padding:2px 6px;">Redraw</button>
+                </div>
+              </div>
+
+              <!-- Main 15s+ Velocity & Bottleneck Canvas -->
+              <div class="bottleneck-canvas-container" id="bottleneckCanvasContainer">
+                <canvas id="velocityBottleneckCanvas" style="width:100%; height:200px; display:block;"></canvas>
+                <div id="bottleneckTooltip" class="bottleneck-tooltip" style="display:none;"></div>
+              </div>
+
+              <!-- Real-Time Telemetry Metrics Strip -->
+              <div class="bottleneck-telemetry-grid">
+                <div class="bn-metric-cell">
+                  <span class="bn-m-label">Sim Time</span>
+                  <strong class="bn-m-val" id="bnMetricTime">0.00s / 15.0s</strong>
+                </div>
+                <div class="bn-metric-cell">
+                  <span class="bn-m-label">Target Vel</span>
+                  <strong class="bn-m-val text-blue" id="bnMetricTarget">0.0 in/s</strong>
+                </div>
+                <div class="bn-metric-cell">
+                  <span class="bn-m-label">Actual Vel</span>
+                  <strong class="bn-m-val text-green" id="bnMetricActual">0.0 in/s</strong>
+                </div>
+                <div class="bn-metric-cell">
+                  <span class="bn-m-label">Accel (a)</span>
+                  <strong class="bn-m-val text-orange" id="bnMetricAccel">0.0 in/s²</strong>
+                </div>
+                <div class="bn-metric-cell">
+                  <span class="bn-m-label">Velocity Lag</span>
+                  <strong class="bn-m-val" id="bnMetricError">0.0 in/s</strong>
+                </div>
+              </div>
+
+              <!-- Chart Color Legend -->
+              <div class="bottleneck-legend">
+                <span class="bn-legend-item"><span class="bn-legend-swatch swatch-target"></span> Target Vel</span>
+                <span class="bn-legend-item"><span class="bn-legend-swatch swatch-actual"></span> Actual Vel</span>
+                <span class="bn-legend-item"><span class="bn-legend-swatch swatch-max"></span> Drivetrain Cap</span>
+                <span class="bn-legend-item"><span class="bn-legend-swatch swatch-bottleneck"></span> Bottleneck Zone</span>
+              </div>
+
+              <!-- Acceleration Bottlenecks Diagnostic Card -->
+              <div class="bottleneck-diagnostics-box" id="bottleneckDiagnosticsBox">
+                <div class="bn-diag-header">
+                  <span id="bnStatusBadge" class="bn-diag-badge badge-neutral">Ready to Analyze</span>
+                  <strong id="bnSummaryHeadline">Acceleration &amp; Slew Diagnostics</strong>
+                </div>
+                <div id="bnBottlenecksList" class="bn-bottlenecks-list">
+                  <!-- Dynamically populated bottleneck intervals -->
+                </div>
+                <div id="bnTuningAdvice" class="bn-tuning-advice">
+                  <!-- Practical LemLib tuning advice -->
+                </div>
+              </div>
             </div>
-            <div style="position:relative; width:100%; height:200px; background:#0f172a; border:1px solid #334155; border-radius:6px; overflow:hidden; margin-bottom:10px;">
-              <canvas id="pidTuningCanvas" style="width:100%; height:100%; display:block;"></canvas>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#94a3b8; padding:0 4px;">
-              <span>Time: <span id="pidTuningTimeVal">0.0s</span></span>
-              <span>Target: <span id="pidTuningTargetVal" style="color:#60a5fa; font-weight:bold;">0.0 in/s</span></span>
-              <span>Actual: <span id="pidTuningActualVal" style="color:#4ade80; font-weight:bold;">0.0 in/s</span></span>
-            </div>
-            <div style="display:flex; gap:10px; margin-top:8px; font-size:0.7rem; align-items:center;">
-              <span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:10px; height:2px; background:#60a5fa; display:inline-block;"></span> Target</span>
-              <span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:10px; height:2px; background:#4ade80; display:inline-block;"></span> Actual</span>
-              <button type="button" id="btnClearPidTuning" class="btn-xs-clean" style="margin-left:auto; font-size:0.65rem; padding:2px 6px;">Clear Graph</button>
+
+            <!-- Secondary Step & Angular Diagnostics (Collapsible) -->
+            <div class="tuning-step-section">
+              <div class="tuning-step-header">
+                <span>🔄 Step Response &amp; Angular Diagnostics</span>
+                <div class="tuning-step-toggles">
+                  <button type="button" id="btnTuningLinear" class="tuning-type-btn active">Linear</button>
+                  <button type="button" id="btnTuningAngular" class="tuning-type-btn">Angular</button>
+                </div>
+              </div>
+              <div class="tuning-step-canvas-wrap">
+                <canvas id="pidTuningCanvas" style="width:100%; height:120px; display:block;"></canvas>
+              </div>
+              <div class="tuning-step-footer">
+                <span>Time: <span id="pidTuningTimeVal">0.0s</span></span>
+                <span>Target: <span id="pidTuningTargetVal" style="color:#60a5fa; font-weight:bold;">0.0 in/s</span></span>
+                <span>Actual: <span id="pidTuningActualVal" style="color:#4ade80; font-weight:bold;">0.0 in/s</span></span>
+                <button type="button" id="btnClearPidTuning" class="btn-xs-clean" style="font-size:0.62rem; padding:1px 5px;">Clear</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2745,21 +2850,21 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260926.k16"></script>
+  <script src="version.js?v=20260926.k26"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260926.k16"></script>
-  <script src="google-drive-sync.js?v=20260926.k16"></script>
-  <script src="session-guard.js?v=20260926.k16"></script>
-  <script src="theme.js?v=20260926.k16"></script>
-  <script src="v5-brain-serial.js?v=20260926.k16"></script>
-  <script src="project-manager.js?v=20260926.k16"></script>
-  <script src="cpp-parser.js?v=20260926.k16"></script>
-  <script src="app.js?v=20260926.k16"></script>
-  <script src="tutorial.js?v=20260926.k16"></script>
+  <script src="firebase-config.js?v=20260926.k26"></script>
+  <script src="google-drive-sync.js?v=20260926.k26"></script>
+  <script src="session-guard.js?v=20260926.k26"></script>
+  <script src="theme.js?v=20260926.k26"></script>
+  <script src="v5-brain-serial.js?v=20260926.k26"></script>
+  <script src="project-manager.js?v=20260926.k26"></script>
+  <script src="cpp-parser.js?v=20260926.k26"></script>
+  <script src="app.js?v=20260926.k26"></script>
+  <script src="tutorial.js?v=20260926.k26"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

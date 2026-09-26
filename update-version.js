@@ -42,8 +42,8 @@ export function updateBuildVersion() {
   fs.writeFileSync(versionFile, outputContent, 'utf8');
   console.log(`[build] Updated version.js to build: ${nextBuild}`);
 
-  // Also update cache-busting query strings in index.html, ide.html, translator.html, stats.html
-  const htmlFiles = ['index.html', 'ide.html', 'translator.html', 'stats.html'];
+  // Also update cache-busting query strings in index.html, ide.html, translator.html, stats.html, tools.html
+  const htmlFiles = ['index.html', 'ide.html', 'translator.html', 'stats.html', 'tools.html'];
   for (const f of htmlFiles) {
     const filePath = path.join(__dirname, f);
     if (fs.existsSync(filePath)) {

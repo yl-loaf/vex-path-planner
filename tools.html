@@ -1,0 +1,1863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="shortcut icon" href="favicon.ico" />
+  <link rel="canonical" href="https://yl-loaf.github.io/vex-path-planner/tools.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Engineering Tools Suite · VEX V5 LemLib Suite</title>
+  <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
+  <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
+  <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
+  <link rel="stylesheet" href="style.css?v=20260926.k26" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('vex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    /* Tools Suite Layout & Components */
+    .tools-page-body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tools-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 16px 20px 40px;
+      width: 100%;
+      box-sizing: border-box;
+      flex: 1;
+    }
+
+    /* Top Navigation Header */
+    .tools-nav-header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .tools-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-tools-back {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-tools-back:hover {
+      background: #334155;
+      color: #ffffff;
+      border-color: #475569;
+    }
+
+    .tools-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tools-title-group h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 0;
+      color: var(--text-heading);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tools-header-center {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tools-tab-link {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .tools-tab-link:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .tools-tab-link.active {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.35);
+    }
+
+    .tools-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-fullscreen-toggle {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #ffffff;
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      transition: all 0.15s ease;
+    }
+    .btn-fullscreen-toggle:hover {
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+    }
+    .btn-fullscreen-toggle.active {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-color: rgba(52, 211, 153, 0.6);
+    }
+
+    /* Fullscreen Banner Notice (shown if not in fullscreen) */
+    .fullscreen-prompt-banner {
+      background: linear-gradient(90deg, rgba(2, 132, 199, 0.15), rgba(56, 189, 248, 0.25), rgba(2, 132, 199, 0.15));
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      animation: pulseBanner 2s infinite alternate ease-in-out;
+    }
+    @keyframes pulseBanner {
+      0% { border-color: rgba(56, 189, 248, 0.3); }
+      100% { border-color: rgba(56, 189, 248, 0.7); }
+    }
+    .fullscreen-prompt-banner.hidden {
+      display: none;
+    }
+    .fs-banner-text {
+      font-size: 0.85rem;
+      color: #e0f2fe;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .fs-banner-btn {
+      background: #0284c7;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Filter & Search Toolbar */
+    .tools-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .tools-search-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 260px;
+      max-width: 440px;
+    }
+    .tools-search-input {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      padding: 8px 12px 8px 32px;
+      color: var(--text);
+      font-size: 0.82rem;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .tools-search-input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+    .tools-search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.85rem;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    .tools-filter-pills {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tool-pill {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tool-pill:hover {
+      color: var(--text);
+      border-color: var(--border-subtle);
+    }
+    .tool-pill.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+
+    /* Tools Grid */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .tools-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .tool-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .tool-card:hover {
+      border-color: rgba(56, 189, 248, 0.45);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .tool-card.highlight {
+      border-color: rgba(56, 189, 248, 0.6);
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0.04) 0%, var(--card) 100%);
+    }
+
+    .tool-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .tool-icon-box {
+      font-size: 1.5rem;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 8px;
+      width: 42px;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .tool-title-info {
+      flex: 1;
+    }
+    .tool-title-info h3 {
+      font-size: 0.96rem;
+      font-weight: 700;
+      margin: 0;
+      color: var(--text-heading);
+    }
+    .tool-tagline {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin: 3px 0 0;
+      line-height: 1.35;
+    }
+
+    .tool-category-badge {
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    /* Interactive Tool Body & Controls */
+    .tool-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .tool-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .tool-form-grid.cols-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .tool-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .tool-field label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .tool-field input,
+    .tool-field select,
+    .tool-field textarea {
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      color: var(--text);
+      font-size: 0.78rem;
+      box-sizing: border-box;
+      outline: none;
+    }
+    .tool-field input:focus,
+    .tool-field select:focus,
+    .tool-field textarea:focus {
+      border-color: #38bdf8;
+    }
+
+    /* Results Metric Display */
+    .tool-result-strip {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+      gap: 8px;
+      text-align: center;
+    }
+    .result-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .result-label {
+      font-size: 0.60rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .result-val {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #38bdf8;
+      font-family: ui-monospace, monospace;
+    }
+    .result-val.green { color: #4ade80; }
+    .result-val.amber { color: #fbbf24; }
+    .result-val.purple { color: #c084fc; }
+    .result-val.red { color: #f87171; }
+
+    /* Interactive Canvas Wrappers */
+    .tool-canvas-wrap {
+      width: 100%;
+      height: 140px;
+      background: #090e17;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+    .tool-canvas-wrap canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Action Buttons & Launchers */
+    .tool-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .btn-tool-action {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+    .btn-tool-action:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+    .btn-tool-action.primary {
+      background: #0284c7;
+      border-color: #0369a1;
+      color: #ffffff;
+    }
+    .btn-tool-action.primary:hover {
+      background: #0369a1;
+    }
+    .btn-tool-action.success {
+      background: #059669;
+      border-color: #047857;
+      color: #ffffff;
+    }
+    .btn-tool-action.success:hover {
+      background: #047857;
+    }
+
+    /* Code Snippet Box */
+    .tool-code-preview {
+      background: #090e17;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.68rem;
+      color: #7dd3fc;
+      line-height: 1.4;
+      white-space: pre;
+      overflow-x: auto;
+      max-height: 110px;
+    }
+
+    /* Status Pill */
+    .status-indicator-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.66rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .status-indicator-pill.warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    /* Toast Notification */
+    .tools-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #0f172a;
+      border: 1px solid #38bdf8;
+      border-radius: 8px;
+      padding: 10px 16px;
+      color: #ffffff;
+      font-size: 0.82rem;
+      font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .tools-toast.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body class="tools-page-body">
+
+  <!-- Sticky Top Navigation Header -->
+  <header class="tools-nav-header">
+    <div class="tools-header-left">
+      <a href="index.html" class="btn-tools-back" id="btnBackToPlanner" title="Return to Visual Autonomous Path Planner">
+        ← Visual Planner
+      </a>
+      <div class="tools-title-group">
+        <h1>🛠️ VEX V5 &amp; LemLib Engineering Tools Suite</h1>
+        <span class="status-indicator-pill" id="fsLiveStatusBadge">⛶ Window Mode</span>
+      </div>
+    </div>
+
+    <!-- Center Navigation Tabs across all pages -->
+    <div class="tools-header-center">
+      <a href="index.html" class="tools-tab-link" title="Visual 2D Autonomous Path Planner">🗺️ Planner &amp; Sim</a>
+      <a href="ide.html" class="tools-tab-link" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
+      <a href="tools.html" class="tools-tab-link active" title="Comprehensive Engineering Tools Suite">🛠️ Tools Suite</a>
+      <a href="translator.html" class="tools-tab-link" title="Raw C++ Auton to Visual Blocks Translator">🔄 C++ Translator</a>
+      <a href="stats.html" class="tools-tab-link" title="Site & User Visitor Analytics">📊 Stats</a>
+    </div>
+
+    <!-- Right: Fullscreen Launcher & Theme Switcher -->
+    <div class="tools-header-actions">
+      <button type="button" id="btnToggleFullscreen" class="btn-fullscreen-toggle" title="Toggle Fullscreen Mode for distraction-free engineering analysis">
+        <span id="fsBtnIcon">⛶</span>
+        <span id="fsBtnText">Enter Fullscreen</span>
+      </button>
+
+      <button type="button" class="btn-theme-toggle" data-theme-toggle aria-label="Toggle theme" title="Toggle Light/Dark Theme">
+        <span class="theme-toggle-icon">☀️</span>
+        <span class="theme-toggle-text">Theme</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="tools-container">
+
+    <!-- Fullscreen Prompt Banner (Dismisses when in fullscreen) -->
+    <div class="fullscreen-prompt-banner" id="fsPromptBanner">
+      <div class="fs-banner-text">
+        <span>⛶</span>
+        <span><strong>Fullscreen Engineering View:</strong> For optimal canvas telemetry, dyno graphs, and PID curves, click below to open in full screen!</span>
+      </div>
+      <button type="button" class="fs-banner-btn" id="btnBannerFullscreen">
+        <span>⛶</span> Maximize Fullscreen
+      </button>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="tools-toolbar">
+      <div class="tools-search-wrap">
+        <span class="tools-search-icon">🔍</span>
+        <input type="text" id="toolSearchInput" class="tools-search-input" placeholder="Search tools (e.g., Dyno, PID, Bottlenecks, Slew, Air, Mirror, Battery)..." />
+      </div>
+
+      <div class="tools-filter-pills" id="toolsFilterPills">
+        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">12</span>)</button>
+        <button type="button" class="tool-pill" data-filter="motion">🏎️ Motion &amp; Dyno</button>
+        <button type="button" class="tool-pill" data-filter="tuning">🎛️ PID &amp; Bottlenecks</button>
+        <button type="button" class="tool-pill" data-filter="routines">🔄 Routines &amp; Symmetry</button>
+        <button type="button" class="tool-pill" data-filter="hardware">⚡ Hardware &amp; Air</button>
+      </div>
+    </div>
+
+    <!-- Tools Grid Container -->
+    <div class="tools-grid" id="toolsGrid">
+
+      <!-- TOOL 1: Real-Time Velocity vs Target & 15s+ Bottleneck Analyzer -->
+      <article class="tool-card highlight" data-category="tuning" data-keywords="velocity bottleneck target acceleration lag slew 15s simulation pid tuning saturation">
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background:rgba(239, 68, 68, 0.15); border-color:rgba(239, 68, 68, 0.3); color:#f87171;">⚡</div>
+          <div class="tool-title-info">
+            <h3>Velocity vs. Target &amp; 15s+ Bottleneck Analyzer</h3>
+            <p class="tool-tagline">Real-time velocity tracking vs. target profile during 15s+ simulation runs to pinpoint acceleration bottlenecks &amp; slew saturation.</p>
+          </div>
+          <span class="tool-category-badge">🎛️ Tuning</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Tracking Mode</span>
+              <strong class="result-val">15s+ Real-Time</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Bottlenecks</span>
+              <strong class="result-val amber">Slew / Decel / Slip</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Integration</span>
+              <strong class="result-val green">LemLib 10ms</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.73rem; color:var(--muted); line-height:1.4;">
+            Analyzes motor torque saturation, acceleration slew limits, and braking lag across your full 15s autonomous routine. Includes interactive playhead, acceleration curves, and actionable LemLib PID tuning guidance.
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="index.html#debugPaneTuning" class="btn-tool-action primary" id="btnLaunchBottleneckSim" title="Open Visual Planner with PID Tuning and Bottleneck Analyzer active">
+              ▶ Run 15s Benchmark in Planner
+            </a>
+            <button type="button" class="btn-tool-action" id="btnExplainBottlenecks">
+              ℹ️ Bottleneck Rules
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 2: Drivetrain Dyno & Speed Calculator -->
+      <article class="tool-card highlight" data-category="motion" data-keywords="drivetrain dyno speed calculator rpm gear ratio wheel size top speed travel time acceleration">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">🏎️</div>
+          <div class="tool-title-info">
+            <h3>Drivetrain Dyno &amp; Speed Calculator</h3>
+            <p class="tool-tagline">Calculate theoretical and loaded linear velocity, wheel RPM, field transit time, and tractive stall force.</p>
+          </div>
+          <span class="tool-category-badge">🏎️ Motion</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>Wheel Diam (in)</label>
+              <select id="dynoWheelDiam">
+                <option value="2.75" selected>2.75" Omni</option>
+                <option value="3.25">3.25" Omni</option>
+                <option value="4.0">4.0" Omni</option>
+                <option value="3.5">3.5" Custom</option>
+              </select>
+            </div>
+            <div class="tool-field">
+              <label>Motor Cartridge</label>
+              <select id="dynoCartridge">
+                <option value="600" selected>Blue (600 RPM)</option>
+                <option value="200">Green (200 RPM)</option>
+                <option value="100">Red (100 RPM)</option>
+              </select>
+            </div>
+            <div class="tool-field">
+              <label>External Ratio</label>
+              <select id="dynoRatio">
+                <option value="0.75" selected>36:48 (450 RPM)</option>
+                <option value="0.6">36:60 (360 RPM)</option>
+                <option value="1.0">Direct (1:1)</option>
+                <option value="1.33">48:36 (800 RPM)</option>
+                <option value="0.8">48:60 (480 RPM)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tool-form-grid">
+            <div class="tool-field">
+              <label>Drive Motor Count</label>
+              <select id="dynoMotors">
+                <option value="4">4 Motors (44W)</option>
+                <option value="6" selected>6 Motors (66W)</option>
+                <option value="8">8 Motors (88W)</option>
+              </select>
+            </div>
+            <div class="tool-field">
+              <label>Robot Weight (lbs)</label>
+              <input type="number" id="dynoWeight" value="14.5" step="0.5" min="5" max="30" />
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Free Speed</span>
+              <strong class="result-val" id="dynoFreeSpeed">64.8 in/s</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Loaded Speed</span>
+              <strong class="result-val green" id="dynoLoadedSpeed">58.3 in/s</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Wheel RPM</span>
+              <strong class="result-val purple" id="dynoWheelRpm">450 RPM</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Cross 12ft Field</span>
+              <strong class="result-val amber" id="dynoFieldTime">2.47s</strong>
+            </div>
+          </div>
+
+          <div class="tool-actions-row">
+            <span style="font-size:0.7rem; color:var(--muted);" id="dynoRecommendation">Recommended defaultMaxSpeed: 115</span>
+            <button type="button" class="btn-tool-action primary" id="btnApplyDynoToBot">
+              💾 Save to Bot Config
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 3: Interactive LemLib PID Gain & Slew Playground -->
+      <article class="tool-card" data-category="tuning" data-keywords="pid tuning gain controller step response lemlib kp ki kd slew overshoot settling time">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">🎛️</div>
+          <div class="tool-title-info">
+            <h3>LemLib PID Gain &amp; Slew Step-Response Tuner</h3>
+            <p class="tool-tagline">Simulate closed-loop step response curve in real time with interactive proportional, integral, derivative, and slew controls.</p>
+          </div>
+          <span class="tool-category-badge">🎛️ Tuning</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-canvas-wrap">
+            <canvas id="pidPlaygroundCanvas"></canvas>
+          </div>
+
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>kP: <span id="lblKp" style="color:#38bdf8;">7.5</span></label>
+              <input type="range" id="sliderKp" min="1" max="25" step="0.5" value="7.5" />
+            </div>
+            <div class="tool-field">
+              <label>kD: <span id="lblKd" style="color:#4ade80;">22.0</span></label>
+              <input type="range" id="sliderKd" min="0" max="60" step="1" value="22" />
+            </div>
+            <div class="tool-field">
+              <label>Slew: <span id="lblSlew" style="color:#fbbf24;">18.0</span></label>
+              <input type="range" id="sliderSlew" min="5" max="40" step="1" value="18" />
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Rise Time (10-90%)</span>
+              <strong class="result-val" id="pidRiseTime">0.32s</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Overshoot</span>
+              <strong class="result-val green" id="pidOvershoot">1.8%</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Settling Time</span>
+              <strong class="result-val purple" id="pidSettling">0.58s</strong>
+            </div>
+          </div>
+
+          <div class="tool-actions-row">
+            <button type="button" class="btn-tool-action primary" id="btnCopyPidCode">
+              📋 Copy LemLib C++ Controller
+            </button>
+            <button type="button" class="btn-tool-action" id="btnResetPidDefaults">
+              ↺ Reset Defaults
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 4: Sharp Turn Centripetal & Tipping Speed Analyzer -->
+      <article class="tool-card" data-category="motion" data-keywords="sharp turn centripetal acceleration tipping friction swing turn radius curvature">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">📐</div>
+          <div class="tool-title-info">
+            <h3>Sharp Turn Centripetal &amp; Tipping Analyzer</h3>
+            <p class="tool-tagline">Calculate maximum cornering velocity on tight arcs to avoid robot tipping or wheel traction breakaway.</p>
+          </div>
+          <span class="tool-category-badge">🏎️ Motion</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>Turn Radius R (in)</label>
+              <input type="number" id="turnRadius" value="18" min="4" max="72" step="1" />
+            </div>
+            <div class="tool-field">
+              <label>Track Width W (in)</label>
+              <input type="number" id="turnWidth" value="13.5" min="8" max="20" step="0.5" />
+            </div>
+            <div class="tool-field">
+              <label>CG Height (in)</label>
+              <input type="number" id="turnCgHeight" value="5.5" min="2" max="12" step="0.5" />
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Max Slip Speed</span>
+              <strong class="result-val" id="turnMaxSlip">47.8 in/s</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Tipping Limit</span>
+              <strong class="result-val green" id="turnTippingLimit">52.1 in/s</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Recommended Turn Cap</span>
+              <strong class="result-val amber" id="turnSafeSpeed">42.0 in/s</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.71rem; color:var(--muted); line-height:1.4;">
+            Formula: $v_{max} = \sqrt{\mu \cdot g \cdot R}$ with safety factor 0.88. Prevents violent high-speed swing turn slides during autonomous.
+          </div>
+
+          <div class="tool-actions-row">
+            <span style="font-size:0.7rem; color:var(--cyan);">Safe LemLib maxSpeed: 85</span>
+            <button type="button" class="btn-tool-action" id="btnCopyTurnSnippet">
+              📋 Copy Safe Swing Call
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 5: Cross-Alliance Routine Mirroring Utility -->
+      <article class="tool-card" data-category="routines" data-keywords="mirror mirroring alliance red left red right blue symmetry coordinates transform">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">🪞</div>
+          <div class="tool-title-info">
+            <h3>Cross-Alliance Routine Mirroring Utility</h3>
+            <p class="tool-tagline">Mirror coordinates and headings across field axes for Red Left ↔ Red Right or cross-alliance Red ↔ Blue matching.</p>
+          </div>
+          <span class="tool-category-badge">🔄 Routines</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid">
+            <div class="tool-field">
+              <label>Transformation Symmetry</label>
+              <select id="mirrorModeSelect">
+                <option value="x_flip" selected>Symmetrical Mirror (X-Axis Flip)</option>
+                <option value="rot_180">Rotational (180° Blue Alliance Flip)</option>
+              </select>
+            </div>
+            <div class="tool-field">
+              <label>Input Format</label>
+              <select id="mirrorInputFormat">
+                <option value="coords">Coordinates: (x, y, θ)</option>
+                <option value="code">LemLib C++ Code</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tool-field">
+            <label>Input Points or Commands</label>
+            <textarea id="mirrorInputText" rows="3" style="font-family:ui-monospace, monospace; font-size:0.72rem;">chassis.moveToPoint(24, 48, 2000);
+chassis.turnToHeading(90, 1000);</textarea>
+          </div>
+
+          <div class="tool-field">
+            <label>Transformed Coordinates / C++ Output</label>
+            <div class="tool-code-preview" id="mirrorOutputText">chassis.moveToPoint(-24, 48, 2000);
+chassis.turnToHeading(270, 1000);</div>
+          </div>
+
+          <div class="tool-actions-row">
+            <button type="button" class="btn-tool-action primary" id="btnExecuteMirror">
+              ⚡ Transform &amp; Mirror
+            </button>
+            <button type="button" class="btn-tool-action" id="btnCopyMirrorOutput">
+              📋 Copy Mirrored C++
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 6: Pure Pursuit Lookahead & Carrot Calculator -->
+      <article class="tool-card" data-category="motion" data-keywords="pure pursuit lookahead carrot lead distance radius tracking spline path following">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">🎯</div>
+          <div class="tool-title-info">
+            <h3>Pure Pursuit Lookahead &amp; Carrot Calculator</h3>
+            <p class="tool-tagline">Calculate optimal carrot lookahead distances ($L$) for tight corners vs. fast straight-line spline tracking.</p>
+          </div>
+          <span class="tool-category-badge">🏎️ Motion</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>Path Speed (in/s)</label>
+              <input type="number" id="ppSpeed" value="55" min="20" max="100" step="5" />
+            </div>
+            <div class="tool-field">
+              <label>Curve Tightness</label>
+              <select id="ppCurve">
+                <option value="tight">Tight (< 18" radius)</option>
+                <option value="moderate" selected>Moderate (18" – 36")</option>
+                <option value="gentle">Gentle / Straight (> 36")</option>
+              </select>
+            </div>
+            <div class="tool-field">
+              <label>Track Width (in)</label>
+              <input type="number" id="ppWidth" value="13.5" min="10" max="18" step="0.5" />
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Recommended Lookahead</span>
+              <strong class="result-val" id="ppLookahead">10.5 in</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Min Lookahead</span>
+              <strong class="result-val green" id="ppMinLookahead">7.5 in</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Lead Factor</span>
+              <strong class="result-val purple" id="ppLeadFactor">0.65</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.71rem; color:var(--muted); line-height:1.4;">
+            Smaller lookahead cuts corners tighter; larger lookahead avoids oscillations on long straights.
+          </div>
+
+          <div class="tool-actions-row">
+            <button type="button" class="btn-tool-action primary" id="btnCopyPurePursuitCode">
+              📋 Copy chassis.follow() Code
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 7: Pneumatics Air Budget & Pressure Drop Calculator -->
+      <article class="tool-card" data-category="hardware" data-keywords="pneumatics air tank pressure psi cylinder clamp intake drop actuations">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">🎈</div>
+          <div class="tool-title-info">
+            <h3>Pneumatics Air Budget &amp; Pressure Drop</h3>
+            <p class="tool-tagline">Estimate tank pressure depletion over autonomous and driver control to ensure goal clamp grip integrity.</p>
+          </div>
+          <span class="tool-category-badge">⚡ Hardware</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>Air Tanks</label>
+              <select id="pneuTanks">
+                <option value="1">1 Tank (100 psi)</option>
+                <option value="2" selected>2 Tanks (100 psi)</option>
+              </select>
+            </div>
+            <div class="tool-field">
+              <label>Cylinders In Use</label>
+              <select id="pneuCylinders">
+                <option value="1">1 Cylinder</option>
+                <option value="2" selected>2 Cylinders</option>
+                <option value="3">3 Cylinders</option>
+                <option value="4">4 Cylinders</option>
+              </select>
+            </div>
+            <div class="tool-field">
+              <label>Auton Actuations</label>
+              <input type="number" id="pneuActuations" value="6" min="1" max="30" step="1" />
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Drop Per Cycle</span>
+              <strong class="result-val amber" id="pneuDropRate">-3.8 psi</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">End of Auton PSI</span>
+              <strong class="result-val green" id="pneuEndPsi">77.2 psi</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Clamp Margin</span>
+              <strong class="result-val purple" id="pneuMargin">Safe (&gt;45 psi)</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.71rem; color:var(--muted); line-height:1.4;">
+            Double-acting cylinders consume ~0.038 standard liters per 50mm stroke at 100 psi initial charge.
+          </div>
+
+          <div class="tool-actions-row">
+            <span style="font-size:0.7rem; color:var(--green);" id="pneuStatusText">✅ Optimal Autonomous Air Retention</span>
+            <button type="button" class="btn-tool-action" id="btnTestPneu15Cycles">
+              ⚡ Test 15-Actuation Rush
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 8: VEX V5 Battery Voltage Sag & Internal Resistance -->
+      <article class="tool-card" data-category="hardware" data-keywords="battery voltage sag internal resistance brownout v5 brain current amp draw">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">🔋</div>
+          <div class="tool-title-info">
+            <h3>VEX V5 Battery Voltage Sag &amp; Draw Estimator</h3>
+            <p class="tool-tagline">Model terminal voltage drops under heavy multi-motor acceleration bursts to avoid V5 brain brownouts.</p>
+          </div>
+          <span class="tool-category-badge">⚡ Hardware</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>Resting Voltage</label>
+              <input type="number" id="battRestVolt" value="12.8" min="10.5" max="13.4" step="0.1" />
+            </div>
+            <div class="tool-field">
+              <label>Motor Count</label>
+              <select id="battMotors">
+                <option value="4">4 Motors</option>
+                <option value="6">6 Motors</option>
+                <option value="8" selected>8 Motors</option>
+              </select>
+            </div>
+            <div class="tool-field">
+              <label>Burst Load Type</label>
+              <select id="battLoad">
+                <option value="cruising">Cruising (12A total)</option>
+                <option value="accel" selected>Hard Accel (28A total)</option>
+                <option value="stall">Full Push / Stall (50A total)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Voltage Sag</span>
+              <strong class="result-val amber" id="battSag">-2.80 V</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Loaded Terminal Volts</span>
+              <strong class="result-val green" id="battTerminalVolts">10.00 V</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Brownout Risk</span>
+              <strong class="result-val green" id="battBrownoutRisk">LOW (&gt;9.2V)</strong>
+            </div>
+          </div>
+
+          <div class="tool-actions-row">
+            <span style="font-size:0.7rem; color:var(--muted);">Internal Resistance: ~0.10 Ω (Typical V5 LiFePO4 pack)</span>
+            <button type="button" class="btn-tool-action" id="btnSimulateStallPeak">
+              ⚠️ Test Goal Clamp Stall
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 9: Raw C++ Auton to Visual Blocks Translator -->
+      <article class="tool-card" data-category="routines" data-keywords="translator c++ raw code parse convert import pros lemlib multitask sync">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">📥</div>
+          <div class="tool-title-info">
+            <h3>Raw C++ Auton → Visual Blocks Translator</h3>
+            <p class="tool-tagline">Parse raw LemLib v0.5+ C++ autonomous code into visual drag-and-drop flowchart blocks with multitask detection.</p>
+          </div>
+          <span class="tool-category-badge">🔄 Routines</span>
+        </div>
+        <div class="tool-body">
+          <div style="font-size:0.73rem; color:var(--muted); line-height:1.4;">
+            Two-way synchronization between text and visual programming. Detects parallel PROS tasks (`pros::Task`), chassis movements (`moveToPoint`, `moveToPose`, `turnToHeading`), pneumatic triggers, and delay timers.
+          </div>
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">LemLib Support</span>
+              <strong class="result-val green">v0.5+ Native</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Multitask Parser</span>
+              <strong class="result-val purple">Concurrency Aware</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Sync Mode</span>
+              <strong class="result-val">Two-Way Bidirectional</strong>
+            </div>
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="translator.html" class="btn-tool-action primary" title="Open full C++ Translator">
+              🔄 Open C++ Translator Page
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 10: Full PROS C++ IDE Suite -->
+      <article class="tool-card" data-category="routines" data-keywords="ide pros compiler c++ code editor syntax highlighting build flash make">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">💻</div>
+          <div class="tool-title-info">
+            <h3>Full PROS C++ IDE &amp; Project Compiler</h3>
+            <p class="tool-tagline">Complete multi-file code editor with syntax highlighting, project tree management, and cloud compilation.</p>
+          </div>
+          <span class="tool-category-badge">🔄 Routines</span>
+        </div>
+        <div class="tool-body">
+          <div style="font-size:0.73rem; color:var(--muted); line-height:1.4;">
+            Edit `main.cpp`, subsystem headers, autonomous routines, and tuning files in a dedicated Monaco-style C++ IDE. Supports instant cloud builds, autosave, and direct hardware flashing.
+          </div>
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Build System</span>
+              <strong class="result-val green">pros make</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Files Supported</span>
+              <strong class="result-val purple">Multi-file tree</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Autosave</span>
+              <strong class="result-val">Live Sync</strong>
+            </div>
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="ide.html" class="btn-tool-action primary" title="Launch PROS C++ IDE">
+              💻 Launch PROS C++ IDE
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 11: VEX V5 Brain USB CDC Telemetry Link -->
+      <article class="tool-card" data-category="hardware" data-keywords="brain v5 usb web serial cdc telemetry battery terminal motor ports">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">🔌</div>
+          <div class="tool-title-info">
+            <h3>VEX V5 Brain USB CDC Telemetry Link</h3>
+            <p class="tool-tagline">Direct Web Serial link to VEX V5 Robot Brain for live motor diagnostics, battery levels, and 1-click code flashing.</p>
+          </div>
+          <span class="tool-category-badge">⚡ Hardware</span>
+        </div>
+        <div class="tool-body">
+          <div style="font-size:0.73rem; color:var(--muted); line-height:1.4;">
+            Connect your laptop directly to the V5 Brain via USB to stream odometry poses, verify Smart Motor temperatures, inspect battery state-of-charge, and flash autonomous code without leaving the browser.
+          </div>
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Web Serial API</span>
+              <strong class="result-val green" id="serialSupportStatus">Supported</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">CDC Port</span>
+              <strong class="result-val purple">User / System</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Live Telemetry</span>
+              <strong class="result-val">100 Hz</strong>
+            </div>
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="index.html#bannerBrainStatus" class="btn-tool-action primary" id="btnConnectBrainTools">
+              🔌 Connect Brain in Planner
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 12: Site & Community Analytics Dashboard -->
+      <article class="tool-card" data-category="routines" data-keywords="stats statistics analytics visits page views users server traffic">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">📊</div>
+          <div class="tool-title-info">
+            <h3>Site &amp; Team Usage Analytics Dashboard</h3>
+            <p class="tool-tagline">Live visitor statistics, popular autonomous modules, and active user requests breakdown.</p>
+          </div>
+          <span class="tool-category-badge">📊 Analytics</span>
+        </div>
+        <div class="tool-body">
+          <div style="font-size:0.73rem; color:var(--muted); line-height:1.4;">
+            Transparent, real-time analytics displaying team page requests across the Visual Planner, PROS IDE, C++ Translator, and API endpoints.
+          </div>
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Total Views</span>
+              <strong class="result-val" id="statToolsViews">...</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Unique Visitors</span>
+              <strong class="result-val green" id="statToolsVisitors">...</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Top Module</span>
+              <strong class="result-val purple" id="statToolsTopPage">Visual Planner</strong>
+            </div>
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="stats.html" class="btn-tool-action" title="View Full Statistics Page">
+              📊 Open Visitor Stats Page
+            </a>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification element -->
+  <div class="tools-toast" id="toolsToast">
+    <span id="toastIcon">✨</span>
+    <span id="toastMsg">Action completed successfully</span>
+  </div>
+
+  <!-- Scripts -->
+  <script src="version.js"></script>
+  <script src="theme.js"></script>
+  <script>
+    // =========================================================================
+    // Tools Suite Main Interactivity Engine
+    // =========================================================================
+    document.addEventListener("DOMContentLoaded", () => {
+      // 1. Fullscreen Handling
+      const btnToggleFullscreen = document.getElementById("btnToggleFullscreen");
+      const btnBannerFullscreen = document.getElementById("btnBannerFullscreen");
+      const fsPromptBanner = document.getElementById("fsPromptBanner");
+      const fsLiveStatusBadge = document.getElementById("fsLiveStatusBadge");
+      const fsBtnIcon = document.getElementById("fsBtnIcon");
+      const fsBtnText = document.getElementById("fsBtnText");
+
+      function updateFullscreenUI() {
+        const isFs = !!document.fullscreenElement;
+        if (isFs) {
+          if (fsLiveStatusBadge) {
+            fsLiveStatusBadge.textContent = "⛶ Fullscreen Active";
+            fsLiveStatusBadge.style.color = "#4ade80";
+            fsLiveStatusBadge.style.borderColor = "rgba(34, 197, 94, 0.4)";
+            fsLiveStatusBadge.style.background = "rgba(34, 197, 94, 0.15)";
+          }
+          if (fsBtnIcon) fsBtnIcon.textContent = "🗗";
+          if (fsBtnText) fsBtnText.textContent = "Exit Fullscreen";
+          if (btnToggleFullscreen) btnToggleFullscreen.classList.add("active");
+          if (fsPromptBanner) fsPromptBanner.classList.add("hidden");
+        } else {
+          if (fsLiveStatusBadge) {
+            fsLiveStatusBadge.textContent = "⛶ Window Mode";
+            fsLiveStatusBadge.style.color = "#94a3b8";
+            fsLiveStatusBadge.style.borderColor = "rgba(148, 163, 184, 0.3)";
+            fsLiveStatusBadge.style.background = "rgba(148, 163, 184, 0.1)";
+          }
+          if (fsBtnIcon) fsBtnIcon.textContent = "⛶";
+          if (fsBtnText) fsBtnText.textContent = "Enter Fullscreen";
+          if (btnToggleFullscreen) btnToggleFullscreen.classList.remove("active");
+          if (fsPromptBanner) fsPromptBanner.classList.remove("hidden");
+        }
+      }
+
+      function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().then(updateFullscreenUI).catch((err) => {
+            console.log("Fullscreen request failed", err);
+            showToast("ℹ️ Click anywhere on the page to allow Fullscreen view.");
+          });
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().then(updateFullscreenUI).catch(() => {});
+          }
+        }
+      }
+
+      if (btnToggleFullscreen) btnToggleFullscreen.addEventListener("click", toggleFullscreen);
+      if (btnBannerFullscreen) btnBannerFullscreen.addEventListener("click", toggleFullscreen);
+      document.addEventListener("fullscreenchange", updateFullscreenUI);
+
+      // Auto-enter fullscreen if user clicked from the tools tab or has hash
+      if (window.location.hash.includes("fullscreen") && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(updateFullscreenUI).catch(() => {
+          // If browser policy blocked immediate fullscreen without direct click, banner remains visible
+          updateFullscreenUI();
+        });
+      } else {
+        updateFullscreenUI();
+      }
+
+      // 2. Toast Utility
+      const toastEl = document.getElementById("toolsToast");
+      const toastMsg = document.getElementById("toastMsg");
+      const toastIcon = document.getElementById("toastIcon");
+      let toastTimer = null;
+
+      function showToast(msg, icon = "✨") {
+        if (!toastEl) return;
+        if (toastMsg) toastMsg.textContent = msg;
+        if (toastIcon) toastIcon.textContent = icon;
+        toastEl.classList.add("active");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastEl.classList.remove("active");
+        }, 2800);
+      }
+
+      // 3. Search and Category Filtering
+      const searchInput = document.getElementById("toolSearchInput");
+      const filterPills = document.querySelectorAll("#toolsFilterPills .tool-pill");
+      const toolCards = document.querySelectorAll(".tool-card");
+      let activeFilter = "all";
+
+      function applyFilters() {
+        const query = (searchInput.value || "").trim().toLowerCase();
+        let visibleCount = 0;
+
+        toolCards.forEach((card) => {
+          const cat = card.getAttribute("data-category") || "";
+          const kw = (card.getAttribute("data-keywords") || "").toLowerCase();
+          const title = (card.querySelector("h3")?.textContent || "").toLowerCase();
+          const desc = (card.querySelector(".tool-tagline")?.textContent || "").toLowerCase();
+
+          const matchesCat = activeFilter === "all" || cat === activeFilter;
+          const matchesQuery = !query || kw.includes(query) || title.includes(query) || desc.includes(query);
+
+          if (matchesCat && matchesQuery) {
+            card.style.display = "flex";
+            visibleCount++;
+          } else {
+            card.style.display = "none";
+          }
+        });
+
+        const countAllEl = document.getElementById("countAll");
+        if (countAllEl) countAllEl.textContent = visibleCount;
+      }
+
+      if (searchInput) searchInput.addEventListener("input", applyFilters);
+
+      filterPills.forEach((pill) => {
+        pill.addEventListener("click", () => {
+          filterPills.forEach((p) => p.classList.remove("active"));
+          pill.classList.add("active");
+          activeFilter = pill.getAttribute("data-filter") || "all";
+          applyFilters();
+        });
+      });
+
+      // 4. TOOL 2: Drivetrain Dyno Calculator Interactivity
+      const dynoWheelDiam = document.getElementById("dynoWheelDiam");
+      const dynoCartridge = document.getElementById("dynoCartridge");
+      const dynoRatio = document.getElementById("dynoRatio");
+      const dynoMotors = document.getElementById("dynoMotors");
+      const dynoWeight = document.getElementById("dynoWeight");
+
+      const dynoFreeSpeed = document.getElementById("dynoFreeSpeed");
+      const dynoLoadedSpeed = document.getElementById("dynoLoadedSpeed");
+      const dynoWheelRpm = document.getElementById("dynoWheelRpm");
+      const dynoFieldTime = document.getElementById("dynoFieldTime");
+      const dynoRecommendation = document.getElementById("dynoRecommendation");
+      const btnApplyDynoToBot = document.getElementById("btnApplyDynoToBot");
+
+      function updateDyno() {
+        const d = parseFloat(dynoWheelDiam?.value || "2.75");
+        const cart = parseFloat(dynoCartridge?.value || "600");
+        const ratio = parseFloat(dynoRatio?.value || "0.75"); // driven / driving
+        const motors = parseInt(dynoMotors?.value || "6", 10);
+        const weight = parseFloat(dynoWeight?.value || "14.5");
+
+        const wheelRpm = cart * ratio;
+        const circ = Math.PI * d; // inches per revolution
+        const freeSpeedInPerSec = (wheelRpm / 60) * circ;
+        const loadedSpeedInPerSec = freeSpeedInPerSec * 0.90; // 90% loaded efficiency
+        const fieldTransitSec = 144 / Math.max(1, loadedSpeedInPerSec);
+
+        if (dynoFreeSpeed) dynoFreeSpeed.textContent = `${freeSpeedInPerSec.toFixed(1)} in/s`;
+        if (dynoLoadedSpeed) dynoLoadedSpeed.textContent = `${loadedSpeedInPerSec.toFixed(1)} in/s`;
+        if (dynoWheelRpm) dynoWheelRpm.textContent = `${Math.round(wheelRpm)} RPM`;
+        if (dynoFieldTime) dynoFieldTime.textContent = `${fieldTransitSec.toFixed(2)}s`;
+
+        const maxSpeedRec = Math.min(127, Math.max(60, Math.round((loadedSpeedInPerSec / freeSpeedInPerSec) * 127)));
+        if (dynoRecommendation) {
+          dynoRecommendation.textContent = `Recommended defaultMaxSpeed: ${maxSpeedRec} | Power: ${motors * 11}W`;
+        }
+      }
+
+      [dynoWheelDiam, dynoCartridge, dynoRatio, dynoMotors, dynoWeight].forEach((el) => {
+        if (el) el.addEventListener("change", updateDyno);
+        if (el) el.addEventListener("input", updateDyno);
+      });
+      updateDyno();
+
+      if (btnApplyDynoToBot) {
+        btnApplyDynoToBot.addEventListener("click", () => {
+          try {
+            const raw = localStorage.getItem("vex_bot_settings");
+            const bot = raw ? JSON.parse(raw) : {};
+            bot.wheelDiam = parseFloat(dynoWheelDiam.value);
+            bot.gearRatio = parseFloat(dynoRatio.value);
+            bot.rpm = parseFloat(dynoCartridge.value) * bot.gearRatio;
+            localStorage.setItem("vex_bot_settings", JSON.stringify(bot));
+            showToast("💾 Drivetrain parameters saved to robot settings profile!");
+          } catch (e) {
+            showToast("✅ Drivetrain parameters copied.");
+          }
+        });
+      }
+
+      // 5. TOOL 3: Interactive LemLib PID Gain Step Response Canvas
+      const pidCanvas = document.getElementById("pidPlaygroundCanvas");
+      const sliderKp = document.getElementById("sliderKp");
+      const sliderKd = document.getElementById("sliderKd");
+      const sliderSlew = document.getElementById("sliderSlew");
+      const lblKp = document.getElementById("lblKp");
+      const lblKd = document.getElementById("lblKd");
+      const lblSlew = document.getElementById("lblSlew");
+      const pidRiseTime = document.getElementById("pidRiseTime");
+      const pidOvershoot = document.getElementById("pidOvershoot");
+      const pidSettling = document.getElementById("pidSettling");
+      const btnCopyPidCode = document.getElementById("btnCopyPidCode");
+      const btnResetPidDefaults = document.getElementById("btnResetPidDefaults");
+
+      function drawPidCanvas() {
+        if (!pidCanvas) return;
+        const rect = pidCanvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        pidCanvas.width = Math.floor(rect.width * dpr);
+        pidCanvas.height = Math.floor(rect.height * dpr);
+
+        const ctx = pidCanvas.getContext("2d");
+        ctx.scale(dpr, dpr);
+        const w = rect.width;
+        const h = rect.height;
+
+        ctx.fillStyle = "#090e17";
+        ctx.fillRect(0, 0, w, h);
+
+        const kp = parseFloat(sliderKp?.value || "7.5");
+        const kd = parseFloat(sliderKd?.value || "22.0");
+        const slew = parseFloat(sliderSlew?.value || "18.0");
+
+        if (lblKp) lblKp.textContent = kp.toFixed(1);
+        if (lblKd) lblKd.textContent = kd.toFixed(1);
+        if (lblSlew) lblSlew.textContent = slew.toFixed(1);
+
+        // Simulation parameters
+        const target = 24.0; // 24 inch step
+        const duration = 2.0; // 2 seconds
+        const dt = 0.01;
+        const steps = Math.floor(duration / dt);
+
+        let pos = 0;
+        let vel = 0;
+        let prevError = target;
+        let maxPos = 0;
+        let rise10t = null;
+        let rise90t = null;
+        let settleT = null;
+
+        const path = [];
+        for (let i = 0; i <= steps; i++) {
+          const t = i * dt;
+          const error = target - pos;
+          const dError = (error - prevError) / dt;
+          prevError = error;
+
+          let targetV = kp * error + kd * dError;
+          // Apply slew rate acceleration limit
+          const maxDeltaV = slew * 4.0 * dt;
+          if (targetV > vel + maxDeltaV) targetV = vel + maxDeltaV;
+          if (targetV < vel - maxDeltaV) targetV = vel - maxDeltaV;
+
+          vel = targetV;
+          pos += vel * dt;
+
+          if (pos > maxPos) maxPos = pos;
+          if (rise10t === null && pos >= target * 0.1) rise10t = t;
+          if (rise90t === null && pos >= target * 0.9) rise90t = t;
+          if (Math.abs(pos - target) < target * 0.03 && settleT === null && t > 0.3) settleT = t;
+
+          path.push({ t, pos });
+        }
+
+        // Metrics calculations
+        const rise = (rise90t !== null && rise10t !== null) ? (rise90t - rise10t) : 0.35;
+        const overshootPct = Math.max(0, ((maxPos - target) / target) * 100);
+        const settling = settleT !== null ? settleT : 0.62;
+
+        if (pidRiseTime) pidRiseTime.textContent = `${rise.toFixed(2)}s`;
+        if (pidOvershoot) {
+          pidOvershoot.textContent = `${overshootPct.toFixed(1)}%`;
+          pidOvershoot.style.color = overshootPct > 8 ? "#f87171" : "#4ade80";
+        }
+        if (pidSettling) pidSettling.textContent = `${settling.toFixed(2)}s`;
+
+        // Draw Target Line
+        const padX = 28;
+        const padY = 16;
+        const plotW = w - padX - 10;
+        const plotH = h - padY * 2;
+        const scaleY = target * 1.35;
+
+        function getX(t) { return padX + (t / duration) * plotW; }
+        function getY(yVal) { return padY + plotH - (yVal / scaleY) * plotH; }
+
+        // Grid lines
+        ctx.strokeStyle = "#1e293b";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padX, getY(target));
+        ctx.lineTo(w - 10, getY(target));
+        ctx.stroke();
+
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+        ctx.beginPath();
+        ctx.moveTo(padX, getY(target));
+        ctx.lineTo(w - 10, getY(target));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#38bdf8";
+        ctx.font = "9px ui-monospace, monospace";
+        ctx.fillText(`Target: 24"`, padX + 4, getY(target) - 4);
+
+        // Actual Step Response curve
+        ctx.strokeStyle = overshootPct > 10 ? "#fbbf24" : "#4ade80";
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        path.forEach((pt, idx) => {
+          const x = getX(pt.t);
+          const y = getY(pt.pos);
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      [sliderKp, sliderKd, sliderSlew].forEach((s) => {
+        if (s) s.addEventListener("input", drawPidCanvas);
+      });
+      window.addEventListener("resize", drawPidCanvas);
+      setTimeout(drawPidCanvas, 50);
+
+      if (btnResetPidDefaults) {
+        btnResetPidDefaults.addEventListener("click", () => {
+          if (sliderKp) sliderKp.value = "7.5";
+          if (sliderKd) sliderKd.value = "22.0";
+          if (sliderSlew) sliderSlew.value = "18.0";
+          drawPidCanvas();
+          showToast("↺ Restored standard LemLib lateral PID defaults.");
+        });
+      }
+
+      if (btnCopyPidCode) {
+        btnCopyPidCode.addEventListener("click", () => {
+          const kp = parseFloat(sliderKp.value).toFixed(1);
+          const kd = parseFloat(sliderKd.value).toFixed(1);
+          const slew = parseFloat(sliderSlew.value).toFixed(1);
+          const code = `// LemLib lateral PID constants\nlemlib::ControllerSettings lateral_controller(\n    ${kp}, // kP\n    0.0, // kI\n    ${kd}, // kD\n    3.0, // anti-windup\n    1.0, // small error range (in)\n    100, // small error range timeout (ms)\n    3.0, // large error range (in)\n    500, // large error range timeout (ms)\n    ${slew} // maximum acceleration (slew)\n);`;
+          navigator.clipboard.writeText(code).then(() => {
+            showToast("📋 Copied ControllerSettings code to clipboard!");
+          }).catch(() => {
+            showToast("✅ Code ready to paste.");
+          });
+        });
+      }
+
+      // 6. TOOL 4: Sharp Turn Centripetal & Tipping Calculator
+      const turnRadius = document.getElementById("turnRadius");
+      const turnWidth = document.getElementById("turnWidth");
+      const turnCgHeight = document.getElementById("turnCgHeight");
+      const turnMaxSlip = document.getElementById("turnMaxSlip");
+      const turnTippingLimit = document.getElementById("turnTippingLimit");
+      const turnSafeSpeed = document.getElementById("turnSafeSpeed");
+      const btnCopyTurnSnippet = document.getElementById("btnCopyTurnSnippet");
+
+      function updateTurnCalc() {
+        const r = parseFloat(turnRadius?.value || "18");
+        const w = parseFloat(turnWidth?.value || "13.5");
+        const h = parseFloat(turnCgHeight?.value || "5.5");
+        const g = 386.088; // in/s^2
+        const mu = 0.75; // field tile friction
+
+        const slipSpeed = Math.sqrt(mu * g * r);
+        const tippingSpeed = Math.sqrt(g * r * (w / (2 * h)));
+        const safeSpeed = Math.min(slipSpeed, tippingSpeed) * 0.88;
+
+        if (turnMaxSlip) turnMaxSlip.textContent = `${slipSpeed.toFixed(1)} in/s`;
+        if (turnTippingLimit) turnTippingLimit.textContent = `${tippingSpeed.toFixed(1)} in/s`;
+        if (turnSafeSpeed) turnSafeSpeed.textContent = `${safeSpeed.toFixed(1)} in/s`;
+      }
+      [turnRadius, turnWidth, turnCgHeight].forEach((el) => {
+        if (el) el.addEventListener("input", updateTurnCalc);
+      });
+      updateTurnCalc();
+
+      if (btnCopyTurnSnippet) {
+        btnCopyTurnSnippet.addEventListener("click", () => {
+          const code = `// Safe turn to prevent wheel slip or robot tipping\nchassis.turnToHeading(90, 1200, {.maxSpeed = 85, .minSpeed = 5, .earlyExitRange = 3});`;
+          navigator.clipboard.writeText(code).then(() => {
+            showToast("📋 Copied safe swing turn code snippet!");
+          });
+        });
+      }
+
+      // 7. TOOL 5: Cross-Alliance Routine Mirroring Utility
+      const mirrorModeSelect = document.getElementById("mirrorModeSelect");
+      const mirrorInputText = document.getElementById("mirrorInputText");
+      const mirrorOutputText = document.getElementById("mirrorOutputText");
+      const btnExecuteMirror = document.getElementById("btnExecuteMirror");
+      const btnCopyMirrorOutput = document.getElementById("btnCopyMirrorOutput");
+
+      function executeMirroring() {
+        const mode = mirrorModeSelect.value;
+        const text = mirrorInputText.value || "";
+        const lines = text.split("\n");
+
+        const transformed = lines.map((line) => {
+          // Match moveToPoint(x, y, ...)
+          line = line.replace(/moveToPoint\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)/g, (_, xStr, yStr) => {
+            let x = parseFloat(xStr);
+            let y = parseFloat(yStr);
+            if (mode === "x_flip") x = -x;
+            else if (mode === "rot_180") { x = -x; y = -y; }
+            return `moveToPoint(${x.toFixed(1)}, ${y.toFixed(1)}`;
+          });
+
+          // Match turnToHeading(theta, ...)
+          line = line.replace(/turnToHeading\(\s*(-?[\d.]+)/g, (_, thStr) => {
+            let th = parseFloat(thStr);
+            if (mode === "x_flip") th = (360 - th) % 360;
+            else if (mode === "rot_180") th = (th + 180) % 360;
+            return `turnToHeading(${th.toFixed(1)}`;
+          });
+
+          return line;
+        }).join("\n");
+
+        if (mirrorOutputText) mirrorOutputText.textContent = transformed;
+        showToast("🪞 Coordinates mirrored across alliance symmetry!");
+      }
+
+      if (btnExecuteMirror) btnExecuteMirror.addEventListener("click", executeMirroring);
+      if (btnCopyMirrorOutput) {
+        btnCopyMirrorOutput.addEventListener("click", () => {
+          const out = mirrorOutputText?.textContent || "";
+          navigator.clipboard.writeText(out).then(() => {
+            showToast("📋 Copied mirrored C++ code to clipboard!");
+          });
+        });
+      }
+
+      // 8. TOOL 6: Pure Pursuit Lookahead
+      const ppSpeed = document.getElementById("ppSpeed");
+      const ppCurve = document.getElementById("ppCurve");
+      const ppWidth = document.getElementById("ppWidth");
+      const ppLookahead = document.getElementById("ppLookahead");
+      const ppMinLookahead = document.getElementById("ppMinLookahead");
+      const ppLeadFactor = document.getElementById("ppLeadFactor");
+      const btnCopyPurePursuitCode = document.getElementById("btnCopyPurePursuitCode");
+
+      function updatePurePursuit() {
+        const spd = parseFloat(ppSpeed?.value || "55");
+        const curve = ppCurve?.value || "moderate";
+        const w = parseFloat(ppWidth?.value || "13.5");
+
+        let baseLookahead = w * 0.65;
+        if (curve === "tight") baseLookahead = w * 0.55;
+        if (curve === "gentle") baseLookahead = w * 0.90;
+
+        const dynamicLookahead = baseLookahead + (spd / 60) * 4.0;
+        const minL = Math.max(6, dynamicLookahead * 0.75);
+        const lead = curve === "tight" ? 0.55 : 0.65;
+
+        if (ppLookahead) ppLookahead.textContent = `${dynamicLookahead.toFixed(1)} in`;
+        if (ppMinLookahead) ppMinLookahead.textContent = `${minL.toFixed(1)} in`;
+        if (ppLeadFactor) ppLeadFactor.textContent = lead.toFixed(2);
+      }
+      [ppSpeed, ppCurve, ppWidth].forEach((el) => {
+        if (el) el.addEventListener("input", updatePurePursuit);
+        if (el) el.addEventListener("change", updatePurePursuit);
+      });
+      updatePurePursuit();
+
+      if (btnCopyPurePursuitCode) {
+        btnCopyPurePursuitCode.addEventListener("click", () => {
+          const l = ppLookahead.textContent.replace(" in", "");
+          const code = `// LemLib Pure Pursuit Path Follower\nchassis.follow(skills_path_txt, ${l}, 4000, true);`;
+          navigator.clipboard.writeText(code).then(() => {
+            showToast("📋 Copied chassis.follow() code!");
+          });
+        });
+      }
+
+      // 9. TOOL 7: Pneumatics Budget
+      const pneuTanks = document.getElementById("pneuTanks");
+      const pneuCylinders = document.getElementById("pneuCylinders");
+      const pneuActuations = document.getElementById("pneuActuations");
+      const pneuDropRate = document.getElementById("pneuDropRate");
+      const pneuEndPsi = document.getElementById("pneuEndPsi");
+      const pneuMargin = document.getElementById("pneuMargin");
+      const pneuStatusText = document.getElementById("pneuStatusText");
+      const btnTestPneu15Cycles = document.getElementById("btnTestPneu15Cycles");
+
+      function updatePneumatics() {
+        const tanks = parseInt(pneuTanks?.value || "2", 10);
+        const cyls = parseInt(pneuCylinders?.value || "2", 10);
+        const acts = parseInt(pneuActuations?.value || "6", 10);
+
+        // Approximate psi drop per actuation pair
+        const dropPerAct = (cyls * 3.6) / tanks;
+        const finalPsi = Math.max(15, 100 - (dropPerAct * acts));
+
+        if (pneuDropRate) pneuDropRate.textContent = `-${dropPerAct.toFixed(1)} psi`;
+        if (pneuEndPsi) pneuEndPsi.textContent = `${finalPsi.toFixed(1)} psi`;
+
+        if (finalPsi >= 55) {
+          if (pneuMargin) { pneuMargin.textContent = "Safe (>45 psi)"; pneuMargin.className = "result-val green"; }
+          if (pneuStatusText) { pneuStatusText.textContent = "✅ Optimal Autonomous Air Retention"; pneuStatusText.style.color = "var(--green)"; }
+        } else if (finalPsi >= 40) {
+          if (pneuMargin) { pneuMargin.textContent = "Marginal Grip"; pneuMargin.className = "result-val amber"; }
+          if (pneuStatusText) { pneuStatusText.textContent = "⚠️ Low Pressure Warning - Consider 2nd Tank"; pneuStatusText.style.color = "var(--amber)"; }
+        } else {
+          if (pneuMargin) { pneuMargin.textContent = "Critical (<40 psi)"; pneuMargin.className = "result-val red"; }
+          if (pneuStatusText) { pneuStatusText.textContent = "🛑 Insufficient Clamp Force - Add 2nd Reservoir"; pneuStatusText.style.color = "var(--red)"; }
+        }
+      }
+      [pneuTanks, pneuCylinders, pneuActuations].forEach((el) => {
+        if (el) el.addEventListener("input", updatePneumatics);
+        if (el) el.addEventListener("change", updatePneumatics);
+      });
+      updatePneumatics();
+
+      if (btnTestPneu15Cycles) {
+        btnTestPneu15Cycles.addEventListener("click", () => {
+          if (pneuActuations) pneuActuations.value = "15";
+          updatePneumatics();
+          showToast("⚡ Tested 15-Actuation rapid rush sequence.");
+        });
+      }
+
+      // 10. TOOL 8: Battery Voltage Sag
+      const battRestVolt = document.getElementById("battRestVolt");
+      const battMotors = document.getElementById("battMotors");
+      const battLoad = document.getElementById("battLoad");
+      const battSag = document.getElementById("battSag");
+      const battTerminalVolts = document.getElementById("battTerminalVolts");
+      const battBrownoutRisk = document.getElementById("battBrownoutRisk");
+      const btnSimulateStallPeak = document.getElementById("btnSimulateStallPeak");
+
+      function updateBatterySag() {
+        const vRest = parseFloat(battRestVolt?.value || "12.8");
+        const mCount = parseInt(battMotors?.value || "8", 10);
+        const load = battLoad?.value || "accel";
+
+        let currentPerMotor = 3.5;
+        if (load === "cruising") currentPerMotor = 1.5;
+        if (load === "accel") currentPerMotor = 3.8;
+        if (load === "stall") currentPerMotor = 6.2;
+
+        const totalCurrent = mCount * currentPerMotor;
+        const rInt = 0.10; // 100 mOhm pack resistance
+        const vDrop = totalCurrent * rInt;
+        const vLoaded = Math.max(7.0, vRest - vDrop);
+
+        if (battSag) battSag.textContent = `-${vDrop.toFixed(2)} V (${Math.round(totalCurrent)}A)`;
+        if (battTerminalVolts) {
+          battTerminalVolts.textContent = `${vLoaded.toFixed(2)} V`;
+          battTerminalVolts.style.color = vLoaded < 9.5 ? "#f87171" : "#4ade80";
+        }
+
+        if (battBrownoutRisk) {
+          if (vLoaded > 10.2) {
+            battBrownoutRisk.textContent = "LOW (>10.2V)";
+            battBrownoutRisk.className = "result-val green";
+          } else if (vLoaded >= 9.2) {
+            battBrownoutRisk.textContent = "MODERATE (>9.2V)";
+            battBrownoutRisk.className = "result-val amber";
+          } else {
+            battBrownoutRisk.textContent = "HIGH (<9.2V)";
+            battBrownoutRisk.className = "result-val red";
+          }
+        }
+      }
+      [battRestVolt, battMotors, battLoad].forEach((el) => {
+        if (el) el.addEventListener("input", updateBatterySag);
+        if (el) el.addEventListener("change", updateBatterySag);
+      });
+      updateBatterySag();
+
+      if (btnSimulateStallPeak) {
+        btnSimulateStallPeak.addEventListener("click", () => {
+          if (battLoad) battLoad.value = "stall";
+          updateBatterySag();
+          showToast("⚠️ Simulating heavy goal clamp motor stall condition.");
+        });
+      }
+
+      // 11. Fetch Site Stats for Tool 12
+      fetch("/api/stats").then((r) => r.json()).then((data) => {
+        if (data) {
+          const v = document.getElementById("statToolsViews");
+          const u = document.getElementById("statToolsVisitors");
+          if (v) v.textContent = (data.totalViews || 0).toLocaleString();
+          if (u) u.textContent = (data.uniqueVisitors || 0).toLocaleString();
+        }
+      }).catch(() => {});
+
+      // 12. Check Web Serial API support
+      const serialSupportStatus = document.getElementById("serialSupportStatus");
+      if (serialSupportStatus) {
+        if ("serial" in navigator) {
+          serialSupportStatus.textContent = "Supported";
+          serialSupportStatus.style.color = "#4ade80";
+        } else {
+          serialSupportStatus.textContent = "Use Chrome / Edge";
+          serialSupportStatus.style.color = "#fbbf24";
+        }
+      }
+
+      // 13. Explain Bottlenecks Dialog
+      const btnExplain = document.getElementById("btnExplainBottlenecks");
+      if (btnExplain) {
+        btnExplain.addEventListener("click", () => {
+          alert("⚡ LemLib Autonomous Bottleneck Diagnostic Rules:\n\n1. Accel Slew Saturation: Rapid velocity request where actual acceleration is bounded by motor slew (Lag > 5.5 in/s).\n2. Deceleration Lag: Momentum overshoot during aggressive braking curves.\n3. Top-End Speed Cap: Target velocity exceeding physical drivetrain gearing.\n4. Wheel Slip: Centripetal force exceeding wheel friction limit.");
+        });
+      }
+    });
+  </script>
+</body>
+</html>

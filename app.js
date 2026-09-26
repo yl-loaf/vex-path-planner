@@ -214,11 +214,359 @@
   let pendingDeleteActionId = null;
   let dragData = null;
 
-  function moveAction(source, dest) {
+  // --- Auto-scroll during block drag (Palette, Routine, Loops, If/Else) ---
+  let autoScrollRafId = null;
+  let autoScrollClientY = null;
+  let autoScrollClientX = null;
+  let isAutoScrolling = false;
+  const AUTO_SCROLL_EDGE_PX = 95; // threshold from window top/bottom in pixels
+  const AUTO_SCROLL_MIN_SPEED = 2.0; // pixels per frame (slow and smooth start)
+  const AUTO_SCROLL_MAX_SPEED = 8.5; // pixels per frame (gentle maximum rate)
+
+  let topScrollIndicatorEl = null;
+  let bottomScrollIndicatorEl = null;
+
+  function ensureScrollIndicators() {
+    if (!topScrollIndicatorEl) {
+      topScrollIndicatorEl = document.createElement("div");
+      topScrollIndicatorEl.className = "drag-scroll-edge-indicator drag-scroll-top";
+      topScrollIndicatorEl.innerHTML = `<span class="drag-scroll-badge">▲ Scrolling Up</span>`;
+      document.body.appendChild(topScrollIndicatorEl);
+    }
+    if (!bottomScrollIndicatorEl) {
+      bottomScrollIndicatorEl = document.createElement("div");
+      bottomScrollIndicatorEl.className = "drag-scroll-edge-indicator drag-scroll-bottom";
+      bottomScrollIndicatorEl.innerHTML = `<span class="drag-scroll-badge">▼ Scrolling Down</span>`;
+      document.body.appendChild(bottomScrollIndicatorEl);
+    }
+  }
+
+  function updateScrollIndicators(speed) {
+    ensureScrollIndicators();
+    if (speed < 0) {
+      topScrollIndicatorEl.classList.add("active");
+      bottomScrollIndicatorEl.classList.remove("active");
+    } else if (speed > 0) {
+      bottomScrollIndicatorEl.classList.add("active");
+      topScrollIndicatorEl.classList.remove("active");
+    } else {
+      if (topScrollIndicatorEl) topScrollIndicatorEl.classList.remove("active");
+      if (bottomScrollIndicatorEl) bottomScrollIndicatorEl.classList.remove("active");
+    }
+  }
+
+  function calculateAutoScrollSpeed(clientY) {
+    if (clientY == null || typeof clientY !== "number") return 0;
+    const windowH = window.innerHeight;
+
+    // Near top edge of the window
+    if (clientY < AUTO_SCROLL_EDGE_PX && clientY >= -60) {
+      const distFromTop = Math.max(0, clientY);
+      const ratio = Math.min(1, Math.max(0, (AUTO_SCROLL_EDGE_PX - distFromTop) / AUTO_SCROLL_EDGE_PX));
+      return -(AUTO_SCROLL_MIN_SPEED + ratio * (AUTO_SCROLL_MAX_SPEED - AUTO_SCROLL_MIN_SPEED));
+    }
+
+    // Near bottom edge of the window
+    if (clientY > windowH - AUTO_SCROLL_EDGE_PX && clientY <= windowH + 60) {
+      const distFromBottom = Math.max(0, windowH - clientY);
+      const ratio = Math.min(1, Math.max(0, (AUTO_SCROLL_EDGE_PX - distFromBottom) / AUTO_SCROLL_EDGE_PX));
+      return (AUTO_SCROLL_MIN_SPEED + ratio * (AUTO_SCROLL_MAX_SPEED - AUTO_SCROLL_MIN_SPEED));
+    }
+
+    return 0;
+  }
+
+  function performAutoScrollTick() {
+    if (!dragData) {
+      stopAutoScroll();
+      return;
+    }
+
+    const speed = calculateAutoScrollSpeed(autoScrollClientY);
+    if (speed === 0) {
+      updateScrollIndicators(0);
+      autoScrollRafId = null;
+      isAutoScrolling = false;
+      return;
+    }
+
+    isAutoScrolling = true;
+    updateScrollIndicators(speed);
+
+    // 1. Scroll the active flowchart panel (holds the routine blocks and actionFlow)
+    const flowPanel = document.querySelector(".flowchart-panel") || document.querySelector(".panel");
+    if (flowPanel) {
+      const maxScroll = flowPanel.scrollHeight - flowPanel.clientHeight;
+      if (speed > 0 && flowPanel.scrollTop < maxScroll) {
+        flowPanel.scrollTop = Math.min(maxScroll, flowPanel.scrollTop + speed);
+      } else if (speed < 0 && flowPanel.scrollTop > 0) {
+        flowPanel.scrollTop = Math.max(0, flowPanel.scrollTop + speed);
+      }
+    }
+
+    // 2. Also scroll the main window if it has scrollable vertical overflow
+    const docElem = document.documentElement;
+    const scrollH = docElem ? docElem.scrollHeight : (document.body ? document.body.scrollHeight : 0);
+    const maxWindowScroll = Math.max(0, scrollH - window.innerHeight);
+    if (speed > 0 && window.scrollY < maxWindowScroll) {
+      window.scrollBy(0, speed);
+    } else if (speed < 0 && window.scrollY > 0) {
+      window.scrollBy(0, speed);
+    }
+
+    // Continue animation frame loop
+    autoScrollRafId = requestAnimationFrame(performAutoScrollTick);
+  }
+
+  function handleAutoScrollDragOver(e) {
+    if (!dragData) return;
+    autoScrollClientY = e.clientY;
+    autoScrollClientX = e.clientX;
+
+    const speed = calculateAutoScrollSpeed(autoScrollClientY);
+    if (speed !== 0) {
+      if (!autoScrollRafId) {
+        autoScrollRafId = requestAnimationFrame(performAutoScrollTick);
+      }
+    } else if (isAutoScrolling) {
+      updateScrollIndicators(0);
+    }
+  }
+
+  function stopAutoScroll() {
+    if (autoScrollRafId) {
+      cancelAnimationFrame(autoScrollRafId);
+      autoScrollRafId = null;
+    }
+    isAutoScrolling = false;
+    autoScrollClientY = null;
+    autoScrollClientX = null;
+    updateScrollIndicators(0);
+  }
+
+  window.addEventListener("dragover", handleAutoScrollDragOver, { passive: true });
+  window.addEventListener("dragend", stopAutoScroll, true);
+  window.addEventListener("drop", stopAutoScroll, true);
+  window.addEventListener("dragleave", (e) => {
+    if (!e.relatedTarget && (e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY <= 0 || e.clientY >= window.innerHeight)) {
+      stopAutoScroll();
+    }
+  }, true);
+  window.addEventListener("blur", stopAutoScroll);
+
+  function createActionFromPalette(type, snipCode, label) {
+    let a = null;
+    if (type) {
+      a = defaultAction(type);
+      if (!a) return null;
+      const poses = computePoses();
+      const last = poses[poses.length - 1] || { x: (typeof start !== "undefined" && start ? start.x : pose.x), y: (typeof start !== "undefined" && start ? start.y : pose.y), theta: (typeof start !== "undefined" && start ? start.theta : pose.theta) };
+      if (needsPoint(type) || isMove(type)) {
+        a.x = Number((last.x + 12).toFixed(1));
+        a.y = Number(last.y.toFixed(1));
+      }
+      if (needsHeading(type)) a.theta = last.theta;
+      if (type === "ifElse") {
+        const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
+        const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
+        a.thenAction = {
+          type: "moveToPoint",
+          x: Number((last.x + 24).toFixed(1)),
+          y: Number((last.y + 24).toFixed(1)),
+          timeout: 2000,
+          forwards: true,
+          maxSpeed: defMax,
+          minSpeed: defMin,
+          earlyExitRange: 0,
+        };
+        a.thenCode = `chassis.moveToPoint(${a.thenAction.x}, ${a.thenAction.y}, 2000);`;
+        a.elseAction = {
+          type: "moveToPoint",
+          x: Number((last.x - 24).toFixed(1)),
+          y: Number((last.y - 24).toFixed(1)),
+          timeout: 2000,
+          forwards: false,
+          maxSpeed: defMax,
+          minSpeed: defMin,
+          earlyExitRange: 0,
+        };
+        a.elseCode = `chassis.moveToPoint(${a.elseAction.x}, ${a.elseAction.y}, 2000, {.forwards = false});`;
+      }
+    } else if (snipCode) {
+      a = defaultAction("custom");
+      a.customCode = snipCode;
+      a.label = (label || "").trim().replace(/^[🟢🟣🔵🟡🔴🔁🌊]\s*/, "") || "subsystem command";
+    }
+    return a;
+  }
+
+  function createPaletteBeamEffect(x1, y1, x2, y2) {
+    try {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "palette-transition-beam-svg");
+      svg.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9999;overflow:visible;";
+      
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const cx = x1 + dx * 0.25 - dy * 0.12;
+      const cy = y1 + dy * 0.78;
+
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const gradId = "beamGrad_" + Math.random().toString(36).substring(2, 8);
+      defs.innerHTML = `
+        <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95"/>
+          <stop offset="50%" stop-color="#818cf8" stop-opacity="0.85"/>
+          <stop offset="100%" stop-color="#34d399" stop-opacity="0.95"/>
+        </linearGradient>
+      `;
+      svg.appendChild(defs);
+
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", `url(#${gradId})`);
+      path.setAttribute("stroke-width", "3");
+      path.setAttribute("stroke-dasharray", "8, 6");
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("class", "palette-transition-beam-path");
+      svg.appendChild(path);
+
+      document.body.appendChild(svg);
+      setTimeout(() => {
+        if (svg && svg.parentNode) svg.parentNode.removeChild(svg);
+      }, 500);
+    } catch (_) {}
+  }
+
+  function animatePaletteToFlowTransition(opts) {
+    const { source, actId, dropEvent, label } = opts || {};
+    if (!actId) return;
+
+    // Switch to flowchart tab so target is in view and measurable
+    switchPlannerTab("flowchart");
+
+    setTimeout(() => {
+      const targetCard = document.querySelector(`.action-card[data-id="${actId}"], [data-nested-child-id="${actId}"]`);
+      if (!targetCard) return;
+
+      const targetRect = targetCard.getBoundingClientRect();
+      const isFromDrop = dropEvent && typeof dropEvent.clientX === "number" && dropEvent.clientX > 0;
+
+      let startX, startY, startW, startH;
+      if (isFromDrop) {
+        startW = source && source.startRect ? source.startRect.width : Math.min(180, targetRect.width * 0.7);
+        startH = source && source.startRect ? source.startRect.height : 36;
+        startX = dropEvent.clientX - startW / 2;
+        startY = dropEvent.clientY - startH / 2;
+      } else if (source && source.startRect) {
+        startX = source.startRect.left;
+        startY = source.startRect.top;
+        startW = source.startRect.width;
+        startH = source.startRect.height;
+      } else {
+        const flowEl = document.getElementById("actionFlow");
+        const fRect = flowEl ? flowEl.getBoundingClientRect() : { left: 100, top: 100 };
+        startX = fRect.left + 40;
+        startY = fRect.top - 40;
+        startW = 160;
+        startH = 36;
+      }
+
+      const bg = (source && source.bg) || "linear-gradient(135deg, #38bdf8, #0284c7)";
+      const displayText = (source && source.text) || label || "Action Block";
+
+      // Create flying clone ghost
+      const flying = document.createElement("div");
+      flying.className = "palette-flying-transition-ghost";
+      flying.style.cssText = `
+        position: fixed;
+        left: ${startX}px;
+        top: ${startY}px;
+        width: ${startW}px;
+        height: ${startH}px;
+        background: ${bg};
+        border-radius: 8px;
+        z-index: 10000;
+        pointer-events: none;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 189, 248, 0.7);
+        color: #ffffff;
+        font-family: ui-monospace, monospace;
+        font-size: 0.75rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transform-origin: center center;
+        transition: transform 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+                    width 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+                    height 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+                    opacity 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+                    border-radius 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+      `;
+      flying.innerHTML = `<span style="display:inline-block;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(displayText)}</span>`;
+      document.body.appendChild(flying);
+
+      if (source && source.element) {
+        source.element.classList.add("palette-btn-launched");
+        setTimeout(() => {
+          if (source.element) source.element.classList.remove("palette-btn-launched");
+        }, 400);
+      }
+
+      targetCard.classList.add("palette-target-landing");
+
+      // Draw SVG beam connection
+      createPaletteBeamEffect(
+        startX + startW / 2,
+        startY + startH / 2,
+        targetRect.left + targetRect.width / 2,
+        targetRect.top + targetRect.height / 2
+      );
+
+      requestAnimationFrame(() => {
+        const latestTargetRect = targetCard.getBoundingClientRect();
+        const dx = latestTargetRect.left - startX;
+        const dy = latestTargetRect.top - startY;
+
+        flying.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+        flying.style.width = `${latestTargetRect.width}px`;
+        flying.style.height = `${latestTargetRect.height}px`;
+        flying.style.borderRadius = "10px";
+        flying.style.opacity = "0.7";
+
+        setTimeout(() => {
+          if (flying && flying.parentNode) {
+            flying.parentNode.removeChild(flying);
+          }
+          targetCard.classList.remove("palette-target-landing");
+          targetCard.classList.add("palette-card-drop-pulse");
+
+          const r = targetCard.getBoundingClientRect();
+          if (r.top < 80 || r.bottom > window.innerHeight) {
+            targetCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+
+          setTimeout(() => {
+            targetCard.classList.remove("palette-card-drop-pulse");
+          }, 600);
+        }, 340);
+      });
+    }, 40);
+  }
+
+  function moveAction(source, dest, dropEvent) {
+    stopAutoScroll();
     if (!source || !dest) return;
     let movedAct = null;
 
-    if (source.source === "main") {
+    if (source.source === "palette") {
+      movedAct = createActionFromPalette(source.type, source.snipCode, source.label);
+    } else if (source.source === "main") {
       const sIdx = actions.findIndex((x) => x.id === source.id);
       if (sIdx !== -1) {
         movedAct = actions.splice(sIdx, 1)[0];
@@ -250,7 +598,11 @@
       let tIdx = dest.targetIdx != null ? dest.targetIdx : actions.length;
       tIdx = Math.max(0, Math.min(actions.length, tIdx));
       actions.splice(tIdx, 0, movedAct);
-      showToast(`🔄 Reordered ${movedAct.type} in routine`);
+      if (source.source === "palette") {
+        showToast(`✨ Added '${movedAct.type || movedAct.label}' to routine`);
+      } else {
+        showToast(`🔄 Reordered ${movedAct.type} in routine`);
+      }
     } else if (dest.target === "loop") {
       const targetLoop = actions.find((x) => x.id === dest.targetLoopId);
       if (targetLoop) {
@@ -258,7 +610,11 @@
         let cIdx = dest.targetChildIdx != null ? dest.targetChildIdx : targetLoop.children.length;
         cIdx = Math.max(0, Math.min(targetLoop.children.length, cIdx));
         targetLoop.children.splice(cIdx, 0, movedAct);
-        showToast(`🔄 Moved ${movedAct.type} block into loop`);
+        if (source.source === "palette") {
+          showToast(`✨ Added '${movedAct.type || movedAct.label}' into loop`);
+        } else {
+          showToast(`🔄 Moved ${movedAct.type} block into loop`);
+        }
       } else {
         actions.push(movedAct);
       }
@@ -271,24 +627,42 @@
           let cIdx = dest.targetChildIdx != null ? dest.targetChildIdx : targetIf.elseChildren.length;
           cIdx = Math.max(0, Math.min(targetIf.elseChildren.length, cIdx));
           targetIf.elseChildren.splice(cIdx, 0, movedAct);
-          showToast(`🔄 Moved ${movedAct.type} block into Else branch`);
+          if (source.source === "palette") {
+            showToast(`✨ Added '${movedAct.type || movedAct.label}' into Else branch`);
+          } else {
+            showToast(`🔄 Moved ${movedAct.type} block into Else branch`);
+          }
         } else {
           if (!Array.isArray(targetIf.thenChildren)) targetIf.thenChildren = [];
           let cIdx = dest.targetChildIdx != null ? dest.targetChildIdx : targetIf.thenChildren.length;
           cIdx = Math.max(0, Math.min(targetIf.thenChildren.length, cIdx));
           targetIf.thenChildren.splice(cIdx, 0, movedAct);
-          showToast(`🔄 Moved ${movedAct.type} block into Then branch`);
+          if (source.source === "palette") {
+            showToast(`✨ Added '${movedAct.type || movedAct.label}' into Then branch`);
+          } else {
+            showToast(`🔄 Moved ${movedAct.type} block into Then branch`);
+          }
         }
       } else {
         actions.push(movedAct);
       }
     }
 
+    selectedId = movedAct.id;
     markDirty();
     renderFlow();
     draw();
     generateCode();
     try { updateTimeDisplay(); } catch (_) {}
+
+    if (source.source === "palette") {
+      animatePaletteToFlowTransition({
+        source,
+        actId: movedAct.id,
+        dropEvent,
+        label: movedAct.type || movedAct.label,
+      });
+    }
   }
 
   function addBlockToLoop(loopId, type) {
@@ -5537,7 +5911,7 @@
           if (!dragData || dragData.id === a.id) return;
           e.preventDefault();
           e.stopPropagation();
-          e.dataTransfer.dropEffect = "move";
+          e.dataTransfer.dropEffect = dragData.source === "palette" ? "copy" : "move";
           dz.classList.add("loop-drag-over");
           const arm = card.querySelector(".loop-c-arm");
           if (arm) arm.classList.add("loop-drag-over");
@@ -5556,7 +5930,7 @@
           const arm = card.querySelector(".loop-c-arm");
           if (arm) arm.classList.remove("loop-drag-over");
           if (!dragData || dragData.id === a.id) return;
-          moveAction(dragData, { target: "loop", targetLoopId: a.id, targetChildIdx: (a.children || []).length });
+          moveAction(dragData, { target: "loop", targetLoopId: a.id, targetChildIdx: (a.children || []).length }, e);
         });
       });
 
@@ -5567,7 +5941,7 @@
           if (!dragData || dragData.id === a.id) return;
           e.preventDefault();
           e.stopPropagation();
-          e.dataTransfer.dropEffect = "move";
+          e.dataTransfer.dropEffect = dragData.source === "palette" ? "copy" : "move";
           dz.classList.add("loop-drag-over");
           const arm = card.querySelector(`.ifelse-c-arm[data-branch="${branch}"]`);
           if (arm) arm.classList.add("loop-drag-over");
@@ -5587,7 +5961,7 @@
           if (arm) arm.classList.remove("loop-drag-over");
           if (!dragData || dragData.id === a.id) return;
           const list = branch === "else" ? (a.elseChildren || []) : (a.thenChildren || []);
-          moveAction(dragData, { target: "ifelse", targetIfId: a.id, branch, targetChildIdx: list.length });
+          moveAction(dragData, { target: "ifelse", targetIfId: a.id, branch, targetChildIdx: list.length }, e);
         });
       });
 
@@ -5632,7 +6006,7 @@
           if (dragData.id === child.id) return;
           e.preventDefault();
           e.stopPropagation();
-          e.dataTransfer.dropEffect = "move";
+          e.dataTransfer.dropEffect = dragData.source === "palette" ? "copy" : "move";
           const rect = childCard.getBoundingClientRect();
           const midY = rect.top + rect.height / 2;
           if (e.clientY < midY) {
@@ -5660,7 +6034,7 @@
           if (dragData.source === "ifelse" && dragData.parentIfId === a.id && dragData.branch === branch && dragData.fromChildIdx < targetChildIdx) {
             targetChildIdx--;
           }
-          moveAction(dragData, { target: "ifelse", targetIfId: a.id, branch, targetChildIdx });
+          moveAction(dragData, { target: "ifelse", targetIfId: a.id, branch, targetChildIdx }, e);
         });
 
         childCard.addEventListener("click", (e) => {
@@ -5759,7 +6133,7 @@
           if (dragData.id === child.id) return;
           e.preventDefault();
           e.stopPropagation();
-          e.dataTransfer.dropEffect = "move";
+          e.dataTransfer.dropEffect = dragData.source === "palette" ? "copy" : "move";
           const rect = childCard.getBoundingClientRect();
           const midY = rect.top + rect.height / 2;
           if (e.clientY < midY) {
@@ -5787,7 +6161,7 @@
           if (dragData.source === "loop" && dragData.parentLoopId === a.id && dragData.fromChildIdx < targetChildIdx) {
             targetChildIdx--;
           }
-          moveAction(dragData, { target: "loop", targetLoopId: a.id, targetChildIdx });
+          moveAction(dragData, { target: "loop", targetLoopId: a.id, targetChildIdx }, e);
         });
 
         childCard.addEventListener("click", (e) => {
@@ -5884,7 +6258,7 @@
         if (dragData.source === "main" && dragData.id === a.id) return;
         if (e.target.closest(".loop-c-arm") || e.target.closest(".loop-child-card") || e.target.closest(".ifelse-c-arm") || e.target.closest(".ifelse-child-card")) return;
         e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
+        e.dataTransfer.dropEffect = dragData.source === "palette" ? "copy" : "move";
         const rect = block.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         if (e.clientY < midY) {
@@ -5919,22 +6293,73 @@
           targetIdx--;
         }
 
-        moveAction(dragData, { target: "main", targetIdx });
+        moveAction(dragData, { target: "main", targetIdx }, e);
       });
 
       block.appendChild(card);
       actionFlow.appendChild(block);
     });
 
+    if (actions.length === 0) {
+      const emptyZone = document.createElement("div");
+      emptyZone.className = "action-flow-empty-dropzone";
+      emptyZone.innerHTML = `
+        <div class="empty-dropzone-icon">📥</div>
+        <div class="empty-dropzone-title">Routine is empty</div>
+        <div class="empty-dropzone-subtitle">Drag blocks from the Palette above, or click any block to start building your routine</div>
+      `;
+      emptyZone.addEventListener("dragover", (e) => {
+        if (!dragData) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = dragData.source === "palette" ? "copy" : "move";
+        emptyZone.classList.add("drop-active");
+      });
+      emptyZone.addEventListener("dragleave", () => {
+        emptyZone.classList.remove("drop-active");
+      });
+      emptyZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        emptyZone.classList.remove("drop-active");
+        if (dragData) {
+          moveAction(dragData, { target: "main", targetIdx: 0 }, e);
+        }
+      });
+      actionFlow.appendChild(emptyZone);
+    } else {
+      const endDropZone = document.createElement("div");
+      endDropZone.className = "action-flow-end-dropzone";
+      endDropZone.title = "Drop here to append block at end of routine";
+      endDropZone.innerHTML = `<span>+ Append block to end of routine</span>`;
+      endDropZone.addEventListener("dragover", (e) => {
+        if (!dragData) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = dragData.source === "palette" ? "copy" : "move";
+        endDropZone.classList.add("drop-active");
+      });
+      endDropZone.addEventListener("dragleave", () => {
+        endDropZone.classList.remove("drop-active");
+      });
+      endDropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        endDropZone.classList.remove("drop-active");
+        if (dragData) {
+          moveAction(dragData, { target: "main", targetIdx: actions.length }, e);
+        }
+      });
+      actionFlow.appendChild(endDropZone);
+    }
+
     actionFlow.addEventListener("dragover", (e) => {
       if (!dragData) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
+      e.dataTransfer.dropEffect = dragData.source === "palette" ? "copy" : "move";
     });
     actionFlow.addEventListener("drop", (e) => {
       if (e.target === actionFlow && dragData) {
         e.preventDefault();
-        moveAction(dragData, { target: "main", targetIdx: actions.length });
+        moveAction(dragData, { target: "main", targetIdx: actions.length }, e);
       }
     });
 
@@ -6718,6 +7143,605 @@
         ? `${actualVal.toFixed(1)} in/s` 
         : `${actualVal.toFixed(1)} °/s`;
     }
+
+    try { drawVelocityBottleneckChart(elapsedTime); } catch (_) {}
+  }
+
+  // =========================================================================
+  // 15s+ Real-Time Velocity vs. Target & Acceleration Bottleneck Analyzer
+  // =========================================================================
+  let bottleneckSelectedDuration = "15";
+  let isBenchmarkRunning = false;
+  let benchmarkStartTime = 0;
+  let currentBenchmarkElapsed = 0;
+  let benchmarkRafId = null;
+
+  function getBottleneckChartDuration() {
+    const totalT = simPath.length ? simPath[simPath.length - 1].t : 0;
+    if (bottleneckSelectedDuration === "full") return Math.max(15.0, totalT);
+    const selVal = Number(bottleneckSelectedDuration) || 15.0;
+    return Math.max(selVal, totalT > selVal ? totalT : selVal);
+  }
+
+  function detectAccelerationBottlenecks(path, vMax, durationSec) {
+    const bottlenecks = [];
+    if (!path || path.length < 2) return bottlenecks;
+
+    let currentBn = null;
+
+    for (let i = 1; i < path.length; i++) {
+      const pt = path[i];
+      const prev = path[i - 1];
+      if (pt.t > durationSec) break;
+
+      const dTime = Math.max(0.002, pt.t - prev.t);
+      const targetA = (pt.targetVLin - prev.targetVLin) / dTime;
+      const actualA = pt.aLin != null ? pt.aLin : (pt.vLin - prev.vLin) / dTime;
+      const vLag = pt.targetVLin - pt.vLin;
+
+      let isBn = false;
+      let bnType = "";
+      let bnSeverity = "medium";
+      let bnReason = "";
+
+      // 1. Accel Slew / Motor Saturation (demanding rapid accel, actual lags > 5.5 in/s)
+      if (targetA > 18 && vLag > 5.5) {
+        isBn = true;
+        bnType = "accel_lag";
+        bnSeverity = vLag > 10 ? "high" : "medium";
+        bnReason = `Acceleration Slew Saturation (Lag: ${vLag.toFixed(1)} in/s, Target Ramp: ${targetA.toFixed(0)} in/s²)`;
+      }
+      // 2. Drivetrain Top-End Speed Limit
+      else if (pt.targetVLin > vMax * 0.94 && pt.vLin < pt.targetVLin - 4.5) {
+        isBn = true;
+        bnType = "top_speed";
+        bnSeverity = "high";
+        bnReason = `Drivetrain Max Velocity Capped (Limit: ${vMax.toFixed(1)} in/s)`;
+      }
+      // 3. Deceleration / Braking Lag
+      else if (targetA < -18 && (pt.vLin - pt.targetVLin) > 5.5) {
+        isBn = true;
+        bnType = "decel_lag";
+        bnSeverity = (pt.vLin - pt.targetVLin) > 10 ? "high" : "medium";
+        bnReason = `Deceleration Braking Lag (Overshoot: ${(pt.vLin - pt.targetVLin).toFixed(1)} in/s)`;
+      }
+      // 4. Wheel Traction Slip
+      else if (pt.isSlipping) {
+        isBn = true;
+        bnType = "wheel_slip";
+        bnSeverity = "high";
+        bnReason = `Wheel Traction Loss / Drivetrain Slip`;
+      }
+
+      if (isBn) {
+        if (!currentBn) {
+          currentBn = {
+            startT: prev.t,
+            endT: pt.t,
+            type: bnType,
+            severity: bnSeverity,
+            maxLag: Math.abs(vLag),
+            reason: bnReason,
+          };
+        } else {
+          currentBn.endT = pt.t;
+          currentBn.maxLag = Math.max(currentBn.maxLag, Math.abs(vLag));
+          if (bnSeverity === "high") currentBn.severity = "high";
+        }
+      } else {
+        if (currentBn) {
+          if (currentBn.endT - currentBn.startT >= 0.06) {
+            bottlenecks.push(currentBn);
+          }
+          currentBn = null;
+        }
+      }
+    }
+    if (currentBn && currentBn.endT - currentBn.startT >= 0.06) {
+      bottlenecks.push(currentBn);
+    }
+    return bottlenecks;
+  }
+
+  function drawVelocityBottleneckChart(elapsedTime = 0) {
+    const canvas = document.getElementById("velocityBottleneckCanvas");
+    if (!canvas || canvas.offsetParent === null) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const targetW = Math.floor(rect.width * dpr);
+    const targetH = Math.floor(rect.height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+
+    const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    const width = rect.width;
+    const height = rect.height;
+
+    // Background
+    ctx.fillStyle = "#0b1120";
+    ctx.fillRect(0, 0, width, height);
+
+    if (!simPath.length || isSimPathDirty) {
+      try { buildSimPath(); } catch (_) {}
+    }
+
+    const totalT = simPath.length ? simPath[simPath.length - 1].t : 0;
+    const durationSec = getBottleneckChartDuration();
+    const vMax = getMaxLinearSpeed(bot);
+
+    // Compute max velocity for vertical scaling
+    let maxV = Math.max(vMax, 30);
+    simPath.forEach((p) => {
+      maxV = Math.max(maxV, p.vLin, p.targetVLin);
+    });
+    maxV = Math.ceil((maxV * 1.15) / 10) * 10; // Round up with 15% headroom
+
+    const padLeft = 36;
+    const padRight = 14;
+    const padTop = 16;
+    const padBottom = 22;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+
+    function getX(t) {
+      return padLeft + Math.max(0, Math.min(1, t / durationSec)) * plotW;
+    }
+    function getY(v) {
+      return padTop + plotH - (Math.max(0, v) / maxV) * plotH;
+    }
+
+    // Grid lines - Horizontal
+    ctx.strokeStyle = "#1e293b";
+    ctx.lineWidth = 1;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.font = "9px ui-monospace, monospace";
+    ctx.fillStyle = "#64748b";
+
+    const vSteps = 4;
+    for (let i = 0; i <= vSteps; i++) {
+      const vVal = (maxV / vSteps) * i;
+      const y = getY(vVal);
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      ctx.fillText(`${Math.round(vVal)}`, padLeft - 4, y);
+    }
+
+    // Grid lines - Vertical (Time ticks every 1s, major labels every 3s)
+    const tInterval = durationSec <= 15 ? 1 : (durationSec <= 30 ? 2 : 5);
+    const tMajor = durationSec <= 15 ? 3 : (durationSec <= 30 ? 5 : 10);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    for (let t = 0; t <= durationSec; t += tInterval) {
+      const x = getX(t);
+      const isMajor = t % tMajor === 0 || t === durationSec;
+      ctx.strokeStyle = isMajor ? "#334155" : "#141e33";
+      ctx.beginPath();
+      ctx.moveTo(x, padTop);
+      ctx.lineTo(x, padTop + plotH);
+      ctx.stroke();
+
+      if (isMajor) {
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillText(`${t}s`, x, padTop + plotH + 4);
+      }
+    }
+
+    // Drivetrain Theoretical Max Speed Dotted Line
+    const yVmax = getY(vMax);
+    if (yVmax >= padTop && yVmax <= padTop + plotH) {
+      ctx.strokeStyle = "rgba(244, 63, 94, 0.7)";
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padLeft, yVmax);
+      ctx.lineTo(width - padRight, yVmax);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(244, 63, 94, 0.85)";
+      ctx.textAlign = "left";
+      ctx.fillText(`Drivetrain Cap (${vMax.toFixed(0)} in/s)`, padLeft + 4, yVmax - 6);
+    }
+
+    // Detect Bottlenecks
+    const bottlenecks = detectAccelerationBottlenecks(simPath, vMax, durationSec);
+    const chkHighlight = document.getElementById("chkHighlightBottlenecks");
+    const showBottlenecks = !chkHighlight || chkHighlight.checked;
+
+    if (showBottlenecks && bottlenecks.length > 0) {
+      bottlenecks.forEach((bn) => {
+        const x1 = getX(bn.startT);
+        const x2 = getX(bn.endT);
+        const bw = Math.max(3, x2 - x1);
+
+        // Shaded vertical bottleneck band
+        const grad = ctx.createLinearGradient(x1, padTop, x1, padTop + plotH);
+        if (bn.severity === "high") {
+          grad.addColorStop(0, "rgba(239, 68, 68, 0.28)");
+          grad.addColorStop(1, "rgba(239, 68, 68, 0.08)");
+        } else {
+          grad.addColorStop(0, "rgba(245, 158, 11, 0.24)");
+          grad.addColorStop(1, "rgba(245, 158, 11, 0.06)");
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(x1, padTop, bw, plotH);
+
+        // Dashed side lines
+        ctx.strokeStyle = bn.severity === "high" ? "rgba(239, 68, 68, 0.8)" : "rgba(245, 158, 11, 0.7)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(x1, padTop);
+        ctx.lineTo(x1, padTop + plotH);
+        ctx.moveTo(x2, padTop);
+        ctx.lineTo(x2, padTop + plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Warning marker at top
+        ctx.fillStyle = bn.severity === "high" ? "#f87171" : "#fbbf24";
+        ctx.font = "8px ui-monospace, monospace";
+        ctx.textAlign = "center";
+        const midX = (x1 + x2) / 2;
+        if (bw > 20) {
+          ctx.fillText(`⚠️ Lag`, midX, padTop + 2);
+        }
+      });
+    }
+
+    // Optional Acceleration curve overlay
+    const chkAccel = document.getElementById("chkShowAccelCurve");
+    if (chkAccel && chkAccel.checked) {
+      const maxA = 120; // 120 in/s² scale
+      ctx.strokeStyle = "rgba(168, 85, 247, 0.65)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      let firstA = true;
+      for (let i = 0; i < simPath.length; i++) {
+        const pt = simPath[i];
+        if (pt.t > durationSec) break;
+        const aVal = Math.max(0, pt.aLin || 0);
+        const y = padTop + plotH - (aVal / maxA) * plotH;
+        if (firstA) { ctx.moveTo(getX(pt.t), y); firstA = false; }
+        else { ctx.lineTo(getX(pt.t), y); }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Target Velocity curve (Blue #38bdf8)
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    let firstPt = true;
+    for (let i = 0; i < simPath.length; i++) {
+      const pt = simPath[i];
+      if (pt.t > durationSec) break;
+      const x = getX(pt.t);
+      const y = getY(Math.max(0, pt.targetVLin || 0));
+      if (firstPt) { ctx.moveTo(x, y); firstPt = false; }
+      else { ctx.lineTo(x, y); }
+    }
+    // Settle out to 0 at end of actions up to durationSec
+    if (totalT < durationSec && simPath.length) {
+      ctx.lineTo(getX(totalT), getY(0));
+      ctx.lineTo(getX(durationSec), getY(0));
+    }
+    ctx.stroke();
+
+    // Actual Velocity curve (Green #4ade80)
+    ctx.strokeStyle = "#4ade80";
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    firstPt = true;
+    for (let i = 0; i < simPath.length; i++) {
+      const pt = simPath[i];
+      if (pt.t > durationSec) break;
+      const x = getX(pt.t);
+      const y = getY(Math.max(0, pt.vLin || 0));
+      if (firstPt) { ctx.moveTo(x, y); firstPt = false; }
+      else { ctx.lineTo(x, y); }
+    }
+    if (totalT < durationSec && simPath.length) {
+      ctx.lineTo(getX(totalT), getY(0));
+      ctx.lineTo(getX(durationSec), getY(0));
+    }
+    ctx.stroke();
+
+    // Live Playhead Cursor at elapsedTime
+    const cursorT = Math.min(elapsedTime, durationSec);
+    const cursorX = getX(cursorT);
+
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cursorX, padTop);
+    ctx.lineTo(cursorX, padTop + plotH);
+    ctx.stroke();
+
+    // Find point data at cursorT
+    let idx = 0;
+    if (simPath.length > 0) {
+      let low = 0, high = simPath.length - 1;
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        if (simPath[mid].t <= cursorT) {
+          idx = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+    }
+    const curPt = (cursorT <= totalT && simPath[idx]) 
+      ? simPath[idx] 
+      : { t: cursorT, vLin: 0, targetVLin: 0, aLin: 0 };
+
+    const curTarget = Math.max(0, curPt.targetVLin || 0);
+    const curActual = Math.max(0, curPt.vLin || 0);
+    const curAccel = curPt.aLin != null ? curPt.aLin : 0;
+    const curError = curTarget - curActual;
+
+    // Draw intersection circles at cursor
+    ctx.fillStyle = "#38bdf8";
+    ctx.beginPath();
+    ctx.arc(cursorX, getY(curTarget), 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#4ade80";
+    ctx.beginPath();
+    ctx.arc(cursorX, getY(curActual), 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    // Update real-time telemetry readout strip
+    const timeEl = document.getElementById("bnMetricTime");
+    const targetEl = document.getElementById("bnMetricTarget");
+    const actualEl = document.getElementById("bnMetricActual");
+    const accelEl = document.getElementById("bnMetricAccel");
+    const errorEl = document.getElementById("bnMetricError");
+
+    if (timeEl) timeEl.textContent = `${cursorT.toFixed(2)}s / ${durationSec.toFixed(1)}s`;
+    if (targetEl) targetEl.textContent = `${curTarget.toFixed(1)} in/s`;
+    if (actualEl) actualEl.textContent = `${curActual.toFixed(1)} in/s`;
+    if (accelEl) accelEl.textContent = `${curAccel >= 0 ? "+" : ""}${curAccel.toFixed(1)} in/s²`;
+    if (errorEl) {
+      errorEl.textContent = `${curError >= 0 ? "+" : ""}${curError.toFixed(1)} in/s`;
+      errorEl.style.color = Math.abs(curError) > 5.5 ? "#f87171" : "#cbd5e1";
+    }
+
+    // Update Bottleneck Diagnostics Box
+    updateBottleneckDiagnosticsBox(bottlenecks, vMax, durationSec);
+  }
+
+  function updateBottleneckDiagnosticsBox(bottlenecks, vMax, durationSec) {
+    const badgeEl = document.getElementById("bnStatusBadge");
+    const headlineEl = document.getElementById("bnSummaryHeadline");
+    const listEl = document.getElementById("bnBottlenecksList");
+    const adviceEl = document.getElementById("bnTuningAdvice");
+
+    if (!badgeEl || !headlineEl || !listEl || !adviceEl) return;
+
+    if (!simPath.length || !actions.length) {
+      badgeEl.className = "bn-diag-badge badge-neutral";
+      badgeEl.textContent = "No Actions";
+      headlineEl.textContent = "Add actions to run 15s simulation";
+      listEl.innerHTML = `<div style="font-size:0.65rem; color:#64748b; padding:4px 0;">No autonomous actions defined yet.</div>`;
+      adviceEl.innerHTML = `Add <code>moveToPoint</code> or <code>moveToPose</code> blocks to analyze acceleration.`;
+      return;
+    }
+
+    if (bottlenecks.length === 0) {
+      badgeEl.className = "bn-diag-badge badge-ok";
+      badgeEl.textContent = "Optimal Flow";
+      headlineEl.textContent = `No Severe Bottlenecks (${durationSec.toFixed(0)}s Window)`;
+      listEl.innerHTML = `<div class="bn-item" style="border-left-color:#22c55e; background:rgba(34,197,94,0.08); color:#bbf7d0;">
+        ✨ Drivetrain cleanly follows commanded LemLib velocity profile with minimal tracking error.
+      </div>`;
+      adviceEl.innerHTML = `💡 <strong>Tuning Tip:</strong> Drivetrain acceleration is well within motor limits. You can safely increase <code>maxSpeed</code> on straight lines for faster cycle times.`;
+    } else {
+      badgeEl.className = "bn-diag-badge badge-warn";
+      badgeEl.textContent = `${bottlenecks.length} Bottleneck${bottlenecks.length > 1 ? "s" : ""}`;
+      headlineEl.textContent = `${bottlenecks.length} Acceleration Bottleneck${bottlenecks.length > 1 ? "s" : ""} on ${durationSec.toFixed(0)}s Profile`;
+
+      let html = "";
+      bottlenecks.slice(0, 4).forEach((bn) => {
+        const cls = bn.severity === "high" ? "bn-item high" : "bn-item";
+        const icon = bn.type === "accel_lag" ? "⚡" : (bn.type === "top_speed" ? "🏎️" : (bn.type === "wheel_slip" ? "🛞" : "🛑"));
+        html += `<div class="${cls}">
+          <strong>${icon} [${bn.startT.toFixed(1)}s – ${bn.endT.toFixed(1)}s]:</strong> ${bn.reason}
+        </div>`;
+      });
+      listEl.innerHTML = html;
+
+      // Generate intelligent, tailored LemLib tuning recommendations
+      const hasAccelSlew = bottlenecks.some((b) => b.type === "accel_lag");
+      const hasDecel = bottlenecks.some((b) => b.type === "decel_lag");
+      const hasTopSpeed = bottlenecks.some((b) => b.type === "top_speed");
+      const hasSlip = bottlenecks.some((b) => b.type === "wheel_slip");
+
+      let tips = [];
+      if (hasAccelSlew) {
+        tips.push(`Increase LemLib <code>slew</code> rate in <code>ControllerSettings</code> or lower <code>earlyExitRange</code> to prevent rapid target jumps.`);
+      }
+      if (hasDecel) {
+        tips.push(`Increase lateral <code>kD</code> to damp deceleration overshoot, or increase <code>largeErrorTimeout</code> to grant motors settling headroom.`);
+      }
+      if (hasTopSpeed) {
+        tips.push(`Target velocity exceeds physical drivetrain RPM limit (${vMax.toFixed(1)} in/s). Cap <code>maxSpeed</code> to ${Math.round(vMax * 0.9)} in/s in code.`);
+      }
+      if (hasSlip) {
+        tips.push(`Reduce angular slew or decrease sudden angular accelerations to prevent wheel traction breakaway.`);
+      }
+
+      adviceEl.innerHTML = `🛠️ <strong>LemLib Tuning Recommendation:</strong> ${tips.join(" ")}`;
+    }
+  }
+
+  function initBottleneckCanvasInteractions() {
+    const canvas = document.getElementById("velocityBottleneckCanvas");
+    const container = document.getElementById("bottleneckCanvasContainer");
+    const tooltip = document.getElementById("bottleneckTooltip");
+    if (!canvas || !container || !tooltip) return;
+
+    canvas.addEventListener("mousemove", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const padLeft = 36;
+      const padRight = 14;
+      const plotW = rect.width - padLeft - padRight;
+      if (mouseX < padLeft || mouseX > rect.width - padRight) {
+        tooltip.style.display = "none";
+        return;
+      }
+
+      const durationSec = getBottleneckChartDuration();
+      const hoverT = Math.max(0, Math.min(durationSec, ((mouseX - padLeft) / plotW) * durationSec));
+      const totalT = simPath.length ? simPath[simPath.length - 1].t : 0;
+
+      let idx = 0;
+      if (simPath.length > 0) {
+        let low = 0, high = simPath.length - 1;
+        while (low <= high) {
+          const mid = (low + high) >> 1;
+          if (simPath[mid].t <= hoverT) {
+            idx = mid;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
+        }
+      }
+      const pt = (hoverT <= totalT && simPath[idx]) ? simPath[idx] : { t: hoverT, vLin: 0, targetVLin: 0, aLin: 0 };
+      const targetVal = Math.max(0, pt.targetVLin || 0);
+      const actualVal = Math.max(0, pt.vLin || 0);
+      const lag = targetVal - actualVal;
+      const accel = pt.aLin != null ? pt.aLin : 0;
+
+      // Check if inside a bottleneck
+      const vMax = getMaxLinearSpeed(bot);
+      const bns = detectAccelerationBottlenecks(simPath, vMax, durationSec);
+      const activeBn = bns.find((b) => hoverT >= b.startT && hoverT <= b.endT);
+
+      let bnStatusHtml = activeBn 
+        ? `<div style="color:#f87171; font-weight:bold; margin-top:2px;">⚠️ ${activeBn.reason}</div>`
+        : `<div style="color:#4ade80; margin-top:2px;">✅ Tracking OK</div>`;
+
+      tooltip.innerHTML = `
+        <div style="font-weight:bold; border-bottom:1px solid #334155; padding-bottom:2px; margin-bottom:3px;">⏱️ Time: ${hoverT.toFixed(2)}s</div>
+        <div style="display:flex; justify-content:space-between; gap:10px;"><span style="color:#38bdf8;">Target Vel:</span><strong>${targetVal.toFixed(1)} in/s</strong></div>
+        <div style="display:flex; justify-content:space-between; gap:10px;"><span style="color:#4ade80;">Actual Vel:</span><strong>${actualVal.toFixed(1)} in/s</strong></div>
+        <div style="display:flex; justify-content:space-between; gap:10px;"><span style="color:#cbd5e1;">Velocity Lag:</span><strong style="color:${Math.abs(lag) > 5 ? '#f87171' : '#cbd5e1'};">${lag >= 0 ? '+' : ''}${lag.toFixed(1)} in/s</strong></div>
+        <div style="display:flex; justify-content:space-between; gap:10px;"><span style="color:#fb923c;">Accel (a):</span><strong>${accel.toFixed(1)} in/s²</strong></div>
+        ${bnStatusHtml}
+      `;
+
+      tooltip.style.display = "block";
+      const tooltipW = tooltip.offsetWidth || 150;
+      let leftPos = mouseX + 12;
+      if (leftPos + tooltipW > rect.width) {
+        leftPos = mouseX - tooltipW - 12;
+      }
+      tooltip.style.left = `${Math.max(4, leftPos)}px`;
+      tooltip.style.top = `16px`;
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      tooltip.style.display = "none";
+    });
+  }
+
+  function run15sBenchmark() {
+    if (isBenchmarkRunning) {
+      pause15sBenchmark();
+      return;
+    }
+    buildSimPath();
+    if (!actions.length) {
+      showToast("⚠️ Add at least one movement action to run benchmark.");
+      return;
+    }
+
+    const durationSec = getBottleneckChartDuration();
+    isBenchmarkRunning = true;
+
+    const btnRun = document.getElementById("btnRun15sBenchmark");
+    if (btnRun) btnRun.innerHTML = `<span>⏸</span> Pause`;
+
+    benchmarkStartTime = performance.now() - (currentBenchmarkElapsed * 1000);
+    const totalT = simPath.length ? simPath[simPath.length - 1].t : 0;
+    const totalEst = estimateTotalTime();
+
+    function benchmarkLoop(now) {
+      if (!isBenchmarkRunning) return;
+      const elapsed = (now - benchmarkStartTime) / 1000;
+      currentBenchmarkElapsed = Math.min(elapsed, durationSec);
+
+      drawVelocityBottleneckChart(currentBenchmarkElapsed);
+      drawPidTuningGraph(currentBenchmarkElapsed);
+
+      // Synchronize robot pose on field canvas
+      let idx = 0;
+      if (simPath.length > 0) {
+        let low = 0, high = simPath.length - 1;
+        while (low <= high) {
+          const mid = (low + high) >> 1;
+          if (simPath[mid].t <= currentBenchmarkElapsed) {
+            idx = mid;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
+        }
+      }
+      simIdx = idx;
+      const pt = simPath[simIdx] || (simPath.length ? simPath[simPath.length - 1] : { x: pose.x, y: pose.y, theta: pose.theta, vLin: 0, omegaDeg: 0 });
+      updateTimeDisplay(Math.min(currentBenchmarkElapsed, totalT), totalEst, pt.vLin, pt.omegaDeg, pt);
+      draw();
+
+      if (currentBenchmarkElapsed < durationSec) {
+        benchmarkRafId = requestAnimationFrame(benchmarkLoop);
+      } else {
+        isBenchmarkRunning = false;
+        if (btnRun) btnRun.innerHTML = `<span>🔄</span> Re-Run`;
+        showToast(`✅ ${durationSec.toFixed(0)}s Simulation complete! Acceleration bottlenecks analyzed.`);
+      }
+    }
+    benchmarkRafId = requestAnimationFrame(benchmarkLoop);
+  }
+
+  function pause15sBenchmark() {
+    isBenchmarkRunning = false;
+    if (benchmarkRafId) {
+      cancelAnimationFrame(benchmarkRafId);
+      benchmarkRafId = null;
+    }
+    const btnRun = document.getElementById("btnRun15sBenchmark");
+    if (btnRun) btnRun.innerHTML = `<span>▶</span> Resume`;
+  }
+
+  function reset15sBenchmark() {
+    pause15sBenchmark();
+    currentBenchmarkElapsed = 0;
+    const btnRun = document.getElementById("btnRun15sBenchmark");
+    if (btnRun) btnRun.innerHTML = `<span>▶</span> Run 15s Run`;
+    drawVelocityBottleneckChart(0);
+    drawPidTuningGraph(0);
+    updateTimeDisplay(0, estimateTotalTime(), 0, 0, simPath[0]);
+    draw();
   }
 
   function distToSegment(px, py, x1, y1, x2, y2) {
@@ -7637,82 +8661,119 @@
     generateCode();
   };
 
-  // Block Palette Event Handler
+  // Block Palette Event Handler & Drag-and-Drop Implementation
   const paletteBar = document.querySelector(".palette-bar");
+  let isDraggingPalette = false;
+
+  function initPaletteDragAndDrop() {
+    const paletteButtons = document.querySelectorAll(".palette-block-list .palette-block-btn");
+    paletteButtons.forEach((btn) => {
+      btn.setAttribute("draggable", "true");
+
+      btn.addEventListener("dragstart", (e) => {
+        const type = btn.getAttribute("data-act-type");
+        const snipCode = btn.getAttribute("data-snip-add");
+        const category = btn.getAttribute("data-category") || "motion";
+        const label = btn.textContent.trim().replace(/^[🟢🟣🔵🟡🔴🔁🌊]\s*/, "");
+        const rect = btn.getBoundingClientRect();
+        const computed = window.getComputedStyle(btn);
+        const bg = computed.backgroundImage && computed.backgroundImage !== "none" ? computed.backgroundImage : computed.backgroundColor;
+        const text = btn.textContent.trim();
+
+        isDraggingPalette = true;
+        dragData = {
+          source: "palette",
+          type: type,
+          snipCode: snipCode,
+          category: category,
+          label: label,
+          text: text,
+          bg: bg,
+          startRect: {
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+          },
+          element: btn,
+        };
+
+        e.dataTransfer.effectAllowed = "copyMove";
+        try {
+          e.dataTransfer.setData("text/plain", JSON.stringify({ source: "palette", type, snipCode, label }));
+        } catch (_) {}
+
+        // Custom drag ghost preview
+        const dragGhost = document.createElement("div");
+        dragGhost.className = "palette-drag-ghost";
+        dragGhost.style.background = bg;
+        dragGhost.innerHTML = `<span>${escapeHtml(text)}</span>`;
+        document.body.appendChild(dragGhost);
+        try {
+          e.dataTransfer.setDragImage(dragGhost, rect.width / 2, rect.height / 2);
+        } catch (_) {}
+        setTimeout(() => {
+          if (dragGhost && dragGhost.parentNode) dragGhost.parentNode.removeChild(dragGhost);
+        }, 0);
+
+        btn.classList.add("is-palette-dragging");
+        document.body.classList.add("palette-drag-active");
+        const flow = document.getElementById("actionFlow");
+        if (flow) flow.classList.add("palette-drag-ready");
+      });
+
+      btn.addEventListener("dragend", () => {
+        btn.classList.remove("is-palette-dragging");
+        document.body.classList.remove("palette-drag-active");
+        const flow = document.getElementById("actionFlow");
+        if (flow) flow.classList.remove("palette-drag-ready");
+        document.querySelectorAll(".drop-before, .drop-after, .drop-active, .loop-drag-over").forEach((el) => {
+          el.classList.remove("drop-before", "drop-after", "drop-active", "loop-drag-over");
+        });
+        dragData = null;
+        setTimeout(() => {
+          isDraggingPalette = false;
+        }, 120);
+      });
+    });
+  }
+  initPaletteDragAndDrop();
+
   if (paletteBar) {
     paletteBar.addEventListener("click", (e) => {
+      if (isDraggingPalette) return;
       const btnBlock = e.target.closest("[data-act-type]");
       const btnSnip = e.target.closest("[data-snip-add]");
-      
-      if (btnBlock) {
-        const type = btnBlock.getAttribute("data-act-type");
-        const a = defaultAction(type);
-        if (!a) return;
-        const poses = computePoses();
-        const last = poses[poses.length - 1] || { x: (start ? start.x : 0), y: (start ? start.y : 0), theta: (start ? start.theta : 0) };
-        if (needsPoint(type) || isMove(type)) {
-          a.x = Number((last.x + 12).toFixed(1));
-          a.y = Number(last.y.toFixed(1));
-        }
-        if (needsHeading(type)) a.theta = last.theta;
-        if (type === "ifElse") {
-          const defMax = bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 127;
-          const defMin = bot.defaultMinSpeed != null ? bot.defaultMinSpeed : 0;
-          a.thenAction = {
-            type: "moveToPoint",
-            x: Number((last.x + 24).toFixed(1)),
-            y: Number((last.y + 24).toFixed(1)),
-            timeout: 2000,
-            forwards: true,
-            maxSpeed: defMax,
-            minSpeed: defMin,
-            earlyExitRange: 0,
-          };
-          a.thenCode = `chassis.moveToPoint(${a.thenAction.x}, ${a.thenAction.y}, 2000);`;
-          a.elseAction = {
-            type: "moveToPoint",
-            x: Number((last.x - 24).toFixed(1)),
-            y: Number((last.y - 24).toFixed(1)),
-            timeout: 2000,
-            forwards: false,
-            maxSpeed: defMax,
-            minSpeed: defMin,
-            earlyExitRange: 0,
-          };
-          a.elseCode = `chassis.moveToPoint(${a.elseAction.x}, ${a.elseAction.y}, 2000, {.forwards = false});`;
-        }
-        actions.push(a);
-        selectedId = a.id;
-        markDirty();
-        renderFlow();
-        draw();
-        generateCode();
-        try { updateTimeDisplay(); } catch (_) {}
-        switchPlannerTab("flowchart");
-        showToast(`➕ Added '${type}' block to routine!`);
-        setTimeout(() => {
-          const cardEl = document.querySelector(`.action-card[data-id="${a.id}"]`);
-          if (cardEl) cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 50);
-      } else if (btnSnip) {
-        const snipCode = btnSnip.getAttribute("data-snip-add");
-        const a = defaultAction("custom");
-        a.customCode = snipCode;
-        a.label = btnSnip.textContent.trim().replace(/^[🟢🟣🔵🟡🔴🔁]\s*/, "") || "subsystem command";
-        actions.push(a);
-        selectedId = a.id;
-        markDirty();
-        renderFlow();
-        draw();
-        generateCode();
-        try { updateTimeDisplay(); } catch (_) {}
-        switchPlannerTab("flowchart");
-        showToast(`🟢 Inserted subsystem '${a.label}'!`);
-        setTimeout(() => {
-          const cardEl = document.querySelector(`.action-card[data-id="${a.id}"]`);
-          if (cardEl) cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 50);
-      }
+      const btn = btnBlock || btnSnip;
+      if (!btn) return;
+
+      const type = btn.getAttribute("data-act-type");
+      const snipCode = btn.getAttribute("data-snip-add");
+      const category = btn.getAttribute("data-category") || "motion";
+      const label = btn.textContent.trim().replace(/^[🟢🟣🔵🟡🔴🔁🌊]\s*/, "");
+      const rect = btn.getBoundingClientRect();
+      const computed = window.getComputedStyle(btn);
+      const bg = computed.backgroundImage && computed.backgroundImage !== "none" ? computed.backgroundImage : computed.backgroundColor;
+      const text = btn.textContent.trim();
+
+      const source = {
+        source: "palette",
+        type,
+        snipCode,
+        category,
+        label,
+        text,
+        bg,
+        startRect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        },
+        element: btn,
+      };
+
+      moveAction(source, { target: "main", targetIdx: actions.length }, null);
     });
   }
 
@@ -8307,6 +9368,25 @@
     const navPlanner = document.getElementById("navModePlanner");
     const navPidTuner = document.getElementById("navModePidTuner");
     const navBrain = document.getElementById("navModeBrain");
+    const navTools = document.getElementById("navModeTools");
+    const dropdownTools = document.getElementById("btnToolsSuiteDropdown");
+
+    function openToolsFullscreen(e) {
+      if (e) e.preventDefault();
+      const targetUrl = "tools.html#fullscreen";
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().then(() => {
+          window.location.href = targetUrl;
+        }).catch(() => {
+          window.location.href = targetUrl;
+        });
+      } else {
+        window.location.href = targetUrl;
+      }
+    }
+
+    if (navTools) navTools.onclick = openToolsFullscreen;
+    if (dropdownTools) dropdownTools.onclick = openToolsFullscreen;
 
     if (navPlanner) {
       navPlanner.onclick = (e) => {
@@ -14393,9 +15473,49 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
         if (targetId === "devices") refreshDebugDevices();
         if (targetId === "diagnostics") refreshDebugDiagnostics();
-        if (targetId === "tuning") drawPidTuningGraph(0);
+        if (targetId === "tuning") {
+          drawPidTuningGraph(0);
+          drawVelocityBottleneckChart(0);
+        }
       };
     });
+
+    // 15s+ Velocity vs Target & Bottleneck Analyzer Controls
+    const btnRun15s = document.getElementById("btnRun15sBenchmark");
+    const btnStop15s = document.getElementById("btnStop15sBenchmark");
+    const selBottleneckDur = document.getElementById("bottleneckDurationSelect");
+    const chkHighlightBn = document.getElementById("chkHighlightBottlenecks");
+    const chkShowAccel = document.getElementById("chkShowAccelCurve");
+    const btnClearBn = document.getElementById("btnClearBottleneckCanvas");
+
+    if (btnRun15s) {
+      btnRun15s.onclick = () => run15sBenchmark();
+    }
+    if (btnStop15s) {
+      btnStop15s.onclick = () => reset15sBenchmark();
+    }
+    if (selBottleneckDur) {
+      selBottleneckDur.onchange = (e) => {
+        bottleneckSelectedDuration = e.target.value;
+        drawVelocityBottleneckChart(currentBenchmarkElapsed);
+      };
+    }
+    if (chkHighlightBn) {
+      chkHighlightBn.onchange = () => drawVelocityBottleneckChart(currentBenchmarkElapsed);
+    }
+    if (chkShowAccel) {
+      chkShowAccel.onchange = () => drawVelocityBottleneckChart(currentBenchmarkElapsed);
+    }
+    if (btnClearBn) {
+      btnClearBn.onclick = () => {
+        buildSimPath();
+        drawVelocityBottleneckChart(0);
+      };
+    }
+
+    try {
+      initBottleneckCanvasInteractions();
+    } catch (_) {}
 
     // PID Tuning graph toggles
     const btnTuningLinear = document.getElementById("btnTuningLinear");

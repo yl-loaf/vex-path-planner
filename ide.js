@@ -2996,6 +2996,22 @@
       btnBackPlanner.addEventListener("click", navigateToPlanner);
     }
 
+    const btnIdeOpenTools = document.getElementById("btnIdeOpenTools");
+    if (btnIdeOpenTools) {
+      btnIdeOpenTools.addEventListener("click", () => {
+        const targetUrl = "tools.html#fullscreen";
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().then(() => {
+            window.location.href = targetUrl;
+          }).catch(() => {
+            window.location.href = targetUrl;
+          });
+        } else {
+          window.location.href = targetUrl;
+        }
+      });
+    }
+
     if (btnOpenPlanner) {
       btnOpenPlanner.addEventListener("click", navigateToPlanner);
     }

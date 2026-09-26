@@ -18,7 +18,7 @@
   <meta name="description" content="Translate raw C++ autonomous routines into visual blocks, multitask concurrency flows, and field trajectories for VEX V5 LemLib." />
   <meta property="og:title" content="C++ Auton to Blocks Translator · VEX V5 LemLib" />
   <meta property="og:description" content="Parse raw C++ autonomous code into visual blocks, synchronized with the user profile and auton slots." />
-  <link rel="stylesheet" href="style.css?v=20260926.k16" />
+  <link rel="stylesheet" href="style.css?v=20260926.k26" />
   <script>
     (function () {
       try {
@@ -48,6 +48,9 @@
         <a href="stats.html" class="btn-nav-stats" style="background:#1a2433;color:#e8eef7;border:1px solid #2a3548;padding:6px 12px;border-radius:8px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="View visitor stats">
           📊 Stats <span id="globalVisitorBadgeTrans" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 6px;border-radius:10px;font-size:0.75rem;">...</span>
         </a>
+        <button type="button" id="btnTransOpenTools" class="btn-return-planner" style="background:#0f172a; border-color:#38bdf8; color:#38bdf8;" title="Open Engineering Tools Suite in Fullscreen">
+          🛠️ Tools Suite
+        </button>
         <div id="authArea" class="auth-area">
           <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google (saved across sessions)">Sign in with Google</button>
           <span id="authUser" class="auth-user" hidden></span>
@@ -267,16 +270,16 @@ void autonomous() {
   <div id="toastNotification" class="toast-notify"></div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260926.k16"></script>
+  <script src="version.js?v=20260926.k26"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260926.k16"></script>
-  <script src="session-guard.js?v=20260926.k16"></script>
-  <script src="theme.js?v=20260926.k16"></script>
-  <script src="cpp-parser.js?v=20260926.k16"></script>
-  <script src="translator-page.js?v=20260926.k16"></script>
-  <script src="tutorial.js?v=20260926.k16"></script>
+  <script src="firebase-config.js?v=20260926.k26"></script>
+  <script src="session-guard.js?v=20260926.k26"></script>
+  <script src="theme.js?v=20260926.k26"></script>
+  <script src="cpp-parser.js?v=20260926.k26"></script>
+  <script src="translator-page.js?v=20260926.k26"></script>
+  <script src="tutorial.js?v=20260926.k26"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {
@@ -344,6 +347,23 @@ void autonomous() {
           var badge = document.getElementById('globalVisitorBadgeTrans');
           if (badge) badge.textContent = localStorage.getItem('vex_total_views') || '128';
         }
+      }
+
+      var btnTools = document.getElementById('btnTransOpenTools');
+      if (btnTools) {
+        btnTools.addEventListener('click', function(e) {
+          e.preventDefault();
+          var targetUrl = 'tools.html#fullscreen';
+          if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().then(function() {
+              window.location.href = targetUrl;
+            }).catch(function() {
+              window.location.href = targetUrl;
+            });
+          } else {
+            window.location.href = targetUrl;
+          }
+        });
       }
     })();
   </script>
