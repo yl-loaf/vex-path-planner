@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "lint": "node -c app.js session-guard.js cpp-parser.js translator-page.js server.js update-version.js v5-brain-serial.js project-manager.js ide.js tutorial.js",
+    "lint": "node -c app.js session-guard.js cpp-parser.js translator-page.js server.js update-version.js v5-brain-serial.js project-manager.js ide.js tutorial.js theme.js",
     "build": "node update-version.js",
     "start": "node server.js"
   },

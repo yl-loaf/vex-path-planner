@@ -14,6 +14,14 @@
   <title>Website Visitor Statistics · VEX V5 Suite</title>
   <meta name="description" content="Live visitor statistics and website analytics dashboard for the VEX V5 LemLib Suite." />
   <link rel="stylesheet" href="style.css" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('vex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
   <style>
     .stats-container {
       max-width: 1200px;
@@ -139,6 +147,10 @@
         <p style="color: var(--muted);">Real-time tracking of website visitors, page views, and activity across the VEX V5 LemLib Suite.</p>
       </div>
       <div class="nav-actions">
+        <button type="button" id="btnStatsThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
+          <span class="theme-toggle-icon">☀️</span>
+          <span class="theme-toggle-text">Theme</span>
+        </button>
         <a href="/" class="btn-nav">🗺️ Visual Planner</a>
         <a href="ide.html" class="btn-nav">💻 PROS IDE</a>
         <a href="translator.html" class="btn-nav">🔄 C++ Translator</a>
@@ -351,5 +363,6 @@
     fetchStats();
     setInterval(fetchStats, 10000);
   </script>
+  <script src="theme.js"></script>
 </body>
 </html>

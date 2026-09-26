@@ -18,7 +18,15 @@
   <meta name="description" content="Translate raw C++ autonomous routines into visual blocks, multitask concurrency flows, and field trajectories for VEX V5 LemLib." />
   <meta property="og:title" content="C++ Auton to Blocks Translator · VEX V5 LemLib" />
   <meta property="og:description" content="Parse raw C++ autonomous code into visual blocks, synchronized with the user profile and auton slots." />
-  <link rel="stylesheet" href="style.css?v=20260926.k14" />
+  <link rel="stylesheet" href="style.css?v=20260926.k16" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('vex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body class="translator-page-body">
   <div id="app" class="translator-app-container">
@@ -33,6 +41,10 @@
         <p class="subtitle">Two-way LemLib v0.5+ parser with multitask concurrency detection · Synchronized with your active profile &amp; slots</p>
       </div>
       <div class="header-actions">
+        <button type="button" id="btnTranslatorThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
+          <span class="theme-toggle-icon">☀️</span>
+          <span class="theme-toggle-text">Theme</span>
+        </button>
         <a href="stats.html" class="btn-nav-stats" style="background:#1a2433;color:#e8eef7;border:1px solid #2a3548;padding:6px 12px;border-radius:8px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="View visitor stats">
           📊 Stats <span id="globalVisitorBadgeTrans" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 6px;border-radius:10px;font-size:0.75rem;">...</span>
         </a>
@@ -255,15 +267,16 @@ void autonomous() {
   <div id="toastNotification" class="toast-notify"></div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260926.k14"></script>
+  <script src="version.js?v=20260926.k16"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260926.k14"></script>
-  <script src="session-guard.js?v=20260926.k14"></script>
-  <script src="cpp-parser.js?v=20260926.k14"></script>
-  <script src="translator-page.js?v=20260926.k14"></script>
-  <script src="tutorial.js?v=20260926.k14"></script>
+  <script src="firebase-config.js?v=20260926.k16"></script>
+  <script src="session-guard.js?v=20260926.k16"></script>
+  <script src="theme.js?v=20260926.k16"></script>
+  <script src="cpp-parser.js?v=20260926.k16"></script>
+  <script src="translator-page.js?v=20260926.k16"></script>
+  <script src="tutorial.js?v=20260926.k16"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {

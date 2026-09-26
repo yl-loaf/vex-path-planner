@@ -44,7 +44,15 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260926.k14" />
+  <link rel="stylesheet" href="style.css?v=20260926.k16" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('vex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <!-- =================================================================
@@ -60,6 +68,10 @@
         </div>
       </div>
       <div class="home-nav-actions">
+        <button type="button" id="btnHomeThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
+          <span class="theme-toggle-icon">☀️</span>
+          <span class="theme-toggle-text">Theme</span>
+        </button>
         <a href="stats.html" class="btn-nav-stats" title="View website visitor analytics and stats">
           📊 Stats <span id="globalVisitorBadge" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 6px;border-radius:10px;font-size:0.75rem;margin-left:4px;">...</span>
         </a>
@@ -338,6 +350,12 @@
             <button type="button" id="btnHelp" class="tools-menu-item">❓ Help &amp; Guides</button>
           </div>
         </div>
+
+        <!-- Theme Switcher -->
+        <button type="button" id="btnPlannerThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
+          <span class="theme-toggle-icon">☀️</span>
+          <span class="theme-toggle-text">Theme</span>
+        </button>
 
         <!-- Google Auth & Cloud Area -->
         <div id="authArea" class="auth-area">
@@ -2727,20 +2745,21 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260926.k14"></script>
+  <script src="version.js?v=20260926.k16"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260926.k14"></script>
-  <script src="google-drive-sync.js?v=20260926.k14"></script>
-  <script src="session-guard.js?v=20260926.k14"></script>
-  <script src="v5-brain-serial.js?v=20260926.k14"></script>
-  <script src="project-manager.js?v=20260926.k14"></script>
-  <script src="cpp-parser.js?v=20260926.k14"></script>
-  <script src="app.js?v=20260926.k14"></script>
-  <script src="tutorial.js?v=20260926.k14"></script>
+  <script src="firebase-config.js?v=20260926.k16"></script>
+  <script src="google-drive-sync.js?v=20260926.k16"></script>
+  <script src="session-guard.js?v=20260926.k16"></script>
+  <script src="theme.js?v=20260926.k16"></script>
+  <script src="v5-brain-serial.js?v=20260926.k16"></script>
+  <script src="project-manager.js?v=20260926.k16"></script>
+  <script src="cpp-parser.js?v=20260926.k16"></script>
+  <script src="app.js?v=20260926.k16"></script>
+  <script src="tutorial.js?v=20260926.k16"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
