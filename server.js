@@ -702,6 +702,22 @@ app.get(['/stats', '/stats.html'], (req, res) => {
 });
 
 // Google Search Console & SEO Routes
+app.get(['/favicon.ico'], (req, res) => {
+  res.set({
+    ...NO_CACHE_HEADERS,
+    'Content-Type': 'image/x-icon'
+  });
+  res.sendFile(path.join(__dirname, 'favicon.ico'));
+});
+
+app.get(['/favicon.svg'], (req, res) => {
+  res.set({
+    ...NO_CACHE_HEADERS,
+    'Content-Type': 'image/svg+xml'
+  });
+  res.sendFile(path.join(__dirname, 'favicon.svg'));
+});
+
 app.get(['/sitemap.xml', '/sitemap'], (req, res) => {
   res.set({
     ...NO_CACHE_HEADERS,
