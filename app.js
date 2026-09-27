@@ -1783,7 +1783,9 @@
   function getRobotPhysicsProps(customBot) {
     const b = customBot || bot;
     const motorCount = Number(b.motorCount) || 6;
-    const weightLbs = Math.max(Number(b.robotWeightLbs) || 15.0, 1.0);
+    const baseWeight = Math.max(Number(b.robotWeightLbs) || 15.0, 1.0);
+    const extraGoalWeight = (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled()) ? ScoringEngine.getClampedGoalWeightLbs() : 0;
+    const weightLbs = baseWeight + extraGoalWeight;
     const tractionMu = Math.max(Number(b.wheelTraction) || 0.85, 0.1);
     const battVolts = Number(b.batteryVolts) || 12.8;
     const rpm = Math.max(Number(b.driveRpm) || 600, 1);
@@ -3523,6 +3525,12 @@
     // Render Field Obstacles (Loaders, Mobile Goals, Center Ladder)
     if (collisionConfig.enabled && collisionConfig.showObstacleOverlays) {
       drawFieldObstacles(ctx, liveHitObstacleIds);
+    }
+
+    // Render Dynamic Scoring Elements (Rings, Clamped Mogos, Stakes)
+    if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled()) {
+      const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+      ScoringEngine.render(ctx, fieldToCanvas, scale, currentTheme);
     }
 
     buildSimPath();
@@ -7182,6 +7190,10 @@
     buildSimPath();
     simRunning = true;
     simIdx = 0;
+    if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled()) {
+      ScoringEngine.resetFieldElements();
+      updateScoringHUD();
+    }
     const startTime = performance.now();
     const totalT = simPath.length ? simPath[simPath.length - 1].t : 0;
     const totalEst = estimateTotalTime();
@@ -7208,6 +7220,13 @@
       simIdx = idx;
       const pt = simPath[simIdx] || { vLin: 0, omegaDeg: 0 };
       const curElapsed = Math.min(elapsed, totalT);
+
+      // Update dynamic scoring engine & subsystem attachment
+      if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled()) {
+        const activeAction = actions[pt.actionIdx != null ? pt.actionIdx : 0];
+        const liveScoreRes = ScoringEngine.updateStep(pt, bot, activeAction, true);
+        updateScoringHUD(liveScoreRes);
+      }
 
       // Check real-time collision during simulation
       if (collisionConfig.enabled && collisionConfig.stopSimOnCollision) {
@@ -7241,6 +7260,10 @@
     simRunning = false;
     if (animId) cancelAnimationFrame(animId);
     simIdx = 0;
+    if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled()) {
+      ScoringEngine.resetFieldElements();
+      updateScoringHUD();
+    }
     updateTimeDisplay();
     draw();
     drawPidTuningGraph(0);
@@ -13539,6 +13562,187 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
 
   /* =================================================================
+     FIELD SCORING ENGINE & DYNAMIC ELEMENTS MODAL (BETA)
+     ================================================================= */
+  function updateScoringHUD(scoreRes) {
+    if (typeof ScoringEngine === "undefined") return;
+    const isEngEnabled = ScoringEngine.getIsEnabled();
+    const btnBeta = document.getElementById("btnScoringBeta");
+    const chipScore = document.getElementById("simHudScore");
+    if (btnBeta) {
+      if (isEngEnabled) btnBeta.classList.add("active");
+      else btnBeta.classList.remove("active");
+    }
+    if (chipScore) {
+      if (isEngEnabled) {
+        chipScore.style.display = "inline-flex";
+        let activeRobotPose = pose;
+        if (simRunning && simPath.length && simPath[simIdx]) {
+          activeRobotPose = simPath[simIdx];
+        }
+        const res = scoreRes || ScoringEngine.calculateScore(activeRobotPose);
+        const awpText = res.awpCriteria ? ` · AWP ${res.awpCriteria.totalCount}/3` : "";
+        setDomText(chipScore, `🏆 ${res.totalScore} pts${awpText}`);
+      } else {
+        chipScore.style.display = "none";
+      }
+    }
+
+    // Update modal if open
+    const modal = document.getElementById("scoringModal");
+    if (modal && !modal.hidden) {
+      let activeRobotPose = pose;
+      if (simRunning && simPath.length && simPath[simIdx]) {
+        activeRobotPose = simPath[simIdx];
+      }
+      const res = scoreRes || ScoringEngine.calculateScore(activeRobotPose);
+      const totalEl = document.getElementById("scoreModalTotalPoints");
+      const mogoRingsEl = document.getElementById("scoreModalMogoRings");
+      const stakeRingsEl = document.getElementById("scoreModalStakeRings");
+      const cornerEl = document.getElementById("scoreModalCornerPts");
+      const goalWeightEl = document.getElementById("scoreModalGoalWeight");
+      const awpBadge = document.getElementById("scoreModalAwpBadge");
+      const statusPill = document.getElementById("scoringModalStatusPill");
+
+      if (totalEl) totalEl.innerHTML = `${res.totalScore} <span class="score-unit">pts</span>`;
+      if (mogoRingsEl) mogoRingsEl.textContent = `${res.ringsOnMogos + res.mogoTopRingBonus} pts`;
+      if (stakeRingsEl) stakeRingsEl.textContent = `${res.ringsOnWallStakes + res.ringsOnHighStake} pts`;
+      if (cornerEl) cornerEl.textContent = `${res.mogoCornerPoints} pts`;
+      if (goalWeightEl) goalWeightEl.textContent = `${ScoringEngine.getClampedGoalWeightLbs().toFixed(1)} lbs`;
+
+      if (statusPill) {
+        if (isEngEnabled) {
+          statusPill.textContent = "🟢 Beta: Active & Tracking";
+          statusPill.classList.add("active");
+        } else {
+          statusPill.textContent = "⚪ Beta: Inactive";
+          statusPill.classList.remove("active");
+        }
+      }
+
+      if (awpBadge && res.awpCriteria) {
+        awpBadge.textContent = `AWP: ${res.awpCriteria.totalCount}/3 Criteria${res.awpCriteria.awpCompleted ? " ✅ COMPLETE" : ""}`;
+        if (res.awpCriteria.awpCompleted) awpBadge.classList.add("completed");
+        else awpBadge.classList.remove("completed");
+      }
+
+      // Subsystem chips
+      const sub = res.subsystems || ScoringEngine.getSubsystems();
+      const dotIntake = document.getElementById("dotSubIntake");
+      const lblIntake = document.getElementById("lblSubIntake");
+      const dotClamp = document.getElementById("dotSubClamp");
+      const lblClamp = document.getElementById("lblSubClamp");
+      const lblHopper = document.getElementById("lblSubHopper");
+
+      if (dotIntake) dotIntake.className = `sub-dot ${sub.intake ? "active" : "off"}`;
+      if (lblIntake) lblIntake.textContent = sub.intake ? "SPINNING" : "OFF";
+      if (dotClamp) dotClamp.className = `sub-dot ${sub.clamp ? "active" : "off"}`;
+      if (lblClamp) lblClamp.textContent = sub.clampedMogoId ? "CLAMPED (+3.5 lbs)" : (sub.clamp ? "LOCKED" : "OPEN");
+      if (lblHopper) lblHopper.textContent = `${sub.hopperRingCount || 0}/2 Rings`;
+    }
+  }
+
+  function wireScoringModal() {
+    if (typeof ScoringEngine === "undefined") return;
+    ScoringEngine.init();
+
+    const modal = document.getElementById("scoringModal");
+    const btnOpenBeta = document.getElementById("btnScoringBeta");
+    const chipScore = document.getElementById("simHudScore");
+    const btnClose = document.getElementById("scoringModalClose");
+    const btnDone = document.getElementById("scoringModalDoneBtn");
+
+    const chkMaster = document.getElementById("chkScoringMaster");
+    const selAlliance = document.getElementById("selScoringAlliance");
+    const selGameMode = document.getElementById("selScoringGameMode");
+    const btnToggleIntake = document.getElementById("btnTestToggleIntake");
+    const btnToggleClamp = document.getElementById("btnTestToggleClamp");
+    const btnResetField = document.getElementById("btnResetFieldElements");
+
+    if (!modal) return;
+
+    function openModal() {
+      if (chkMaster) chkMaster.checked = ScoringEngine.getIsEnabled();
+      if (selAlliance) selAlliance.value = ScoringEngine.getAllianceColor();
+      if (selGameMode) selGameMode.value = ScoringEngine.getGameMode();
+      updateScoringHUD();
+      modal.hidden = false;
+      modal.classList.add("open");
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    if (btnOpenBeta) btnOpenBeta.addEventListener("click", openModal);
+    if (chipScore) chipScore.addEventListener("click", openModal);
+    if (btnClose) btnClose.addEventListener("click", closeModal);
+    if (btnDone) btnDone.addEventListener("click", closeModal);
+
+    if (chkMaster) {
+      chkMaster.addEventListener("change", (e) => {
+        ScoringEngine.setEnabled(e.target.checked);
+        if (e.target.checked) {
+          showToast("🎯 Beta: Field Scoring Engine & Dynamic Element Tracking Enabled!");
+        } else {
+          showToast("⚪ Beta: Field Scoring Engine Disabled");
+        }
+        markDirty();
+        draw();
+        updateScoringHUD();
+      });
+    }
+
+    if (selAlliance) {
+      selAlliance.addEventListener("change", (e) => {
+        ScoringEngine.setAllianceColor(e.target.value);
+        markDirty();
+        draw();
+        updateScoringHUD();
+      });
+    }
+
+    if (selGameMode) {
+      selGameMode.addEventListener("change", (e) => {
+        ScoringEngine.setGameMode(e.target.value);
+        if (bot) bot.matchPeriod = (e.target.value === "skills60") ? "60s" : "15s";
+        markDirty();
+        draw();
+        updateScoringHUD();
+        try { updateTimeDisplay(); } catch (_) {}
+      });
+    }
+
+    if (btnToggleIntake) {
+      btnToggleIntake.addEventListener("click", () => {
+        ScoringEngine.toggleIntake();
+        updateScoringHUD();
+        draw();
+      });
+    }
+
+    if (btnToggleClamp) {
+      btnToggleClamp.addEventListener("click", () => {
+        ScoringEngine.toggleClamp();
+        updateScoringHUD();
+        draw();
+      });
+    }
+
+    if (btnResetField) {
+      btnResetField.addEventListener("click", () => {
+        ScoringEngine.resetFieldElements();
+        showToast("↺ Reset all field rings and mobile goals.");
+        updateScoringHUD();
+        draw();
+      });
+    }
+
+    updateScoringHUD();
+  }
+
+  /* =================================================================
      FIELD COLLISION DETECTION & OBSTACLE MANAGER MODAL
      ================================================================= */
   function wireCollisionModal() {
@@ -14759,6 +14963,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
   wireAllianceMirrorModal();
   wireDrivePhysicsModal();
   wireCollisionModal();
+  wireScoringModal();
   wireBreadcrumbs();
   wireCommandPaletteModal();
   initCoordPrecisionControls();

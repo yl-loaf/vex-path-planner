@@ -974,6 +974,7 @@
               <span class="hud-title-tag">SIMULATION &amp; DRIVE DYNAMICS</span>
             </div>
             <div class="hud-action-btns">
+              <button type="button" id="btnScoringBeta" class="hud-tool-btn beta-pill-btn" title="Toggle Beta: Interactive Field Scoring Engine & Dynamic Element State Tracking">🎯 Scoring <span class="badge-beta-text">BETA</span></button>
               <button type="button" id="btnToolBezier" class="hud-tool-btn bezier-tool-btn" title="Toggle Bezier Curve Path Tool (Hotkey: B) - Drag control points between waypoints to create smooth curves">🌊 Bezier Tool <kbd style="font-size:0.65rem;background:rgba(255,255,255,0.15);padding:1px 4px;border-radius:3px;margin-left:2px;">B</kbd></button>
               <button type="button" id="btnHudCollisionModal" class="hud-tool-btn" title="Open Field Collision Detection &amp; Obstacles Manager">🛡️ Collisions (<span id="hudCollisionStatus">Clear</span>)</button>
               <button type="button" id="btnHudPhysicsModal" class="hud-tool-btn" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Physics</button>
@@ -1007,6 +1008,9 @@
               </div>
             </div>
             <div class="sim-hud-right">
+              <div class="sim-hud-chip chip-score" id="simHudScore" title="Live Autonomous Score & AWP Checklist (Beta). Click to open Scoring panel" style="display:none; cursor:pointer;">
+                🏆 0 pts · AWP 0/3
+              </div>
               <div class="sim-hud-chip chip-time" id="simHudTime" title="Live Elapsed & Total Path Duration">
                 ⏱ 0.00s / ~0.00s
               </div>
@@ -2755,6 +2759,117 @@ void autonomous() {
     </div>
   </div>
 
+  <!-- Field Scoring Engine & Dynamic Elements Modal (BETA) -->
+  <div id="scoringModal" class="modal scoring-modal" hidden>
+    <div class="modal-card scoring-modal-card">
+      <div class="scoring-modal-header">
+        <div class="scoring-modal-title-wrap">
+          <span class="scoring-badge">VRC High Stakes / Override · Interactive Scoring</span>
+          <h2 id="scoringModalTitle">🎯 Dynamic Scoring Engine <span class="badge-beta-text">BETA</span></h2>
+        </div>
+        <button type="button" id="scoringModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="scoring-modal-body">
+        <p class="scoring-modal-desc">
+          Simulates dynamic game objects (<strong>Rings</strong>, <strong>Mobile Goals</strong>, <strong>Wall Stakes</strong>) and subsystem interactions. Intaking rings and clamping mobile goals dynamically updates the 15s score and applies <strong>+3.5 lbs mobile goal load</strong> to the drivetrain physics engine.
+        </p>
+
+        <!-- Top Master Controls -->
+        <div class="scoring-master-panel">
+          <div class="scoring-master-row">
+            <label class="collision-toggle-switch">
+              <input type="checkbox" id="chkScoringMaster" />
+              <span class="collision-slider"></span>
+              <span class="collision-toggle-text"><strong>Enable Live Scoring Engine (Beta)</strong></span>
+            </label>
+            <div class="scoring-status-pill" id="scoringModalStatusPill">
+              ⚪ Beta: Inactive
+            </div>
+          </div>
+
+          <div class="scoring-config-grid">
+            <div class="scoring-config-item">
+              <label>Alliance Color</label>
+              <select id="selScoringAlliance" class="scoring-select">
+                <option value="red" selected>🔴 Red Alliance</option>
+                <option value="blue">🔵 Blue Alliance</option>
+              </select>
+            </div>
+            <div class="scoring-config-item">
+              <label>Competition Mode</label>
+              <select id="selScoringGameMode" class="scoring-select">
+                <option value="match15" selected>⏱️ 15s Match Autonomous</option>
+                <option value="skills60">⏱️ 60s Autonomous Skills</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time Scoreboard Strip -->
+        <div class="scoring-live-scoreboard">
+          <div class="score-hero-box">
+            <span class="score-hero-label">Projected Auton Score</span>
+            <div class="score-hero-val" id="scoreModalTotalPoints">0 <span class="score-unit">pts</span></div>
+            <span class="score-awp-badge" id="scoreModalAwpBadge">AWP: 0/3 Criteria</span>
+          </div>
+
+          <div class="score-breakdown-grid">
+            <div class="score-metric-cell">
+              <span class="score-cell-label">Mobile Goal Rings</span>
+              <strong class="score-cell-val" id="scoreModalMogoRings">0 pts</strong>
+              <span class="score-cell-sub">1 pt each + 2 pt top bonus</span>
+            </div>
+            <div class="score-metric-cell">
+              <span class="score-cell-label">Wall &amp; Ladder Stakes</span>
+              <strong class="score-cell-val" id="scoreModalStakeRings">0 pts</strong>
+              <span class="score-cell-sub">1-2 pts + stake bonus</span>
+            </div>
+            <div class="score-metric-cell">
+              <span class="score-cell-label">Corner Placements</span>
+              <strong class="score-cell-val" id="scoreModalCornerPts">0 pts</strong>
+              <span class="score-cell-sub">+5 pts per corner mogo</span>
+            </div>
+            <div class="score-metric-cell">
+              <span class="score-cell-label">Goal Load Physics</span>
+              <strong class="score-cell-val" id="scoreModalGoalWeight">0.0 lbs</strong>
+              <span class="score-cell-sub">+3.5 lbs when clamped</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subsystems Live Status Bar -->
+        <div class="scoring-subsystem-bar">
+          <div class="subsystem-status-chip" id="subsystemChipIntake">
+            <span class="sub-dot off" id="dotSubIntake"></span>
+            <span>Intake: <strong id="lblSubIntake">OFF</strong></span>
+          </div>
+          <div class="subsystem-status-chip" id="subsystemChipClamp">
+            <span class="sub-dot off" id="dotSubClamp"></span>
+            <span>Clamp: <strong id="lblSubClamp">OPEN</strong></span>
+          </div>
+          <div class="subsystem-status-chip" id="subsystemChipHopper">
+            <span>🎒 Hopper: <strong id="lblSubHopper">0/2 Rings</strong></span>
+          </div>
+          <button type="button" class="btn-sub-quick" id="btnTestToggleIntake" title="Toggle robot intake simulation">Spin Intake</button>
+          <button type="button" class="btn-sub-quick" id="btnTestToggleClamp" title="Toggle pneumatic goal clamp simulation">Toggle Clamp</button>
+          <button type="button" class="btn-sub-quick" id="btnResetFieldElements" title="Reset all rings and mobile goals to initial field positions">↺ Reset Field</button>
+        </div>
+
+        <div class="scoring-hint-box">
+          💡 <strong>Automation:</strong> Actions with custom code or labels like <code>clamp.set_value(true)</code> and <code>intake.move(127)</code> automatically trigger pneumatic clamping and ring intaking during simulation playback!
+        </div>
+      </div>
+
+      <div class="scoring-modal-footer">
+        <span class="scoring-footer-note">
+          ⚠️ <strong>Beta Feature:</strong> Physics inertia and element scoring are approximations calibrated to VRC High Stakes specifications.
+        </span>
+        <button type="button" id="scoringModalDoneBtn" class="primary">Done</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Field Collision Detection & Obstacle Manager Modal -->
   <div id="collisionModal" class="modal collision-modal" hidden>
     <div class="modal-card collision-modal-card">
@@ -2885,8 +3000,9 @@ void autonomous() {
   <script src="theme.js?v=20260927.k7"></script>
   <script src="v5-brain-serial.js?v=20260927.k7"></script>
   <script src="project-manager.js?v=20260927.k7"></script>
-  <script src="cpp-parser.js?v=20260927.k7"></script>
-  <script src="app.js?v=20260927.k7"></script>
+  <script src="cpp-parser.js?v=20260927.k9"></script>
+  <script src="scoring-engine.js?v=20260927.k9"></script>
+  <script src="app.js?v=20260927.k9"></script>
   <script src="tutorial.js?v=20260927.k7"></script>
   <script>
     (function () {

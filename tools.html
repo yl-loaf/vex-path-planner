@@ -615,7 +615,7 @@
       </div>
 
       <div class="tools-filter-pills" id="toolsFilterPills">
-        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">12</span>)</button>
+        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">14</span>)</button>
         <button type="button" class="tool-pill" data-filter="motion">🏎️ Motion &amp; Dyno</button>
         <button type="button" class="tool-pill" data-filter="tuning">🎛️ PID &amp; Bottlenecks</button>
         <button type="button" class="tool-pill" data-filter="routines">🔄 Routines &amp; Symmetry</button>
@@ -1302,6 +1302,62 @@ chassis.turnToHeading(270, 1000);</div>
         </div>
       </article>
 
+      <!-- TOOL 14: Interactive Field Scoring Engine & Dynamic Element Tracker (BETA) -->
+      <article class="tool-card highlight" data-category="routines" data-keywords="scoring score points rings mobile goals mogo stakes awp autonomous win point beta clamp intake">
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background:rgba(234, 179, 8, 0.15); border-color:rgba(234, 179, 8, 0.35); color:#facc15;">🎯</div>
+          <div class="tool-title-info">
+            <h3>Field Scoring Engine &amp; Dynamic Element Tracker <span style="font-size:0.6rem;background:#eab308;color:#0f172a;font-weight:900;padding:1px 5px;border-radius:3px;margin-left:4px;">BETA</span></h3>
+            <p class="tool-tagline">Simulate dynamic VRC game objects (rings, mobile goals, wall stakes), subsystem intake/clamp states, and +3.5 lbs goal load physics in real-time.</p>
+          </div>
+          <span class="tool-category-badge">🔄 Routines</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>Rings on Mogos</label>
+              <input type="number" id="calcScoreMogos" value="4" min="0" max="24" step="1" />
+            </div>
+            <div class="tool-field">
+              <label>Wall / Ladder Stakes</label>
+              <input type="number" id="calcScoreStakes" value="2" min="0" max="10" step="1" />
+            </div>
+            <div class="tool-field">
+              <label>Corner Mogos</label>
+              <input type="number" id="calcScoreCorners" value="1" min="0" max="4" step="1" />
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Calculated Auton Score</span>
+              <strong class="result-val amber" id="calcScoreTotal">19 pts</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">AWP Status</span>
+              <strong class="result-val green" id="calcScoreAwp">2/3 Criteria</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Clamped Goal Load</span>
+              <strong class="result-val purple">+3.5 lbs Added</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.71rem; color:var(--muted); line-height:1.4;">
+            Official VRC High Stakes / Override rules: Rings on Mogos count 1 pt (+2 pt top ring bonus), wall stakes count 1 pt (+2 pt top ring), high stakes count 2 pts, and corners award +5 pts.
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="index.html#btnScoringBeta" class="btn-tool-action primary" id="btnLaunchScoringPlanner">
+              🎯 Open Live Scoring in Planner
+            </a>
+            <button type="button" class="btn-tool-action" id="btnRecalcScoreTool">
+              ⚡ Recalculate Score
+            </button>
+          </div>
+        </div>
+      </article>
+
     </div>
   </div>
 
@@ -1981,6 +2037,40 @@ chassis.turnToHeading(270, 1000);</div>
           }
         });
       }
+      // 15. Scoring Calculator (Tool 14)
+      const calcScoreMogos = document.getElementById("calcScoreMogos");
+      const calcScoreStakes = document.getElementById("calcScoreStakes");
+      const calcScoreCorners = document.getElementById("calcScoreCorners");
+      const calcScoreTotal = document.getElementById("calcScoreTotal");
+      const calcScoreAwp = document.getElementById("calcScoreAwp");
+      const btnRecalcScoreTool = document.getElementById("btnRecalcScoreTool");
+
+      function updateToolScoring() {
+        const mRings = parseInt(calcScoreMogos?.value || "0", 10);
+        const sRings = parseInt(calcScoreStakes?.value || "0", 10);
+        const corners = parseInt(calcScoreCorners?.value || "0", 10);
+
+        // 1 pt per mogo ring + 2 pt top ring bonus
+        const mogoPts = mRings > 0 ? mRings + 2 : 0;
+        // 1 pt per stake ring + 2 pt top ring bonus
+        const stakePts = sRings > 0 ? sRings + 2 : 0;
+        // 5 pts per corner mogo
+        const cornerPts = corners * 5;
+
+        const total = mogoPts + stakePts + cornerPts;
+        if (calcScoreTotal) calcScoreTotal.textContent = `${total} pts`;
+        if (calcScoreAwp) {
+          const awpCount = (mRings > 0 ? 1 : 0) + (sRings > 0 ? 1 : 0) + (corners > 0 ? 1 : 0);
+          calcScoreAwp.textContent = `${awpCount}/3 Criteria`;
+        }
+      }
+
+      [calcScoreMogos, calcScoreStakes, calcScoreCorners].forEach((el) => {
+        if (el) el.addEventListener("input", updateToolScoring);
+        if (el) el.addEventListener("change", updateToolScoring);
+      });
+      if (btnRecalcScoreTool) btnRecalcScoreTool.addEventListener("click", updateToolScoring);
+      updateToolScoring();
     });
   </script>
 </body>
