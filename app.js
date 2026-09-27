@@ -3559,8 +3559,12 @@
       drawFieldObstacles(ctx, liveHitObstacleIds);
     }
 
-    // Render Dynamic Scoring Elements (Rings, Clamped Mogos, Stakes)
+    // Render Dynamic Scoring Elements (Pins, Goals, Toggles, Loaders)
     if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled && ScoringEngine.getIsEnabled()) {
+      if (!simRunning && typeof ScoringEngine.evaluateFullRoutine === "function") {
+        const computedPoses = typeof computePoses === "function" ? computePoses() : [];
+        ScoringEngine.evaluateFullRoutine(actions, computedPoses, bot);
+      }
       const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
       const currentScale = getFieldScale();
       ScoringEngine.render(ctx, fieldToCanvas, currentScale, currentTheme);
@@ -5772,6 +5776,7 @@
           draw();
           generateCode();
           updateTimeDisplay();
+          try { updateScoringHUD(); } catch (_) {}
         });
 
         el.addEventListener("input", () => {
@@ -5797,6 +5802,10 @@
                 headerHint.className = "hint-inline" + (clean ? " has-comment" : "");
               }
               generateCode();
+              try { updateScoringHUD(); } catch (_) {}
+            }
+            if (f === "customCode") {
+              try { updateScoringHUD(); } catch (_) {}
             }
             if (f === "customDuration") {
               updateTimeDisplay();
@@ -6692,6 +6701,7 @@
     });
 
     try { renderBreadcrumbs(); } catch (_) {}
+    try { updateScoringHUD(); } catch (_) {}
   }
 
   function syncStartInputs() {
@@ -7176,7 +7186,8 @@
     const initPhys = calculateStepPhysics(0, 0, 0, 0.01, getRobotPhysicsProps(bot), bot);
     simPath.push({ ...cur, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
 
-    for (const a of actions) {
+    for (let aIdx = 0; aIdx < actions.length; aIdx++) {
+      const a = actions[aIdx];
       const seg = simulateAction(a, cur, bot);
       simSegments.push({
         action: a,
@@ -7207,6 +7218,8 @@
           voltage: pt.voltage != null ? pt.voltage : (bot.batteryVolts || 12.8),
           current: pt.current != null ? pt.current : 0,
           watts: pt.watts != null ? pt.watts : 0,
+          actionIdx: aIdx,
+          action: a,
         });
       }
       t += seg.duration;
@@ -13623,14 +13636,27 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (isEngEnabled) btnBeta.classList.add("active");
       else btnBeta.classList.remove("active");
     }
+
+    let activeRobotPose = pose;
+    if (simRunning && simPath.length && simPath[simIdx]) {
+      activeRobotPose = simPath[simIdx];
+    }
+    
+    let res = scoreRes;
+    if (!res) {
+      if (simRunning) {
+        res = ScoringEngine.calculateScore(activeRobotPose);
+      } else if (typeof ScoringEngine.evaluateFullRoutine === "function") {
+        const poses = typeof computePoses === "function" ? computePoses() : [];
+        res = ScoringEngine.evaluateFullRoutine(actions, poses, bot);
+      } else {
+        res = ScoringEngine.calculateScore(activeRobotPose);
+      }
+    }
+
     if (chipScore) {
       if (isEngEnabled) {
         chipScore.style.display = "inline-flex";
-        let activeRobotPose = pose;
-        if (simRunning && simPath.length && simPath[simIdx]) {
-          activeRobotPose = simPath[simIdx];
-        }
-        const res = scoreRes || ScoringEngine.calculateScore(activeRobotPose);
         const carriedText = res.carriedPin ? ` · 📌 1 Pin` : "";
         setDomText(chipScore, `🏆 ${res.totalScore} pts · 🎚️ ${res.redTogglesOwned + res.blueTogglesOwned}/4 Toggles · 🥅 ${res.totalPinsStacked} Pins${carriedText}`);
       } else {
@@ -13641,11 +13667,6 @@ lemlib::ControllerSettings ${currentMode}_controller(
     // Update modal if open
     const modal = document.getElementById("scoringModal");
     if (modal && !modal.hidden) {
-      let activeRobotPose = pose;
-      if (simRunning && simPath.length && simPath[simIdx]) {
-        activeRobotPose = simPath[simIdx];
-      }
-      const res = scoreRes || ScoringEngine.calculateScore(activeRobotPose);
       const totalEl = document.getElementById("scoreModalTotalPoints");
       const carriedEl = document.getElementById("scoreModalCarriedPin");
       const stackedEl = document.getElementById("scoreModalStackedCount");
@@ -13728,13 +13749,14 @@ lemlib::ControllerSettings ${currentMode}_controller(
     }
 
     const btnLaunchGuide = document.getElementById("btnLaunchCommentGuideFromModal");
-    if (btnLaunchGuide) {
-      btnLaunchGuide.addEventListener("click", () => {
-        if (typeof window.openOverrideCommentTutorial === "function") {
-          window.openOverrideCommentTutorial();
-        }
-      });
-    }
+    const btnQuickGuide = document.getElementById("btnQuickCommentGuide");
+    const openGuideFn = () => {
+      if (typeof window.openOverrideCommentTutorial === "function") {
+        window.openOverrideCommentTutorial();
+      }
+    };
+    if (btnLaunchGuide) btnLaunchGuide.addEventListener("click", openGuideFn);
+    if (btnQuickGuide) btnQuickGuide.addEventListener("click", openGuideFn);
 
     if (btnOpenBeta) btnOpenBeta.addEventListener("click", openModal);
     if (chipScore) chipScore.addEventListener("click", openModal);
@@ -16704,9 +16726,14 @@ lemlib::ControllerSettings ${currentMode}_controller(
       // Protect raw C++ code: IF code exists in src/autons.cpp and differs from visual blocks:
       if (code && code.trim().length > 0) {
         if (hasDiff) {
+          const isFirstVisit = !localStorage.getItem("lemlib_first_visit_done") || localStorage.getItem("lemlib_tutorial_completed_v1") !== "true";
           if (proj.importedProject || proj.lastAutonEditor === "ide" || proj.rawCppPreserved) {
             console.log("📥 Loading autonomous routines from imported/IDE C++ code (src/autons.cpp)...");
             loadProjectAutonsIntoPlanner(false, true);
+          } else if (isFirstVisit) {
+            // First time visitor: do NOT show the resolve diffs modal, sync cleanly
+            console.log("🌟 First visit detected: syncing visual blocks into autons.cpp cleanly without diff prompt.");
+            window.ProjectManager.updateAutonCppFromPlanner(paths, indent);
           } else {
             console.log("⚠️ Conflict detected between visual blocks and src/autons.cpp. Prompting user...");
             promptMergeAutonCpp();

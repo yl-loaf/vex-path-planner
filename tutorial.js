@@ -237,13 +237,15 @@
 
         const userCompleted = userUid ? localStorage.getItem(STORAGE_KEY_PREFIX_USER + userUid) === "true" : false;
 
-        // If neither global nor user has completed, and haven't dismissed this session:
+        // If neither global nor user has completed, directly launch the full tutorial on first visit:
         if (!hasCompletedGlobal && !userCompleted && !hasSeenPrompt) {
           sessionStorage.setItem(STORAGE_KEY_SEEN_MODAL, "true");
-          // Offer welcome toast or directly launch tutorial
+          localStorage.setItem("lemlib_first_visit_done", "true");
           setTimeout(() => {
-            this.showWelcomeToast();
-          }, 1200);
+            if (!this.active) {
+              this.start(0);
+            }
+          }, 800);
         }
       } catch (e) {
         console.warn("Tutorial auto-launch check:", e);

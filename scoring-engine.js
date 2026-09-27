@@ -11,8 +11,8 @@
  * Comment Trigger Mechanics:
  * - "// pin collected" -> Grabs nearest pin (field or loader), carries on bot. Loader replenishes immediately.
  * - "// pin deposited" -> Drops carried pin into nearest goal, stacks on goal.
- * - "// turn toggle CW" -> Turns nearest wall toggle Clockwise, sets alliance color.
- * - "// turn toggle CCW" -> Turns nearest wall toggle Counter-Clockwise, sets alliance color.
+ * - "// turn toggle CW" -> Turns nearest wall toggle Clockwise, sets Red alliance.
+ * - "// turn toggle CCW" -> Turns nearest wall toggle Counter-Clockwise, sets Blue alliance.
  */
 
 (function (root, factory) {
@@ -29,10 +29,10 @@
   // Official Dimensions (Inches)
   const PIN_RADIUS = 1.4;       // ~2.8" diameter base
   const PIN_HEIGHT = 6.5;       // 6.5" height
-  const GOAL_BASE_RADIUS = 3.2; // Goal base radius
-  const TOGGLE_REACH = 24.0;    // Interaction radius for wall toggles
-  const PIN_PICKUP_REACH = 8.0; // Reach distance for collecting pins
-  const GOAL_DEPOSIT_REACH = 20.0; // Reach distance for depositing into goals
+  const GOAL_BASE_RADIUS = 3.6; // Goal base radius
+  const TOGGLE_REACH = 48.0;    // Interaction radius for wall toggles
+  const PIN_PICKUP_REACH = 36.0; // Reach distance for collecting pins
+  const GOAL_DEPOSIT_REACH = 48.0; // Reach distance for depositing into goals
   const PIN_MASS_LBS = 0.45;    // Pin weight
 
   // 4 Official Wall Match Loaders (Loaders always have a pin ready)
@@ -53,15 +53,15 @@
 
   // 9 Official Override Goals
   const DEFAULT_GOALS = [
-    { id: "goal_center", name: "Neutral Tall Goal (Center)", type: "neutral_tall", color: "yellow", x: 0.0, y: 0.0, height: 8.7, radius: 3.4 },
-    { id: "goal_neutral_tl", name: "Neutral Goal (Top-Left)", type: "neutral_short", color: "yellow", x: -24.0, y: 48.0, height: 5.8, radius: 3.1 },
-    { id: "goal_neutral_ml", name: "Neutral Goal (Mid-Left)", type: "neutral_short", color: "yellow", x: -48.0, y: 24.0, height: 5.8, radius: 3.1 },
-    { id: "goal_neutral_mr", name: "Neutral Goal (Mid-Right)", type: "neutral_short", color: "yellow", x: 48.0, y: -24.0, height: 5.8, radius: 3.1 },
-    { id: "goal_neutral_br", name: "Neutral Goal (Bottom-Right)", type: "neutral_short", color: "yellow", x: 24.0, y: -48.0, height: 5.8, radius: 3.1 },
-    { id: "goal_red_1", name: "Red Alliance Goal 1", type: "alliance", color: "red", x: -48.0, y: -24.0, height: 3.25, radius: 3.1 },
-    { id: "goal_red_2", name: "Red Alliance Goal 2", type: "alliance", color: "red", x: -24.0, y: -48.0, height: 3.25, radius: 3.1 },
-    { id: "goal_blue_1", name: "Blue Alliance Goal 1", type: "alliance", color: "blue", x: 48.0, y: 24.0, height: 3.25, radius: 3.1 },
-    { id: "goal_blue_2", name: "Blue Alliance Goal 2", type: "alliance", color: "blue", x: 24.0, y: 48.0, height: 3.25, radius: 3.1 },
+    { id: "goal_center", name: "Neutral Tall Goal (Center)", type: "neutral_tall", color: "yellow", x: 0.0, y: 0.0, height: 8.7, radius: 4.2 },
+    { id: "goal_neutral_tl", name: "Neutral Goal (Top-Left)", type: "neutral_short", color: "yellow", x: -24.0, y: 48.0, height: 5.8, radius: 3.6 },
+    { id: "goal_neutral_ml", name: "Neutral Goal (Mid-Left)", type: "neutral_short", color: "yellow", x: -48.0, y: 24.0, height: 5.8, radius: 3.6 },
+    { id: "goal_neutral_mr", name: "Neutral Goal (Mid-Right)", type: "neutral_short", color: "yellow", x: 48.0, y: -24.0, height: 5.8, radius: 3.6 },
+    { id: "goal_neutral_br", name: "Neutral Goal (Bottom-Right)", type: "neutral_short", color: "yellow", x: 24.0, y: -48.0, height: 5.8, radius: 3.6 },
+    { id: "goal_red_1", name: "Red Alliance Goal 1", type: "alliance", color: "red", x: -48.0, y: -24.0, height: 3.25, radius: 3.6 },
+    { id: "goal_red_2", name: "Red Alliance Goal 2", type: "alliance", color: "red", x: -24.0, y: -48.0, height: 3.25, radius: 3.6 },
+    { id: "goal_blue_1", name: "Blue Alliance Goal 1", type: "alliance", color: "blue", x: 48.0, y: 24.0, height: 3.25, radius: 3.6 },
+    { id: "goal_blue_2", name: "Blue Alliance Goal 2", type: "alliance", color: "blue", x: 24.0, y: 48.0, height: 3.25, radius: 3.6 },
   ];
 
   // Starting Field Pins (Red, Blue, and Yellow Pins distributed on tiles)
@@ -99,16 +99,17 @@
     { id: "pin_blue_9", color: "blue", x: 24.0, y: 60.0 },
   ];
 
-  // Dynamic State
-  let isEnabled = true; // Enabled by default for Override tracking
+  // Dynamic State - Default state is OFF (disabled)
+  let isEnabled = false;
   let pins = [];
   let loaders = [];
   let toggles = [];
   let goals = [];
-  let carriedPin = null; // Robot carries exactly ONE pin at a time: { id, color, x, y }
+  let carriedPin = null; // Robot carries exactly ONE pin at a time
   let allianceColor = "red"; // 'red' | 'blue'
   let gameMode = "match15"; // 'match15' | 'skills60'
   let pinCounter = 100;
+  let executedActionTriggers = new Set();
 
   function init() {
     resetFieldElements();
@@ -116,11 +117,19 @@
       const saved = localStorage.getItem("vex_override_engine_v2");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (typeof parsed.isEnabled === "boolean") isEnabled = parsed.isEnabled;
+        if (typeof parsed.isEnabled === "boolean") {
+          isEnabled = parsed.isEnabled;
+        } else {
+          isEnabled = false;
+        }
         if (parsed.allianceColor) allianceColor = parsed.allianceColor;
         if (parsed.gameMode) gameMode = parsed.gameMode;
+      } else {
+        isEnabled = false;
       }
-    } catch (_) {}
+    } catch (_) {
+      isEnabled = false;
+    }
   }
 
   function saveConfig() {
@@ -135,6 +144,7 @@
 
   function resetFieldElements() {
     carriedPin = null;
+    executedActionTriggers.clear();
 
     // Initialize Loaders (each with a ready pin)
     loaders = DEFAULT_LOADERS.map((l) => ({
@@ -168,7 +178,7 @@
       y: p.y,
       initialX: p.x,
       initialY: p.y,
-      state: "field", // 'field' | 'held' | 'stacked' | 'loader'
+      state: "field",
       goalId: null,
     }));
   }
@@ -209,25 +219,23 @@
   }
 
   /**
-   * Evaluates action comments / code to detect Override triggers:
-   * 1. "// pin collected"
-   * 2. "// pin deposited"
-   * 3. "// turn toggle CW"
-   * 4. "// turn toggle CCW"
+   * Flexible detection of comment triggers in any action property
    */
   function parseOverrideTriggers(action) {
     if (!action) return {};
     const text = [
-      action.comment || "",
       action.label || "",
+      action.comment || "",
       action.customCode || "",
       action.subsystemCode || "",
+      action.commentText || "",
+      action.name || "",
     ].join(" ").toLowerCase();
 
-    const pinCollected = /\/\/\s*pin\s*collected|pin\s*collected|collect\s*pin|grab\s*pin/i.test(text);
-    const pinDeposited = /\/\/\s*pin\s*deposited|pin\s*deposited|deposit\s*pin|score\s*pin|drop\s*pin/i.test(text);
-    const turnToggleCw = /\/\/\s*turn\s*toggle\s*cw|turn\s*toggle\s*cw|toggle\s*cw/i.test(text);
-    const turnToggleCcw = /\/\/\s*turn\s*toggle\s*ccw|turn\s*toggle\s*ccw|toggle\s*ccw/i.test(text);
+    const pinCollected = /\/\/\s*pin\s*collected|pin\s*collected|collect\s*pin|grab\s*pin|pickup\s*pin|intake\s*pin/i.test(text);
+    const pinDeposited = /\/\/\s*pin\s*deposited|pin\s*deposited|deposit\s*pin|score\s*pin|drop\s*pin|stack\s*pin|place\s*pin/i.test(text);
+    const turnToggleCcw = /\/\/\s*turn\s*toggle\s*ccw|turn\s*toggle\s*ccw|toggle\s*ccw|toggle\s*blue/i.test(text);
+    const turnToggleCw = (/\/\/\s*turn\s*toggle\s*cw|turn\s*toggle\s*cw|toggle\s*cw|turn\s*toggle|toggle\s*red/i.test(text)) && !turnToggleCcw;
 
     return {
       pinCollected,
@@ -242,7 +250,6 @@
    */
   function collectNearestPin(robotX, robotY) {
     if (carriedPin) {
-      // Robot already holds 1 pin (capacity = 1 pin)
       return carriedPin;
     }
 
@@ -250,7 +257,7 @@
     let nearestDist = PIN_PICKUP_REACH;
     let fromLoader = null;
 
-    // Check Wall Loaders (Loaders ALWAYS have a pin ready!)
+    // Check Wall Loaders
     for (const loader of loaders) {
       const dist = Math.hypot(loader.x - robotX, loader.y - robotY);
       if (dist <= TOGGLE_REACH) {
@@ -262,7 +269,6 @@
     }
 
     if (fromLoader) {
-      // Collected from Loader -> create pin for bot, and loader immediately keeps a pin ready!
       pinCounter++;
       const newPin = {
         id: `pin_loader_${fromLoader.id}_${pinCounter}`,
@@ -273,8 +279,7 @@
         goalId: null,
       };
       carriedPin = newPin;
-      // Loader ALWAYS stays full with another pin ready
-      fromLoader.hasPin = true;
+      fromLoader.hasPin = true; // Always keeps pin ready
       return carriedPin;
     }
 
@@ -296,7 +301,7 @@
       return carriedPin;
     }
 
-    // Fallback: spawn a new pin if right near pickup area
+    // Fallback: spawn an alliance pin
     pinCounter++;
     const spawnedPin = {
       id: `pin_spawned_${pinCounter}`,
@@ -314,9 +319,12 @@
    * Action: Deposit Pin (drops carried pin into nearest goal, stacks on goal)
    */
   function depositCarriedPin(robotX, robotY) {
+    // If not holding a pin, auto-collect an alliance pin first so depositing always succeeds
+    if (!carriedPin) {
+      collectNearestPin(robotX, robotY);
+    }
     if (!carriedPin) return null;
 
-    // Find nearest goal
     let nearestGoal = null;
     let nearestDist = 9999;
     for (const goal of goals) {
@@ -328,11 +336,9 @@
     }
 
     if (!nearestGoal || nearestDist > GOAL_DEPOSIT_REACH) {
-      // If robot is not within range of any goal, drop at center goal or nearest
-      nearestGoal = goals[0];
+      nearestGoal = goals[0]; // Center goal fallback
     }
 
-    // Stack the pin on the goal
     carriedPin.state = "stacked";
     carriedPin.goalId = nearestGoal.id;
     carriedPin.x = nearestGoal.x;
@@ -355,7 +361,7 @@
   }
 
   /**
-   * Action: Turn Toggle (CW or CCW if near a wall toggle)
+   * Action: Turn Toggle (CW or CCW)
    */
   function turnToggle(robotX, robotY, direction) {
     let nearestToggle = null;
@@ -370,7 +376,6 @@
     }
 
     if (!nearestToggle) {
-      // Find absolute nearest toggle even if slightly outside buffer
       let minD = 9999;
       for (const toggle of toggles) {
         const d = Math.hypot(toggle.x - robotX, toggle.y - robotY);
@@ -384,14 +389,55 @@
     if (nearestToggle) {
       if (direction === "CW") {
         nearestToggle.rotationDeg = (nearestToggle.rotationDeg + 120) % 360;
-        nearestToggle.state = "red"; // CW sets Red Alliance
+        nearestToggle.state = "red";
       } else {
         nearestToggle.rotationDeg = (nearestToggle.rotationDeg - 120 + 360) % 360;
-        nearestToggle.state = "blue"; // CCW sets Blue Alliance
+        nearestToggle.state = "blue";
       }
       return nearestToggle;
     }
     return null;
+  }
+
+  /**
+   * Evaluates the entire routine ahead of time for static projected scoring & visual stacking
+   */
+  function evaluateFullRoutine(actionsList, posesList, botConfig) {
+    resetFieldElements();
+    if (!Array.isArray(actionsList) || actionsList.length === 0) return calculateScore();
+
+    for (let i = 0; i < actionsList.length; i++) {
+      const a = actionsList[i];
+      // Target position of this action (end of move waypoint)
+      let px = 0, py = 0;
+      if (a.x != null && a.y != null && !isNaN(Number(a.x)) && !isNaN(Number(a.y))) {
+        px = Number(a.x);
+        py = Number(a.y);
+      } else if (posesList && posesList[i + 1]) {
+        px = posesList[i + 1].x;
+        py = posesList[i + 1].y;
+      } else if (posesList && posesList[i]) {
+        px = posesList[i].x;
+        py = posesList[i].y;
+      }
+
+      const triggers = parseOverrideTriggers(a);
+
+      if (triggers.pinCollected) {
+        collectNearestPin(px, py);
+      }
+      if (triggers.pinDeposited) {
+        depositCarriedPin(px, py);
+      }
+      if (triggers.turnToggleCw) {
+        turnToggle(px, py, "CW");
+      }
+      if (triggers.turnToggleCcw) {
+        turnToggle(px, py, "CCW");
+      }
+    }
+
+    return calculateScore();
   }
 
   /**
@@ -400,30 +446,34 @@
   function updateStep(robotPose, robotDimensions, action, isSimulating) {
     if (!robotPose) return calculateScore();
 
-    // 1. If robot carries a pin, update pin position to follow the robot exactly
     if (carriedPin) {
       carriedPin.x = robotPose.x;
       carriedPin.y = robotPose.y;
     }
 
-    // 2. Parse action comment triggers
     if (action) {
-      const triggers = parseOverrideTriggers(action);
+      const actKey = action.id || `act_${action.x}_${action.y}_${action.label || ''}`;
+      if (!executedActionTriggers.has(actKey)) {
+        const triggers = parseOverrideTriggers(action);
+        const targetX = (action.x != null && !isNaN(Number(action.x))) ? Number(action.x) : robotPose.x;
+        const targetY = (action.y != null && !isNaN(Number(action.y))) ? Number(action.y) : robotPose.y;
 
-      if (triggers.pinCollected) {
-        collectNearestPin(robotPose.x, robotPose.y);
-      }
-
-      if (triggers.pinDeposited) {
-        depositCarriedPin(robotPose.x, robotPose.y);
-      }
-
-      if (triggers.turnToggleCw) {
-        turnToggle(robotPose.x, robotPose.y, "CW");
-      }
-
-      if (triggers.turnToggleCcw) {
-        turnToggle(robotPose.x, robotPose.y, "CCW");
+        if (triggers.pinCollected) {
+          executedActionTriggers.add(actKey);
+          collectNearestPin(targetX, targetY);
+        }
+        if (triggers.pinDeposited) {
+          executedActionTriggers.add(actKey);
+          depositCarriedPin(targetX, targetY);
+        }
+        if (triggers.turnToggleCw) {
+          executedActionTriggers.add(actKey);
+          turnToggle(targetX, targetY, "CW");
+        }
+        if (triggers.turnToggleCcw) {
+          executedActionTriggers.add(actKey);
+          turnToggle(targetX, targetY, "CCW");
+        }
       }
     }
 
@@ -440,21 +490,17 @@
     let redTogglesOwned = 0;
     let blueTogglesOwned = 0;
 
-    // 1. Toggles Ownership
     for (const toggle of toggles) {
       if (toggle.state === "red") redTogglesOwned++;
       else if (toggle.state === "blue") blueTogglesOwned++;
     }
 
-    // 2. Goals & Stacking (5 pts per alliance pin; 10 pts per yellow pin if toggle owned)
     for (const goal of goals) {
       totalPinsStacked += goal.totalCount;
 
-      // Base Pin Points
       redScore += goal.redCount * 5;
       blueScore += goal.blueCount * 5;
 
-      // Yellow Pins (10 pts for alliance owning the toggle in that quadrant)
       if (redTogglesOwned > 0) {
         redScore += goal.yellowCount * 10;
       }
@@ -463,7 +509,6 @@
       }
     }
 
-    // Toggles ownership bonus (10 pts per toggle)
     redScore += redTogglesOwned * 10;
     blueScore += blueTogglesOwned * 10;
 
@@ -487,22 +532,23 @@
         blueCount: g.blueCount,
         yellowCount: g.yellowCount,
         totalCount: g.totalCount,
+        stackedPins: g.stackedPins ? [...g.stackedPins] : [],
       })),
     };
   }
 
   /**
-   * Renders dynamic VRC Override Field elements (Active Toggles, Goal Stacking Badges, Carried Pin)
-   * Designed to blend seamlessly with the high-resolution 3D field background.
+   * Renders dynamic VRC Override Field elements (Pins on Goals, Active Toggles, Carried Pin)
+   * Purely visual graphics without any text words or labels cluttering the field.
    */
   function render(ctx, fieldToCanvas, scale, theme = "dark") {
     if (!ctx) return;
 
     ctx.save();
 
-    // 1. Draw Active Perimeter Wall Toggles (only highlight when state has been changed from neutral)
+    // 1. Draw Active Perimeter Wall Toggles (Clean physical indicator bar, no text words)
     for (const toggle of toggles) {
-      if (toggle.state === "neutral") continue; // Keep field graphic clean when neutral
+      if (toggle.state === "neutral") continue;
 
       const { cx, cy } = fieldToCanvas(toggle.x, toggle.y);
       const len = 16.0 * scale;
@@ -522,6 +568,7 @@
       ctx.shadowColor = glowColor;
       ctx.shadowBlur = 10;
 
+      // Toggle outer bar
       ctx.fillStyle = toggleBg;
       ctx.strokeStyle = toggleBorder;
       ctx.lineWidth = 1.8;
@@ -530,105 +577,106 @@
       ctx.fill();
       ctx.stroke();
 
-      // Compact Toggle State Label
+      // Sleek physical indicator dot
+      ctx.beginPath();
+      ctx.arc(0, 0, th * 0.45, 0, Math.PI * 2);
       ctx.fillStyle = "#ffffff";
-      ctx.font = `bold ${Math.max(8, Math.round(7.5 * scale))}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(isRed ? "🔴 RED" : "🔵 BLUE", 0, 0);
+      ctx.fill();
 
       ctx.restore();
     }
 
-    // 2. Draw Goal Stacking Badges (only when 1 or more pins are stacked on that goal)
+    // 2. Draw Stacked Pins directly ON the Goals (Clean 3D stacked pins, no text badges)
     for (const goal of goals) {
-      if (!goal.totalCount || goal.totalCount <= 0) continue; // Keep empty goals clean
+      if (!goal.totalCount || goal.totalCount <= 0) continue;
 
       const { cx, cy } = fieldToCanvas(goal.x, goal.y);
-      const r = (goal.radius || GOAL_BASE_RADIUS) * scale;
+      const goalR = (goal.radius || GOAL_BASE_RADIUS) * scale;
 
       ctx.save();
 
-      // Draw stacked pin rings around the post
-      for (let i = 0; i < goal.stackedPins.length; i++) {
-        const pin = goal.stackedPins[i];
-        const ringR = r * (0.6 + i * 0.18);
-        ctx.beginPath();
-        ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-        ctx.strokeStyle = pin.color === "red" ? "#f87171" : (pin.color === "blue" ? "#60a5fa" : "#fde047");
-        ctx.lineWidth = 2.2;
-        ctx.stroke();
-      }
-
-      // Compact Stacking Badge above Goal
-      const badgeW = 46;
-      const badgeH = 18;
-      ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
-      ctx.strokeStyle = "#facc15";
-      ctx.lineWidth = 1.2;
-      ctx.shadowColor = "rgba(0,0,0,0.6)";
-      ctx.shadowBlur = 6;
+      // Goal Radiant Scored Halo
+      const hasRed = goal.redCount > 0;
+      const hasBlue = goal.blueCount > 0;
+      const dominantHalo = hasRed && !hasBlue ? "rgba(239, 68, 68, 0.35)" : (hasBlue && !hasRed ? "rgba(59, 130, 246, 0.35)" : "rgba(250, 204, 21, 0.35)");
       ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(cx - badgeW / 2, cy - r - 18, badgeW, badgeH, 4) : ctx.rect(cx - badgeW / 2, cy - r - 18, badgeW, badgeH);
+      ctx.arc(cx, cy, goalR * 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = dominantHalo;
       ctx.fill();
-      ctx.stroke();
 
-      ctx.fillStyle = "#facc15";
-      ctx.font = "bold 9px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`🥅 ${goal.totalCount} Pins`, cx, cy - r - 9);
+      // Draw Individual Stacked 3D Pins in Goal
+      const pinCount = goal.stackedPins.length;
+      for (let i = 0; i < pinCount; i++) {
+        const pin = goal.stackedPins[i];
+        let pX = cx;
+        let pY = cy;
 
-      // Breakdown tag (e.g. "🔴2 🟡1")
-      const tagParts = [];
-      if (goal.redCount > 0) tagParts.push(`🔴${goal.redCount}`);
-      if (goal.blueCount > 0) tagParts.push(`🔵${goal.blueCount}`);
-      if (goal.yellowCount > 0) tagParts.push(`🟡${goal.yellowCount}`);
+        // Radial offset if multiple pins stacked
+        if (pinCount > 1) {
+          const angle = (i * 2 * Math.PI) / pinCount;
+          const dist = goalR * 0.52;
+          pX = cx + Math.cos(angle) * dist;
+          pY = cy + Math.sin(angle) * dist;
+        }
 
-      if (tagParts.length) {
-        ctx.fillStyle = "#f8fafc";
-        ctx.font = "bold 8.5px monospace";
-        ctx.fillText(tagParts.join(" "), cx, cy + r + 10);
+        const pinRadiusPx = Math.max(6.5, PIN_RADIUS * scale * 1.35);
+
+        ctx.save();
+        const pinFill = pin.color === "red" ? "#dc2626" : (pin.color === "blue" ? "#2563eb" : "#eab308");
+        const pinHighlight = pin.color === "red" ? "#f87171" : (pin.color === "blue" ? "#60a5fa" : "#fde047");
+
+        ctx.shadowColor = pinHighlight;
+        ctx.shadowBlur = 8;
+
+        // Pin Outer Cone Base
+        ctx.beginPath();
+        ctx.arc(pX, pY, pinRadiusPx, 0, Math.PI * 2);
+        ctx.fillStyle = pinFill;
+        ctx.fill();
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+
+        // Pin Inner Cone Tip
+        ctx.beginPath();
+        ctx.arc(pX, pY, pinRadiusPx * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = pinHighlight;
+        ctx.fill();
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+
+        ctx.restore();
       }
 
       ctx.restore();
     }
 
-    // 3. Draw Carried Pin on Robot (when robot is currently holding a pin)
+    // 3. Draw Carried Pin on Robot (Clean 3D pin icon, no text box)
     if (carriedPin) {
       const { cx, cy } = fieldToCanvas(carriedPin.x, carriedPin.y);
-      const pinR = PIN_RADIUS * scale * 1.2;
+      const pinR = PIN_RADIUS * scale * 1.5;
 
       ctx.save();
       const pinColor = carriedPin.color === "red" ? "#ef4444" : (carriedPin.color === "blue" ? "#3b82f6" : "#eab308");
+      const pinLight = carriedPin.color === "red" ? "#fca5a5" : (carriedPin.color === "blue" ? "#93c5fd" : "#fef08a");
       ctx.shadowColor = pinColor;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 14;
 
-      // Carried Pin glowing circle
+      // Outer cone
       ctx.beginPath();
       ctx.arc(cx, cy, pinR, 0, Math.PI * 2);
       ctx.fillStyle = pinColor;
       ctx.fill();
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 2.0;
       ctx.strokeStyle = "#ffffff";
       ctx.stroke();
 
-      // Sleek floating badge: 📌 1 PIN HELD
-      const bW = 62;
-      const bH = 15;
-      ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
-      ctx.strokeStyle = "#facc15";
-      ctx.lineWidth = 1;
+      // Inner tip
       ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(cx - bW / 2, cy - 24, bW, bH, 4) : ctx.rect(cx - bW / 2, cy - 24, bW, bH);
+      ctx.arc(cx, cy, pinR * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = pinLight;
       ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "#facc15";
-      ctx.font = "bold 8px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`📌 1 PIN HELD`, cx, cy - 16.5);
 
       ctx.restore();
     }
@@ -653,6 +701,7 @@
     depositCarriedPin,
     turnToggle,
     updateStep,
+    evaluateFullRoutine,
     calculateScore,
     render,
     parseOverrideTriggers,

@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260927.k13" />
+  <link rel="stylesheet" href="style.css?v=20260927.k14" />
   <script>
     (function () {
       try {
@@ -1008,9 +1008,12 @@
               </div>
             </div>
             <div class="sim-hud-right">
-              <div class="sim-hud-chip chip-score" id="simHudScore" title="Live Autonomous Score & AWP Checklist (Beta). Click to open Scoring panel" style="display:none; cursor:pointer;">
-                🏆 0 pts · AWP 0/3
+              <div class="sim-hud-chip chip-score" id="simHudScore" title="Live Autonomous Score & Dynamic Override Tracker (Beta). Click to open Scoring panel" style="display:none; cursor:pointer;">
+                🏆 0 pts · 🎚️ 0/4 Toggles · 🥅 0 Pins
               </div>
+              <button type="button" class="btn-xs-clean" id="btnQuickCommentGuide" title="Open step-by-step guide on how to use autonomous comments" style="background:rgba(56,189,248,0.18);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 8px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                <span>❓ Guide</span>
+              </button>
               <div class="sim-hud-chip chip-time" id="simHudTime" title="Live Elapsed & Total Path Duration">
                 ⏱ 0.00s / ~0.00s
               </div>
@@ -2989,22 +2992,22 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260927.k13"></script>
+  <script src="version.js?v=20260927.k14"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260927.k13"></script>
-  <script src="google-drive-sync.js?v=20260927.k13"></script>
-  <script src="session-guard.js?v=20260927.k13"></script>
-  <script src="theme.js?v=20260927.k13"></script>
-  <script src="v5-brain-serial.js?v=20260927.k13"></script>
-  <script src="project-manager.js?v=20260927.k13"></script>
-  <script src="cpp-parser.js?v=20260927.k13"></script>
-  <script src="scoring-engine.js?v=20260927.k13"></script>
-  <script src="app.js?v=20260927.k13"></script>
-  <script src="tutorial.js?v=20260927.k13"></script>
+  <script src="firebase-config.js?v=20260927.k14"></script>
+  <script src="google-drive-sync.js?v=20260927.k14"></script>
+  <script src="session-guard.js?v=20260927.k14"></script>
+  <script src="theme.js?v=20260927.k14"></script>
+  <script src="v5-brain-serial.js?v=20260927.k14"></script>
+  <script src="project-manager.js?v=20260927.k14"></script>
+  <script src="cpp-parser.js?v=20260927.k14"></script>
+  <script src="scoring-engine.js?v=20260927.k14"></script>
+  <script src="app.js?v=20260927.k14"></script>
+  <script src="tutorial.js?v=20260927.k14"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
