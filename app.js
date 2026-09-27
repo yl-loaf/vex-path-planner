@@ -1099,6 +1099,159 @@
     };
   }
 
+  // -- High-Precision Pointer & Coordinate Resolution Engine --------
+  // Default: 0.1" (Tenth-Inch Grid)
+  const PRECISION_STEPS = [0.1, 0.5, 1.0, 0, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05];
+  let coordPrecision = parseFloat(localStorage.getItem("vex_coord_precision_v4"));
+  if (isNaN(coordPrecision) || !PRECISION_STEPS.includes(coordPrecision)) {
+    coordPrecision = 0.1; // Tenth-inch grid default (0.1", 1 decimal)
+  }
+
+  function roundToPrecision(val, step = coordPrecision) {
+    if (val == null || isNaN(val)) return 0;
+    if (!step || step <= 0) {
+      // Free subpixel continuous precision (up to 4 clean decimals)
+      return Number(Number(val).toFixed(4));
+    }
+    const factor = Math.round(1 / step);
+    const decimals = step <= 0.0005 ? 4 : step <= 0.005 ? 3 : step <= 0.05 ? 2 : step <= 0.5 ? 1 : 0;
+    const rounded = Math.round(val * factor) / factor;
+    return Number(rounded.toFixed(decimals));
+  }
+
+  function formatPreciseCoord(val, step = coordPrecision) {
+    if (val == null || isNaN(val)) return "0.0";
+    if (!step || step <= 0) return Number(val).toFixed(4);
+    if (step <= 0.0005) return Number(val).toFixed(4);
+    if (step <= 0.005) return Number(val).toFixed(3);
+    if (step <= 0.05) return Number(val).toFixed(2);
+    if (step <= 0.5) return Number(val).toFixed(1);
+    return Number(val).toFixed(0);
+  }
+
+  let hoverPointer = {
+    cx: 0,
+    cy: 0,
+    x: -60,
+    y: -60,
+    active: false,
+    dist: 0,
+    angle: 0,
+  };
+
+  function updateCoordsDisplay(x, y, activeStep = coordPrecision) {
+    const elX = document.getElementById("coordXVal");
+    const elY = document.getElementById("coordYVal");
+    const elMm = document.getElementById("coordMetricVal");
+    const elDelta = document.getElementById("coordDeltaVal");
+    const elPrecBtn = document.getElementById("btnCyclePrecision");
+
+    const poses = typeof computePoses === "function" ? computePoses() : [];
+    const lastPose = (actions && actions.length > 0 && poses.length > 1) ? poses[poses.length - 1] : pose;
+    const dX = x - (lastPose ? lastPose.x : 0);
+    const dY = y - (lastPose ? lastPose.y : 0);
+    const dist = Math.hypot(dX, dY);
+    const angle = typeof angleToPoint === "function" ? angleToPoint(lastPose ? lastPose.x : 0, lastPose ? lastPose.y : 0, x, y) : 0;
+
+    const xSign = x >= 0 ? "+" : "";
+    const ySign = y >= 0 ? "+" : "";
+    const xStr = `${xSign}${formatPreciseCoord(x, activeStep)}"`;
+    const yStr = `${ySign}${formatPreciseCoord(y, activeStep)}"`;
+
+    const distDecimals = (!activeStep || activeStep <= 0.0005) ? 4 : (activeStep <= 0.005 ? 3 : (activeStep <= 0.1 ? 1 : 2));
+    const angleDecimals = (!activeStep || activeStep <= 0.001) ? 2 : (activeStep <= 0.05 ? 1 : 0);
+    const deltaStr = `Δ: ${dist.toFixed(distDecimals)}" · θ: ${normalizeAngle(angle).toFixed(angleDecimals)}°`;
+
+    if (elX && elY) {
+      elX.textContent = `X: ${xStr}`;
+      elY.textContent = `Y: ${yStr}`;
+      if (elMm) elMm.style.display = "none";
+      if (elDelta) elDelta.textContent = deltaStr;
+      if (elPrecBtn) {
+        if (!activeStep || activeStep <= 0) elPrecBtn.textContent = "🎯 Free";
+        else if (activeStep <= 0.0001) elPrecBtn.textContent = "🎯 0.0001″";
+        else if (activeStep <= 0.0005) elPrecBtn.textContent = "🎯 0.0005″";
+        else if (activeStep <= 0.001) elPrecBtn.textContent = "🎯 0.001″";
+        else if (activeStep <= 0.005) elPrecBtn.textContent = "🎯 0.005″";
+        else elPrecBtn.textContent = `🎯 ${activeStep}″`;
+      }
+    } else if (coordsEl) {
+      coordsEl.textContent = `X: ${xStr}  Y: ${yStr} | ${deltaStr} [🎯 ${activeStep ? activeStep + '"' : "Free"}]`;
+    }
+
+    // Sync active state in precision dropdown menu
+    document.querySelectorAll(".precision-menu-item").forEach((item) => {
+      const stepVal = parseFloat(item.dataset.step);
+      if (Math.abs(stepVal - (activeStep || 0)) < 1e-6) {
+        item.classList.add("active");
+      } else {
+        item.classList.remove("active");
+      }
+    });
+  }
+
+  function setCoordPrecision(step) {
+    coordPrecision = Number(step);
+    try {
+      localStorage.setItem("vex_coord_precision_v4", String(coordPrecision));
+    } catch (_) {}
+    let label = "Free (Continuous / Subpixel)";
+    if (coordPrecision > 0) {
+      label = coordPrecision === 0.1
+        ? "0.1″ (Tenth-Inch Grid · Default)"
+        : coordPrecision <= 0.0001
+        ? "0.0001″ (Ultra-Fine · 4-Decimals)"
+        : coordPrecision <= 0.001
+        ? `${coordPrecision}″ (High-Res · 3-Decimals)`
+        : `${coordPrecision}″`;
+    }
+    showToast(`🎯 Pointer resolution set to ${label}`);
+    updateCoordsDisplay(hoverPointer.x, hoverPointer.y, coordPrecision);
+    draw();
+  }
+
+  function cycleCoordPrecision() {
+    const idx = PRECISION_STEPS.indexOf(coordPrecision);
+    const nextIdx = (idx + 1) % PRECISION_STEPS.length;
+    setCoordPrecision(PRECISION_STEPS[nextIdx]);
+  }
+
+  function initCoordPrecisionControls() {
+    const elPrecBtn = document.getElementById("btnCyclePrecision");
+    const elDropdownToggle = document.getElementById("btnPrecisionDropdownToggle");
+    const elDropdownMenu = document.getElementById("precisionMenuDropdown");
+
+    if (elPrecBtn) {
+      elPrecBtn.onclick = (e) => {
+        e.stopPropagation();
+        cycleCoordPrecision();
+      };
+    }
+
+    if (elDropdownToggle && elDropdownMenu) {
+      elDropdownToggle.onclick = (e) => {
+        e.stopPropagation();
+        const isOpen = !elDropdownMenu.hidden;
+        elDropdownMenu.hidden = isOpen;
+      };
+
+      document.addEventListener("click", (e) => {
+        if (!elDropdownMenu.hidden && !elDropdownMenu.contains(e.target) && e.target !== elDropdownToggle) {
+          elDropdownMenu.hidden = true;
+        }
+      });
+
+      document.querySelectorAll(".precision-menu-item").forEach((btn) => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const stepVal = parseFloat(btn.dataset.step);
+          setCoordPrecision(stepVal);
+          elDropdownMenu.hidden = true;
+        };
+      });
+    }
+  }
+
   function headingRad(deg) {
     // Convert LemLib heading (0°=+Y, CW+) to canvas math angle for drawing
     return ((90 - deg) * Math.PI) / 180;
@@ -2535,15 +2688,18 @@
 
 
 
-  function snapToWall(x, y) {
+  function snapToWall(x, y, bypass = false) {
     const margin = 8;
     const limit = HALF - margin;
+    if (bypass) {
+      return { x: clamp(x, -limit, limit), y: clamp(y, -limit, limit) };
+    }
     const dL = Math.abs(x + HALF);
     const dR = Math.abs(x - HALF);
     const dB = Math.abs(y + HALF);
     const dT = Math.abs(y - HALF);
     const minD = Math.min(dL, dR, dB, dT);
-    if (minD < 14) {
+    if (minD > 10) {
       return { x: clamp(x, -limit, limit), y: clamp(y, -limit, limit) };
     }
     if (minD === dL) return { x: -limit, y: clamp(y, -limit, limit) };
@@ -3875,6 +4031,120 @@
         updateBezierQuickBar();
       } catch (_) {}
     }
+
+    // High-precision pointer reticle & alignment guidelines on field
+    if (hoverPointer && hoverPointer.active) {
+      const pPt = fieldToCanvas(hoverPointer.x, hoverPointer.y);
+      const topEdge = fieldToCanvas(hoverPointer.x, 72);
+      const bottomEdge = fieldToCanvas(hoverPointer.x, -72);
+      const leftEdge = fieldToCanvas(-72, hoverPointer.y);
+      const rightEdge = fieldToCanvas(72, hoverPointer.y);
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.28)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+
+      // Vertical guide
+      ctx.beginPath();
+      ctx.moveTo(pPt.cx, topEdge.cy);
+      ctx.lineTo(pPt.cx, bottomEdge.cy);
+      ctx.stroke();
+
+      // Horizontal guide
+      ctx.beginPath();
+      ctx.moveTo(leftEdge.cx, pPt.cy);
+      ctx.lineTo(rightEdge.cx, pPt.cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // High-precision crosshair reticle at point
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(pPt.cx, pPt.cy, 5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Micro crosshair ticks and center dot for pixel-perfect targeting
+      ctx.fillStyle = "#38bdf8";
+      ctx.beginPath();
+      ctx.arc(pPt.cx, pPt.cy, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(pPt.cx - 9, pPt.cy); ctx.lineTo(pPt.cx - 4, pPt.cy);
+      ctx.moveTo(pPt.cx + 4, pPt.cy); ctx.lineTo(pPt.cx + 9, pPt.cy);
+      ctx.moveTo(pPt.cx, pPt.cy - 9); ctx.lineTo(pPt.cx, pPt.cy - 4);
+      ctx.moveTo(pPt.cx, pPt.cy + 4); ctx.lineTo(pPt.cx, pPt.cy + 9);
+      ctx.stroke();
+
+      // Perimeter tick badges
+      ctx.font = "9px ui-monospace, monospace";
+
+      // Top X badge
+      const xText = `X: ${hoverPointer.x >= 0 ? '+' : ''}${formatPreciseCoord(hoverPointer.x)}"`;
+      const xW = ctx.measureText(xText).width + 8;
+      ctx.fillStyle = "rgba(11, 19, 37, 0.9)";
+      ctx.fillRect(pPt.cx - xW / 2, topEdge.cy - 14, xW, 13);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
+      ctx.strokeRect(pPt.cx - xW / 2, topEdge.cy - 14, xW, 13);
+      ctx.fillStyle = "#38bdf8";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(xText, pPt.cx, topEdge.cy - 7.5);
+
+      // Right Y badge
+      const yText = `Y: ${hoverPointer.y >= 0 ? '+' : ''}${formatPreciseCoord(hoverPointer.y)}"`;
+      const yW = ctx.measureText(yText).width + 8;
+      ctx.fillStyle = "rgba(11, 19, 37, 0.9)";
+      ctx.fillRect(rightEdge.cx + 4, pPt.cy - 7, yW, 14);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
+      ctx.strokeRect(rightEdge.cx + 4, pPt.cy - 7, yW, 14);
+      ctx.fillStyle = "#38bdf8";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(yText, rightEdge.cx + 4 + yW / 2, pPt.cy);
+
+      // Floating high-precision tooltip near the cursor (active on both hover and drag)
+      const xInStr = `${hoverPointer.x >= 0 ? '+' : ''}${formatPreciseCoord(hoverPointer.x, coordPrecision)}"`;
+      const yInStr = `${hoverPointer.y >= 0 ? '+' : ''}${formatPreciseCoord(hoverPointer.y, coordPrecision)}"`;
+
+      let badgePrimary = `(${xInStr}, ${yInStr})`;
+      if (drag) {
+        const poses = typeof computePoses === "function" ? computePoses() : [];
+        const lastPose = (actions && actions.length > 0 && poses.length > 1) ? poses[poses.length - 1] : pose;
+        const dX = hoverPointer.x - (lastPose ? lastPose.x : 0);
+        const dY = hoverPointer.y - (lastPose ? lastPose.y : 0);
+        const dist = Math.hypot(dX, dY);
+        badgePrimary += ` · Δ:${dist.toFixed(coordPrecision <= 0.001 ? 3 : 1)}"`;
+      }
+
+      ctx.font = "bold 10px ui-monospace, SFMono-Regular, monospace";
+      const badgeW = ctx.measureText(badgePrimary).width + 16;
+      const badgeH = 20;
+
+      let bX = pPt.cx + 14;
+      let bY = pPt.cy - 28;
+      if (bX + badgeW > canvas.width - 10) bX = pPt.cx - badgeW - 14;
+      if (bY < 10) bY = pPt.cy + 14;
+
+      ctx.fillStyle = drag ? "rgba(11, 19, 37, 0.96)" : "rgba(11, 19, 37, 0.90)";
+      ctx.strokeStyle = drag ? "#38bdf8" : "rgba(56, 189, 248, 0.65)";
+      ctx.lineWidth = drag ? 1.5 : 1.0;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bX, bY, badgeW, badgeH, 4);
+      else ctx.rect(bX, bY, badgeW, badgeH);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = drag ? "#38bdf8" : "#f0f9ff";
+      ctx.font = "bold 10px ui-monospace, SFMono-Regular, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(badgePrimary, bX + badgeW / 2, bY + badgeH / 2);
+
+      ctx.restore();
+    }
     } catch (err) {
       console.warn("Error rendering simulation canvas:", err);
     }
@@ -4398,8 +4668,8 @@
         </div>`;
     } else {
       const ptFields = needsPoint(child.type) ? `
-        <label>X <input type="number" data-child-f="x" step="0.1" value="${child.x}" ${parentAttrs}/></label>
-        <label>Y <input type="number" data-child-f="y" step="0.1" value="${child.y}" ${parentAttrs}/></label>` : "";
+        <label>X <input type="number" data-child-f="x" step="0.001" value="${child.x}" ${parentAttrs}/></label>
+        <label>Y <input type="number" data-child-f="y" step="0.001" value="${child.y}" ${parentAttrs}/></label>` : "";
       const hdField = needsHeading(child.type) ? `
         <label>θ° <input type="number" data-child-f="theta" step="1" value="${child.theta}" ${parentAttrs}/></label>` : "";
       const sideField = needsSide(child.type) ? `
@@ -5072,8 +5342,8 @@
         const simDur = estimateActionTime(a, fromPose);
 
         const pointFields = needsPoint(a.type)
-          ? `<label>X <input type="number" data-f="x" step="0.1" value="${a.x}"/></label>
-             <label>Y <input type="number" data-f="y" step="0.1" value="${a.y}"/></label>`
+          ? `<label>X <input type="number" data-f="x" step="0.001" value="${a.x}"/></label>
+             <label>Y <input type="number" data-f="y" step="0.001" value="${a.y}"/></label>`
           : "";
         const headField = needsHeading(a.type)
           ? `<label>θ° <input type="number" data-f="theta" step="1" value="${a.theta}"/></label>`
@@ -6367,14 +6637,17 @@
   }
 
   function syncStartInputs() {
-    startX.value = Number(pose.x.toFixed(1));
-    startY.value = Number(pose.y.toFixed(1));
+    const decimals = (!coordPrecision || coordPrecision <= 0.0005) ? 4 : (coordPrecision <= 0.005 ? 3 : (coordPrecision <= 0.05 ? 2 : 1));
+    startX.value = Number(pose.x.toFixed(decimals));
+    startY.value = Number(pose.y.toFixed(decimals));
     startTheta.value = Number(pose.theta.toFixed(1));
   }
 
   // -- Code generation ----------------------------------------------
   function num(v) {
-    return Number(Number(v).toFixed(2));
+    if (v == null || isNaN(v)) return 0;
+    const decimals = (!coordPrecision || coordPrecision <= 0.0005) ? 4 : (coordPrecision <= 0.005 ? 3 : 2);
+    return Number(Number(v).toFixed(decimals));
   }
 
   function sanitizeIdent(name) {
@@ -8110,10 +8383,31 @@
     }
   });
 
+  canvas.addEventListener("mouseenter", () => {
+    hoverPointer.active = true;
+    draw();
+  });
+  canvas.addEventListener("mouseleave", () => {
+    hoverPointer.active = false;
+    draw();
+  });
+
   window.addEventListener("mousemove", (e) => {
     const { cx, cy } = canvasCoords(e);
-    const { x, y } = canvasToField(cx, cy);
-    coordsEl.textContent = `X: ${x.toFixed(1)}  Y: ${y.toFixed(1)}`;
+    const rawField = canvasToField(cx, cy);
+    const activeStep = (e.shiftKey || e.altKey) ? 0.001 : coordPrecision;
+    const x = roundToPrecision(rawField.x, activeStep);
+    const y = roundToPrecision(rawField.y, activeStep);
+
+    const rect = canvas.getBoundingClientRect();
+    const isOverCanvas = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+    hoverPointer.cx = cx;
+    hoverPointer.cy = cy;
+    hoverPointer.x = x;
+    hoverPointer.y = y;
+    hoverPointer.active = isOverCanvas || !!drag;
+
+    updateCoordsDisplay(x, y, activeStep);
 
     if (!drag) {
       const hoverHit = hitTest(cx, cy);
@@ -8131,7 +8425,7 @@
       }
 
       const changed = (prevHover?.id !== hoverHit?.id) || (prevHover?.handle !== hoverHit?.handle) || (prevHover?.kind !== hoverHit?.kind);
-      if (changed) {
+      if (changed || hoverPointer.active) {
         draw();
       }
       return;
@@ -8140,10 +8434,11 @@
     canvas.style.cursor = "grabbing";
 
     if (drag.kind === "start") {
-      const snapped = snapToWall(x, y);
-      pose.x = snapped.x;
-      pose.y = snapped.y;
+      const snapped = snapToWall(x, y, e.shiftKey || e.altKey);
+      pose.x = roundToPrecision(snapped.x, activeStep);
+      pose.y = roundToPrecision(snapped.y, activeStep);
       syncStartInputs();
+      updateCoordsDisplay(pose.x, pose.y, activeStep);
       markDirty();
       draw();
     } else if (drag.kind === "action") {
@@ -8161,16 +8456,16 @@
 
         if (e.shiftKey || a.freeHandles) {
           a.freeHandles = true;
-          a.cp1X = Number(x.toFixed(1));
-          a.cp1Y = Number(y.toFixed(1));
-          a.lead1 = Math.round(Math.hypot(a.cp1X - fromPt.x, a.cp1Y - fromPt.y));
-          coordsEl.textContent = `CP1 (Free Tangent): X: ${a.cp1X}  Y: ${a.cp1Y} | Lead: ${a.lead1}"`;
+          a.cp1X = roundToPrecision(x, activeStep);
+          a.cp1Y = roundToPrecision(y, activeStep);
+          a.lead1 = Number(Math.hypot(a.cp1X - fromPt.x, a.cp1Y - fromPt.y).toFixed(1));
+          updateCoordsDisplay(a.cp1X, a.cp1Y, activeStep);
         } else {
           const proj = (x - fromPt.x) * rayX + (y - fromPt.y) * rayY;
-          a.lead1 = Math.max(4, Math.min(80, Math.round(proj)));
+          a.lead1 = Math.max(4, Math.min(80, Number(proj.toFixed(1))));
           a.cp1X = null;
           a.cp1Y = null;
-          coordsEl.textContent = `CP1 (Departure Tangent): Lead: ${a.lead1}" | 🔒 Tangent Locked (Hold Shift for Free Angle)`;
+          updateCoordsDisplay(fromPt.x + rayX * a.lead1, fromPt.y + rayY * a.lead1, activeStep);
         }
         markDirty();
         renderFlow();
@@ -8186,16 +8481,16 @@
 
         if (e.shiftKey || a.freeHandles) {
           a.freeHandles = true;
-          a.cp2X = Number(x.toFixed(1));
-          a.cp2Y = Number(y.toFixed(1));
-          a.lead2 = Math.round(Math.hypot(a.x - a.cp2X, a.y - a.cp2Y));
-          coordsEl.textContent = `CP2 (Free Tangent): X: ${a.cp2X}  Y: ${a.cp2Y} | Lead: ${a.lead2}"`;
+          a.cp2X = roundToPrecision(x, activeStep);
+          a.cp2Y = roundToPrecision(y, activeStep);
+          a.lead2 = Number(Math.hypot(a.x - a.cp2X, a.y - a.cp2Y).toFixed(1));
+          updateCoordsDisplay(a.cp2X, a.cp2Y, activeStep);
         } else {
           const proj = (x - a.x) * rayX + (y - a.y) * rayY;
-          a.lead2 = Math.max(4, Math.min(80, Math.round(proj)));
+          a.lead2 = Math.max(4, Math.min(80, Number(proj.toFixed(1))));
           a.cp2X = null;
           a.cp2Y = null;
-          coordsEl.textContent = `CP2 (Arrival Tangent): Lead: ${a.lead2}" | 🔒 Tangent Locked (Hold Shift for Free Angle)`;
+          updateCoordsDisplay(a.x + rayX * a.lead2, a.y + rayY * a.lead2, activeStep);
         }
         markDirty();
         renderFlow();
@@ -8240,7 +8535,9 @@
 
         const metrics = computeBezierMetrics(a, fromPt);
         const bendDir = a.bulge > 0 ? "Right ↷" : a.bulge < 0 ? "Left ↶" : "Straight 📏";
-        coordsEl.textContent = `🌊 Arc Bend: ${a.bulge > 0 ? '+' : ''}${a.bulge}" (${bendDir}) | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'} | Arc: ${metrics.arcLength.toFixed(1)}"`;
+        if (coordsEl) {
+          coordsEl.textContent = `🌊 Arc Bend: ${a.bulge > 0 ? '+' : ''}${a.bulge}" (${bendDir}) | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'} | Arc: ${metrics.arcLength.toFixed(1)}"`;
+        }
 
         const quickSlider = document.getElementById("bzbSlider");
         const quickVal = document.getElementById("bzbVal");
@@ -8281,13 +8578,13 @@
           dist = Math.max(10, projDist);
         }
 
-        a.x = Number((endC.x + fwdX * dist).toFixed(1));
-        a.y = Number((endC.y + fwdY * dist).toFixed(1));
+        a.x = roundToPrecision(endC.x + fwdX * dist, activeStep);
+        a.y = roundToPrecision(endC.y + fwdY * dist, activeStep);
 
-        coordsEl.textContent = `X: ${a.x.toFixed(1)}  Y: ${a.y.toFixed(1)} | θ: ${snappedTheta.toFixed(1)}° (22.5° snap) | Radius: ${dist.toFixed(1)}"`;
+        updateCoordsDisplay(a.x, a.y, activeStep);
         if (collisionConfig.enabled) {
           const dragCol = checkRobotCollisionAtPose(a.x, a.y, snappedTheta, collisionConfig.safetyBuffer);
-          if (dragCol.hit) {
+          if (dragCol.hit && coordsEl) {
             coordsEl.textContent += ` | ⚠️ COLLISION: ${dragCol.obstacles.map((o) => o.name).join(", ")}`;
           }
         }
@@ -8295,18 +8592,18 @@
         renderFlow();
         draw();
       } else {
-        const dPtX = Number(x.toFixed(1)) - a.x;
-        const dPtY = Number(y.toFixed(1)) - a.y;
-        a.x = Number(x.toFixed(1));
-        a.y = Number(y.toFixed(1));
-        if (a.cp2X != null) a.cp2X = Number((a.cp2X + dPtX).toFixed(1));
-        if (a.cp2Y != null) a.cp2Y = Number((a.cp2Y + dPtY).toFixed(1));
-        coordsEl.textContent = `X: ${a.x.toFixed(1)}  Y: ${a.y.toFixed(1)}`;
+        const dPtX = roundToPrecision(x, activeStep) - a.x;
+        const dPtY = roundToPrecision(y, activeStep) - a.y;
+        a.x = roundToPrecision(x, activeStep);
+        a.y = roundToPrecision(y, activeStep);
+        if (a.cp2X != null) a.cp2X = roundToPrecision(a.cp2X + dPtX, activeStep);
+        if (a.cp2Y != null) a.cp2Y = roundToPrecision(a.cp2Y + dPtY, activeStep);
+        updateCoordsDisplay(a.x, a.y, activeStep);
         if (collisionConfig.enabled) {
           const poses = computePoses();
           const theta = a.theta != null ? a.theta : (poses[si] ? poses[si].theta : 0);
           const dragCol = checkRobotCollisionAtPose(a.x, a.y, theta, collisionConfig.safetyBuffer);
-          if (dragCol.hit) {
+          if (dragCol.hit && coordsEl) {
             coordsEl.textContent += ` | ⚠️ COLLISION: ${dragCol.obstacles.map((o) => o.name).join(", ")}`;
           }
         }
@@ -14464,10 +14761,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
   wireCollisionModal();
   wireBreadcrumbs();
   wireCommandPaletteModal();
+  initCoordPrecisionControls();
   loadLocal();
   syncPathSelect();
   syncStartInputs();
   syncBotInputs();
+  updateCoordsDisplay(hoverPointer.x, hoverPointer.y, coordPrecision);
   renderFlow();
   draw();
   generateCode();

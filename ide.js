@@ -56,6 +56,12 @@
   let isAutosaving = false;
   let lastSaveTimestamp = null;
 
+  // Monaco Editor Engine (VS Code Engine) State
+  let monacoInstance = null;
+  let monacoEditor = null;
+  const monacoModels = new Map();
+  let isMonacoReady = false;
+
   // -------------------------------------------------------------
   // Universal Multi-File Project Ignore & Import Manager
   // -------------------------------------------------------------
@@ -258,6 +264,347 @@
   }
   window.applyNewImportedProject = applyNewImportedProject;
 
+  // -------------------------------------------------------------
+  // Monaco Editor (VS Code Engine) Integration & Controller
+  // -------------------------------------------------------------
+  function getLanguageForFile(filename) {
+    if (!filename) return "cpp";
+    const ext = filename.split(".").pop().toLowerCase();
+    if (["cpp", "c", "h", "hpp", "cc", "cxx", "inl"].includes(ext)) return "cpp";
+    if (ext === "json") return "json";
+    if (["md", "markdown"].includes(ext)) return "markdown";
+    if (["txt", "ini", "cfg", "log"].includes(ext)) return "plaintext";
+    return "cpp";
+  }
+
+  function getOrCreateModel(filename, content) {
+    if (!monacoInstance) return null;
+    const lang = getLanguageForFile(filename);
+    const cleanPath = filename.replace(/^[\/\\]+/, "");
+    const uri = monacoInstance.Uri.parse("inmemory://pros/" + encodeURIComponent(cleanPath));
+    let model = monacoInstance.editor.getModel(uri);
+    if (!model || model.isDisposed()) {
+      const fileData = content !== undefined ? content : (window.ProjectManager ? window.ProjectManager.getFile(filename) : "");
+      model = monacoInstance.editor.createModel(fileData || "", lang, uri);
+      model.onDidChangeContent(() => {
+        onEditorChange();
+      });
+    } else if (content !== undefined && model.getValue() !== content) {
+      model.setValue(content);
+    }
+    monacoModels.set(cleanPath, model);
+    return model;
+  }
+
+  function setupMonacoEngine(container) {
+    if (!monacoInstance || !container) return;
+
+    // Define LemLib Dark & Light Themes
+    monacoInstance.editor.defineTheme("lemlib-dark", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "6a9955", fontStyle: "italic" },
+        { token: "string", foreground: "ce9178" },
+        { token: "keyword", foreground: "569cd6", fontStyle: "bold" },
+        { token: "type", foreground: "4ec9b0", fontStyle: "bold" },
+        { token: "number", foreground: "b5cea8" },
+        { token: "delimiter", foreground: "d4d4d4" },
+        { token: "identifier", foreground: "e2e8f0" }
+      ],
+      colors: {
+        "editor.background": "#050a14",
+        "editor.foreground": "#e2e8f0",
+        "editor.lineHighlightBackground": "#0f172a",
+        "editorLineNumber.foreground": "#475569",
+        "editorLineNumber.activeForeground": "#38bdf8",
+        "editorGutter.background": "#070d18",
+        "editorCursor.foreground": "#38bdf8",
+        "editor.selectionBackground": "#1e3a8a80",
+        "editor.inactiveSelectionBackground": "#1e293b60",
+        "editorWidget.background": "#0f172a",
+        "editorWidget.border": "#1e293b",
+        "editorWidget.foreground": "#e2e8f0",
+        "editorSuggestWidget.background": "#09111e",
+        "editorSuggestWidget.border": "#334155",
+        "editorSuggestWidget.foreground": "#e2e8f0",
+        "editorSuggestWidget.selectedForeground": "#ffffff",
+        "editorSuggestWidget.selectedBackground": "#1e3a8a",
+        "editorSuggestWidget.highlightForeground": "#38bdf8",
+        "editorSuggestWidget.focusHighlightForeground": "#38bdf8",
+        "editorSuggestWidget.selectedIconForeground": "#ffffff",
+        "editorSuggestWidgetStatus.foreground": "#94a3b8",
+        "list.hoverForeground": "#ffffff",
+        "list.activeSelectionForeground": "#ffffff",
+        "list.focusForeground": "#ffffff",
+        "list.inactiveSelectionForeground": "#e2e8f0"
+      }
+    });
+
+    monacoInstance.editor.defineTheme("lemlib-light", {
+      base: "vs",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "008000", fontStyle: "italic" },
+        { token: "string", foreground: "a31515" },
+        { token: "keyword", foreground: "0000ff", fontStyle: "bold" },
+        { token: "type", foreground: "267f99", fontStyle: "bold" }
+      ],
+      colors: {
+        "editor.background": "#ffffff",
+        "editor.foreground": "#0f172a",
+        "editor.lineHighlightBackground": "#f1f5f9",
+        "editorLineNumber.foreground": "#94a3b8",
+        "editorLineNumber.activeForeground": "#0284c7",
+        "editorGutter.background": "#f8fafc",
+        "editorCursor.foreground": "#0284c7",
+        "editor.selectionBackground": "#bae6fd80",
+        "editorWidget.background": "#ffffff",
+        "editorWidget.border": "#cbd5e1",
+        "editorWidget.foreground": "#0f172a",
+        "editorSuggestWidget.background": "#ffffff",
+        "editorSuggestWidget.border": "#cbd5e1",
+        "editorSuggestWidget.foreground": "#0f172a",
+        "editorSuggestWidget.selectedForeground": "#0369a1",
+        "editorSuggestWidget.selectedBackground": "#e0f2fe",
+        "editorSuggestWidget.highlightForeground": "#0284c7",
+        "editorSuggestWidget.focusHighlightForeground": "#0284c7"
+      }
+    });
+
+    // C++ LemLib & PROS IntelliSense Provider
+    monacoInstance.languages.registerCompletionItemProvider("cpp", {
+      triggerCharacters: [".", ":", ">"],
+      provideCompletionItems: function(model, position) {
+        const wordInfo = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: wordInfo.startColumn,
+          endColumn: wordInfo.endColumn
+        };
+
+        const suggestions = [];
+
+        // 1. Built-in LemLib & PROS items
+        if (typeof BUILTIN_INTELLISENSE !== "undefined" && Array.isArray(BUILTIN_INTELLISENSE)) {
+          BUILTIN_INTELLISENSE.forEach(item => {
+            let kind = monacoInstance.languages.CompletionItemKind.Method;
+            if (item.kind === "variable") kind = monacoInstance.languages.CompletionItemKind.Variable;
+            else if (item.kind === "property") kind = monacoInstance.languages.CompletionItemKind.Property;
+            else if (item.kind === "keyword") kind = monacoInstance.languages.CompletionItemKind.Keyword;
+            else if (item.kind === "snippet") kind = monacoInstance.languages.CompletionItemKind.Snippet;
+            else if (item.kind === "type") kind = monacoInstance.languages.CompletionItemKind.Class;
+
+            let insertText = item.insertSnippet || item.name;
+            let counter = 1;
+            const snippetText = insertText.replace(/\$\{([^}]+)\}/g, (_, p) => `\${${counter++}:${p}}`);
+
+            suggestions.push({
+              label: item.name,
+              kind: kind,
+              insertText: snippetText,
+              insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              detail: item.detail || "LemLib API",
+              documentation: {
+                value: `**${item.name}**\n\n${item.doc || ""}`
+              },
+              range: range
+            });
+          });
+        }
+
+        // 2. Dynamic Hardware & Subsystem Symbols from Project
+        if (typeof getDynamicProjectItems === "function") {
+          const dynamicItems = getDynamicProjectItems();
+          dynamicItems.forEach(item => {
+            let insertText = item.insertSnippet || item.name;
+            let counter = 1;
+            const snippetText = insertText.replace(/\$\{([^}]+)\}/g, (_, p) => `\${${counter++}:${p}}`);
+
+            suggestions.push({
+              label: item.name,
+              kind: item.kind === "method" ? monacoInstance.languages.CompletionItemKind.Function : monacoInstance.languages.CompletionItemKind.Variable,
+              insertText: snippetText,
+              insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              detail: item.detail,
+              documentation: {
+                value: `### ${item.icon || "⚙️"} ${item.label}\n\n${item.doc}`
+              },
+              range: range
+            });
+          });
+        }
+
+        return { suggestions: suggestions };
+      }
+    });
+
+    // C++ Hover Provider
+    monacoInstance.languages.registerHoverProvider("cpp", {
+      provideHover: function(model, position) {
+        const word = model.getWordAtPosition(position);
+        if (!word) return null;
+
+        const term = word.word;
+        const catalog = (typeof BUILTIN_INTELLISENSE !== "undefined" ? BUILTIN_INTELLISENSE : []);
+        const dynamicItems = (typeof getDynamicProjectItems === "function" ? getDynamicProjectItems() : []);
+        const match = catalog.find(i => i.name === term) || dynamicItems.find(i => i.name === term);
+        if (match) {
+          return {
+            range: new monacoInstance.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
+            contents: [
+              { value: "```cpp\n" + (match.detail || match.name) + "\n```" },
+              { value: match.doc || "LemLib / PROS C++ Robotics Engine" }
+            ]
+          };
+        }
+        return null;
+      }
+    });
+
+    // C++ Signature Help Provider
+    monacoInstance.languages.registerSignatureHelpProvider("cpp", {
+      signatureHelpTriggerCharacters: ["(", ","],
+      provideSignatureHelp: function(model, position) {
+        const lineContent = model.getLineContent(position.lineNumber).substring(0, position.column - 1);
+        const parenIndex = lineContent.lastIndexOf("(");
+        if (parenIndex === -1) return null;
+
+        const beforeParen = lineContent.substring(0, parenIndex).trim();
+        const match = beforeParen.match(/([a-zA-Z0-9_]+)$/);
+        if (!match) return null;
+
+        const fnName = match[1];
+        const catalog = (typeof BUILTIN_INTELLISENSE !== "undefined" ? BUILTIN_INTELLISENSE : []);
+        const item = catalog.find(i => i.name === fnName);
+        if (!item || !item.detail) return null;
+
+        const argsStr = lineContent.substring(parenIndex + 1);
+        const commaCount = (argsStr.match(/,/g) || []).length;
+        const paramMatches = (item.detail.match(/\((.*?)\)/)?.[1] || "").split(",").map(p => ({
+          label: p.trim(),
+          documentation: `Parameter: ${p.trim()}`
+        }));
+
+        return {
+          value: {
+            signatures: [{
+              label: item.detail,
+              documentation: item.doc,
+              parameters: paramMatches
+            }],
+            activeSignature: 0,
+            activeParameter: Math.min(commaCount, Math.max(0, paramMatches.length - 1))
+          },
+          dispose: function() {}
+        };
+      }
+    });
+
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    const initialContent = window.ProjectManager ? window.ProjectManager.getFile(activeFile) : (elCodeEditor ? elCodeEditor.value : "");
+
+    // Create Initial Monaco Model
+    const model = getOrCreateModel(activeFile, initialContent);
+
+    // Create Monaco Editor Instance
+    monacoEditor = monacoInstance.editor.create(container, {
+      model: model,
+      theme: isLight ? "lemlib-light" : "lemlib-dark",
+      automaticLayout: true,
+      fontSize: 13.5,
+      lineHeight: 20,
+      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      fontLigatures: true,
+      minimap: { enabled: true, maxColumn: 80 },
+      bracketPairColorization: { enabled: true },
+      guides: { bracketPairs: true, indentation: true },
+      scrollBeyondLastLine: false,
+      smoothScrolling: true,
+      cursorBlinking: "smooth",
+      renderLineHighlight: "all",
+      tabSize: 4,
+      insertSpaces: true,
+      wordWrap: "off",
+      formatOnPaste: true,
+      suggestOnTriggerCharacters: true,
+      quickSuggestions: { other: true, comments: false, strings: false },
+      parameterHints: { enabled: true },
+      fixedOverflowWidgets: true
+    });
+
+    // Editor Shortcuts
+    monacoEditor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
+      saveCurrentEditorState();
+      if (window.ProjectManager) window.ProjectManager.saveLocal();
+      showToast("💾 Saved workspace!");
+    });
+    monacoEditor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyB, () => {
+      if (typeof runCompilation === "function") runCompilation();
+    });
+
+    // Cursor position updates
+    monacoEditor.onDidChangeCursorPosition(() => {
+      updateCursorAndCharCount();
+    });
+
+    // Theme synchronization
+    window.addEventListener("vex-theme-changed", e => {
+      if (monacoInstance) {
+        monacoInstance.editor.setTheme(e.detail.isLight ? "lemlib-light" : "lemlib-dark");
+      }
+    });
+
+    isMonacoReady = true;
+
+    // Activate Monaco UI wrapper
+    const wrapper = document.getElementById("ideEditorWrapper");
+    if (wrapper) wrapper.classList.add("monaco-active");
+
+    updateCursorAndCharCount();
+    debouncedUpdateDiagnostics();
+  }
+
+  function initMonaco() {
+    const container = document.getElementById("monacoEditorContainer");
+    if (!container) return;
+
+    if (!window.require) {
+      console.warn("[Monaco] AMD loader not found. Using fallback editor.");
+      return;
+    }
+
+    try {
+      window.require.config({
+        paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs" }
+      });
+
+      window.MonacoEnvironment = {
+        getWorkerUrl: function() {
+          const proxyCode = `
+            self.MonacoEnvironment = {
+              baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/'
+            };
+            importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/base/worker/workerMain.js');
+          `;
+          return "data:text/javascript;charset=utf-8," + encodeURIComponent(proxyCode);
+        }
+      };
+
+      window.require(["vs/editor/editor.main"], function() {
+        try {
+          monacoInstance = window.monaco;
+          setupMonacoEngine(container);
+        } catch (setupErr) {
+          console.error("[Monaco] Setup failed:", setupErr);
+        }
+      });
+    } catch (e) {
+      console.error("[Monaco] Require config error:", e);
+    }
+  }
+
   function init() {
     initAuth();
     initAutosave();
@@ -272,6 +619,7 @@
     wireNavGuard();
     wireGithubSync();
     updateDiagnosticsUI();
+    initMonaco();
 
     // Check URL parameters for direct file & line navigation (e.g. from Diagnostics)
     const urlParams = new URLSearchParams(window.location.search);
@@ -286,10 +634,12 @@
       if (reason !== "dirty") {
         renderSymbols();
       }
-      if (activeFile && elCodeEditor) {
+      if (activeFile) {
         const latest = ProjectManager.getFile(activeFile);
-        if (latest !== elCodeEditor.value) {
-          if (window.isSyncingFromPlanner || document.activeElement !== elCodeEditor) {
+        const currentVal = isMonacoReady && monacoEditor ? monacoEditor.getValue() : (elCodeEditor ? elCodeEditor.value : null);
+        if (latest !== currentVal) {
+          const isUserTyping = (document.activeElement === elCodeEditor) || (isMonacoReady && monacoEditor && monacoEditor.hasTextFocus());
+          if (window.isSyncingFromPlanner || !isUserTyping) {
             loadFile(activeFile);
           }
         }
@@ -1107,29 +1457,51 @@
   }
 
   function refreshIdeEditorIfActive(filename) {
-    if (activeFile === filename && elCodeEditor && window.ProjectManager) {
-      const freshContent = window.ProjectManager.getFile(filename);
-      if (elCodeEditor.value !== freshContent) {
-        elCodeEditor.value = freshContent;
-        if (typeof updateEditorLineNumbers === "function") updateEditorLineNumbers();
-        if (typeof updateEditorStageHeader === "function") updateEditorStageHeader();
-        if (typeof runLiveAnalysis === "function") runLiveAnalysis();
+    if (activeFile === filename && window.ProjectManager) {
+      const freshContent = window.ProjectManager.getFile(filename) || "";
+      if (isMonacoReady && monacoEditor) {
+        if (monacoEditor.getValue() !== freshContent) {
+          monacoEditor.setValue(freshContent);
+        }
       }
+      if (elCodeEditor && elCodeEditor.value !== freshContent) {
+        elCodeEditor.value = freshContent;
+      }
+      if (!isMonacoReady) {
+        updateLineNumbers();
+        scheduleSyntaxHighlight();
+      }
+      updateCursorAndCharCount();
+      debouncedUpdateDiagnostics();
     }
   }
   window.refreshIdeEditorIfActive = refreshIdeEditorIfActive;
 
   function saveCurrentEditorState() {
-    if (activeFile && elCodeEditor && window.ProjectManager) {
+    if (activeFile && window.ProjectManager) {
+      let content = "";
+      if (isMonacoReady && monacoEditor) {
+        content = monacoEditor.getValue();
+        if (elCodeEditor) elCodeEditor.value = content;
+      } else if (elCodeEditor) {
+        content = elCodeEditor.value;
+      } else {
+        return;
+      }
+
       if (window.isSyncingFromPlanner) {
-        // Planner is actively updating ProjectManager, refresh textarea from ProjectManager instead
+        // Planner is actively updating ProjectManager, refresh editor from ProjectManager instead
         const latest = window.ProjectManager.getFile(activeFile);
-        if (latest && latest !== elCodeEditor.value) {
-          elCodeEditor.value = latest;
+        if (latest && latest !== content) {
+          if (isMonacoReady && monacoEditor) {
+            monacoEditor.setValue(latest);
+          }
+          if (elCodeEditor) elCodeEditor.value = latest;
         }
         return;
       }
-      window.ProjectManager.setFile(activeFile, elCodeEditor.value, false);
+
+      window.ProjectManager.setFile(activeFile, content, false);
       if (window.ProjectManager.project) {
         window.ProjectManager.project.lastAutonEditor = "ide";
         window.ProjectManager.project.rawCppPreserved = true;
@@ -1142,16 +1514,6 @@
     }
   }
 
-  // Global helper for version restores
-  window.refreshIdeEditorIfActive = function(filename) {
-    if (filename === activeFile && elCodeEditor && window.ProjectManager) {
-      elCodeEditor.value = window.ProjectManager.getFile(filename) || "";
-      updateLineNumbers();
-      updateCursorAndCharCount();
-      scheduleSyntaxHighlight();
-    }
-  };
-
   function switchToFile(filename, lineNum) {
     saveCurrentEditorState();
     if (autosaveEnabled && window.ProjectManager && window.ProjectManager.isDirty) {
@@ -1163,23 +1525,32 @@
     activeFile = filename;
     renderFileTree();
     renderTabs();
-    loadFile(filename);
+    loadFile(filename, lineNum);
     updateDiagnosticsUI();
 
-    if (lineNum && elCodeEditor) {
-      setTimeout(() => {
-        const lines = elCodeEditor.value.split("\n");
-        let charIndex = 0;
-        const targetLine = Math.min(Math.max(1, lineNum), lines.length);
-        for (let i = 0; i < targetLine - 1; i++) {
-          charIndex += lines[i].length + 1;
-        }
-        elCodeEditor.focus();
-        elCodeEditor.setSelectionRange(charIndex, charIndex + (lines[targetLine - 1] ? lines[targetLine - 1].length : 0));
-        const lineHeight = 20;
-        elCodeEditor.scrollTop = Math.max(0, (targetLine - 5) * lineHeight);
-        updateCursorAndCharCount();
-      }, 50);
+    if (lineNum) {
+      if (isMonacoReady && monacoEditor) {
+        setTimeout(() => {
+          monacoEditor.revealLineInCenter(lineNum);
+          monacoEditor.setPosition({ lineNumber: lineNum, column: 1 });
+          monacoEditor.focus();
+          updateCursorAndCharCount();
+        }, 50);
+      } else if (elCodeEditor) {
+        setTimeout(() => {
+          const lines = elCodeEditor.value.split("\n");
+          let charIndex = 0;
+          const targetLine = Math.min(Math.max(1, lineNum), lines.length);
+          for (let i = 0; i < targetLine - 1; i++) {
+            charIndex += lines[i].length + 1;
+          }
+          elCodeEditor.focus();
+          elCodeEditor.setSelectionRange(charIndex, charIndex + (lines[targetLine - 1] ? lines[targetLine - 1].length : 0));
+          const lineHeight = 20;
+          elCodeEditor.scrollTop = Math.max(0, (targetLine - 5) * lineHeight);
+          updateCursorAndCharCount();
+        }, 50);
+      }
     }
   }
 
@@ -1198,10 +1569,27 @@
     updateDiagnosticsUI();
   }
 
-  function loadFile(filename) {
+  function loadFile(filename, lineNum) {
     const content = ProjectManager.getFile(filename);
-    if (elCodeEditor) elCodeEditor.value = content;
     if (elCurrentFile) elCurrentFile.textContent = filename;
+
+    if (isMonacoReady && monacoEditor) {
+      const model = getOrCreateModel(filename, content);
+      if (monacoEditor.getModel() !== model) {
+        monacoEditor.setModel(model);
+      }
+      if (elCodeEditor) elCodeEditor.value = model.getValue();
+      if (lineNum) {
+        monacoEditor.revealLineInCenter(lineNum);
+        monacoEditor.setPosition({ lineNumber: lineNum, column: 1 });
+        monacoEditor.focus();
+      }
+      updateCursorAndCharCount();
+      debouncedUpdateDiagnostics();
+      return;
+    }
+
+    if (elCodeEditor) elCodeEditor.value = content;
     lastLineCount = -1;
     updateLineNumbers();
     updateCursorAndCharCount();
@@ -1813,6 +2201,19 @@
   }
 
   function insertSnippet(snippet) {
+    if (isMonacoReady && monacoEditor) {
+      monacoEditor.focus();
+      const selection = monacoEditor.getSelection();
+      monacoEditor.executeEdits("symbol-snippet-insert", [{
+        range: selection,
+        text: snippet,
+        forceMoveMarkers: true
+      }]);
+      saveCurrentEditorState();
+      debouncedUpdateDiagnostics();
+      return;
+    }
+
     if (!elCodeEditor) return;
     const start = elCodeEditor.selectionStart;
     const end = elCodeEditor.selectionEnd;
@@ -1841,12 +2242,23 @@
   }
 
   function updateCursorAndCharCount() {
-    if (!elCodeEditor) return;
-    const text = elCodeEditor.value;
-    const selStart = elCodeEditor.selectionStart;
-    const upToCursor = text.substring(0, selStart);
-    const line = upToCursor.split("\n").length;
-    const col = selStart - upToCursor.lastIndexOf("\n");
+    let line = 1;
+    let col = 1;
+    let text = "";
+    if (isMonacoReady && monacoEditor) {
+      const pos = monacoEditor.getPosition();
+      if (pos) {
+        line = pos.lineNumber;
+        col = pos.column;
+      }
+      text = monacoEditor.getValue();
+    } else if (elCodeEditor) {
+      text = elCodeEditor.value;
+      const selStart = elCodeEditor.selectionStart;
+      const upToCursor = text.substring(0, selStart);
+      line = upToCursor.split("\n").length;
+      col = selStart - upToCursor.lastIndexOf("\n");
+    }
 
     if (elCursorPos) elCursorPos.textContent = `Ln ${line}, Col ${col}`;
     if (elCharCount) elCharCount.textContent = `${text.length} chars · ${text.split("\n").length} lines`;
@@ -1862,16 +2274,19 @@
   }
 
   function onEditorChange() {
-    const val = elCodeEditor.value;
+    const val = (isMonacoReady && monacoEditor) ? monacoEditor.getValue() : (elCodeEditor ? elCodeEditor.value : "");
+    if (elCodeEditor && isMonacoReady) elCodeEditor.value = val;
     ProjectManager.setFile(activeFile, val, false);
     if (ProjectManager.project) {
       ProjectManager.project.lastAutonEditor = "ide";
       ProjectManager.project.rawCppPreserved = true;
     }
     if (elDirtyBadge) elDirtyBadge.hidden = false;
-    updateLineNumbers();
+    if (!isMonacoReady) {
+      updateLineNumbers();
+      scheduleSyntaxHighlight();
+    }
     updateCursorAndCharCount();
-    scheduleSyntaxHighlight();
     triggerAutosave(false);
     debouncedUpdateDiagnostics();
   }
@@ -2066,7 +2481,10 @@
     const pm = window.ProjectManager;
     if (!pm || !activeFile) return;
     saveCurrentEditorState();
-    const content = (elCodeEditor && activeFile) ? elCodeEditor.value : (pm.getFile(activeFile) || "");
+    const content = (isMonacoReady && monacoEditor)
+      ? monacoEditor.getValue()
+      : ((elCodeEditor && activeFile) ? elCodeEditor.value : (pm.getFile(activeFile) || ""));
+
     if (typeof pm.indexVariables === "function") {
       pm.indexVariables();
     }
@@ -2076,6 +2494,40 @@
     const warnCount = (res.warnings || []).length;
 
     if (elDiagCount) elDiagCount.textContent = errCount + warnCount;
+
+    // Update Monaco Markers: Red squiggles for errors, Yellow squiggles for warnings
+    if (isMonacoReady && monacoEditor && monacoInstance) {
+      const model = monacoEditor.getModel();
+      if (model) {
+        const markers = [];
+        (res.errors || []).forEach(err => {
+          const line = Math.max(1, parseInt(err.line, 10) || 1);
+          markers.push({
+            severity: monacoInstance.MarkerSeverity.Error,
+            message: err.message,
+            startLineNumber: line,
+            startColumn: 1,
+            endLineNumber: line,
+            endColumn: 1000,
+            source: "PROS Linter"
+          });
+        });
+        (res.warnings || []).forEach(warn => {
+          const line = Math.max(1, parseInt(warn.line, 10) || 1);
+          markers.push({
+            severity: warn.severity === "error" ? monacoInstance.MarkerSeverity.Error : monacoInstance.MarkerSeverity.Warning,
+            message: warn.message,
+            startLineNumber: line,
+            startColumn: 1,
+            endLineNumber: line,
+            endColumn: 1000,
+            source: "PROS Linter"
+          });
+        });
+        monacoInstance.editor.setModelMarkers(model, "pros-diagnostics", markers);
+      }
+    }
+
     if (elDiagnosticsList) {
       if (errCount === 0 && warnCount === 0) {
         elDiagnosticsList.innerHTML = `<div class="ide-diag-empty">✅ No syntax errors or warnings in <strong>${escapeHtml(activeFile)}</strong>.</div>`;

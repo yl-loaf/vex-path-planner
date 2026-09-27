@@ -25,6 +25,26 @@
   --dropdown-bg: #111827;
   --dropdown-border: #374151;
   --shadow-color: rgba(0, 0, 0, 0.4);
+
+  /* Monaco Editor Engine CSS Variables */
+  --vscode-editor-foreground: #e2e8f0;
+  --vscode-editor-background: #050a14;
+  --vscode-editorWidget-background: #0f172a;
+  --vscode-editorWidget-border: #1e293b;
+  --vscode-editorWidget-foreground: #e2e8f0;
+  --vscode-editorSuggestWidget-background: #09111e;
+  --vscode-editorSuggestWidget-border: #334155;
+  --vscode-editorSuggestWidget-foreground: #e2e8f0;
+  --vscode-editorSuggestWidget-selectedForeground: #ffffff;
+  --vscode-editorSuggestWidget-selectedBackground: #1e3a8a;
+  --vscode-editorSuggestWidget-highlightForeground: #38bdf8;
+  --vscode-editorSuggestWidget-focusHighlightForeground: #67e8f9;
+  --vscode-editorSuggestWidget-selectedIconForeground: #ffffff;
+  --vscode-editorSuggestWidgetStatus-foreground: #94a3b8;
+  --vscode-editorHoverWidget-background: #0f172a;
+  --vscode-editorHoverWidget-border: #334155;
+  --vscode-editorHoverWidget-foreground: #e2e8f0;
+  --vscode-editorHoverWidget-statusBarBackground: #0b1325;
 }
 
 [data-theme="light"],
@@ -55,6 +75,26 @@ html[data-theme="light"] {
   --dropdown-bg: #ffffff;
   --dropdown-border: #cbd5e1;
   --shadow-color: rgba(15, 23, 42, 0.08);
+
+  /* Monaco Editor Light Theme CSS Variables */
+  --vscode-editor-foreground: #0f172a;
+  --vscode-editor-background: #ffffff;
+  --vscode-editorWidget-background: #ffffff;
+  --vscode-editorWidget-border: #cbd5e1;
+  --vscode-editorWidget-foreground: #0f172a;
+  --vscode-editorSuggestWidget-background: #ffffff;
+  --vscode-editorSuggestWidget-border: #cbd5e1;
+  --vscode-editorSuggestWidget-foreground: #0f172a;
+  --vscode-editorSuggestWidget-selectedForeground: #0369a1;
+  --vscode-editorSuggestWidget-selectedBackground: #e0f2fe;
+  --vscode-editorSuggestWidget-highlightForeground: #0284c7;
+  --vscode-editorSuggestWidget-focusHighlightForeground: #0284c7;
+  --vscode-editorSuggestWidget-selectedIconForeground: #0284c7;
+  --vscode-editorSuggestWidgetStatus-foreground: #64748b;
+  --vscode-editorHoverWidget-background: #ffffff;
+  --vscode-editorHoverWidget-border: #cbd5e1;
+  --vscode-editorHoverWidget-foreground: #0f172a;
+  --vscode-editorHoverWidget-statusBarBackground: #f8fafc;
 }
 
 /* Theme Toggle Button */
@@ -1578,14 +1618,194 @@ button.full { width: 100%; }
 
 #coords {
   position: absolute;
-  bottom: 10px;
+  bottom: 12px;
   left: 12px;
-  background: rgba(0,0,0,0.78);
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-family: ui-monospace, monospace;
-  pointer-events: none;
+  background: rgba(11, 19, 37, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 25;
+  pointer-events: auto;
+  user-select: none;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+#coords:hover {
+  border-color: rgba(56, 189, 248, 0.7);
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.25);
+}
+.coord-axis-val {
+  color: #38bdf8;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.coord-metric-val {
+  color: #7dd3fc;
+  font-size: 0.68rem;
+  opacity: 0.88;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.coord-delta-info {
+  color: #94a3b8;
+  font-size: 0.70rem;
+  border-left: 1px solid #334155;
+  padding-left: 8px;
+  white-space: nowrap;
+}
+.coord-precision-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.btn-coord-precision {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-right: none;
+}
+.btn-coord-precision:hover {
+  background: rgba(56, 189, 248, 0.35);
+  color: #ffffff;
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+.btn-coord-prec-dropdown {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  font-size: 0.62rem;
+  padding: 2px 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-coord-prec-dropdown:hover {
+  background: rgba(56, 189, 248, 0.35);
+  color: #ffffff;
+  border-color: #38bdf8;
+}
+.precision-menu-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: rgba(11, 19, 37, 0.98);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.65), 0 0 12px rgba(56, 189, 248, 0.2);
+  backdrop-filter: blur(14px);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  z-index: 9999;
+  min-width: 250px;
+}
+.precision-menu-header {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  padding: 4px 8px 2px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  margin-bottom: 2px;
+}
+.precision-menu-item {
+  background: none;
+  border: none;
+  color: #e2e8f0;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  transition: all 0.12s ease;
+}
+.precision-menu-item:hover {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+.precision-menu-item.active {
+  background: rgba(56, 189, 248, 0.28);
+  color: #38bdf8;
+  font-weight: 700;
+}
+.precision-menu-item .prec-sub {
+  font-size: 0.65rem;
+  color: #94a3b8;
+}
+.precision-menu-divider {
+  height: 1px;
+  background: rgba(51, 65, 85, 0.6);
+  margin: 3px 0;
+}
+
+[data-theme="light"] #coords {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] .coord-axis-val {
+  color: #0284c7;
+}
+[data-theme="light"] .coord-metric-val {
+  color: #0369a1;
+}
+[data-theme="light"] .coord-delta-info {
+  color: #64748b;
+  border-left-color: #e2e8f0;
+}
+[data-theme="light"] .btn-coord-precision,
+[data-theme="light"] .btn-coord-prec-dropdown {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+[data-theme="light"] .precision-menu-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: #93c5fd;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+[data-theme="light"] .precision-menu-item {
+  color: #1e293b;
+}
+[data-theme="light"] .precision-menu-item:hover {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+[data-theme="light"] .precision-menu-item.active {
+  background: #bae6fd;
+  color: #0284c7;
 }
 
 #legend {
@@ -5362,6 +5582,323 @@ kbd {
 /* Global hidden attribute enforcement */
 [hidden] {
   display: none !important;
+}
+
+.monaco-editor-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.ide-editor-wrapper.monaco-active .ide-line-numbers,
+.ide-editor-wrapper.monaco-active .ide-code-highlight,
+.ide-editor-wrapper.monaco-active .ide-code-textarea,
+.ide-editor-wrapper.monaco-active #ideIntelliSense,
+.ide-editor-wrapper.monaco-active #ideParamHint {
+  display: none !important;
+}
+
+.ide-editor-wrapper.monaco-active .ide-editor-stage {
+  padding: 0 !important;
+}
+
+/* =============================================================
+   Monaco Editor Popups, Autocomplete & Overlay Widgets Engine
+   ============================================================= */
+
+/* Neutralize global .main flex rules inside Monaco Editor rows */
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main,
+.monaco-editor .main,
+body > .monaco-editor .main {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Suggest Widget (Autocomplete Dropdown) Container */
+.suggest-widget,
+.monaco-editor .suggest-widget,
+body > .monaco-editor .suggest-widget,
+body > .suggest-widget {
+  background-color: #09111e !important;
+  border: 1px solid #334155 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65) !important;
+  border-radius: 6px !important;
+  z-index: 1000 !important;
+  min-width: 320px !important;
+}
+
+.suggest-widget .monaco-list,
+.suggest-widget .monaco-list-rows,
+.suggest-widget .monaco-list-row {
+  color: #e2e8f0 !important;
+}
+
+/* Monaco Suggest List Row Inner Containers */
+.suggest-widget .monaco-list-row > .contents {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  padding: 0 6px !important;
+}
+
+.suggest-widget .monaco-list-row .left {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.suggest-widget .monaco-list-row .right {
+  display: flex !important;
+  align-items: center !important;
+  margin-left: auto !important;
+  padding-left: 8px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Icon & Label Components inside Suggest Rows */
+.suggest-widget .monaco-icon-label {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  color: #e2e8f0 !important;
+  font-size: 13px !important;
+  line-height: 22px !important;
+}
+
+.suggest-widget .monaco-icon-label-container {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.suggest-widget .monaco-icon-name-container {
+  display: inline-flex !important;
+  align-items: center !important;
+  color: #e2e8f0 !important;
+}
+
+.suggest-widget .label-name {
+  color: #e2e8f0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  white-space: pre !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.suggest-widget .monaco-highlighted-label {
+  color: #e2e8f0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.suggest-widget .monaco-highlighted-label span {
+  color: #e2e8f0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.suggest-widget .monaco-highlighted-label .highlight {
+  color: #38bdf8 !important;
+  font-weight: 700 !important;
+}
+
+.suggest-widget .label-description,
+.suggest-widget .details-label,
+.suggest-widget .signature-label,
+.suggest-widget .qualifier-label {
+  color: #94a3b8 !important;
+  font-size: 12px !important;
+  opacity: 0.85 !important;
+  visibility: visible !important;
+  display: inline-block !important;
+}
+
+/* Focused Row Styling */
+.suggest-widget .monaco-list-row.focused {
+  background-color: #1e3a8a !important;
+  color: #ffffff !important;
+}
+
+.suggest-widget .monaco-list-row.focused .label-name,
+.suggest-widget .monaco-list-row.focused .monaco-highlighted-label,
+.suggest-widget .monaco-list-row.focused .monaco-highlighted-label span {
+  color: #ffffff !important;
+}
+
+.suggest-widget .monaco-list-row.focused .monaco-highlighted-label .highlight {
+  color: #67e8f9 !important;
+}
+
+.suggest-widget .monaco-list-row.focused .details-label,
+.suggest-widget .monaco-list-row.focused .label-description {
+  color: #cbd5e1 !important;
+}
+
+/* Suggest Documentation Details Pane (Slide-out) */
+.suggest-details,
+.monaco-editor .suggest-details,
+body > .suggest-details {
+  background-color: #0b1325 !important;
+  border: 1px solid #334155 !important;
+  color: #e2e8f0 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65) !important;
+  padding: 8px 12px !important;
+}
+
+.suggest-details .body,
+.suggest-details .docs,
+.suggest-details p {
+  color: #cbd5e1 !important;
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+}
+
+.suggest-details .type,
+.suggest-details code {
+  color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.1) !important;
+}
+
+/* Parameter Hints Widget (chassis.moveToPoint( ... )) */
+.parameter-hints-widget,
+.monaco-editor .parameter-hints-widget,
+body > .parameter-hints-widget {
+  background-color: #0b1325 !important;
+  border: 1px solid #334155 !important;
+  color: #e2e8f0 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65) !important;
+  padding: 8px 12px !important;
+  z-index: 1000 !important;
+}
+
+.parameter-hints-widget .wrapper,
+.parameter-hints-widget .signature,
+.parameter-hints-widget span {
+  color: #e2e8f0 !important;
+  font-size: 13px !important;
+}
+
+.parameter-hints-widget .parameter.active {
+  color: #38bdf8 !important;
+  font-weight: 700 !important;
+  text-decoration: underline !important;
+}
+
+.parameter-hints-widget .body,
+.parameter-hints-widget .docs {
+  color: #94a3b8 !important;
+  font-size: 12px !important;
+  margin-top: 4px !important;
+}
+
+/* Hover Tooltips Widget (Documentation on Mouseover) */
+.monaco-hover,
+.monaco-editor-hover,
+.monaco-editor .monaco-hover,
+body > .monaco-editor-hover,
+body > .monaco-hover {
+  background-color: #0b1325 !important;
+  border: 1px solid #334155 !important;
+  color: #e2e8f0 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65) !important;
+  z-index: 1000 !important;
+}
+
+.monaco-hover-content,
+.monaco-hover-content p,
+.monaco-hover-content span {
+  color: #e2e8f0 !important;
+  font-size: 13px !important;
+}
+
+.monaco-hover-content pre,
+.monaco-hover-content code {
+  color: #38bdf8 !important;
+  background: rgba(15, 23, 42, 0.7) !important;
+  border-radius: 4px !important;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace !important;
+}
+
+/* Light Theme Popups Overrides */
+[data-theme="light"] .suggest-widget,
+[data-theme="light"] .monaco-editor .suggest-widget,
+[data-theme="light"] .suggest-details,
+[data-theme="light"] .parameter-hints-widget,
+[data-theme="light"] .monaco-hover,
+[data-theme="light"] .monaco-editor-hover {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12) !important;
+}
+
+[data-theme="light"] .suggest-widget .label-name,
+[data-theme="light"] .suggest-widget .monaco-highlighted-label,
+[data-theme="light"] .suggest-widget .monaco-highlighted-label span {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .suggest-widget .monaco-highlighted-label .highlight {
+  color: #0284c7 !important;
+}
+
+[data-theme="light"] .suggest-widget .details-label,
+[data-theme="light"] .suggest-widget .label-description {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .suggest-widget .monaco-list-row.focused {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+}
+
+[data-theme="light"] .suggest-widget .monaco-list-row.focused .label-name,
+[data-theme="light"] .suggest-widget .monaco-list-row.focused .monaco-highlighted-label,
+[data-theme="light"] .suggest-widget .monaco-list-row.focused .monaco-highlighted-label span {
+  color: #0369a1 !important;
+}
+
+[data-theme="light"] .parameter-hints-widget .wrapper,
+[data-theme="light"] .parameter-hints-widget .signature,
+[data-theme="light"] .parameter-hints-widget span,
+[data-theme="light"] .monaco-hover-content p,
+[data-theme="light"] .monaco-hover-content span {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .parameter-hints-widget .parameter.active {
+  color: #0284c7 !important;
+}
+
+[data-theme="light"] .monaco-hover-content pre,
+[data-theme="light"] .monaco-hover-content code {
+  color: #0284c7 !important;
+  background: #f1f5f9 !important;
 }
 
 .ide-line-numbers {

@@ -13,7 +13,7 @@
   <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
   <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
-  <link rel="stylesheet" href="style.css?v=20260926.k26" />
+  <link rel="stylesheet" href="style.css?v=20260927.k7" />
   <script>
     (function () {
       try {
@@ -1237,6 +1237,71 @@ chassis.turnToHeading(270, 1000);</div>
         </div>
       </article>
 
+      <!-- TOOL 13: High-Precision Coordinate & Odometry Resolution Converter -->
+      <article class="tool-card" data-category="motion" data-keywords="coordinate coordinates resolution precision pointer odometry units inches millimeters tiles snap convert high-precision">
+        <div class="tool-card-header">
+          <div class="tool-icon-box">🎯</div>
+          <div class="tool-title-info">
+            <h3>High-Precision Coordinate &amp; Odometry Converter</h3>
+            <p class="tool-tagline">Convert between field coordinates (inches, mm, tiles), compute sub-thousandth precision (0.0001″ / 2.5 µm), and calculate tracking wheel encoder ticks.</p>
+          </div>
+          <span class="tool-category-badge">🏎️ Motion</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>X Coordinate (inches)</label>
+              <input type="number" id="coordInputX" value="24.125" step="0.001" />
+            </div>
+            <div class="tool-field">
+              <label>Y Coordinate (inches)</label>
+              <input type="number" id="coordInputY" value="-36.875" step="0.001" />
+            </div>
+            <div class="tool-field">
+              <label>Resolution / Snap Step</label>
+              <select id="coordResSelect">
+                <option value="0.0001">0.0001″ (Ultra 4-dec · 2.54 µm)</option>
+                <option value="0.0005">0.0005″ (Fine 4-dec · 12.7 µm)</option>
+                <option value="0.001" selected>0.001″ (High-Res 3-dec · 25.4 µm)</option>
+                <option value="0.005">0.005″ (Quarter-Hundredth)</option>
+                <option value="0.01">0.01″ (Standard · 0.254 mm)</option>
+                <option value="0.1">0.1″ (Tenth Inch · 2.54 mm)</option>
+                <option value="0">Free (Continuous Floating)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">High-Res Inches</span>
+              <strong class="result-val blue" id="coordResInches">(24.125″, -36.875″)</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Metric (mm)</span>
+              <strong class="result-val green" id="coordResMm">(+612.775, -936.625 mm)</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Field Tiles (24″ grid)</span>
+              <strong class="result-val purple" id="coordResTiles">(+1.005, -1.536 tiles)</strong>
+            </div>
+          </div>
+
+          <div class="tool-field" style="margin-top:8px;">
+            <label>Generated LemLib Code</label>
+            <div class="tool-code-preview" id="coordLemLibCode">chassis.moveToPoint(24.125, -36.875, 2000);</div>
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="index.html" class="btn-tool-action primary" id="btnApplyCoordToPlanner">
+              🗺️ Open in Visual Planner
+            </a>
+            <button type="button" class="btn-tool-action" id="btnCopyCoordCode">
+              📋 Copy LemLib Code
+            </button>
+          </div>
+        </div>
+      </article>
+
     </div>
   </div>
 
@@ -1855,6 +1920,65 @@ chassis.turnToHeading(270, 1000);</div>
       if (btnExplain) {
         btnExplain.addEventListener("click", () => {
           alert("⚡ LemLib Autonomous Bottleneck Diagnostic Rules:\n\n1. Accel Slew Saturation: Rapid velocity request where actual acceleration is bounded by motor slew (Lag > 5.5 in/s).\n2. Deceleration Lag: Momentum overshoot during aggressive braking curves.\n3. Top-End Speed Cap: Target velocity exceeding physical drivetrain gearing.\n4. Wheel Slip: Centripetal force exceeding wheel friction limit.");
+        });
+      }
+
+      // 14. High-Precision Coordinate Converter (Tool 13)
+      const coordInputX = document.getElementById("coordInputX");
+      const coordInputY = document.getElementById("coordInputY");
+      const coordResSelect = document.getElementById("coordResSelect");
+      const coordResInches = document.getElementById("coordResInches");
+      const coordResMm = document.getElementById("coordResMm");
+      const coordResTiles = document.getElementById("coordResTiles");
+      const coordLemLibCode = document.getElementById("coordLemLibCode");
+      const btnCopyCoordCode = document.getElementById("btnCopyCoordCode");
+
+      function updateCoordConverter() {
+        const rawX = parseFloat(coordInputX?.value) || 0;
+        const rawY = parseFloat(coordInputY?.value) || 0;
+        const step = parseFloat(coordResSelect?.value) || 0;
+
+        let x = rawX;
+        let y = rawY;
+        if (step > 0) {
+          const factor = Math.round(1 / step);
+          x = Math.round(rawX * factor) / factor;
+          y = Math.round(rawY * factor) / factor;
+        }
+
+        const decIn = (step > 0 && step <= 0.0005) ? 4 : ((step > 0 && step <= 0.005) ? 3 : (step > 0 && step <= 0.05 ? 2 : (step > 0 ? 1 : 4)));
+        const xInStr = `${x >= 0 ? '+' : ''}${x.toFixed(decIn)}"`;
+        const yInStr = `${y >= 0 ? '+' : ''}${y.toFixed(decIn)}"`;
+        if (coordResInches) coordResInches.textContent = `(${xInStr}, ${yInStr})`;
+
+        const xMm = x * 25.4;
+        const yMm = y * 25.4;
+        const decMm = decIn >= 3 ? 3 : 2;
+        if (coordResMm) coordResMm.textContent = `(${xMm >= 0 ? '+' : ''}${xMm.toFixed(decMm)}, ${yMm >= 0 ? '+' : ''}${yMm.toFixed(decMm)} mm)`;
+
+        const xTiles = x / 24.0;
+        const yTiles = y / 24.0;
+        if (coordResTiles) coordResTiles.textContent = `(${xTiles >= 0 ? '+' : ''}${xTiles.toFixed(3)}, ${yTiles >= 0 ? '+' : ''}${yTiles.toFixed(3)} tiles)`;
+
+        const codeStr = `chassis.moveToPoint(${x.toFixed(decIn)}, ${y.toFixed(decIn)}, 2000);`;
+        if (coordLemLibCode) coordLemLibCode.textContent = codeStr;
+      }
+
+      [coordInputX, coordInputY, coordResSelect].forEach((el) => {
+        if (el) el.addEventListener("input", updateCoordConverter);
+        if (el) el.addEventListener("change", updateCoordConverter);
+      });
+      updateCoordConverter();
+
+      if (btnCopyCoordCode) {
+        btnCopyCoordCode.addEventListener("click", () => {
+          if (coordLemLibCode) {
+            navigator.clipboard.writeText(coordLemLibCode.textContent).then(() => {
+              showToast("✓ Copied precise LemLib code to clipboard!");
+            }).catch(() => {
+              showToast("Copied code!");
+            });
+          }
         });
       }
     });

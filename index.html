@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260926.k26" />
+  <link rel="stylesheet" href="style.css?v=20260927.k7" />
   <script>
     (function () {
       try {
@@ -483,9 +483,9 @@
               <span class="hint-inline">Drag robot on field · must touch wall</span>
             </div>
             <div class="card-body row">
-              <label>X <input type="number" id="startX" step="0.1" value="-60" /></label>
-              <label>Y <input type="number" id="startY" step="0.1" value="-60" /></label>
-              <label>θ° <input type="number" id="startTheta" step="1" value="0" /></label>
+              <label>X <input type="number" id="startX" step="0.001" value="-60" /></label>
+              <label>Y <input type="number" id="startY" step="0.001" value="-60" /></label>
+              <label>θ° <input type="number" id="startTheta" step="0.1" value="0" /></label>
             </div>
             <div class="btn-row compact preset-segmented-group">
               <button class="preset" data-preset="redL">Red L</button>
@@ -1067,7 +1067,30 @@
         </div>
 
         <canvas id="field" width="900" height="900"></canvas>
-        <div id="coords">X: -60.0  Y: -60.0</div>
+        <div id="coords" class="precise-coords-overlay" title="Live Pointer Coordinates &amp; Resolution Picker">
+          <span class="coord-axis-val" id="coordXVal">X: -60.0"</span>
+          <span class="coord-axis-val" id="coordYVal">Y: -60.0"</span>
+          <span class="coord-delta-info" id="coordDeltaVal">Δ: 0.0" · θ: 0.0°</span>
+          <div class="coord-precision-wrapper">
+            <button type="button" id="btnCyclePrecision" class="btn-coord-precision" title="Current pointer resolution: 0.1″ (Tenth Inch Grid, Default). Click to cycle resolutions">🎯 0.1″</button>
+            <button type="button" id="btnPrecisionDropdownToggle" class="btn-coord-prec-dropdown" title="Open Resolution &amp; Snap Menu">▾</button>
+            <div id="precisionMenuDropdown" class="precision-menu-dropdown" hidden>
+              <div class="precision-menu-header">Resolution &amp; Snap</div>
+              <button type="button" class="precision-menu-item active" data-step="0.1"><span>🎯 0.1″</span> <span class="prec-sub">Tenth Inch Grid (1 dec) ★ Default</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.5"><span>🎯 0.5″</span> <span class="prec-sub">Half-Inch Grid</span></button>
+              <button type="button" class="precision-menu-item" data-step="1.0"><span>🎯 1.0″</span> <span class="prec-sub">1-Inch Grid</span></button>
+              <div class="precision-menu-divider"></div>
+              <button type="button" class="precision-menu-item" data-step="0.05"><span>🎯 0.05″</span> <span class="prec-sub">Twentieth (2 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.01"><span>🎯 0.01″</span> <span class="prec-sub">Hundredth (2 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.005"><span>🎯 0.005″</span> <span class="prec-sub">Quarter-Hundredth (3 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.001"><span>🎯 0.001″</span> <span class="prec-sub">High-Res (3 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.0005"><span>🎯 0.0005″</span> <span class="prec-sub">Fine (4 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.0001"><span>🎯 0.0001″</span> <span class="prec-sub">Ultra (4 dec)</span></button>
+              <div class="precision-menu-divider"></div>
+              <button type="button" class="precision-menu-item" data-step="0"><span>🎯 Free / Raw</span> <span class="prec-sub">Subpixel Continuous</span></button>
+            </div>
+          </div>
+        </div>
         <div id="timeEst">Est. time: —</div>
         <div id="legend">
           <span class="leg start"></span> Start
@@ -2850,21 +2873,21 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260926.k26"></script>
+  <script src="version.js?v=20260927.k7"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260926.k26"></script>
-  <script src="google-drive-sync.js?v=20260926.k26"></script>
-  <script src="session-guard.js?v=20260926.k26"></script>
-  <script src="theme.js?v=20260926.k26"></script>
-  <script src="v5-brain-serial.js?v=20260926.k26"></script>
-  <script src="project-manager.js?v=20260926.k26"></script>
-  <script src="cpp-parser.js?v=20260926.k26"></script>
-  <script src="app.js?v=20260926.k26"></script>
-  <script src="tutorial.js?v=20260926.k26"></script>
+  <script src="firebase-config.js?v=20260927.k7"></script>
+  <script src="google-drive-sync.js?v=20260927.k7"></script>
+  <script src="session-guard.js?v=20260927.k7"></script>
+  <script src="theme.js?v=20260927.k7"></script>
+  <script src="v5-brain-serial.js?v=20260927.k7"></script>
+  <script src="project-manager.js?v=20260927.k7"></script>
+  <script src="cpp-parser.js?v=20260927.k7"></script>
+  <script src="app.js?v=20260927.k7"></script>
+  <script src="tutorial.js?v=20260927.k7"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
