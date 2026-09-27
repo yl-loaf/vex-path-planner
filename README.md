@@ -19,14 +19,6 @@ Interactive path planner for **VEX V5 Robotics Competition Override (2026-27)** 
 - **Auto-save** to browser `localStorage` so you don’t lose work
 - Clear end-direction arrow + live robot during playback
 
-## Live site
-
-After enabling GitHub Pages (Settings → Pages → Deploy from `main` / root):
-
-`https://yl-loaf.github.io/vex-path-planner/`
-
-Place `field.jpg` in the repo root so the real field image loads.
-
 ## Coordinate system
 
 - Origin (0, 0) = field center  
