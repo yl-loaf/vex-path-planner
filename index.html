@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260927.k7" />
+  <link rel="stylesheet" href="style.css?v=20260927.k13" />
   <script>
     (function () {
       try {
@@ -2764,27 +2764,30 @@ void autonomous() {
     <div class="modal-card scoring-modal-card">
       <div class="scoring-modal-header">
         <div class="scoring-modal-title-wrap">
-          <span class="scoring-badge">VRC High Stakes / Override · Interactive Scoring</span>
-          <h2 id="scoringModalTitle">🎯 Dynamic Scoring Engine <span class="badge-beta-text">BETA</span></h2>
+          <span class="scoring-badge">VRC Override (2026-27) · Game Engine &amp; Dynamic Tracking</span>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <h2 id="scoringModalTitle" style="margin:0;">🎯 Override Scoring Engine <span class="badge-beta-text">BETA</span></h2>
+            <button type="button" class="btn-xs-clean" id="btnLaunchCommentGuideFromModal" style="background:rgba(56,189,248,0.2);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 10px;border-radius:6px;cursor:pointer;">❓ Comment Tutorial</button>
+          </div>
         </div>
         <button type="button" id="scoringModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
       </div>
 
       <div class="scoring-modal-body">
         <p class="scoring-modal-desc">
-          Simulates dynamic game objects (<strong>Rings</strong>, <strong>Mobile Goals</strong>, <strong>Wall Stakes</strong>) and subsystem interactions. Intaking rings and clamping mobile goals dynamically updates the 15s score and applies <strong>+3.5 lbs mobile goal load</strong> to the drivetrain physics engine.
+          Simulates official <strong>VRC Override (2026-27)</strong> field mechanics: <strong>Pins</strong> (63 on field), <strong>4 Wall Loaders</strong> (always ready), <strong>4 Perimeter Toggles</strong> (CW/CCW), and <strong>9 Goals</strong> with live pin stacking. Robot carries exactly <strong>1 Pin at a time</strong>.
         </p>
 
         <!-- Top Master Controls -->
         <div class="scoring-master-panel">
           <div class="scoring-master-row">
             <label class="collision-toggle-switch">
-              <input type="checkbox" id="chkScoringMaster" />
+              <input type="checkbox" id="chkScoringMaster" checked />
               <span class="collision-slider"></span>
-              <span class="collision-toggle-text"><strong>Enable Live Scoring Engine (Beta)</strong></span>
+              <span class="collision-toggle-text"><strong>Enable Override Dynamic Tracker (Beta)</strong></span>
             </label>
-            <div class="scoring-status-pill" id="scoringModalStatusPill">
-              ⚪ Beta: Inactive
+            <div class="scoring-status-pill active" id="scoringModalStatusPill">
+              🟢 Beta: Active &amp; Tracking
             </div>
           </div>
 
@@ -2809,61 +2812,59 @@ void autonomous() {
         <!-- Real-Time Scoreboard Strip -->
         <div class="scoring-live-scoreboard">
           <div class="score-hero-box">
-            <span class="score-hero-label">Projected Auton Score</span>
+            <span class="score-hero-label">Projected Autonomous Score</span>
             <div class="score-hero-val" id="scoreModalTotalPoints">0 <span class="score-unit">pts</span></div>
-            <span class="score-awp-badge" id="scoreModalAwpBadge">AWP: 0/3 Criteria</span>
+            <span class="score-awp-badge" id="scoreModalAwpBadge">Toggles Owned: 0/4 · Pins Stacked: 0</span>
           </div>
 
           <div class="score-breakdown-grid">
             <div class="score-metric-cell">
-              <span class="score-cell-label">Mobile Goal Rings</span>
-              <strong class="score-cell-val" id="scoreModalMogoRings">0 pts</strong>
-              <span class="score-cell-sub">1 pt each + 2 pt top bonus</span>
+              <span class="score-cell-label">Carried Pin</span>
+              <strong class="score-cell-val" id="scoreModalCarriedPin">None (Empty)</strong>
+              <span class="score-cell-sub">Max 1 Pin on Robot</span>
             </div>
             <div class="score-metric-cell">
-              <span class="score-cell-label">Wall &amp; Ladder Stakes</span>
-              <strong class="score-cell-val" id="scoreModalStakeRings">0 pts</strong>
-              <span class="score-cell-sub">1-2 pts + stake bonus</span>
+              <span class="score-cell-label">Pins Stacked on Goals</span>
+              <strong class="score-cell-val" id="scoreModalStackedCount">0 Pins</strong>
+              <span class="score-cell-sub">5 pts / color · 10 pts / yellow</span>
             </div>
             <div class="score-metric-cell">
-              <span class="score-cell-label">Corner Placements</span>
-              <strong class="score-cell-val" id="scoreModalCornerPts">0 pts</strong>
-              <span class="score-cell-sub">+5 pts per corner mogo</span>
+              <span class="score-cell-label">Toggles Controlled</span>
+              <strong class="score-cell-val" id="scoreModalTogglesCount">0 Active</strong>
+              <span class="score-cell-sub">CW / CCW wall triggers</span>
             </div>
             <div class="score-metric-cell">
-              <span class="score-cell-label">Goal Load Physics</span>
-              <strong class="score-cell-val" id="scoreModalGoalWeight">0.0 lbs</strong>
-              <span class="score-cell-sub">+3.5 lbs when clamped</span>
+              <span class="score-cell-label">Match Loaders</span>
+              <strong class="score-cell-val" id="scoreModalLoaderStatus">4 Ready</strong>
+              <span class="score-cell-sub">Replenishing Pins</span>
             </div>
           </div>
         </div>
 
-        <!-- Subsystems Live Status Bar -->
+        <!-- Quick Trigger Actions & Subsystem Bar -->
         <div class="scoring-subsystem-bar">
-          <div class="subsystem-status-chip" id="subsystemChipIntake">
-            <span class="sub-dot off" id="dotSubIntake"></span>
-            <span>Intake: <strong id="lblSubIntake">OFF</strong></span>
+          <div class="subsystem-status-chip" id="subsystemChipPin">
+            <span class="sub-dot off" id="dotSubPin"></span>
+            <span>Robot Pin: <strong id="lblSubPin">NONE</strong></span>
           </div>
-          <div class="subsystem-status-chip" id="subsystemChipClamp">
-            <span class="sub-dot off" id="dotSubClamp"></span>
-            <span>Clamp: <strong id="lblSubClamp">OPEN</strong></span>
-          </div>
-          <div class="subsystem-status-chip" id="subsystemChipHopper">
-            <span>🎒 Hopper: <strong id="lblSubHopper">0/2 Rings</strong></span>
-          </div>
-          <button type="button" class="btn-sub-quick" id="btnTestToggleIntake" title="Toggle robot intake simulation">Spin Intake</button>
-          <button type="button" class="btn-sub-quick" id="btnTestToggleClamp" title="Toggle pneumatic goal clamp simulation">Toggle Clamp</button>
-          <button type="button" class="btn-sub-quick" id="btnResetFieldElements" title="Reset all rings and mobile goals to initial field positions">↺ Reset Field</button>
+          <button type="button" class="btn-sub-quick" id="btnTestCollectPin" title="Trigger pin collection">📌 Collect Pin</button>
+          <button type="button" class="btn-sub-quick" id="btnTestDepositPin" title="Deposit carried pin into nearest goal">🥅 Deposit Pin</button>
+          <button type="button" class="btn-sub-quick" id="btnTestToggleCW" title="Turn nearest toggle CW">🔄 Toggle CW</button>
+          <button type="button" class="btn-sub-quick" id="btnTestToggleCCW" title="Turn nearest toggle CCW">🔁 Toggle CCW</button>
+          <button type="button" class="btn-sub-quick" id="btnResetFieldElements" title="Reset all pins, toggles and goal stacks to initial field state">↺ Reset Field</button>
         </div>
 
         <div class="scoring-hint-box">
-          💡 <strong>Automation:</strong> Actions with custom code or labels like <code>clamp.set_value(true)</code> and <code>intake.move(127)</code> automatically trigger pneumatic clamping and ring intaking during simulation playback!
+          💡 <strong>VRC Override Autonomous Comment Triggers:</strong><br/>
+          • <code>// pin collected</code> — Robot grabs nearest pin (from field or wall loader) and carries it (1 pin max).<br/>
+          • <code>// pin deposited</code> — Drops carried pin into nearest goal and stacks it (tracks color &amp; yellow pins).<br/>
+          • <code>// turn toggle CW</code> / <code>// turn toggle CCW</code> — Turns nearest wall toggle and changes its alliance color!
         </div>
       </div>
 
       <div class="scoring-modal-footer">
         <span class="scoring-footer-note">
-          ⚠️ <strong>Beta Feature:</strong> Physics inertia and element scoring are approximations calibrated to VRC High Stakes specifications.
+          ⚡ <strong>VRC Override (2026-27):</strong> 63 Pins, 4 Wall Loaders, 4 Perimeter Toggles, 9 Stacking Goals.
         </span>
         <button type="button" id="scoringModalDoneBtn" class="primary">Done</button>
       </div>
@@ -2988,22 +2989,22 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260927.k7"></script>
+  <script src="version.js?v=20260927.k13"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260927.k7"></script>
-  <script src="google-drive-sync.js?v=20260927.k7"></script>
-  <script src="session-guard.js?v=20260927.k7"></script>
-  <script src="theme.js?v=20260927.k7"></script>
-  <script src="v5-brain-serial.js?v=20260927.k7"></script>
-  <script src="project-manager.js?v=20260927.k7"></script>
-  <script src="cpp-parser.js?v=20260927.k9"></script>
-  <script src="scoring-engine.js?v=20260927.k9"></script>
-  <script src="app.js?v=20260927.k9"></script>
-  <script src="tutorial.js?v=20260927.k7"></script>
+  <script src="firebase-config.js?v=20260927.k13"></script>
+  <script src="google-drive-sync.js?v=20260927.k13"></script>
+  <script src="session-guard.js?v=20260927.k13"></script>
+  <script src="theme.js?v=20260927.k13"></script>
+  <script src="v5-brain-serial.js?v=20260927.k13"></script>
+  <script src="project-manager.js?v=20260927.k13"></script>
+  <script src="cpp-parser.js?v=20260927.k13"></script>
+  <script src="scoring-engine.js?v=20260927.k13"></script>
+  <script src="app.js?v=20260927.k13"></script>
+  <script src="tutorial.js?v=20260927.k13"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

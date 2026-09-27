@@ -478,4 +478,116 @@
     }
   };
 
+  /**
+   * Dedicated Interactive Tutorial Dialog for VRC Override Dynamic Comment Triggers
+   */
+  global.openOverrideCommentTutorial = function () {
+    let guideModal = document.getElementById("overrideCommentGuideModal");
+    if (!guideModal) {
+      guideModal = document.createElement("div");
+      guideModal.id = "overrideCommentGuideModal";
+      guideModal.className = "modal tutorial-guide-modal";
+      guideModal.innerHTML = `
+        <div class="modal-card" style="max-width:680px;background:#0f172a;border:1px solid rgba(250,204,21,0.3);border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.85);color:#f8fafc;padding:0;overflow:hidden;">
+          <div style="background:linear-gradient(135deg, rgba(234,179,8,0.2), rgba(15,23,42,0.95));padding:16px 20px;border-bottom:1px solid rgba(250,204,21,0.25);display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:1.6rem;background:rgba(234,179,8,0.2);padding:6px;border-radius:8px;border:1px solid rgba(250,204,21,0.4);">🎯</span>
+              <div>
+                <h3 style="margin:0;font-size:1.15rem;color:#facc15;font-weight:800;">VRC Override Autonomous Comment Guide</h3>
+                <span style="font-size:0.75rem;color:#cbd5e1;">How to use action comments to trigger pin collection, goal deposition, and wall toggles</span>
+              </div>
+            </div>
+            <button type="button" class="modal-close-btn" id="btnCloseCommentGuide" style="background:transparent;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;">✕</button>
+          </div>
+
+          <div style="padding:20px;max-height:65vh;overflow-y:auto;display:flex;flex-direction:column;gap:16px;font-size:0.85rem;line-height:1.5;">
+            
+            <div style="background:rgba(30,41,59,0.7);border-radius:8px;padding:12px 16px;border-left:4px solid #38bdf8;">
+              <strong style="color:#38bdf8;font-size:0.9rem;">💡 What are Comment Triggers?</strong>
+              <p style="margin:4px 0 0;color:#cbd5e1;">In the path planner, you can write natural C++ comments (in any action's <strong>Comment</strong>, <strong>Label</strong>, or <strong>Custom Code</strong> field). During simulation playback, the engine reads these comments and automatically updates the robot and field!</p>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+              
+              <!-- Trigger 1 -->
+              <div style="background:#1e293b;border-radius:8px;padding:12px;border:1px solid #334155;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                  <span style="font-weight:700;color:#f87171;font-size:0.88rem;">📌 1. Collecting a Pin</span>
+                  <code style="background:#0f172a;color:#facc15;padding:2px 8px;border-radius:4px;border:1px solid rgba(250,204,21,0.3);font-family:monospace;">// pin collected</code>
+                </div>
+                <p style="margin:0 0 8px;color:#94a3b8;font-size:0.8rem;">
+                  When the robot reaches this waypoint, it grabs the nearest pin from the foam tile or from a match loader chute. The pin attaches to the robot and moves with it.
+                </p>
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:6px 10px;border-radius:6px;">
+                  <span style="color:#64748b;font-size:0.75rem;">Rule: Robot carries max 1 pin at a time. Match loaders always keep a pin ready.</span>
+                  <button type="button" class="btn-xs-clean" onclick="navigator.clipboard.writeText('// pin collected'); if(window.showToast) window.showToast('✓ Copied // pin collected');" style="color:#38bdf8;cursor:pointer;">📋 Copy</button>
+                </div>
+              </div>
+
+              <!-- Trigger 2 -->
+              <div style="background:#1e293b;border-radius:8px;padding:12px;border:1px solid #334155;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                  <span style="font-weight:700;color:#60a5fa;font-size:0.88rem;">🥅 2. Depositing &amp; Stacking on a Goal</span>
+                  <code style="background:#0f172a;color:#facc15;padding:2px 8px;border-radius:4px;border:1px solid rgba(250,204,21,0.3);font-family:monospace;">// pin deposited</code>
+                </div>
+                <p style="margin:0 0 8px;color:#94a3b8;font-size:0.8rem;">
+                  When the robot reaches this waypoint, it drops the carried pin into the nearest goal. The goal stacks the pin and displays the live stack count (e.g. <code>🔴 2 🟡 1</code>).
+                </p>
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:6px 10px;border-radius:6px;">
+                  <span style="color:#64748b;font-size:0.75rem;">Scoring: +5 pts for alliance pin · +10 pts for yellow pin if toggle owned.</span>
+                  <button type="button" class="btn-xs-clean" onclick="navigator.clipboard.writeText('// pin deposited'); if(window.showToast) window.showToast('✓ Copied // pin deposited');" style="color:#38bdf8;cursor:pointer;">📋 Copy</button>
+                </div>
+              </div>
+
+              <!-- Trigger 3 -->
+              <div style="background:#1e293b;border-radius:8px;padding:12px;border:1px solid #334155;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                  <span style="font-weight:700;color:#4ade80;font-size:0.88rem;">🔄 3. Turning Wall Toggles</span>
+                  <div style="display:flex;gap:6px;">
+                    <code style="background:#0f172a;color:#f87171;padding:2px 6px;border-radius:4px;font-family:monospace;">// turn toggle CW</code>
+                    <code style="background:#0f172a;color:#60a5fa;padding:2px 6px;border-radius:4px;font-family:monospace;">// turn toggle CCW</code>
+                  </div>
+                </div>
+                <p style="margin:0 0 8px;color:#94a3b8;font-size:0.8rem;">
+                  When near any of the 4 perimeter wall toggles (West, East, North, South), this comment rotates the toggle: <strong>CW</strong> sets it to Red Alliance, and <strong>CCW</strong> sets it to Blue Alliance.
+                </p>
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:6px 10px;border-radius:6px;">
+                  <span style="color:#64748b;font-size:0.75rem;">Scoring: +10 pts per controlled toggle · Doubles quadrant yellow pin score!</span>
+                  <button type="button" class="btn-xs-clean" onclick="navigator.clipboard.writeText('// turn toggle CW'); if(window.showToast) window.showToast('✓ Copied // turn toggle CW');" style="color:#38bdf8;cursor:pointer;">📋 Copy CW</button>
+                </div>
+              </div>
+
+            </div>
+
+            <div style="background:rgba(234,179,8,0.1);border:1px solid rgba(250,204,21,0.3);border-radius:8px;padding:10px 14px;">
+              <strong style="color:#facc15;">⚡ Quick 1-Click Insert:</strong>
+              <p style="margin:2px 0 0;color:#e2e8f0;font-size:0.78rem;">You don't need to type these out manually! Inside any action block in the sidebar, click the quick snippet chips like <strong>[📌 // pin collected]</strong> to insert them instantly into your routine.</p>
+            </div>
+
+          </div>
+
+          <div style="background:#1e293b;padding:12px 20px;border-top:1px solid #334155;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.75rem;color:#94a3b8;">VRC Override 2026-27 Autonomous Rules</span>
+            <button type="button" class="primary" id="btnDoneCommentGuide" style="background:#eab308;color:#0f172a;font-weight:700;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;">Got it!</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(guideModal);
+
+      const closeBtn = guideModal.querySelector("#btnCloseCommentGuide");
+      const doneBtn = guideModal.querySelector("#btnDoneCommentGuide");
+      const closeFn = () => {
+        guideModal.style.display = "none";
+        guideModal.classList.remove("open");
+      };
+      if (closeBtn) closeBtn.onclick = closeFn;
+      if (doneBtn) doneBtn.onclick = closeFn;
+      guideModal.onclick = (e) => { if (e.target === guideModal) closeFn(); };
+    }
+
+    guideModal.style.display = "flex";
+    guideModal.classList.add("open");
+  };
+
 })(typeof window !== "undefined" ? window : this);
+

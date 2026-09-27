@@ -1784,7 +1784,14 @@
     const b = customBot || bot;
     const motorCount = Number(b.motorCount) || 6;
     const baseWeight = Math.max(Number(b.robotWeightLbs) || 15.0, 1.0);
-    const extraGoalWeight = (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled()) ? ScoringEngine.getClampedGoalWeightLbs() : 0;
+    let extraGoalWeight = 0;
+    if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled && ScoringEngine.getIsEnabled()) {
+      if (typeof ScoringEngine.getCarriedPinWeightLbs === "function") {
+        extraGoalWeight = ScoringEngine.getCarriedPinWeightLbs();
+      } else if (typeof ScoringEngine.getClampedGoalWeightLbs === "function") {
+        extraGoalWeight = ScoringEngine.getClampedGoalWeightLbs();
+      }
+    }
     const weightLbs = baseWeight + extraGoalWeight;
     const tractionMu = Math.max(Number(b.wheelTraction) || 0.85, 0.1);
     const battVolts = Number(b.batteryVolts) || 12.8;
@@ -3131,6 +3138,31 @@
       ctx.restore();
     }
 
+    // Draw Carried Pin on top of robot chassis
+    if (typeof ScoringEngine !== "undefined") {
+      const heldPin = ScoringEngine.getCarriedPin();
+      if (heldPin) {
+        ctx.save();
+        const pinColor = heldPin.color === "red" ? "#f87171" : (heldPin.color === "blue" ? "#60a5fa" : "#fde047");
+        ctx.shadowColor = pinColor;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.fillStyle = pinColor;
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "bold 7px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("PIN", 0, 0);
+        ctx.restore();
+      }
+    }
+
     ctx.restore();
   }
 
@@ -3528,9 +3560,10 @@
     }
 
     // Render Dynamic Scoring Elements (Rings, Clamped Mogos, Stakes)
-    if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled()) {
+    if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled && ScoringEngine.getIsEnabled()) {
       const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
-      ScoringEngine.render(ctx, fieldToCanvas, scale, currentTheme);
+      const currentScale = getFieldScale();
+      ScoringEngine.render(ctx, fieldToCanvas, currentScale, currentTheme);
     }
 
     buildSimPath();
@@ -5215,23 +5248,24 @@
             <button type="button" class="wait-mode-btn ${mode === 'time' ? 'active' : ''}" data-act="set-wait-mode" data-mode="time">⏱️ PROS Delay (${delayVal}ms)</button>
           </div>
           ${paramSection}
-          <label class="wide" style="margin-top:8px;">Subsystem Action Code (optional, runs at trigger event)
-            <textarea data-f="customCode" rows="2" placeholder="// e.g. clamp.set_value(true); or intake.move(127);">${escapeHtml(a.customCode || '')}</textarea>
+          <label class="wide" style="margin-top:8px;">Subsystem Action Code / Comment (runs at trigger event)
+            <textarea data-f="customCode" rows="2" placeholder="// e.g. // pin collected, // pin deposited, or intake.move(127);">${escapeHtml(a.customCode || '')}</textarea>
           </label>
           <div class="multitask-presets-row">
-            <span style="font-size:0.68rem;color:#94a3b8;align-self:center;">Snippets:</span>
-            <button type="button" class="snippet-chip" data-snip="clamp.set_value(true);">🦾 Clamp Goal</button>
-            <button type="button" class="snippet-chip" data-snip="clamp.set_value(false);">🔓 Release Clamp</button>
-            <button type="button" class="snippet-chip" data-snip="intake.move(127);">⚡ Intake On</button>
-            <button type="button" class="snippet-chip" data-snip="intake.move(0);">🛑 Intake Off</button>
+            <span style="font-size:0.68rem;color:#facc15;font-weight:700;">Override:</span>
+            <button type="button" class="snippet-chip" data-snip="// pin collected" title="Grab nearest pin and carry on robot">📌 // pin collected</button>
+            <button type="button" class="snippet-chip" data-snip="// pin deposited" title="Drop carried pin into nearest goal">🥅 // pin deposited</button>
+            <button type="button" class="snippet-chip" data-snip="// turn toggle CW" title="Turn nearest wall toggle Clockwise (Red)">🔄 // turn toggle CW</button>
+            <button type="button" class="snippet-chip" data-snip="// turn toggle CCW" title="Turn nearest wall toggle Counter-Clockwise (Blue)">🔁 // turn toggle CCW</button>
+            <button type="button" class="btn-comment-tut-launch" title="Open step-by-step tutorial on how to use autonomous comments" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;cursor:pointer;">❓ Guide</button>
           </div>
           <div class="move-comment-row">
             <label class="move-comment-label">
               <span class="move-comment-header">
                 <span class="move-comment-tag">💬 Event Comment</span>
-                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(cleanCommentText(a.label))}` : "e.g. // clamp mogo at 12 inches"}</span>
+                <span class="move-comment-preview">${a.label ? `// ${escapeHtml(cleanCommentText(a.label))}` : "e.g. // pin collected or // turn toggle CW"}</span>
               </span>
-              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label || '')}" placeholder="e.g. clamp mogo at 12 inches into drive"/>
+              <input type="text" data-f="label" class="move-comment-input" value="${escapeHtml(a.label || '')}" placeholder="e.g. // pin collected, // pin deposited, // turn toggle CW"/>
             </label>
           </div>`;
       } else if (a.type === "custom") {
@@ -5259,16 +5293,23 @@
               ⚡ Convert to Scratch Block
             </button>
           </div>` : ""}
-          <label class="wide">Custom C++ (injected as-is)
-            <textarea data-f="customCode" rows="3" placeholder="// e.g. intake.move(127); or if (isRed) { ... }">${escapeHtml(a.customCode)}</textarea>
+          <label class="wide">Custom C++ / Comment (injected as-is)
+            <textarea data-f="customCode" rows="3" placeholder="// e.g. // pin collected, // turn toggle CW, or intake.move(127);">${escapeHtml(a.customCode)}</textarea>
           </label>
           <div class="multitask-presets-row">
-            <span style="font-size:0.68rem;color:#94a3b8;align-self:center;">Snippets:</span>
+            <span style="font-size:0.68rem;color:#facc15;font-weight:700;">Override:</span>
+            <button type="button" class="snippet-chip" data-snip="// pin collected" title="Grab nearest pin and carry on robot">📌 // pin collected</button>
+            <button type="button" class="snippet-chip" data-snip="// pin deposited" title="Drop carried pin into nearest goal">🥅 // pin deposited</button>
+            <button type="button" class="snippet-chip" data-snip="// turn toggle CW" title="Turn nearest wall toggle Clockwise (Red)">🔄 // turn toggle CW</button>
+            <button type="button" class="snippet-chip" data-snip="// turn toggle CCW" title="Turn nearest wall toggle Counter-Clockwise (Blue)">🔁 // turn toggle CCW</button>
+            <button type="button" class="btn-comment-tut-launch" title="Open step-by-step tutorial on how to use autonomous comments" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;cursor:pointer;">❓ Guide</button>
+          </div>
+          <div class="multitask-presets-row" style="margin-top:4px;">
+            <span style="font-size:0.68rem;color:#94a3b8;">C++:</span>
             <button type="button" class="snippet-chip" data-snip="intake.move(127);">⚡ Intake On</button>
             <button type="button" class="snippet-chip" data-snip="intake.move(0);">🛑 Intake Off</button>
             <button type="button" class="snippet-chip" data-snip="clamp.set_value(true);">🦾 Clamp</button>
             <button type="button" class="snippet-chip" data-snip="if (isRed) {\n  chassis.moveToPoint(24, 24, 2000);\n} else {\n  chassis.moveToPoint(-24, -24, 2000, {.forwards = false});\n}">🔀 If-Else Loop</button>
-            <button type="button" class="snippet-chip" data-snip="isRed ? chassis.moveToPoint(24, 24, 2000) : chassis.moveToPoint(-24, -24, 2000);">⚡ Ternary (? :)</button>
             <button type="button" class="snippet-chip" data-snip="chassis.waitUntil(12);">⏱️ Wait 12"</button>
             <button type="button" class="snippet-chip" data-snip="chassis.waitUntilDone();">⏳ Wait Done</button>
           </div>
@@ -5701,6 +5742,15 @@
             markDirty();
             generateCode();
             ta.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        });
+      });
+
+      card.querySelectorAll(".btn-comment-tut-launch").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (typeof window.openOverrideCommentTutorial === "function") {
+            window.openOverrideCommentTutorial();
           }
         });
       });
@@ -13581,8 +13631,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
           activeRobotPose = simPath[simIdx];
         }
         const res = scoreRes || ScoringEngine.calculateScore(activeRobotPose);
-        const awpText = res.awpCriteria ? ` · AWP ${res.awpCriteria.totalCount}/3` : "";
-        setDomText(chipScore, `🏆 ${res.totalScore} pts${awpText}`);
+        const carriedText = res.carriedPin ? ` · 📌 1 Pin` : "";
+        setDomText(chipScore, `🏆 ${res.totalScore} pts · 🎚️ ${res.redTogglesOwned + res.blueTogglesOwned}/4 Toggles · 🥅 ${res.totalPinsStacked} Pins${carriedText}`);
       } else {
         chipScore.style.display = "none";
       }
@@ -13597,18 +13647,27 @@ lemlib::ControllerSettings ${currentMode}_controller(
       }
       const res = scoreRes || ScoringEngine.calculateScore(activeRobotPose);
       const totalEl = document.getElementById("scoreModalTotalPoints");
-      const mogoRingsEl = document.getElementById("scoreModalMogoRings");
-      const stakeRingsEl = document.getElementById("scoreModalStakeRings");
-      const cornerEl = document.getElementById("scoreModalCornerPts");
-      const goalWeightEl = document.getElementById("scoreModalGoalWeight");
+      const carriedEl = document.getElementById("scoreModalCarriedPin");
+      const stackedEl = document.getElementById("scoreModalStackedCount");
+      const togglesEl = document.getElementById("scoreModalTogglesCount");
+      const loaderEl = document.getElementById("scoreModalLoaderStatus");
       const awpBadge = document.getElementById("scoreModalAwpBadge");
       const statusPill = document.getElementById("scoringModalStatusPill");
 
       if (totalEl) totalEl.innerHTML = `${res.totalScore} <span class="score-unit">pts</span>`;
-      if (mogoRingsEl) mogoRingsEl.textContent = `${res.ringsOnMogos + res.mogoTopRingBonus} pts`;
-      if (stakeRingsEl) stakeRingsEl.textContent = `${res.ringsOnWallStakes + res.ringsOnHighStake} pts`;
-      if (cornerEl) cornerEl.textContent = `${res.mogoCornerPoints} pts`;
-      if (goalWeightEl) goalWeightEl.textContent = `${ScoringEngine.getClampedGoalWeightLbs().toFixed(1)} lbs`;
+      if (carriedEl) {
+        if (res.carriedPin) {
+          const cName = res.carriedPin.color.toUpperCase();
+          carriedEl.textContent = `1 ${cName} PIN HELD`;
+          carriedEl.style.color = res.carriedPin.color === "red" ? "#f87171" : (res.carriedPin.color === "blue" ? "#60a5fa" : "#fde047");
+        } else {
+          carriedEl.textContent = "None (Empty)";
+          carriedEl.style.color = "#94a3b8";
+        }
+      }
+      if (stackedEl) stackedEl.textContent = `${res.totalPinsStacked} Pins Stacked`;
+      if (togglesEl) togglesEl.textContent = `Red: ${res.redTogglesOwned} · Blue: ${res.blueTogglesOwned}`;
+      if (loaderEl) loaderEl.textContent = "4 Loaders (Pins Ready)";
 
       if (statusPill) {
         if (isEngEnabled) {
@@ -13620,25 +13679,16 @@ lemlib::ControllerSettings ${currentMode}_controller(
         }
       }
 
-      if (awpBadge && res.awpCriteria) {
-        awpBadge.textContent = `AWP: ${res.awpCriteria.totalCount}/3 Criteria${res.awpCriteria.awpCompleted ? " ✅ COMPLETE" : ""}`;
-        if (res.awpCriteria.awpCompleted) awpBadge.classList.add("completed");
-        else awpBadge.classList.remove("completed");
+      if (awpBadge) {
+        awpBadge.textContent = `Toggles: ${res.redTogglesOwned + res.blueTogglesOwned}/4 · Goals Stacked: ${res.totalPinsStacked} Pins`;
       }
 
       // Subsystem chips
-      const sub = res.subsystems || ScoringEngine.getSubsystems();
-      const dotIntake = document.getElementById("dotSubIntake");
-      const lblIntake = document.getElementById("lblSubIntake");
-      const dotClamp = document.getElementById("dotSubClamp");
-      const lblClamp = document.getElementById("lblSubClamp");
-      const lblHopper = document.getElementById("lblSubHopper");
+      const dotPin = document.getElementById("dotSubPin");
+      const lblPin = document.getElementById("lblSubPin");
 
-      if (dotIntake) dotIntake.className = `sub-dot ${sub.intake ? "active" : "off"}`;
-      if (lblIntake) lblIntake.textContent = sub.intake ? "SPINNING" : "OFF";
-      if (dotClamp) dotClamp.className = `sub-dot ${sub.clamp ? "active" : "off"}`;
-      if (lblClamp) lblClamp.textContent = sub.clampedMogoId ? "CLAMPED (+3.5 lbs)" : (sub.clamp ? "LOCKED" : "OPEN");
-      if (lblHopper) lblHopper.textContent = `${sub.hopperRingCount || 0}/2 Rings`;
+      if (dotPin) dotPin.className = `sub-dot ${res.carriedPin ? "active" : "off"}`;
+      if (lblPin) lblPin.textContent = res.carriedPin ? `HOLDING ${res.carriedPin.color.toUpperCase()} PIN` : "NONE (EMPTY)";
     }
   }
 
@@ -13655,8 +13705,10 @@ lemlib::ControllerSettings ${currentMode}_controller(
     const chkMaster = document.getElementById("chkScoringMaster");
     const selAlliance = document.getElementById("selScoringAlliance");
     const selGameMode = document.getElementById("selScoringGameMode");
-    const btnToggleIntake = document.getElementById("btnTestToggleIntake");
-    const btnToggleClamp = document.getElementById("btnTestToggleClamp");
+    const btnTestCollect = document.getElementById("btnTestCollectPin");
+    const btnTestDeposit = document.getElementById("btnTestDepositPin");
+    const btnTestCW = document.getElementById("btnTestToggleCW");
+    const btnTestCCW = document.getElementById("btnTestToggleCCW");
     const btnResetField = document.getElementById("btnResetFieldElements");
 
     if (!modal) return;
@@ -13675,6 +13727,15 @@ lemlib::ControllerSettings ${currentMode}_controller(
       modal.classList.remove("open");
     }
 
+    const btnLaunchGuide = document.getElementById("btnLaunchCommentGuideFromModal");
+    if (btnLaunchGuide) {
+      btnLaunchGuide.addEventListener("click", () => {
+        if (typeof window.openOverrideCommentTutorial === "function") {
+          window.openOverrideCommentTutorial();
+        }
+      });
+    }
+
     if (btnOpenBeta) btnOpenBeta.addEventListener("click", openModal);
     if (chipScore) chipScore.addEventListener("click", openModal);
     if (btnClose) btnClose.addEventListener("click", closeModal);
@@ -13684,9 +13745,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
       chkMaster.addEventListener("change", (e) => {
         ScoringEngine.setEnabled(e.target.checked);
         if (e.target.checked) {
-          showToast("🎯 Beta: Field Scoring Engine & Dynamic Element Tracking Enabled!");
+          showToast("🎯 Beta: Override Field Engine Enabled!");
         } else {
-          showToast("⚪ Beta: Field Scoring Engine Disabled");
+          showToast("⚪ Beta: Override Field Engine Disabled");
         }
         markDirty();
         draw();
@@ -13714,17 +13775,45 @@ lemlib::ControllerSettings ${currentMode}_controller(
       });
     }
 
-    if (btnToggleIntake) {
-      btnToggleIntake.addEventListener("click", () => {
-        ScoringEngine.toggleIntake();
+    if (btnTestCollect) {
+      btnTestCollect.addEventListener("click", () => {
+        const p = (simRunning && simPath.length && simPath[simIdx]) ? simPath[simIdx] : pose;
+        ScoringEngine.collectNearestPin(p.x, p.y);
+        showToast("📌 Pin collected by robot (1 pin max).");
         updateScoringHUD();
         draw();
       });
     }
 
-    if (btnToggleClamp) {
-      btnToggleClamp.addEventListener("click", () => {
-        ScoringEngine.toggleClamp();
+    if (btnTestDeposit) {
+      btnTestDeposit.addEventListener("click", () => {
+        const p = (simRunning && simPath.length && simPath[simIdx]) ? simPath[simIdx] : pose;
+        const res = ScoringEngine.depositCarriedPin(p.x, p.y);
+        if (res && res.goal) {
+          showToast(`🥅 Deposited pin into ${res.goal.name}!`);
+        } else {
+          showToast("⚠️ No pin carried by robot to deposit.");
+        }
+        updateScoringHUD();
+        draw();
+      });
+    }
+
+    if (btnTestCW) {
+      btnTestCW.addEventListener("click", () => {
+        const p = (simRunning && simPath.length && simPath[simIdx]) ? simPath[simIdx] : pose;
+        const tog = ScoringEngine.turnToggle(p.x, p.y, "CW");
+        if (tog) showToast(`🔄 Turned ${tog.name} CW (RED)!`);
+        updateScoringHUD();
+        draw();
+      });
+    }
+
+    if (btnTestCCW) {
+      btnTestCCW.addEventListener("click", () => {
+        const p = (simRunning && simPath.length && simPath[simIdx]) ? simPath[simIdx] : pose;
+        const tog = ScoringEngine.turnToggle(p.x, p.y, "CCW");
+        if (tog) showToast(`🔁 Turned ${tog.name} CCW (BLUE)!`);
         updateScoringHUD();
         draw();
       });
@@ -13733,7 +13822,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (btnResetField) {
       btnResetField.addEventListener("click", () => {
         ScoringEngine.resetFieldElements();
-        showToast("↺ Reset all field rings and mobile goals.");
+        showToast("↺ Reset all field pins, loaders, toggles, and goals.");
         updateScoringHUD();
         draw();
       });

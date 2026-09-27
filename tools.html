@@ -13,7 +13,7 @@
   <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
   <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
-  <link rel="stylesheet" href="style.css?v=20260927.k7" />
+  <link rel="stylesheet" href="style.css?v=20260927.k10" />
   <script>
     (function () {
       try {
@@ -1302,54 +1302,54 @@ chassis.turnToHeading(270, 1000);</div>
         </div>
       </article>
 
-      <!-- TOOL 14: Interactive Field Scoring Engine & Dynamic Element Tracker (BETA) -->
-      <article class="tool-card highlight" data-category="routines" data-keywords="scoring score points rings mobile goals mogo stakes awp autonomous win point beta clamp intake">
+      <!-- TOOL 14: VRC Override Game Engine & Dynamic Pin Tracker (BETA) -->
+      <article class="tool-card highlight" data-category="routines" data-keywords="override scoring score points pins toggles loaders goals stacking autonomous win point beta cw ccw">
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(234, 179, 8, 0.15); border-color:rgba(234, 179, 8, 0.35); color:#facc15;">🎯</div>
           <div class="tool-title-info">
-            <h3>Field Scoring Engine &amp; Dynamic Element Tracker <span style="font-size:0.6rem;background:#eab308;color:#0f172a;font-weight:900;padding:1px 5px;border-radius:3px;margin-left:4px;">BETA</span></h3>
-            <p class="tool-tagline">Simulate dynamic VRC game objects (rings, mobile goals, wall stakes), subsystem intake/clamp states, and +3.5 lbs goal load physics in real-time.</p>
+            <h3>VRC Override Game Engine &amp; Pin Tracker <span style="font-size:0.6rem;background:#eab308;color:#0f172a;font-weight:900;padding:1px 5px;border-radius:3px;margin-left:4px;">BETA</span></h3>
+            <p class="tool-tagline">Simulate official VRC Override game mechanics: Pins (63 total), 4 Wall Loaders (always ready), 4 Wall Toggles (CW/CCW), and 9 Goals with stacking.</p>
           </div>
           <span class="tool-category-badge">🔄 Routines</span>
         </div>
         <div class="tool-body">
           <div class="tool-form-grid cols-3">
             <div class="tool-field">
-              <label>Rings on Mogos</label>
-              <input type="number" id="calcScoreMogos" value="4" min="0" max="24" step="1" />
+              <label>Color Pins Stacked</label>
+              <input type="number" id="calcScoreMogos" value="4" min="0" max="40" step="1" />
             </div>
             <div class="tool-field">
-              <label>Wall / Ladder Stakes</label>
-              <input type="number" id="calcScoreStakes" value="2" min="0" max="10" step="1" />
+              <label>Yellow Pins Stacked</label>
+              <input type="number" id="calcScoreStakes" value="2" min="0" max="23" step="1" />
             </div>
             <div class="tool-field">
-              <label>Corner Mogos</label>
-              <input type="number" id="calcScoreCorners" value="1" min="0" max="4" step="1" />
+              <label>Toggles Owned (CW/CCW)</label>
+              <input type="number" id="calcScoreCorners" value="2" min="0" max="4" step="1" />
             </div>
           </div>
 
           <div class="tool-result-strip">
             <div class="result-cell">
-              <span class="result-label">Calculated Auton Score</span>
-              <strong class="result-val amber" id="calcScoreTotal">19 pts</strong>
+              <span class="result-label">Projected Match Score</span>
+              <strong class="result-val amber" id="calcScoreTotal">60 pts</strong>
             </div>
             <div class="result-cell">
-              <span class="result-label">AWP Status</span>
-              <strong class="result-val green" id="calcScoreAwp">2/3 Criteria</strong>
+              <span class="result-label">Toggles Controlled</span>
+              <strong class="result-val green" id="calcScoreAwp">2 / 4 Toggles</strong>
             </div>
             <div class="result-cell">
-              <span class="result-label">Clamped Goal Load</span>
-              <strong class="result-val purple">+3.5 lbs Added</strong>
+              <span class="result-label">Robot Pin Capacity</span>
+              <strong class="result-val purple">1 Pin at a Time</strong>
             </div>
           </div>
 
           <div style="font-size:0.71rem; color:var(--muted); line-height:1.4;">
-            Official VRC High Stakes / Override rules: Rings on Mogos count 1 pt (+2 pt top ring bonus), wall stakes count 1 pt (+2 pt top ring), high stakes count 2 pts, and corners award +5 pts.
+            Official VRC Override (2026-27) Rules: Alliance-colored pins in goals award 5 pts; yellow pins award 10 pts for toggle owners; toggles award 10 pts.
           </div>
 
           <div class="tool-actions-row">
             <a href="index.html#btnScoringBeta" class="btn-tool-action primary" id="btnLaunchScoringPlanner">
-              🎯 Open Live Scoring in Planner
+              🎯 Open Override Engine in Planner
             </a>
             <button type="button" class="btn-tool-action" id="btnRecalcScoreTool">
               ⚡ Recalculate Score
