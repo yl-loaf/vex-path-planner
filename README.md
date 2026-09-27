@@ -10,6 +10,7 @@ Interactive path planner for **VEX V5 Robotics Competition Override (2026-27)** 
 - **VRC Override Engine (Beta):** Simulate game pieces (pins, goals) and perimeter wall toggles.
 - **PROS C++ IDE:** Multi-file code studio with cross-file variable indexing, compiler diagnostics, and safe sync between visual blocks and `src/autons.cpp`.
 - **V5 Brain Flasher:** Direct USB Web Serial connection to flash routines to V5 Brain slots 1-8.
+- **GitHub Integration:** Direct API support to commit and push generated autonomous routines directly to your GitHub repositories.
 - **Productivity Tools:** Auto-save, `.vpath` import/export, and interactive onboarding tutorial for new users.
 
 ## Coordinate system
