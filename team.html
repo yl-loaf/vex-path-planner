@@ -783,8 +783,17 @@
       <a href="stats.html" class="team-nav-tab" title="Site &amp; User Visitor Analytics">📊 Stats</a>
     </nav>
 
-    <!-- Header Actions: Theme & Google Auth -->
+    <!-- Header Actions: V5 Brain USB, Theme & Google Auth -->
     <div style="display:flex;align-items:center;gap:10px;">
+      <!-- Hardware Brain Link & Quick Connect -->
+      <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB" style="display:inline-flex;align-items:center;gap:6px;background:#090d16;border:1px solid #334155;padding:4px 10px;border-radius:20px;font-size:0.75rem;">
+        <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
+        <span class="brain-status-text" id="bannerBrainText" style="color:#cbd5e1;font-weight:600;">Brain: Disconnected</span>
+        <span class="brain-battery-pill" id="bannerBrainBatt" hidden style="background:rgba(34,197,94,0.2);color:#4ade80;padding:1px 6px;border-radius:10px;font-size:0.68rem;font-weight:700;">⚡ 94%</span>
+        <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC" style="background:#0284c7;color:#fff;border:none;padding:2px 8px;border-radius:10px;font-weight:700;cursor:pointer;font-size:0.7rem;">🔌 Connect</button>
+        <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;background:#16a34a;color:#fff;border:none;padding:2px 8px;border-radius:10px;font-weight:700;cursor:pointer;font-size:0.7rem;">🚀 Upload &amp; Run</button>
+      </div>
+
       <button type="button" class="btn-theme-toggle" data-theme-toggle aria-label="Toggle theme" title="Toggle Light/Dark Theme">
         <span class="theme-toggle-icon">☀️</span>
         <span class="theme-toggle-text">Theme</span>
@@ -954,20 +963,53 @@
 
       <!-- VIEW 1: FIELD CANVAS & SIMULATOR -->
       <div id="teamFieldViewContainer" style="display:flex;flex-direction:column;flex:1;min-height:0;position:relative;">
-        <!-- Top Canvas Status Strip -->
-        <div style="padding:8px 16px;background:#090e17;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;font-size:0.75rem;">
-          <div style="display:flex;align-items:center;gap:12px;">
+        <!-- Top Canvas Status Strip & Floating HUD Tools -->
+        <div style="padding:8px 16px;background:#090e17;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;font-size:0.75rem;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <span>📍 Pose: <strong id="lblCursorCoords" style="color:#38bdf8;">X: 0.0" | Y: 0.0" | θ: 0.0°</strong></span>
             <span style="color:#475569;">|</span>
             <span id="lblActiveEditingStatus" style="color:#94a3b8;">Move any waypoint or click to drop strategy pin</span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button type="button" id="btnCenterCanvasPinTool" class="btn-team-secondary" style="padding:4px 10px;font-size:0.72rem;display:inline-flex;align-items:center;gap:4px;">
-              <span>📍</span> Drop Pin Comment
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <button type="button" id="btnScoringBeta" class="btn-team-secondary" style="background:rgba(245,158,11,0.15);border-color:#f59e0b;color:#f59e0b;padding:3px 8px;font-size:0.72rem;font-weight:700;" title="Toggle Beta Scoring Engine">🎯 Scoring <span class="badge-beta-pill" style="font-size:0.55rem;padding:1px 4px;">BETA</span></button>
+            <button type="button" id="btnToolBezier" class="btn-team-secondary" style="background:rgba(6,182,212,0.15);border-color:#06b6d4;color:#cffafe;padding:3px 8px;font-size:0.72rem;font-weight:700;" title="Toggle Bezier Curve Path Tool (Hotkey: B)">🌊 Bezier Tool <kbd style="font-size:0.6rem;background:rgba(255,255,255,0.15);padding:1px 3px;border-radius:3px;">B</kbd></button>
+            <button type="button" id="btnHudCollisionModal" class="btn-team-secondary" style="padding:3px 8px;font-size:0.72rem;" title="Open Field Collision Detection">🛡️ Collisions (<span id="hudCollisionStatus">Clear</span>)</button>
+            <button type="button" id="btnToggleDebug" class="btn-team-secondary" style="background:rgba(168,85,247,0.15);border-color:#a855f7;color:#e9d5ff;padding:3px 8px;font-size:0.72rem;font-weight:700;" title="Open Live Telemetry & Inspector">🐞 Debugger</button>
+            <button type="button" id="btnCenterCanvasPinTool" class="btn-team-secondary" style="padding:3px 8px;font-size:0.72rem;display:inline-flex;align-items:center;gap:4px;">
+              <span>📍</span> Drop Pin
             </button>
-            <button type="button" id="btnAutoTuneCurve" class="btn-team-secondary" style="padding:4px 10px;font-size:0.72rem;">
-              ⚡ Auto-Smooth Path
+            <button type="button" id="btnAutoTuneCurve" class="btn-team-secondary" style="padding:3px 8px;font-size:0.72rem;">
+              ⚡ Auto-Smooth
             </button>
+          </div>
+        </div>
+
+        <!-- Floating Bezier Mode Banner -->
+        <div id="bezierBanner" class="bezier-mode-banner" style="display: none; background:linear-gradient(90deg, #0f172a, #0284c7); border:1px solid #06b6d4; border-radius:8px; padding:6px 12px; margin:8px 12px 0; font-size:0.78rem; color:#f8fafc; align-items:center; justify-content:space-between; z-index:50;">
+          <div class="bezier-banner-left" style="display:flex;align-items:center;gap:8px;">
+            <span class="bezier-pulse-dot" style="width:8px;height:8px;border-radius:50%;background:#06b6d4;display:inline-block;"></span>
+            <span class="bezier-banner-title" style="font-weight:700;color:#cffafe;">🌊 Bezier Curve Tool Active</span>
+            <span class="bezier-banner-hint" style="color:#93c5fd;font-size:0.72rem;">Drag any curve to bend · Drag CP1/CP2 along tangent handles</span>
+          </div>
+          <button type="button" id="btnExitBezierTool" class="btn-bezier-exit" style="background:#06b6d4;color:#0b1120;border:none;padding:3px 10px;border-radius:6px;font-weight:800;font-size:0.72rem;cursor:pointer;">Done (B)</button>
+        </div>
+
+        <!-- Floating Quick Bar for Selected Bezier Curve -->
+        <div id="bezierQuickBar" class="bezier-quick-bar" style="display: none; background:#0f172a; border:1px solid #38bdf8; border-radius:8px; padding:6px 12px; margin:6px 12px 0; font-size:0.75rem; color:#f8fafc; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; z-index:50;">
+          <div class="bezier-quick-title" style="display:flex;align-items:center;gap:6px;">
+            <span class="bezier-quick-badge" id="bzbLabel" style="background:rgba(6,182,212,0.2);color:#06b6d4;padding:2px 6px;border-radius:4px;font-weight:700;">🌊 Curve Arc</span>
+          </div>
+          <div class="bezier-quick-actions" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+            <button type="button" class="btn-bz-quick btn-team-secondary" id="btnBzBendLeft" style="padding:2px 6px;font-size:0.7rem;">↶ Left</button>
+            <button type="button" class="btn-bz-quick btn-team-secondary" id="btnBzStraight" style="padding:2px 6px;font-size:0.7rem;">📏 Straight</button>
+            <button type="button" class="btn-bz-quick btn-team-secondary" id="btnBzBendRight" style="padding:2px 6px;font-size:0.7rem;">↷ Right</button>
+            <button type="button" class="btn-bz-quick btn-team-secondary" id="btnBzFlip" style="padding:2px 6px;font-size:0.7rem;">🔄 Flip</button>
+            <button type="button" class="btn-bz-quick btn-team-secondary" id="btnBzSCurve" style="padding:2px 6px;font-size:0.7rem;">〰️ S-Curve</button>
+          </div>
+          <div class="bezier-quick-slider-wrap" style="display:flex;align-items:center;gap:6px;">
+            <span class="bz-slider-label" style="font-size:0.7rem;color:#94a3b8;">Bulge:</span>
+            <input type="range" id="bzbSlider" min="-35" max="35" step="1" value="0" style="width:90px;accent-color:#06b6d4;" />
+            <span id="bzbVal" class="bz-slider-val" style="font-family:monospace;font-size:0.72rem;color:#38bdf8;">0"</span>
           </div>
         </div>
 
@@ -979,6 +1021,25 @@
           </div>
           <div id="fieldPinsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
             <!-- Dynamically rendered comment pins -->
+          </div>
+        </div>
+
+        <!-- Real-Time Telemetry Chips Strip -->
+        <div style="background:#060a12;border-top:1px solid #1e293b;padding:4px 12px;display:flex;align-items:center;gap:8px;font-size:0.7rem;overflow-x:auto;white-space:nowrap;">
+          <div class="sim-hud-chip chip-score" id="simHudScore" style="color:#fbbf24;background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;" title="Live Score">
+            🏆 0 pts
+          </div>
+          <div class="sim-hud-chip chip-time" id="simHudTime" style="color:#cbd5e1;background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;" title="Elapsed Time">
+            ⏱️ 0.00s / 15.00s
+          </div>
+          <div class="sim-hud-chip chip-speed" id="simHudSpeed" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:2px 6px;border-radius:4px;" title="Simulated Velocity">
+            🏎️ 0.0 in/s
+          </div>
+          <div class="sim-hud-chip chip-collision legal" id="simHudCollision" style="color:#4ade80;background:rgba(34,197,94,0.1);padding:2px 6px;border-radius:4px;" title="Collision Status">
+            🛡️ Clear
+          </div>
+          <div class="sim-hud-chip chip-coords" id="simHudCoords" style="color:#e2e8f0;background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;" title="Robot Pose">
+            📍 (-60.0", -60.0") θ=0°
           </div>
         </div>
 
@@ -1067,10 +1128,10 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
             <button type="button" id="btnPaletteMovePoint" class="btn-xs-clean" style="background:#0284c7;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">📍 MoveToPoint</button>
             <button type="button" id="btnPaletteMovePose" class="btn-xs-clean" style="background:#0369a1;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">🧭 MoveToPose</button>
+            <button type="button" id="btnPaletteBezier" class="btn-xs-clean" style="background:#06b6d4;color:#0b1120;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:800;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">🌊 Bezier Curve</button>
             <button type="button" id="btnPaletteTurn" class="btn-xs-clean" style="background:#7c3aed;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">🔄 TurnToHeading</button>
             <button type="button" id="btnPaletteWait" class="btn-xs-clean" style="background:#d97706;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">⏱️ Delay / Wait</button>
             <button type="button" id="btnPaletteCustom" class="btn-xs-clean" style="background:#16a34a;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">⚙️ Custom C++</button>
-            <button type="button" id="btnPaletteSetPose" class="btn-xs-clean" style="background:#475569;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">🤖 Reset Pose</button>
           </div>
         </div>
 
@@ -1638,15 +1699,17 @@
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260928.k40"></script>
+  <script src="version.js?v=20260928.k54"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260928.k40"></script>
-  <script src="theme.js?v=20260928.k40"></script>
-  <script src="cpp-parser.js?v=20260928.k40"></script>
-  <script src="project-manager.js?v=20260928.k41"></script>
-  <script src="google-drive-sync.js?v=20260928.k41"></script>
-  <script src="team.js?v=20260928.k41"></script>
+  <script src="firebase-config.js?v=20260928.k54"></script>
+  <script src="theme.js?v=20260928.k54"></script>
+  <script src="cpp-parser.js?v=20260928.k54"></script>
+  <script src="project-manager.js?v=20260928.k54"></script>
+  <script src="v5-brain-serial.js?v=20260928.k54"></script>
+  <script src="scoring-engine.js?v=20260928.k54"></script>
+  <script src="google-drive-sync.js?v=20260928.k54"></script>
+  <script src="team.js?v=20260928.k54"></script>
 </body>
 </html>

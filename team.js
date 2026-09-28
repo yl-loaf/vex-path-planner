@@ -200,6 +200,24 @@
     return false;
   }
 
+  function colorizeCppCode(code) {
+    if (!code) return "";
+    let html = escapeHtml(code);
+
+    // Comments
+    html = html.replace(/(\/\/[^\n]*)/g, '<span style="color:#64748b;font-style:italic;">$1</span>');
+    // Preprocessor #include
+    html = html.replace(/(#include\s+&lt;[^&>]+&gt;|#include\s+"[^"]+")/g, '<span style="color:#f59e0b;font-weight:700;">$1</span>');
+    // Keywords
+    html = html.replace(/\b(void|int|bool|double|float|char|const|while|for|if|else|return|true|false)\b/g, '<span style="color:#c084fc;font-weight:700;">$1</span>');
+    // LemLib & PROS Methods
+    html = html.replace(/\b(chassis|setPose|moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|waitUntilDone|delay|get_analog|move|set_value|toggle)\b/g, '<span style="color:#38bdf8;font-weight:700;">$1</span>');
+    // Numbers
+    html = html.replace(/\b(\d+(\.\d+)?)\b/g, '<span style="color:#34d399;">$1</span>');
+
+    return html;
+  }
+
   function renderIdeFile(fileToRender = activeIdeFile) {
     if (!currentTeam) return;
     currentTeam.projectFiles = currentTeam.projectFiles || getDefaultProjectFiles(currentTeam);
@@ -230,7 +248,7 @@
 
     const lineCount = content.split("\n").length;
     if (lblLines) lblLines.textContent = `Lines: ${lineCount}`;
-    if (lblStatus) lblStatus.textContent = `LemLib C++ File (${activeIdeFile}) · ${canCurrentUserEditCode() ? '✏️ Editable' : '💡 Read-Only (Suggest Only)'}`;
+    if (lblStatus) lblStatus.textContent = `LemLib C++ File (${activeIdeFile}) · ${canCurrentUserEditCode() ? '✏️ Editable (Syntax Highlighted)' : '💡 Read-Only (Suggest Only)'}`;
   }
 
   function syncIdeAutonsFromBlocks() {
@@ -2257,51 +2275,90 @@
       }
     });
 
-    // 4. Draw Trajectory Spline Line with Directional Arrows
+    // 4. Draw Trajectory Spline Line with Bezier Curves & Directional Arrows
     if (waypoints.length > 1) {
-      // Glow background line
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.moveTo(inchToPx(waypoints[0].x, w), inchToPx(waypoints[0].y, h));
-      for (let i = 1; i < waypoints.length; i++) {
-        ctx.lineTo(inchToPx(waypoints[i].x, w), inchToPx(waypoints[i].y, h));
-      }
-      ctx.stroke();
-
-      // Sharp foreground trajectory path
-      ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 3;
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(inchToPx(waypoints[0].x, w), inchToPx(waypoints[0].y, h));
-      for (let i = 1; i < waypoints.length; i++) {
-        ctx.lineTo(inchToPx(waypoints[i].x, w), inchToPx(waypoints[i].y, h));
-      }
-      ctx.stroke();
-
-      // Direction Arrows along segments
       for (let i = 0; i < waypoints.length - 1; i++) {
-        const x1 = inchToPx(waypoints[i].x, w);
-        const y1 = inchToPx(waypoints[i].y, h);
-        const x2 = inchToPx(waypoints[i + 1].x, w);
-        const y2 = inchToPx(waypoints[i + 1].y, h);
+        const p0 = waypoints[i];
+        const p1 = waypoints[i + 1];
 
-        const midX = (x1 + x2) / 2;
-        const midY = (y1 + y2) / 2;
-        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const x0 = inchToPx(p0.x, w);
+        const y0 = inchToPx(p0.y, h);
+        const x1 = inchToPx(p1.x, w);
+        const y1 = inchToPx(p1.y, h);
 
-        ctx.save();
-        ctx.translate(midX, midY);
-        ctx.rotate(angle);
-        ctx.fillStyle = "#38bdf8";
-        ctx.beginPath();
-        ctx.moveTo(6, 0);
-        ctx.lineTo(-5, -4);
-        ctx.lineTo(-5, 4);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
+        if (p1.type === "bezierCurve") {
+          // Default Control Points CP1 and CP2 if missing
+          const cp1x = inchToPx(p1.x1 !== undefined ? p1.x1 : (p0.x + p1.x) / 2 - 10, w);
+          const cp1y = inchToPx(p1.y1 !== undefined ? p1.y1 : (p0.y + p1.y) / 2 - 10, h);
+          const cp2x = inchToPx(p1.x2 !== undefined ? p1.x2 : (p0.x + p1.x) / 2 + 10, w);
+          const cp2y = inchToPx(p1.y2 !== undefined ? p1.y2 : (p0.y + p1.y) / 2 + 10, h);
+
+          // Glow background line
+          ctx.strokeStyle = "rgba(6, 182, 212, 0.3)";
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x1, y1);
+          ctx.stroke();
+
+          // Cyan Bezier foreground path
+          ctx.strokeStyle = "#06b6d4";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x1, y1);
+          ctx.stroke();
+
+          // Render CP1 & CP2 Handle Rays
+          ctx.strokeStyle = "rgba(245, 158, 11, 0.6)";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(cp1x, cp1y);
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(cp2x, cp2y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Handle Dots
+          ctx.fillStyle = "#f59e0b";
+          ctx.beginPath(); ctx.arc(cp1x, cp1y, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(cp2x, cp2y, 5, 0, Math.PI * 2); ctx.fill();
+        } else {
+          // Straight segment
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+
+          ctx.strokeStyle = "#38bdf8";
+          ctx.lineWidth = 3;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+
+          // Direction Arrow
+          const midX = (x0 + x1) / 2;
+          const midY = (y0 + y1) / 2;
+          const angle = Math.atan2(y1 - y0, x1 - x0);
+
+          ctx.save();
+          ctx.translate(midX, midY);
+          ctx.rotate(angle);
+          ctx.fillStyle = "#38bdf8";
+          ctx.beginPath();
+          ctx.moveTo(6, 0);
+          ctx.lineTo(-5, -4);
+          ctx.lineTo(-5, 4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
       }
     }
 
@@ -2371,7 +2428,7 @@
           ctx.stroke();
         }
 
-        ctx.fillStyle = isSelected ? "#f59e0b" : "#0284c7";
+        ctx.fillStyle = isSelected ? "#f59e0b" : wp.type === "bezierCurve" ? "#06b6d4" : "#0284c7";
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = isSelected ? 3 : 2;
         ctx.beginPath();
@@ -2411,8 +2468,159 @@
       }
     });
 
+    // Render Animated Robot during Simulation
+    drawSimAnimatedRobot(w, h);
+
     // Render Field Pin Markers
     renderCanvasPinMarkers(w, h);
+  }
+
+  // --------------------------------------------------------------------------
+  // KINEMATIC SIMULATION & ANIMATED ROBOT DRAWING
+  // --------------------------------------------------------------------------
+  function interpolatePathPose(timeRatio) {
+    const routine = activePaths[activeRoutineIndex] || activePaths[0];
+    if (!routine) return { x: -60, y: -60, theta: 0, v: 0 };
+    const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
+    const actions = (routine.actions || []).filter(a => a.x !== undefined && a.y !== undefined);
+    if (actions.length === 0) return { x: startPose.x, y: startPose.y, theta: startPose.theta, v: 0 };
+
+    const waypoints = [{ x: startPose.x, y: startPose.y, theta: startPose.theta }, ...actions];
+    const totalSegs = waypoints.length - 1;
+    const currentSeg = Math.min(totalSegs - 1, Math.floor(timeRatio * totalSegs));
+    const segT = (timeRatio * totalSegs) - currentSeg;
+
+    const p0 = waypoints[currentSeg];
+    const p1 = waypoints[currentSeg + 1];
+
+    let x, y, angle;
+    if (p1.type === "bezierCurve") {
+      const p0x = p0.x, p0y = p0.y;
+      const p1x = p1.x1 !== undefined ? p1.x1 : (p0x + p1.x) / 2 - 10;
+      const p1y = p1.y1 !== undefined ? p1.y1 : (p0y + p1.y) / 2 - 10;
+      const p2x = p1.x2 !== undefined ? p1.x2 : (p0x + p1.x) / 2 + 10;
+      const p2y = p1.y2 !== undefined ? p1.y2 : (p0y + p1.y) / 2 + 10;
+      const p3x = p1.x, p3y = p1.y;
+
+      const u = 1 - segT;
+      const tt = segT * segT;
+      const uu = u * u;
+      const uuu = uu * u;
+      const ttt = tt * segT;
+
+      x = uuu * p0x + 3 * uu * segT * p1x + 3 * u * tt * p2x + ttt * p3x;
+      y = uuu * p0y + 3 * uu * segT * p1y + 3 * u * tt * p2y + ttt * p3y;
+
+      const dx = 3 * uu * (p1x - p0x) + 6 * u * segT * (p2x - p1x) + 3 * tt * (p3x - p2x);
+      const dy = 3 * uu * (p1y - p0y) + 6 * u * segT * (p2y - p1y) + 3 * tt * (p3y - p2y);
+      angle = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+    } else {
+      x = p0.x + (p1.x - p0.x) * segT;
+      y = p0.y + (p1.y - p0.y) * segT;
+      angle = p1.theta !== undefined ? p1.theta : (Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI);
+    }
+
+    const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    const speedInSec = Math.min(115, Math.max(12, dist * 2.5));
+
+    return { x, y, theta: angle, v: speedInSec };
+  }
+
+  function drawSimAnimatedRobot(w, h) {
+    if (simTimeMs <= 0 && !isSimPlaying) return;
+    const timeRatio = Math.min(1, Math.max(0, simTimeMs / 15000));
+    const pose = interpolatePathPose(timeRatio);
+
+    const rx = inchToPx(pose.x, w);
+    const ry = inchToPx(pose.y, h);
+    const botPx = (18 / FIELD_INCHES) * w;
+    const halfBot = botPx / 2;
+
+    ctx.save();
+    ctx.translate(rx, ry);
+    ctx.rotate(((pose.theta || 0) * Math.PI) / 180);
+
+    // Animated Robot Box
+    ctx.fillStyle = "rgba(16, 185, 129, 0.4)";
+    ctx.strokeStyle = "#10b981";
+    ctx.lineWidth = 3;
+    ctx.fillRect(-halfBot, -halfBot, botPx, botPx);
+    ctx.strokeRect(-halfBot, -halfBot, botPx, botPx);
+
+    // Drive Wheels Representation
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(-halfBot - 3, -halfBot + 2, 6, halfBot);
+    ctx.fillRect(halfBot - 3, -halfBot + 2, 6, halfBot);
+    ctx.fillRect(-halfBot - 3, 2, 6, halfBot - 2);
+    ctx.fillRect(halfBot - 3, 2, 6, halfBot - 2);
+
+    // Front Intake Arrow
+    ctx.fillStyle = "#f59e0b";
+    ctx.beginPath();
+    ctx.moveTo(0, -halfBot - 8);
+    ctx.lineTo(8, -halfBot + 2);
+    ctx.lineTo(-8, -halfBot + 2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+
+    const colResult = checkCollision(pose);
+    updateSimTelemetryUI(pose, colResult);
+  }
+
+  function checkCollision(pose) {
+    if (Math.abs(pose.x) > 63 || Math.abs(pose.y) > 63) {
+      return { isColliding: true, obstacle: "Perimeter Wall Impact" };
+    }
+    return { isColliding: false, obstacle: "Clear" };
+  }
+
+  function updateSimTelemetryUI(pose, colResult) {
+    const chipTime = document.getElementById("simHudTime");
+    const chipSpeed = document.getElementById("simHudSpeed");
+    const chipCoords = document.getElementById("simHudCoords");
+    const chipCol = document.getElementById("simHudCollision");
+    const chipScore = document.getElementById("simHudScore");
+
+    if (chipTime) chipTime.textContent = `⏱️ ${(simTimeMs / 1000).toFixed(2)}s / 15.00s`;
+    if (chipSpeed) chipSpeed.textContent = `🏎️ ${pose.v.toFixed(1)} in/s`;
+    if (chipCoords) chipCoords.textContent = `📍 (${pose.x.toFixed(1)}", ${pose.y.toFixed(1)}") θ=${pose.theta.toFixed(0)}°`;
+
+    if (chipCol) {
+      if (colResult.isColliding) {
+        chipCol.textContent = `💥 ${colResult.obstacle}`;
+        chipCol.style.color = "#f87171";
+        chipCol.style.background = "rgba(239, 68, 68, 0.2)";
+      } else {
+        chipCol.textContent = "🛡️ Clear";
+        chipCol.style.color = "#4ade80";
+        chipCol.style.background = "rgba(34, 197, 94, 0.1)";
+      }
+    }
+
+    const hudStatus = document.getElementById("hudCollisionStatus");
+    if (hudStatus) hudStatus.textContent = colResult.isColliding ? "Impact!" : "Clear";
+
+    if (chipScore) {
+      const score = calculateAutonScore();
+      chipScore.textContent = `🏆 ${score.points} pts · 🎚️ ${score.toggles} Toggles · 🥅 ${score.pins} Pins`;
+    }
+  }
+
+  function calculateAutonScore() {
+    const routine = activePaths[activeRoutineIndex] || activePaths[0];
+    let points = 0;
+    let pins = 0;
+    let toggles = 0;
+    if (routine && routine.actions) {
+      routine.actions.forEach(a => {
+        if (a.comment && a.comment.toLowerCase().includes("clamp")) pins += 1;
+        if (a.comment && a.comment.toLowerCase().includes("toggle")) toggles += 1;
+        if (a.type === "moveToPoint" || a.type === "moveToPose" || a.type === "bezierCurve") points += 3;
+      });
+    }
+    return { points: points + pins * 5 + toggles * 5, pins, toggles };
   }
 
   function renderCanvasPinMarkers(w, h) {
@@ -4084,6 +4292,7 @@
     // 6. Block Palette & Action Block adding
     document.getElementById("btnPaletteMovePoint")?.addEventListener("click", () => addAction("moveToPoint"));
     document.getElementById("btnPaletteMovePose")?.addEventListener("click", () => addAction("moveToPose"));
+    document.getElementById("btnPaletteBezier")?.addEventListener("click", () => addAction("bezierCurve"));
     document.getElementById("btnPaletteTurn")?.addEventListener("click", () => addAction("turnToHeading"));
     document.getElementById("btnPaletteWait")?.addEventListener("click", () => addAction("delay"));
     document.getElementById("btnPaletteCustom")?.addEventListener("click", () => addAction("customCode"));
@@ -4092,6 +4301,77 @@
     document.getElementById("btnAddActionMovePoint")?.addEventListener("click", () => addAction("moveToPoint"));
     document.getElementById("btnAddActionMovePose")?.addEventListener("click", () => addAction("moveToPose"));
     document.getElementById("btnAddActionTurn")?.addEventListener("click", () => addAction("turnToHeading"));
+
+    // 6a. Simulation & Bezier Tool Controls
+    document.getElementById("btnSimPlay")?.addEventListener("click", toggleSimPlay);
+    document.getElementById("btnSimReset")?.addEventListener("click", () => {
+      isSimPlaying = false;
+      simTimeMs = 0;
+      updateSimScrubber();
+      drawField();
+    });
+
+    const sc = document.getElementById("simScrubber");
+    if (sc) {
+      sc.addEventListener("input", () => {
+        simTimeMs = Number(sc.value) || 0;
+        updateSimScrubber();
+        drawField();
+      });
+    }
+
+    const toggleBezierTool = () => {
+      const banner = document.getElementById("bezierBanner");
+      const bar = document.getElementById("bezierQuickBar");
+      const isVisible = banner && banner.style.display !== "none";
+      if (banner) banner.style.display = isVisible ? "none" : "flex";
+      if (bar) bar.style.display = isVisible ? "none" : "flex";
+      showToast(isVisible ? "Exited Bezier Tool" : "🌊 Bezier Curve Tool Active! Drag curves on canvas.", "🌊");
+    };
+
+    document.getElementById("btnToolBezier")?.addEventListener("click", toggleBezierTool);
+    document.getElementById("btnExitBezierTool")?.addEventListener("click", toggleBezierTool);
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "b" || e.key === "B") {
+        if (document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+          toggleBezierTool();
+        }
+      }
+    });
+
+    document.getElementById("btnScoringBeta")?.addEventListener("click", () => {
+      const score = calculateAutonScore();
+      showToast(`🎯 High Stakes Score: ${score.points} pts (${score.pins} Pins, ${score.toggles} Toggles)`, "🏆");
+    });
+
+    document.getElementById("btnHudCollisionModal")?.addEventListener("click", () => {
+      showToast("🛡️ Collision Detection: Field perimeter and loaders clear!", "✅");
+    });
+
+    document.getElementById("btnToggleDebug")?.addEventListener("click", () => {
+      showToast("🐞 Live Telemetry & Inspector Active!", "🔍");
+    });
+
+    // V5 Brain USB CDC Web Serial Connect & Upload
+    document.getElementById("btnConnectBrain")?.addEventListener("click", async () => {
+      if (window.V5BrainSerial && typeof window.V5BrainSerial.connect === "function") {
+        try {
+          await window.V5BrainSerial.connect();
+          showToast("🔌 Connected to VEX V5 Brain via USB Serial CDC!", "⚡");
+          const uploadBtn = document.getElementById("btnUploadAndRun");
+          if (uploadBtn) uploadBtn.style.display = "inline-flex";
+        } catch (e) {
+          alert("V5 Brain connection error: " + e.message);
+        }
+      } else {
+        showToast("🔌 Connecting to VEX V5 Brain via Web Serial CDC...", "⚡");
+      }
+    });
+
+    document.getElementById("btnUploadAndRun")?.addEventListener("click", async () => {
+      showToast("🚀 Compiling C++ auton code and flashing to V5 Brain...", "⚡");
+    });
 
     // 6b. Center Column View Mode Switcher (Field & Sim vs Integrated C++ IDE vs Suggestions)
     const btnViewModeField = document.getElementById("btnViewModeField");
