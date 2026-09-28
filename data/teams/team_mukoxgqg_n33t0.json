@@ -1,0 +1,140 @@
+{
+  "teamId": "team_mukoxgqg_n33t0",
+  "teamCode": "VEX-217",
+  "joinSecret": "5f43bb1a46546ac89481068d3719f9d5",
+  "teamName": "99999X Apex",
+  "vexTeamNumber": "99999X",
+  "ownerEmail": "owner@example.com",
+  "createdAt": 1790566275832,
+  "updatedAt": 1790566275869,
+  "members": [
+    {
+      "email": "owner@example.com",
+      "displayName": "Team Owner",
+      "role": "Programmer",
+      "color": "#38bdf8",
+      "joinedAt": 1790566275832,
+      "photoURL": "",
+      "isOwner": true
+    }
+  ],
+  "pathPayload": {
+    "paths": [
+      {
+        "id": "p_gh",
+        "name": "LemLib Competition Auton",
+        "pose": {
+          "x": 0,
+          "y": 0,
+          "theta": 90
+        },
+        "actions": []
+      }
+    ]
+  },
+  "project": {
+    "name": "LemLib/LemLib"
+  },
+  "versionHistory": [
+    {
+      "id": "v_1790566275869_import",
+      "timestamp": 1790566275869,
+      "dateStr": "Sep 28, 2026 · 03:31:15 AM",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "authorRole": "Programmer",
+      "authorColor": "#38bdf8",
+      "actionSummary": "Imported GitHub repo \"LemLib/LemLib\" (master)",
+      "editType": "import_github",
+      "snapshot": {
+        "paths": [
+          {
+            "id": "p_gh",
+            "name": "LemLib Competition Auton",
+            "pose": {
+              "x": 0,
+              "y": 0,
+              "theta": 90
+            },
+            "actions": []
+          }
+        ]
+      },
+      "project": {
+        "name": "LemLib/LemLib",
+        "fileCount": 0
+      }
+    },
+    {
+      "id": "v_1790566275853_import",
+      "timestamp": 1790566275853,
+      "dateStr": "Sep 28, 2026 · 03:31:15 AM",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "authorRole": "Programmer",
+      "authorColor": "#38bdf8",
+      "actionSummary": "Imported active project \"Local VEX Auton Project\" (1 routines) from Visual Planner",
+      "editType": "import_planner",
+      "snapshot": {
+        "paths": [
+          {
+            "id": "p_rush",
+            "name": "Imported Planner Solo AWP",
+            "pose": {
+              "x": -48,
+              "y": -48,
+              "theta": 45
+            },
+            "actions": []
+          }
+        ]
+      },
+      "project": {
+        "name": "Local VEX Auton Project",
+        "fileCount": 0
+      }
+    },
+    {
+      "id": "v_1790566275832_init",
+      "timestamp": 1790566275832,
+      "dateStr": "Sep 28, 2026 · 03:31:15 AM",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "authorRole": "Programmer",
+      "authorColor": "#38bdf8",
+      "actionSummary": "Team initialized & autonomous workspace created",
+      "editType": "team_init",
+      "snapshot": null
+    }
+  ],
+  "comments": [
+    {
+      "id": "cmt_welcome",
+      "x": -24,
+      "y": -24,
+      "text": "📍 Strategy Tip: Clamp preload here before 12s mark. Drop pin comments anywhere on field to discuss routines!",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "authorRole": "Programmer",
+      "authorColor": "#38bdf8",
+      "timestamp": 1790566275832,
+      "resolved": false,
+      "replies": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "strat_plan_a",
+      "title": "Plan A: Center Mobile Goal Rush",
+      "description": "Primary match routine: Rush center goal, clamp alliance mogo, sweep 3 side rings, park before 14.5s.",
+      "targetRoutine": "Red Left Mogo Rush",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "createdAt": 1790566275832,
+      "status": "active",
+      "votes": {
+        "owner@example.com": "rocket"
+      }
+    }
+  ]
+}

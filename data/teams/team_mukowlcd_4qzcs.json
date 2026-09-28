@@ -1,0 +1,100 @@
+{
+  "teamId": "team_mukowlcd_4qzcs",
+  "teamCode": "VEX-939",
+  "teamName": "99999X Apex",
+  "vexTeamNumber": "99999X",
+  "ownerEmail": "owner@example.com",
+  "createdAt": 1790566235149,
+  "updatedAt": 1790566235149,
+  "members": [
+    {
+      "email": "owner@example.com",
+      "displayName": "Team Owner",
+      "role": "Programmer",
+      "color": "#38bdf8",
+      "joinedAt": 1790566235149,
+      "photoURL": "",
+      "isOwner": true
+    }
+  ],
+  "pathPayload": {
+    "paths": [
+      {
+        "id": "p_default",
+        "name": "Red Left Mogo Rush",
+        "pose": {
+          "x": -60,
+          "y": -60,
+          "theta": 0
+        },
+        "actions": [
+          {
+            "id": "a_1",
+            "type": "moveToPoint",
+            "x": -24,
+            "y": -24,
+            "timeout": 2000,
+            "maxSpeed": 115,
+            "earlyExitRange": 2,
+            "comment": "Rush alliance goal"
+          },
+          {
+            "id": "a_2",
+            "type": "moveToPose",
+            "x": 0,
+            "y": 48,
+            "theta": 90,
+            "timeout": 2500,
+            "lead": 0.6,
+            "comment": "Score preload in corner"
+          }
+        ]
+      }
+    ]
+  },
+  "project": null,
+  "versionHistory": [
+    {
+      "id": "v_1790566235149_init",
+      "timestamp": 1790566235149,
+      "dateStr": "Sep 28, 2026 · 03:30:35 AM",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "authorRole": "Programmer",
+      "authorColor": "#38bdf8",
+      "actionSummary": "Team initialized & autonomous workspace created",
+      "editType": "team_init",
+      "snapshot": null
+    }
+  ],
+  "comments": [
+    {
+      "id": "cmt_welcome",
+      "x": -24,
+      "y": -24,
+      "text": "📍 Strategy Tip: Clamp preload here before 12s mark. Drop pin comments anywhere on field to discuss routines!",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "authorRole": "Programmer",
+      "authorColor": "#38bdf8",
+      "timestamp": 1790566235149,
+      "resolved": false,
+      "replies": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "strat_plan_a",
+      "title": "Plan A: Center Mobile Goal Rush",
+      "description": "Primary match routine: Rush center goal, clamp alliance mogo, sweep 3 side rings, park before 14.5s.",
+      "targetRoutine": "Red Left Mogo Rush",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "createdAt": 1790566235149,
+      "status": "active",
+      "votes": {
+        "owner@example.com": "rocket"
+      }
+    }
+  ]
+}

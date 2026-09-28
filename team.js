@@ -306,9 +306,16 @@
         if (btnSignOut) btnSignOut.hidden = true;
         if (btnSwitchAccount) btnSwitchAccount.hidden = true;
         if (authUser) authUser.hidden = true;
-        document.getElementById("gateAuthRequired").style.display = "block";
-        document.getElementById("gateOptions").style.display = "none";
-        document.getElementById("modalTeamGate").style.display = "flex";
+        const gateAuth = document.getElementById("gateAuthRequired");
+        if (gateAuth) gateAuth.style.display = "block";
+        const gateOpts = document.getElementById("gateOptions");
+        if (gateOpts) gateOpts.style.display = "none";
+        const wsView = document.getElementById("teamWorkspaceView");
+        if (wsView) wsView.style.display = "none";
+        const setupView = document.getElementById("teamSetupJoinView");
+        if (setupView) setupView.style.display = "block";
+        const gateModal = document.getElementById("modalTeamGate");
+        if (gateModal) gateModal.style.display = "none";
       }
     }
 
@@ -403,24 +410,200 @@
   // --------------------------------------------------------------------------
   // TEAM DATA REST API & SSE STREAM
   // --------------------------------------------------------------------------
+  let otpIntervalTimer = null;
+  function setupTeamOtpTicker(otpInfo) {
+    if (otpIntervalTimer) clearInterval(otpIntervalTimer);
+    if (!currentTeam) return;
+
+    const lblTeamOtp = document.getElementById("lblTeamOtp");
+    const lblTeamOtpTimer = document.getElementById("lblTeamOtpTimer");
+
+    function renderOtpDisplay(otp, remainingSecs) {
+      if (lblTeamOtp) lblTeamOtp.textContent = otp || "------";
+      if (lblTeamOtpTimer) {
+        const m = Math.floor(Math.max(0, remainingSecs) / 60);
+        const s = Math.max(0, remainingSecs) % 60;
+        lblTeamOtpTimer.textContent = `(${m}:${s < 10 ? '0' : ''}${s})`;
+      }
+    }
+
+    let remaining = (otpInfo && typeof otpInfo.remainingSeconds === 'number') ? otpInfo.remainingSeconds : 300;
+    let currentOtp = (otpInfo && otpInfo.otp) || "------";
+    renderOtpDisplay(currentOtp, remaining);
+
+    otpIntervalTimer = setInterval(async () => {
+      remaining--;
+      if (remaining <= 0) {
+        // Fetch refreshed 5-minute rolling OTP from server
+        if (currentTeam && currentTeam.teamId && currentUser && currentUser.email) {
+          try {
+            const res = await fetch(`/api/team/otp?teamId=${encodeURIComponent(currentTeam.teamId)}&email=${encodeURIComponent(currentUser.email)}`);
+            const data = await res.json();
+            if (data.success && data.otp) {
+              currentOtp = data.otp;
+              remaining = data.remainingSeconds || 300;
+              currentTeam.otpInfo = data;
+            } else {
+              remaining = 300;
+            }
+          } catch (_) {
+            remaining = 300;
+          }
+        } else {
+          remaining = 300;
+        }
+      }
+      renderOtpDisplay(currentOtp, remaining);
+    }, 1000);
+  }
+
   async function checkUserTeam() {
     if (!currentUser || !currentUser.email) return;
     try {
       const res = await fetch(`/api/team/my-team?email=${encodeURIComponent(currentUser.email)}`);
       const data = await res.json();
+      const setupView = document.getElementById("teamSetupJoinView");
+      const wsView = document.getElementById("teamWorkspaceView");
+      const gate = document.getElementById("modalTeamGate");
+      if (gate) gate.style.display = "none";
+
       if (data.hasTeam && data.team) {
         currentTeam = data.team;
-        document.getElementById("modalTeamGate").style.display = "none";
+        if (setupView) setupView.style.display = "none";
+        if (wsView) wsView.style.display = "flex";
         onTeamLoaded();
       } else {
-        // Show Team Gate Dialog
+        // Show Team Setup & Join Page (user not in team)
         currentTeam = null;
-        document.getElementById("modalTeamGate").style.display = "flex";
+        if (wsView) wsView.style.display = "none";
+        if (setupView) setupView.style.display = "block";
       }
     } catch (err) {
       console.error("Error checking user team:", err);
       showToast("Network error checking team status", "⚠️");
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // OWNER PERMISSIONS & PROJECT IMPORT HELPERS
+  // --------------------------------------------------------------------------
+  function isCurrentUserOwner() {
+    if (!currentTeam || !currentUser || !currentUser.email) return false;
+    const myEmail = currentUser.email.toLowerCase().trim();
+    if (currentTeam.ownerEmail && currentTeam.ownerEmail.toLowerCase().trim() === myEmail) {
+      return true;
+    }
+    const myMember = (currentTeam.members || []).find(m => (m.email || "").toLowerCase().trim() === myEmail);
+    return Boolean(myMember && myMember.isOwner);
+  }
+
+  function updateOwnerControlsVisibility() {
+    const ownerWrap = document.getElementById("ownerImportWrap");
+    if (ownerWrap) {
+      ownerWrap.style.display = isCurrentUserOwner() ? "inline-block" : "none";
+    }
+  }
+
+  function getLocalPlannerPayload() {
+    let paths = [];
+    let project = null;
+
+    // 1. Try reading visual planner's localStorage
+    try {
+      const raw = localStorage.getItem("vex-lemlib-path-v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.paths) && parsed.paths.length > 0) {
+          paths = JSON.parse(JSON.stringify(parsed.paths));
+        }
+      }
+    } catch (_) {}
+
+    // 2. Try ProjectManager
+    try {
+      if (global.ProjectManager && global.ProjectManager.project) {
+        project = {
+          name: global.ProjectManager.project.name || "Override_LemLib_Bot",
+          files: global.ProjectManager.project.files || {}
+        };
+      } else {
+        const rawProj = localStorage.getItem("lemlib_active_project");
+        if (rawProj) {
+          project = JSON.parse(rawProj);
+        }
+      }
+    } catch (_) {}
+
+    // 3. Fallback to activePaths if nothing in storage
+    if (paths.length === 0 && activePaths && activePaths.length > 0) {
+      paths = JSON.parse(JSON.stringify(activePaths));
+    }
+
+    return {
+      paths,
+      project: project || { name: "Override_LemLib_Bot", files: {} }
+    };
+  }
+
+  function parseGithubAutonFiles(files, repoName) {
+    let detectedPaths = [];
+    if (!files) return detectedPaths;
+
+    const candidateFiles = ["src/autons.cpp", "src/auton.cpp", "src/main.cpp", "main.cpp"];
+    let matchedFile = null;
+    let code = "";
+
+    for (const cf of candidateFiles) {
+      if (files[cf]) {
+        matchedFile = cf;
+        code = files[cf];
+        break;
+      }
+    }
+
+    if (!code) {
+      for (const [fn, content] of Object.entries(files)) {
+        if (fn.endsWith(".cpp") && (content.includes("moveToPoint") || content.includes("turnToHeading") || content.includes("setPose"))) {
+          matchedFile = fn;
+          code = content;
+          break;
+        }
+      }
+    }
+
+    if (code && global.CppTranslator && typeof global.CppTranslator.parseCppAuton === "function") {
+      try {
+        const res = global.CppTranslator.parseCppAuton(code);
+        if (res) {
+          const fnName = matchedFile ? matchedFile.split("/").pop() : "autons.cpp";
+          detectedPaths.push({
+            id: "p_gh_" + Date.now(),
+            name: `${repoName || "GitHub"} Auton (${fnName})`,
+            pose: res.pose || { x: -60, y: -60, theta: 0 },
+            actions: res.actions && res.actions.length > 0 ? res.actions : [
+              { id: "a_1", type: "moveToPoint", x: 0, y: 0, timeout: 2000, comment: "Start auton" }
+            ]
+          });
+        }
+      } catch (err) {
+        console.warn("CppTranslator parsing notice:", err);
+      }
+    }
+
+    if (detectedPaths.length === 0) {
+      detectedPaths = [
+        {
+          id: "p_gh_default_" + Date.now(),
+          name: `${repoName || "GitHub"} Default Auton`,
+          pose: { x: -60, y: -60, theta: 0 },
+          actions: [
+            { id: "a_1", type: "moveToPoint", x: -24, y: -24, timeout: 2000, maxSpeed: 115, earlyExitRange: 2, comment: "Rush goal" }
+          ]
+        }
+      ];
+    }
+
+    return detectedPaths;
   }
 
   function onTeamLoaded() {
@@ -482,6 +665,22 @@
     renderVersionHistory();
     renderPresenceAvatars();
     drawField();
+    updateOwnerControlsVisibility();
+
+    // Start Live 5-Minute Rolling OTP ticker in ribbon
+    if (currentTeam.otpInfo) {
+      setupTeamOtpTicker(currentTeam.otpInfo);
+    } else if (currentTeam.teamId && currentUser && currentUser.email) {
+      fetch(`/api/team/otp?teamId=${encodeURIComponent(currentTeam.teamId)}&email=${encodeURIComponent(currentUser.email)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            currentTeam.otpInfo = data;
+            setupTeamOtpTicker(data);
+          }
+        })
+        .catch(() => {});
+    }
 
     // Start SSE stream and presence heartbeats
     connectSSE();
@@ -1627,6 +1826,22 @@
       };
     }
 
+    // 1b. Copy Team Invite & Live 5-Minute OTP button
+    const btnCopyOtp = document.getElementById("btnCopyTeamOtp");
+    if (btnCopyOtp) {
+      btnCopyOtp.onclick = () => {
+        if (!currentTeam || !currentTeam.teamCode) return;
+        const curOtp = currentTeam.otpInfo?.otp || document.getElementById("lblTeamOtp")?.textContent || "------";
+        const curTimer = document.getElementById("lblTeamOtpTimer")?.textContent || "";
+        const inviteText = `Join my VEX LemLib Team!\nTeam: ${currentTeam.teamName} (${currentTeam.vexTeamNumber || 'VEX'})\nTeam Code: ${currentTeam.teamCode}\nLive 5-Min Join OTP: ${curOtp} ${curTimer}\nJoin at: ${window.location.origin}/team.html`;
+        navigator.clipboard.writeText(inviteText).then(() => {
+          showToast(`📋 Copied Team Invite & live OTP (${curOtp})!`, "✅");
+        }).catch(() => {
+          prompt("Copy team invite with 5-minute OTP:", inviteText);
+        });
+      };
+    }
+
     // 2. Gateway Create vs Join tab switching
     const tabGateCreate = document.getElementById("tabGateCreate");
     const tabGateJoin = document.getElementById("tabGateJoin");
@@ -1657,10 +1872,32 @@
       };
     }
 
-    // 3. Create Team submit
+    // 3. Create Team submit & Initial Source Radio wiring
+    const radioSourceGroup = document.querySelectorAll('input[name="initProjectSource"]');
+    const gateGithubFields = document.getElementById("gateGithubFields");
+    const lblGatePlannerPreview = document.getElementById("lblGatePlannerPreview");
+
+    // Preview local planner info on gate load
+    try {
+      const local = getLocalPlannerPayload();
+      if (local && local.paths && local.paths.length > 0) {
+        if (lblGatePlannerPreview) {
+          lblGatePlannerPreview.textContent = `Found ${local.paths.length} local routine${local.paths.length === 1 ? '' : 's'} (${local.paths.map(p => p.name).slice(0, 2).join(', ')}${local.paths.length > 2 ? '...' : ''})`;
+        }
+      }
+    } catch (_) {}
+
+    radioSourceGroup.forEach(radio => {
+      radio.addEventListener("change", () => {
+        if (gateGithubFields) {
+          gateGithubFields.style.display = radio.value === "github" && radio.checked ? "block" : "none";
+        }
+      });
+    });
+
     const btnSubmitCreate = document.getElementById("btnSubmitCreateTeam");
     if (btnSubmitCreate) {
-      btnSubmitCreate.onclick = () => {
+      btnSubmitCreate.onclick = async () => {
         if (!currentUser || !currentUser.email) {
           alert("Please sign in with Google first.");
           return;
@@ -1668,44 +1905,97 @@
         const name = document.getElementById("txtNewTeamName")?.value.trim();
         const vexNum = document.getElementById("txtNewVexNumber")?.value.trim();
         const role = document.getElementById("selNewRole")?.value || "Programmer";
+        const selectedSource = document.querySelector('input[name="initProjectSource"]:checked')?.value || "template";
+
+        let pathsData = null;
+        let projectData = null;
+        let repoInfo = null;
 
         btnSubmitCreate.disabled = true;
+
+        if (selectedSource === "planner") {
+          btnSubmitCreate.textContent = "Importing Planner Routines...";
+          const local = getLocalPlannerPayload();
+          pathsData = { paths: local.paths };
+          projectData = local.project;
+        } else if (selectedSource === "github") {
+          const repoVal = document.getElementById("txtGateGithubRepo")?.value.trim();
+          const branchVal = document.getElementById("txtGateGithubBranch")?.value.trim();
+          const tokenVal = document.getElementById("txtGateGithubToken")?.value.trim();
+
+          if (!repoVal) {
+            alert("Please enter a GitHub repository (e.g. LemLib/LemLib or full URL)");
+            btnSubmitCreate.disabled = false;
+            return;
+          }
+          if (tokenVal) localStorage.setItem("github_pat_token", tokenVal);
+
+          btnSubmitCreate.textContent = "Cloning GitHub Repository...";
+          try {
+            const cloneRes = await fetch("/api/github/clone", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
+            });
+            const cloneData = await cloneRes.json();
+            if (!cloneData.success || !cloneData.files) {
+              throw new Error(cloneData.error || "Failed to clone GitHub repository");
+            }
+            const detectedPaths = parseGithubAutonFiles(cloneData.files, cloneData.repoName);
+            pathsData = { paths: detectedPaths };
+            projectData = { name: cloneData.repoName || repoVal, files: cloneData.files };
+            repoInfo = { repo: repoVal, branch: cloneData.branch, fileCount: cloneData.fileCount };
+          } catch (err) {
+            btnSubmitCreate.disabled = false;
+            btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
+            alert("GitHub clone failed: " + err.message);
+            return;
+          }
+        }
+
         btnSubmitCreate.textContent = "Creating Team...";
 
-        fetch("/api/team/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: currentUser.email,
-            displayName: currentUser.displayName,
-            teamName: name,
-            vexTeamNumber: vexNum,
-            role,
-            photoURL: currentUser.photoURL
-          })
-        })
-        .then(r => r.json())
-        .then(data => {
+        try {
+          const res = await fetch("/api/team/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              teamName: name,
+              vexTeamNumber: vexNum,
+              role,
+              photoURL: currentUser.photoURL,
+              pathsData,
+              projectData,
+              repoInfo
+            })
+          });
+          const data = await res.json();
           btnSubmitCreate.disabled = false;
           btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
           if (data.error) {
             alert(data.error);
           } else if (data.success && data.team) {
             currentTeam = data.team;
-            document.getElementById("modalTeamGate").style.display = "none";
+            const gate = document.getElementById("modalTeamGate");
+            if (gate) gate.style.display = "none";
+            const setupView = document.getElementById("teamSetupJoinView");
+            if (setupView) setupView.style.display = "none";
+            const wsView = document.getElementById("teamWorkspaceView");
+            if (wsView) wsView.style.display = "flex";
             showToast(`Team "${data.team.teamName}" created!`, "🎉");
             onTeamLoaded();
           }
-        })
-        .catch(err => {
+        } catch (err) {
           btnSubmitCreate.disabled = false;
           btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
           alert("Network error creating team: " + err.message);
-        });
+        }
       };
     }
 
-    // 4. Join Team submit
+    // 4. Join Team submit with 5-minute constantly changing OTP
     const btnSubmitJoin = document.getElementById("btnSubmitJoinTeam");
     if (btnSubmitJoin) {
       btnSubmitJoin.onclick = () => {
@@ -1714,15 +2004,20 @@
           return;
         }
         const code = document.getElementById("txtJoinCode")?.value.trim().toUpperCase();
+        const otp = document.getElementById("txtJoinOtp")?.value.trim();
         const role = document.getElementById("selJoinRole")?.value || "Driver";
 
         if (!code) {
-          alert("Please enter the 6-character team code (e.g. VEX-742)");
+          alert("Please enter the 6-character Team Code (e.g. VEX-742)");
+          return;
+        }
+        if (!otp) {
+          alert("Please enter the live 5-minute authorization OTP from an active teammate on the workspace.");
           return;
         }
 
         btnSubmitJoin.disabled = true;
-        btnSubmitJoin.textContent = "Joining Team...";
+        btnSubmitJoin.textContent = "Verifying OTP & Joining...";
 
         fetch("/api/team/join", {
           method: "POST",
@@ -1731,6 +2026,7 @@
             email: currentUser.email,
             displayName: currentUser.displayName,
             teamCode: code,
+            otp,
             role,
             photoURL: currentUser.photoURL
           })
@@ -1738,23 +2034,51 @@
         .then(r => r.json())
         .then(data => {
           btnSubmitJoin.disabled = false;
-          btnSubmitJoin.textContent = "🔗 Join Team Workspace";
+          btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
           if (data.error) {
             alert(data.error);
           } else if (data.success && data.team) {
             currentTeam = data.team;
-            document.getElementById("modalTeamGate").style.display = "none";
-            showToast(`Joined team "${data.team.teamName}"!`, "🎉");
+            const gate = document.getElementById("modalTeamGate");
+            if (gate) gate.style.display = "none";
+            const setupView = document.getElementById("teamSetupJoinView");
+            if (setupView) setupView.style.display = "none";
+            const wsView = document.getElementById("teamWorkspaceView");
+            if (wsView) wsView.style.display = "flex";
+            showToast(`Joined team "${data.team.teamName}"! You are authorized across sessions.`, "🎉");
             onTeamLoaded();
           }
         })
         .catch(err => {
           btnSubmitJoin.disabled = false;
-          btnSubmitJoin.textContent = "🔗 Join Team Workspace";
+          btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
           alert("Network error joining team: " + err.message);
         });
       };
     }
+
+    // Auto-detect pasted invite text containing both team code and OTP
+    const handleJoinPaste = (e) => {
+      const pasted = (e.clipboardData || window.clipboardData)?.getData("text") || "";
+      if (!pasted) return;
+      const codeMatch = pasted.match(/\b(VEX-[A-Z0-9]{3,6}|[A-Z0-9]{6})\b/i);
+      const otpMatch = pasted.match(/\b(\d{6})\b/);
+      if (codeMatch || otpMatch) {
+        if (codeMatch) {
+          const txtCode = document.getElementById("txtJoinCode");
+          if (txtCode) txtCode.value = codeMatch[1].toUpperCase();
+        }
+        if (otpMatch) {
+          const txtOtp = document.getElementById("txtJoinOtp");
+          if (txtOtp) txtOtp.value = otpMatch[1];
+        }
+        if (codeMatch && otpMatch) {
+          showToast("✨ Auto-filled Team Code and 5-min OTP from copied invite!", "📋");
+        }
+      }
+    };
+    document.getElementById("txtJoinCode")?.addEventListener("paste", handleJoinPaste);
+    document.getElementById("txtJoinOtp")?.addEventListener("paste", handleJoinPaste);
 
     // 5. Right panel tabs switching (Actions vs Versions)
     const tabBtnActions = document.getElementById("tabBtnActions");
@@ -1939,6 +2263,254 @@
     document.getElementById("btnAutoTuneCurve")?.addEventListener("click", () => {
       showToast("⚡ Auto-smoothed trajectory curvature for LemLib pure pursuit!", "✨");
     });
+
+    // 15. Owner Project Import Dropdown & Modals (Visual Planner vs GitHub)
+    const btnOwnerImport = document.getElementById("btnOwnerImport");
+    const ownerImportMenu = document.getElementById("ownerImportMenu");
+    const btnMenuImportPlanner = document.getElementById("btnMenuImportPlanner");
+    const btnMenuImportGithub = document.getElementById("btnMenuImportGithub");
+
+    if (btnOwnerImport && ownerImportMenu) {
+      btnOwnerImport.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = ownerImportMenu.style.display === "block";
+        ownerImportMenu.style.display = isOpen ? "none" : "block";
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#ownerImportWrap")) {
+          ownerImportMenu.style.display = "none";
+        }
+      });
+    }
+
+    // Modal: Import from Visual Planner
+    const modalPlannerImport = document.getElementById("modalPlannerImportConfirm");
+    const btnClosePlannerModal = document.getElementById("btnClosePlannerImportModal");
+    const btnCancelPlannerModal = document.getElementById("btnCancelPlannerImport");
+    const btnExecutePlannerImport = document.getElementById("btnExecutePlannerImport");
+    const plannerPreviewBox = document.getElementById("plannerImportPreviewBox");
+    const plannerImportStatus = document.getElementById("plannerImportStatus");
+
+    if (btnMenuImportPlanner) {
+      btnMenuImportPlanner.addEventListener("click", () => {
+        if (ownerImportMenu) ownerImportMenu.style.display = "none";
+        if (!isCurrentUserOwner()) {
+          alert("Only the team owner has permission to import projects into this team workspace.");
+          return;
+        }
+
+        const local = getLocalPlannerPayload();
+        if (plannerPreviewBox) {
+          if (local.paths && local.paths.length > 0) {
+            const routineList = local.paths.map(p => `<li><strong>${escapeHtml(p.name)}</strong> (${(p.actions || []).length} waypoints)</li>`).join("");
+            plannerPreviewBox.innerHTML = `
+              <div style="font-weight:700;color:#38bdf8;margin-bottom:6px;">📁 Active Project: ${escapeHtml(local.project?.name || "Local Planner Project")}</div>
+              <div style="color:#cbd5e1;margin-bottom:4px;">📍 Detected ${local.paths.length} Autonomous Routine${local.paths.length === 1 ? '' : 's'}:</div>
+              <ul style="margin:0 0 10px 18px;padding:0;color:#94a3b8;font-size:0.75rem;">${routineList}</ul>
+              <div style="font-size:0.72rem;color:#10b981;">✅ Ready to sync to your team workspace</div>
+            `;
+          } else {
+            plannerPreviewBox.innerHTML = `
+              <div style="color:#f59e0b;">⚠️ No custom autonomous routines found in local visual planner storage. Default starter template will be used.</div>
+            `;
+          }
+        }
+        if (plannerImportStatus) plannerImportStatus.style.display = "none";
+        if (modalPlannerImport) modalPlannerImport.style.display = "flex";
+      });
+    }
+
+    [btnClosePlannerModal, btnCancelPlannerModal].forEach(btn => {
+      btn?.addEventListener("click", () => {
+        if (modalPlannerImport) modalPlannerImport.style.display = "none";
+      });
+    });
+
+    if (btnExecutePlannerImport) {
+      btnExecutePlannerImport.addEventListener("click", async () => {
+        if (!currentTeam || !currentUser) return;
+        const local = getLocalPlannerPayload();
+
+        btnExecutePlannerImport.disabled = true;
+        btnExecutePlannerImport.textContent = "Importing...";
+        if (plannerImportStatus) {
+          plannerImportStatus.style.display = "block";
+          plannerImportStatus.style.background = "rgba(56, 189, 248, 0.1)";
+          plannerImportStatus.style.color = "#38bdf8";
+          plannerImportStatus.textContent = "⏳ Synchronizing visual planner routines with team workspace...";
+        }
+
+        try {
+          const res = await fetch("/api/team/import-project", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              teamId: currentTeam.teamId,
+              email: currentUser.email,
+              authorName: currentUser.displayName,
+              authorRole: currentUser.role,
+              source: "planner",
+              pathPayload: { paths: local.paths },
+              projectData: local.project
+            })
+          });
+          const data = await res.json();
+          btnExecutePlannerImport.disabled = false;
+          btnExecutePlannerImport.textContent = "🗺️ Confirm & Import to Team";
+
+          if (data.error) {
+            alert(data.error);
+            if (plannerImportStatus) {
+              plannerImportStatus.style.background = "rgba(239, 68, 68, 0.1)";
+              plannerImportStatus.style.color = "#f87171";
+              plannerImportStatus.textContent = `❌ ${data.error}`;
+            }
+          } else if (data.success && data.team) {
+            currentTeam = data.team;
+            if (currentTeam.pathPayload?.paths) {
+              activePaths = currentTeam.pathPayload.paths;
+              activeRoutineIndex = 0;
+            }
+            if (modalPlannerImport) modalPlannerImport.style.display = "none";
+            renderRoutinesSelector();
+            renderActionBlocks();
+            renderVersionHistory();
+            drawField();
+            showToast("🚀 Successfully imported project from Visual Planner!", "🎉");
+          }
+        } catch (err) {
+          btnExecutePlannerImport.disabled = false;
+          btnExecutePlannerImport.textContent = "🗺️ Confirm & Import to Team";
+          alert("Import failed: " + err.message);
+        }
+      });
+    }
+
+    // Modal: Import from GitHub
+    const modalGithubImport = document.getElementById("modalGithubImport");
+    const btnCloseGithubModal = document.getElementById("btnCloseGithubImportModal");
+    const btnCancelGithubModal = document.getElementById("btnCancelGithubImport");
+    const btnExecuteGithubImport = document.getElementById("btnExecuteGithubImport");
+    const txtImportGithubRepo = document.getElementById("txtImportGithubRepo");
+    const txtImportGithubBranch = document.getElementById("txtImportGithubBranch");
+    const txtImportGithubToken = document.getElementById("txtImportGithubToken");
+    const githubImportStatus = document.getElementById("githubImportStatus");
+
+    if (btnMenuImportGithub) {
+      btnMenuImportGithub.addEventListener("click", () => {
+        if (ownerImportMenu) ownerImportMenu.style.display = "none";
+        if (!isCurrentUserOwner()) {
+          alert("Only the team owner has permission to import projects into this team workspace.");
+          return;
+        }
+
+        const savedToken = localStorage.getItem("github_pat_token") || "";
+        if (txtImportGithubToken && savedToken) {
+          txtImportGithubToken.value = savedToken;
+        }
+        if (githubImportStatus) githubImportStatus.style.display = "none";
+        if (modalGithubImport) modalGithubImport.style.display = "flex";
+      });
+    }
+
+    [btnCloseGithubModal, btnCancelGithubModal].forEach(btn => {
+      btn?.addEventListener("click", () => {
+        if (modalGithubImport) modalGithubImport.style.display = "none";
+      });
+    });
+
+    if (btnExecuteGithubImport) {
+      btnExecuteGithubImport.addEventListener("click", async () => {
+        if (!currentTeam || !currentUser) return;
+        const repoVal = txtImportGithubRepo?.value.trim();
+        const branchVal = txtImportGithubBranch?.value.trim();
+        const tokenVal = txtImportGithubToken?.value.trim();
+
+        if (!repoVal) {
+          alert("Please enter a GitHub repository (e.g. LemLib/LemLib or full URL)");
+          return;
+        }
+
+        if (tokenVal) localStorage.setItem("github_pat_token", tokenVal);
+
+        btnExecuteGithubImport.disabled = true;
+        btnExecuteGithubImport.textContent = "Cloning...";
+        if (githubImportStatus) {
+          githubImportStatus.style.display = "block";
+          githubImportStatus.style.background = "rgba(56, 189, 248, 0.1)";
+          githubImportStatus.style.color = "#38bdf8";
+          githubImportStatus.textContent = `⏳ Connecting to GitHub and downloading "${repoVal}"...`;
+        }
+
+        try {
+          const cloneRes = await fetch("/api/github/clone", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
+          });
+          const cloneData = await cloneRes.json();
+          if (!cloneData.success || !cloneData.files) {
+            throw new Error(cloneData.error || "Failed to clone repository from GitHub");
+          }
+
+          if (githubImportStatus) {
+            githubImportStatus.textContent = `⚙️ Extracted ${cloneData.fileCount} files. Parsing C++ LemLib autons...`;
+          }
+
+          const detectedPaths = parseGithubAutonFiles(cloneData.files, cloneData.repoName);
+
+          const importRes = await fetch("/api/team/import-project", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              teamId: currentTeam.teamId,
+              email: currentUser.email,
+              authorName: currentUser.displayName,
+              authorRole: currentUser.role,
+              source: "github",
+              pathPayload: { paths: detectedPaths },
+              projectData: { name: cloneData.repoName || repoVal, files: cloneData.files },
+              repoInfo: { repo: repoVal, branch: cloneData.branch, fileCount: cloneData.fileCount }
+            })
+          });
+          const importData = await importRes.json();
+
+          btnExecuteGithubImport.disabled = false;
+          btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
+
+          if (importData.error) {
+            alert(importData.error);
+            if (githubImportStatus) {
+              githubImportStatus.style.background = "rgba(239, 68, 68, 0.1)";
+              githubImportStatus.style.color = "#f87171";
+              githubImportStatus.textContent = `❌ ${importData.error}`;
+            }
+          } else if (importData.success && importData.team) {
+            currentTeam = importData.team;
+            if (currentTeam.pathPayload?.paths) {
+              activePaths = currentTeam.pathPayload.paths;
+              activeRoutineIndex = 0;
+            }
+            if (modalGithubImport) modalGithubImport.style.display = "none";
+            renderRoutinesSelector();
+            renderActionBlocks();
+            renderVersionHistory();
+            drawField();
+            showToast(`🚀 Successfully cloned & imported ${repoVal} into team!`, "🎉");
+          }
+        } catch (err) {
+          btnExecuteGithubImport.disabled = false;
+          btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
+          if (githubImportStatus) {
+            githubImportStatus.style.background = "rgba(239, 68, 68, 0.1)";
+            githubImportStatus.style.color = "#f87171";
+            githubImportStatus.textContent = `❌ Error: ${err.message}`;
+          }
+          alert("GitHub import failed: " + err.message);
+        }
+      });
+    }
   }
 
   // --------------------------------------------------------------------------

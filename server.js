@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import JSZip from 'jszip';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -153,7 +154,12 @@ function getTeam(teamId) {
   try {
     const fp = getTeamFilePath(teamId);
     if (fs.existsSync(fp)) {
-      return JSON.parse(fs.readFileSync(fp, 'utf8'));
+      const team = JSON.parse(fs.readFileSync(fp, 'utf8'));
+      if (team && !team.joinSecret) {
+        team.joinSecret = crypto.randomBytes(16).toString('hex');
+        saveTeam(team);
+      }
+      return team;
     }
   } catch (e) {
     console.error(`Error reading team ${teamId}:`, e);
@@ -171,6 +177,66 @@ function saveTeam(team) {
     console.error('Error saving team:', e);
     return false;
   }
+}
+
+// ----------------------------------------------------------------------------
+// 5-Minute Constantly Changing Join OTP Engine
+// ----------------------------------------------------------------------------
+function getTeamJoinOtp(team, timestamp = Date.now()) {
+  if (!team) return '000000';
+  const secret = team.joinSecret || (String(team.teamId) + '_' + String(team.teamCode || 'VEX') + '_otp_secret');
+  // 5-minute rolling time window (300,000 ms)
+  const windowIndex = Math.floor(timestamp / (5 * 60 * 1000));
+  const hmac = crypto.createHmac('sha256', secret).update(String(windowIndex)).digest('hex');
+  // Generate a distinct 6-digit numeric OTP (100000 - 999999)
+  const num = (parseInt(hmac.substring(0, 8), 16) % 900000) + 100000;
+  return String(num);
+}
+
+function verifyTeamJoinOtp(team, otpCandidate) {
+  if (!team || !otpCandidate) return false;
+  const clean = String(otpCandidate).replace(/\s+/g, '').trim();
+  const now = Date.now();
+  // Check current window and previous window (grace period for rollover)
+  const currentOtp = getTeamJoinOtp(team, now);
+  const prevOtp = getTeamJoinOtp(team, now - 5 * 60 * 1000);
+  return clean === currentOtp || clean === prevOtp;
+}
+
+function getTeamOtpInfo(team) {
+  const now = Date.now();
+  const windowMs = 5 * 60 * 1000;
+  const currentOtp = getTeamJoinOtp(team, now);
+  const remainingMs = windowMs - (now % windowMs);
+  const remainingSeconds = Math.max(1, Math.floor(remainingMs / 1000));
+  return {
+    otp: currentOtp,
+    remainingSeconds,
+    expiresAt: now + remainingMs,
+    intervalSeconds: 300
+  };
+}
+
+function findTeamByOtp(otpCandidate) {
+  if (!otpCandidate) return null;
+  const clean = String(otpCandidate).replace(/\s+/g, '').trim();
+  try {
+    const files = fs.readdirSync(teamsDir);
+    for (const f of files) {
+      if (f.startsWith('team_') && f.endsWith('.json')) {
+        try {
+          const raw = fs.readFileSync(path.join(teamsDir, f), 'utf8');
+          const data = JSON.parse(raw);
+          if (data && verifyTeamJoinOtp(data, clean)) {
+            return data;
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.error('Error scanning teams by OTP:', e);
+  }
+  return null;
 }
 
 function findTeamByCode(code) {
@@ -444,6 +510,7 @@ app.get(['/api/team/my-team', '/vex-path-planner/api/team/my-team'], (req, res) 
   }
 
   const pMap = teamPresences.get(team.teamId) || new Map();
+  team.otpInfo = getTeamOtpInfo(team);
   res.json({
     hasTeam: true,
     teamId: team.teamId,
@@ -506,6 +573,7 @@ app.post(['/api/team/create', '/vex-path-planner/api/team/create'], (req, res) =
   const newTeam = {
     teamId,
     teamCode,
+    joinSecret: crypto.randomBytes(16).toString('hex'),
     teamName: (teamName && String(teamName).trim()) || 'VEX High Stakes Team',
     vexTeamNumber: (vexTeamNumber && String(vexTeamNumber).trim().toUpperCase()) || '99999X',
     ownerEmail: email.trim().toLowerCase(),
@@ -564,12 +632,38 @@ app.post(['/api/team/create', '/vex-path-planner/api/team/create'], (req, res) =
   saveUserTeamsIndex(userTeams);
 
   console.log(`[TeamCollab] Created team "${newTeam.teamName}" (${newTeam.teamCode}) for ${email}`);
+  newTeam.otpInfo = getTeamOtpInfo(newTeam);
   res.json({ success: true, team: newTeam });
 });
 
-// 3. Join an existing team by Team Code (Enforces 1 Gmail = 1 Team rule)
+// 2.5 Get current live 5-minute rolling OTP for team authorization
+app.get(['/api/team/otp', '/vex-path-planner/api/team/otp'], (req, res) => {
+  const { teamId, email } = req.query || {};
+  if (!teamId) {
+    return res.status(400).json({ error: 'Missing teamId parameter' });
+  }
+  const team = getTeam(teamId);
+  if (!team) {
+    return res.status(404).json({ error: 'Team not found' });
+  }
+  if (email) {
+    const clean = cleanEmailKey(email);
+    const isMember = (team.members || []).some(m => cleanEmailKey(m.email) === clean);
+    if (!isMember) {
+      return res.status(403).json({ error: 'Only authorized team members can view the live join OTP' });
+    }
+  }
+  res.json({
+    success: true,
+    teamId: team.teamId,
+    teamCode: team.teamCode,
+    ...getTeamOtpInfo(team)
+  });
+});
+
+// 3. Join an existing team by Team Code & 5-minute OTP (Enforces 1 Gmail = 1 Team rule)
 app.post(['/api/team/join', '/vex-path-planner/api/team/join'], (req, res) => {
-  const { email, displayName, teamCode, role, photoURL } = req.body || {};
+  const { email, displayName, teamCode, otp, role, photoURL } = req.body || {};
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'Valid Gmail address is required to join a team' });
   }
@@ -580,9 +674,29 @@ app.post(['/api/team/join', '/vex-path-planner/api/team/join'], (req, res) => {
   const clean = cleanEmailKey(email);
   const userTeams = getUserTeamsIndex();
 
-  const team = findTeamByCode(teamCode);
+  let team = findTeamByCode(teamCode);
+  if (!team && otp) {
+    team = findTeamByCode(otp);
+  }
+  if (!team) {
+    team = findTeamByOtp(otp || teamCode);
+  }
   if (!team) {
     return res.status(404).json({ error: `Team with code "${teamCode}" not found. Please verify the 6-character code with your teammate.` });
+  }
+
+  // Enforce 5-Minute Constantly Changing OTP requirement
+  const rawOtp = String(otp || (teamCode && /^\d{6}$/.test(String(teamCode).trim()) ? teamCode : '')).trim();
+  if (!rawOtp) {
+    return res.status(400).json({
+      error: `Security Authorization Required: You must enter the live 5-minute Join OTP code. Ask an active teammate on team "${team.teamName}" for the code displayed on their workspace.`
+    });
+  }
+
+  if (!verifyTeamJoinOtp(team, rawOtp)) {
+    return res.status(403).json({
+      error: `Invalid or expired Join OTP for team "${team.teamName}". Join codes rotate every 5 minutes for security. Please request the current live OTP from an active teammate.`
+    });
   }
 
   // Check if user is already registered in a different team
@@ -639,6 +753,7 @@ app.post(['/api/team/join', '/vex-path-planner/api/team/join'], (req, res) => {
   saveUserTeamsIndex(userTeams);
 
   console.log(`[TeamCollab] User ${email} joined team "${team.teamName}" (${team.teamCode}) as ${userRole}`);
+  team.otpInfo = getTeamOtpInfo(team);
   res.json({ success: true, team });
 });
 
@@ -1095,6 +1210,92 @@ app.post(['/api/team/version/restore', '/vex-path-planner/api/team/version/resto
     updatedAt: now
   });
 
+  res.json({ success: true, team });
+});
+
+// 12. Owner Project Import (from Visual Planner or GitHub)
+app.post(['/api/team/import-project', '/vex-path-planner/api/team/import-project'], (req, res) => {
+  const { teamId, email, authorName, authorRole, source, projectData, pathPayload, repoInfo } = req.body || {};
+  if (!teamId || !email) {
+    return res.status(400).json({ error: 'Missing teamId or email' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const cleanEmail = email.trim().toLowerCase();
+  const ownerEmail = (team.ownerEmail || '').trim().toLowerCase();
+
+  // Enforce: only the owner can import projects into the team workspace
+  const member = (team.members || []).find(m => (m.email || '').trim().toLowerCase() === cleanEmail);
+  const isOwner = cleanEmail === ownerEmail || Boolean(member && member.isOwner);
+
+  if (!isOwner) {
+    return res.status(403).json({
+      error: `Permission Denied: Only the team owner (${team.ownerEmail || 'Team Creator'}) has permission to import projects into this team workspace.`
+    });
+  }
+
+  const now = Date.now();
+  const userDisp = authorName || member?.displayName || email.split('@')[0];
+  const userRole = authorRole || member?.role || 'Programmer';
+
+  if (pathPayload && pathPayload.paths) {
+    team.pathPayload = pathPayload;
+  }
+  if (projectData) {
+    team.project = projectData;
+  }
+
+  let summary = 'Imported project into team workspace';
+  let editType = 'project_import';
+  if (source === 'github') {
+    const repoStr = repoInfo?.repo || repoInfo?.name || 'GitHub repository';
+    const branchStr = repoInfo?.branch ? ` (${repoInfo.branch})` : '';
+    summary = `Imported GitHub repo "${repoStr}"${branchStr}`;
+    editType = 'import_github';
+  } else if (source === 'planner') {
+    const projName = projectData?.name || 'Visual Planner';
+    const numRoutines = pathPayload?.paths?.length || 0;
+    summary = `Imported active project "${projName}" (${numRoutines} routines) from Visual Planner`;
+    editType = 'import_planner';
+  }
+
+  const importSnapshot = {
+    id: 'v_' + now + '_import',
+    timestamp: now,
+    dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    authorEmail: cleanEmail,
+    authorName: userDisp,
+    authorRole: userRole,
+    authorColor: getRoleColor(userRole),
+    actionSummary: summary,
+    editType,
+    snapshot: team.pathPayload,
+    project: team.project ? { name: team.project.name, fileCount: Object.keys(team.project.files || {}).length } : null
+  };
+
+  if (!team.versionHistory) team.versionHistory = [];
+  team.versionHistory.unshift(importSnapshot);
+  if (team.versionHistory.length > 500) team.versionHistory.length = 500;
+
+  team.updatedAt = now;
+  saveTeam(team);
+
+  // Broadcast to all team members in real-time
+  broadcastToTeam(teamId, 'sync', {
+    email: cleanEmail,
+    authorName: userDisp,
+    authorRole: userRole,
+    editType,
+    changeSummary: summary,
+    pathPayload: team.pathPayload,
+    projectPayload: team.project,
+    versionCount: team.versionHistory.length,
+    updatedAt: now
+  });
+
+  console.log(`[TeamCollab] Owner ${cleanEmail} imported project (${source}) for team "${team.teamName}"`);
   res.json({ success: true, team });
 });
 

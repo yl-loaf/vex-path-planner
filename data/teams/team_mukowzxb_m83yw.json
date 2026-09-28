@@ -1,0 +1,125 @@
+{
+  "teamId": "team_mukowzxb_m83yw",
+  "teamCode": "VEX-957",
+  "joinSecret": "11fa67ecc9a6653954839b75aa75ee98",
+  "teamName": "99999X Apex",
+  "vexTeamNumber": "99999X",
+  "ownerEmail": "owner@example.com",
+  "createdAt": 1790566254047,
+  "updatedAt": 1790566254138,
+  "members": [
+    {
+      "email": "owner@example.com",
+      "displayName": "Team Owner",
+      "role": "Programmer",
+      "color": "#38bdf8",
+      "joinedAt": 1790566254047,
+      "photoURL": "",
+      "isOwner": true
+    }
+  ],
+  "pathPayload": {
+    "paths": [
+      {
+        "id": "p_default",
+        "name": "Red Left Mogo Rush",
+        "pose": {
+          "x": -60,
+          "y": -60,
+          "theta": 0
+        },
+        "actions": [
+          {
+            "id": "a_1",
+            "type": "moveToPoint",
+            "x": -24,
+            "y": -24,
+            "timeout": 2000,
+            "maxSpeed": 115,
+            "earlyExitRange": 2,
+            "comment": "Rush alliance goal"
+          },
+          {
+            "id": "a_2",
+            "type": "moveToPose",
+            "x": 0,
+            "y": 48,
+            "theta": 90,
+            "timeout": 2500,
+            "lead": 0.6,
+            "comment": "Score preload in corner"
+          }
+        ]
+      }
+    ]
+  },
+  "project": null,
+  "versionHistory": [
+    {
+      "id": "v_1790566254138_leave",
+      "timestamp": 1790566254138,
+      "dateStr": "Sep 28, 2026 · 03:30:54 AM",
+      "authorEmail": "driver@example.com",
+      "authorName": "Team Driver",
+      "authorRole": "Driver",
+      "authorColor": "#10b981",
+      "actionSummary": "Team Driver left the team",
+      "editType": "member_leave",
+      "snapshot": null
+    },
+    {
+      "id": "v_1790566254121_join",
+      "timestamp": 1790566254121,
+      "dateStr": "Sep 28, 2026 · 03:30:54 AM",
+      "authorEmail": "driver@example.com",
+      "authorName": "Team Driver",
+      "authorRole": "Driver",
+      "authorColor": "#10b981",
+      "actionSummary": "Team Driver joined the team as Driver",
+      "editType": "member_join",
+      "snapshot": null
+    },
+    {
+      "id": "v_1790566254047_init",
+      "timestamp": 1790566254047,
+      "dateStr": "Sep 28, 2026 · 03:30:54 AM",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "authorRole": "Programmer",
+      "authorColor": "#38bdf8",
+      "actionSummary": "Team initialized & autonomous workspace created",
+      "editType": "team_init",
+      "snapshot": null
+    }
+  ],
+  "comments": [
+    {
+      "id": "cmt_welcome",
+      "x": -24,
+      "y": -24,
+      "text": "📍 Strategy Tip: Clamp preload here before 12s mark. Drop pin comments anywhere on field to discuss routines!",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "authorRole": "Programmer",
+      "authorColor": "#38bdf8",
+      "timestamp": 1790566254047,
+      "resolved": false,
+      "replies": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "strat_plan_a",
+      "title": "Plan A: Center Mobile Goal Rush",
+      "description": "Primary match routine: Rush center goal, clamp alliance mogo, sweep 3 side rings, park before 14.5s.",
+      "targetRoutine": "Red Left Mogo Rush",
+      "authorEmail": "owner@example.com",
+      "authorName": "Team Owner",
+      "createdAt": 1790566254047,
+      "status": "active",
+      "votes": {
+        "owner@example.com": "rocket"
+      }
+    }
+  ]
+}

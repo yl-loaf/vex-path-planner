@@ -580,6 +580,53 @@
       gap: 10px;
     }
 
+    /* Live 5-Minute OTP Badge */
+    .team-otp-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 8px;
+      padding: 3px 10px;
+      font-size: 0.76rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .team-otp-badge:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+    }
+
+    /* Dedicated Team Setup & Join Page Layout */
+    .team-setup-container {
+      max-width: 620px;
+      width: 100%;
+      margin: 36px auto;
+      padding: 0 16px;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .team-setup-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+    }
+    .team-setup-header {
+      padding: 24px 28px 18px;
+      border-bottom: 1px solid #1e293b;
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 70%);
+    }
+    .team-setup-body {
+      padding: 24px 28px;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     /* Modal Dialogs */
     .team-modal-backdrop {
       position: fixed;
@@ -752,40 +799,66 @@
     </div>
   </header>
 
-  <!-- Secondary Team Information Ribbon -->
-  <div class="team-sub-ribbon">
-    <div class="team-info-pill-group">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-weight:700;color:#f8fafc;" id="lblTeamName">Loading Team...</span>
-        <span style="color:#64748b;" id="lblVexNumber">(VEX Team #)</span>
-      </div>
+  <!-- TEAM WORKSPACE VIEW (Shown when user is in a team) -->
+  <div id="teamWorkspaceView" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+    <!-- Secondary Team Information Ribbon -->
+    <div class="team-sub-ribbon">
+      <div class="team-info-pill-group">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-weight:700;color:#f8fafc;" id="lblTeamName">Loading Team...</span>
+          <span style="color:#64748b;" id="lblVexNumber">(VEX Team #)</span>
+        </div>
 
-      <div class="team-code-badge" id="btnCopyTeamCode" title="Click to copy Team Code to share with teammates">
-        <span>📋 Code:</span>
-        <strong id="lblTeamCode">---</strong>
-        <span style="font-size:0.7rem;opacity:0.7;">(Click to Copy)</span>
-      </div>
+        <div class="team-code-badge" id="btnCopyTeamCode" title="Click to copy Team Code to share with teammates">
+          <span>📋 Code:</span>
+          <strong id="lblTeamCode">---</strong>
+          <span style="font-size:0.7rem;opacity:0.7;">(Click to Copy)</span>
+        </div>
 
-      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:700;" id="connStatusPill">
-        <span class="presence-pulse" style="position:static;display:inline-block;"></span>
-        <span id="connStatusText">Connected · Live Sync</span>
-      </div>
-    </div>
+        <div class="team-code-badge team-otp-badge" id="btnCopyTeamOtp" title="Live 5-minute rolling OTP for authorizing new teammates. Click to copy full invite." style="cursor:pointer;border-color:rgba(56,189,248,0.4);background:rgba(56,189,248,0.12);">
+          <span>🔐 Join OTP:</span>
+          <strong id="lblTeamOtp" style="font-family:ui-monospace,monospace;letter-spacing:1px;color:#38bdf8;font-size:0.82rem;">------</strong>
+          <span id="lblTeamOtpTimer" style="font-size:0.7rem;color:#f59e0b;font-weight:700;">(5:00)</span>
+          <span style="font-size:0.7rem;opacity:0.7;">(Click to Copy)</span>
+        </div>
 
-    <!-- Active Collaborator Presence Avatars -->
-    <div style="display:flex;align-items:center;gap:12px;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:0.72rem;color:var(--muted);">Online Now:</span>
-        <div class="team-presence-avatars" id="presenceAvatarsWrap">
-          <!-- Dynamically populated -->
+        <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:700;" id="connStatusPill">
+          <span class="presence-pulse" style="position:static;display:inline-block;"></span>
+          <span id="connStatusText">Connected · Live Sync</span>
         </div>
       </div>
 
-      <button type="button" class="btn-xs-clean" id="btnManageTeam" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;">
-        ⚙️ Team Settings
-      </button>
+      <!-- Active Collaborator Presence Avatars -->
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:0.72rem;color:var(--muted);">Online Now:</span>
+          <div class="team-presence-avatars" id="presenceAvatarsWrap">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Owner Project Import Menu (Only displayed if current user is team owner) -->
+        <div class="team-owner-import-wrap" id="ownerImportWrap" style="display:none;position:relative;">
+          <button type="button" id="btnOwnerImport" class="btn-xs-clean" style="background:#0284c7;border:1px solid #0369a1;color:#ffffff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;font-weight:700;display:inline-flex;align-items:center;gap:5px;">
+            <span>👑 Import Project ▾</span>
+          </button>
+          <div id="ownerImportMenu" class="team-dropdown-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#0f172a;border:1px solid #334155;border-radius:8px;box-shadow:0 12px 28px rgba(0,0,0,0.6);width:270px;z-index:300;overflow:hidden;">
+            <button type="button" id="btnMenuImportPlanner" class="team-dropdown-item" style="width:100%;text-align:left;padding:10px 14px;background:none;border:none;border-bottom:1px solid #1e293b;color:#f8fafc;cursor:pointer;font-size:0.78rem;display:flex;flex-direction:column;gap:3px;transition:background 0.15s ease;">
+              <span style="font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:6px;">🗺️ Import from Visual Planner</span>
+              <span style="font-size:0.68rem;color:#94a3b8;">Load current local planner routines &amp; project</span>
+            </button>
+            <button type="button" id="btnMenuImportGithub" class="team-dropdown-item" style="width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:#f8fafc;cursor:pointer;font-size:0.78rem;display:flex;flex-direction:column;gap:3px;transition:background 0.15s ease;">
+              <span style="font-weight:700;color:#4ade80;display:flex;align-items:center;gap:6px;">🐙 Import from GitHub</span>
+              <span style="font-size:0.68rem;color:#94a3b8;">Clone a PROS LemLib Git repository</span>
+            </button>
+          </div>
+        </div>
+
+        <button type="button" class="btn-xs-clean" id="btnManageTeam" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;">
+          ⚙️ Team Settings
+        </button>
+      </div>
     </div>
-  </div>
 
   <!-- Main 3-Column Collaborative Workspace -->
   <main class="team-workspace">
@@ -953,47 +1026,46 @@
       </div>
     </aside>
   </main>
+  </div>
 
   <!-- =========================================================================
-       MODALS & OVERLAYS
+       TEAM SETUP & JOIN PAGE (Shown when user is NOT in a team)
        ========================================================================= -->
-
-  <!-- TEAM GATEWAY MODAL (Shown if user is not in a team) -->
-  <div id="modalTeamGate" class="team-modal-backdrop" style="display:none;">
-    <div class="team-modal-content" style="max-width:540px;">
-      <div class="team-modal-header">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:1.4rem;">👥</span>
+  <div id="teamSetupJoinView" class="team-setup-container" style="display:none;">
+    <div class="team-setup-card">
+      <div class="team-setup-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:1.8rem;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;">👥</span>
           <div>
-            <h2 style="margin:0;font-size:1.15rem;color:#f8fafc;">Join or Create Team Workspace <span class="badge-beta-pill">BETA</span></h2>
-            <p style="margin:2px 0 0;font-size:0.75rem;color:#94a3b8;">Real-time multi-user editing, live cursors &amp; 500 version checkpoints</p>
+            <h1 style="margin:0;font-size:1.3rem;color:#f8fafc;font-weight:800;letter-spacing:-0.02em;">VEX Team Workspace Setup <span class="badge-beta-pill">BETA</span></h1>
+            <p style="margin:3px 0 0;font-size:0.78rem;color:#94a3b8;">Real-time multi-user editing, live field telemetry &amp; 500 version checkpoints</p>
           </div>
         </div>
       </div>
 
-      <div class="team-modal-body">
+      <div class="team-setup-body">
         <!-- Explanatory Banner -->
-        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.78rem;line-height:1.45;color:#cbd5e1;">
+        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.78rem;line-height:1.45;color:#cbd5e1;">
           <strong style="color:#38bdf8;">📌 Team Collaboration Rules:</strong><br/>
-          • Different Gmail addresses collaborate on the same team.<br/>
+          • Different Gmail addresses collaborate seamlessly on the same drive team.<br/>
           • <strong>1 Gmail account belongs to 1 team at a time</strong>.<br/>
-          • Complete audit history: tracks who edited what and stores up to <strong>500 version histories</strong>!
+          • Full audit history: tracks who edited what and retains up to <strong>500 version checkpoints</strong>!
         </div>
 
         <!-- Google Auth Warning if not signed in -->
-        <div id="gateAuthRequired" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px;margin-bottom:16px;text-align:center;">
-          <p style="margin:0 0 10px;font-size:0.82rem;color:#fbbf24;">Please sign in with your Google account to access your team workspace:</p>
+        <div id="gateAuthRequired" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:14px;margin-bottom:16px;text-align:center;">
+          <p style="margin:0 0 10px;font-size:0.82rem;color:#fbbf24;">Please sign in with your Google account to access or join your team workspace:</p>
           <button type="button" id="btnGateSignIn" class="btn-team-primary" style="margin:0 auto;">Sign in with Google</button>
         </div>
 
         <div id="gateOptions" style="display:block;">
           <!-- Tabs: Create vs Join -->
-          <div style="display:flex;border-bottom:1px solid #334155;margin-bottom:16px;">
-            <button type="button" id="tabGateCreate" class="btn-xs-clean" style="flex:1;padding:8px;border:none;background:rgba(56,189,248,0.12);color:#38bdf8;font-weight:700;font-size:0.82rem;border-bottom:2px solid #38bdf8;cursor:pointer;">
+          <div style="display:flex;border-bottom:1px solid #334155;margin-bottom:18px;">
+            <button type="button" id="tabGateCreate" class="btn-xs-clean" style="flex:1;padding:10px 8px;border:none;background:rgba(56,189,248,0.12);color:#38bdf8;font-weight:700;font-size:0.84rem;border-bottom:2px solid #38bdf8;cursor:pointer;">
               ✨ Create a Team
             </button>
-            <button type="button" id="tabGateJoin" class="btn-xs-clean" style="flex:1;padding:8px;border:none;background:transparent;color:#94a3b8;font-weight:700;font-size:0.82rem;border-bottom:2px solid transparent;cursor:pointer;">
-              🔗 Join by Team Code
+            <button type="button" id="tabGateJoin" class="btn-xs-clean" style="flex:1;padding:10px 8px;border:none;background:transparent;color:#94a3b8;font-weight:700;font-size:0.84rem;border-bottom:2px solid transparent;cursor:pointer;">
+              🔗 Join Existing Team (5-Min OTP)
             </button>
           </div>
 
@@ -1016,18 +1088,85 @@
                 <option value="Strategist">🎯 Strategist (Alliances &amp; Field Routing)</option>
               </select>
             </div>
-            <button type="button" id="btnSubmitCreateTeam" class="btn-team-primary" style="width:100%;justify-content:center;padding:10px;margin-top:6px;">
+
+            <!-- Project Source Options for Team Owner -->
+            <div class="form-group" style="margin-top:14px;">
+              <label style="display:flex;align-items:center;justify-content:space-between;">
+                <span>Initial Project &amp; Autonomous Source</span>
+                <span style="font-size:0.7rem;color:#38bdf8;font-weight:700;">Owner Option</span>
+              </label>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">
+                <label style="display:flex;align-items:flex-start;gap:8px;background:#090d16;border:1px solid #334155;border-radius:6px;padding:8px 10px;cursor:pointer;">
+                  <input type="radio" name="initProjectSource" id="srcRadioTemplate" value="template" checked style="margin-top:3px;" />
+                  <div>
+                    <div style="font-weight:700;font-size:0.8rem;color:#f8fafc;">✨ Default High Stakes Template</div>
+                    <div style="font-size:0.7rem;color:#94a3b8;">Clean autonomous routine with standard field start pose</div>
+                  </div>
+                </label>
+                <label style="display:flex;align-items:flex-start;gap:8px;background:#090d16;border:1px solid #334155;border-radius:6px;padding:8px 10px;cursor:pointer;">
+                  <input type="radio" name="initProjectSource" id="srcRadioPlanner" value="planner" style="margin-top:3px;" />
+                  <div>
+                    <div style="font-weight:700;font-size:0.8rem;color:#38bdf8;">🗺️ Import from Visual Planner</div>
+                    <div style="font-size:0.7rem;color:#94a3b8;" id="lblGatePlannerPreview">Load active routines and robot setup from your local planner</div>
+                  </div>
+                </label>
+                <label style="display:flex;align-items:flex-start;gap:8px;background:#090d16;border:1px solid #334155;border-radius:6px;padding:8px 10px;cursor:pointer;">
+                  <input type="radio" name="initProjectSource" id="srcRadioGithub" value="github" style="margin-top:3px;" />
+                  <div>
+                    <div style="font-weight:700;font-size:0.8rem;color:#4ade80;">🐙 Import from GitHub Repository</div>
+                    <div style="font-size:0.7rem;color:#94a3b8;">Clone an existing PROS LemLib robot code repository</div>
+                  </div>
+                </label>
+              </div>
+
+              <!-- GitHub Fields when GitHub source is selected in gate -->
+              <div id="gateGithubFields" style="display:none;background:#050911;border:1px solid #1e293b;border-radius:6px;padding:10px;margin-top:8px;">
+                <div style="margin-bottom:8px;">
+                  <label for="txtGateGithubRepo" style="font-size:0.74rem;">GitHub Repository</label>
+                  <input type="text" id="txtGateGithubRepo" class="form-input" placeholder="e.g. LemLib/LemLib or owner/robot-code" style="font-size:0.78rem;" />
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <div style="flex:1;">
+                    <label for="txtGateGithubBranch" style="font-size:0.74rem;">Branch (optional)</label>
+                    <input type="text" id="txtGateGithubBranch" class="form-input" placeholder="main" style="font-size:0.78rem;" />
+                  </div>
+                  <div style="flex:1;">
+                    <label for="txtGateGithubToken" style="font-size:0.74rem;">PAT Token (for private repos)</label>
+                    <input type="password" id="txtGateGithubToken" class="form-input" placeholder="Optional token" style="font-size:0.78rem;" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" id="btnSubmitCreateTeam" class="btn-team-primary" style="width:100%;justify-content:center;padding:12px;margin-top:8px;font-size:0.86rem;">
               🚀 Create Team &amp; Start Collaborating
             </button>
           </div>
 
           <!-- PANE 2: Join Team -->
           <div id="paneGateJoin" style="display:none;">
+            <!-- 5-Minute OTP Security Callout -->
+            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.76rem;line-height:1.45;color:#fef3c7;">
+              <strong style="color:#fbbf24;">🛡️ 5-Minute Authorization OTP Required:</strong><br/>
+              To enter an existing team, you must enter a constantly changing (every 5 min) code as an OTP to ensure that you are authorized to join. Ask an active teammate currently on the team workspace for their live code.<br/>
+              <span style="color:#6ee7b7;font-size:0.72rem;margin-top:4px;display:inline-block;">✅ After joining, you will not need to rejoin again unless you leave the team.</span>
+            </div>
+
             <div class="form-group">
-              <label for="txtJoinCode">6-Digit Team Code</label>
+              <label for="txtJoinCode">Team Code</label>
               <input type="text" id="txtJoinCode" class="form-input" placeholder="e.g. VEX-742" style="font-family:ui-monospace, monospace;text-transform:uppercase;font-size:1.1rem;letter-spacing:0.1em;text-align:center;" />
               <span style="font-size:0.7rem;color:#94a3b8;display:block;margin-top:4px;">Ask your teammate for their team code (displayed at the top of their screen).</span>
             </div>
+
+            <div class="form-group">
+              <label for="txtJoinOtp" style="display:flex;align-items:center;justify-content:space-between;">
+                <span>5-Minute Authorization OTP</span>
+                <span style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;padding:2px 8px;border-radius:10px;font-size:0.68rem;font-weight:700;">⏱️ Changes Every 5 Min</span>
+              </label>
+              <input type="text" id="txtJoinOtp" class="form-input" placeholder="e.g. 482910" maxlength="8" style="font-family:ui-monospace, monospace;font-size:1.15rem;letter-spacing:0.18em;text-align:center;color:#38bdf8;font-weight:700;" />
+              <span style="font-size:0.7rem;color:#94a3b8;display:block;margin-top:4px;">Ask an active team member on the workspace to provide the live 6-digit OTP from their header.</span>
+            </div>
+
             <div class="form-group">
               <label for="selJoinRole">Your Role on Drive Team</label>
               <select id="selJoinRole" class="form-input">
@@ -1037,14 +1176,21 @@
                 <option value="Strategist">🎯 Strategist (Alliances &amp; Field Routing)</option>
               </select>
             </div>
-            <button type="button" id="btnSubmitJoinTeam" class="btn-team-primary" style="width:100%;justify-content:center;padding:10px;margin-top:6px;">
-              🔗 Join Team Workspace
+            <button type="button" id="btnSubmitJoinTeam" class="btn-team-primary" style="width:100%;justify-content:center;padding:12px;margin-top:8px;font-size:0.86rem;">
+              🔗 Verify 5-Min OTP &amp; Join Team Workspace
             </button>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Hidden alias for backwards compatibility -->
+  <div id="modalTeamGate" style="display:none;"></div>
+
+  <!-- =========================================================================
+       MODALS & OVERLAYS
+       ========================================================================= -->
 
   <!-- VERSION DIFF & RESTORE MODAL -->
   <div id="modalVersionInspect" class="team-modal-backdrop" style="display:none;">
@@ -1108,6 +1254,81 @@
     </div>
   </div>
 
+  <!-- GITHUB REPOSITORY IMPORT MODAL (OWNER ONLY) -->
+  <div id="modalGithubImport" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content" style="max-width:560px;">
+      <div class="team-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.4rem;">🐙</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">Import Project from GitHub</h3>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;">Team Owner · Clones C++ LemLib routines into team workspace</p>
+          </div>
+        </div>
+        <button type="button" id="btnCloseGithubImportModal" class="btn-xs-clean" style="color:#94a3b8;background:none;border:none;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="team-modal-body">
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.76rem;color:#cbd5e1;line-height:1.4;">
+          <strong style="color:#4ade80;">👑 Owner Action:</strong> This will import the selected GitHub repository and parse its autonomous routines (from <code>src/autons.cpp</code> or <code>src/main.cpp</code>). Teammates will immediately receive the synced paths with a recorded version history checkpoint.
+        </div>
+        <div class="form-group">
+          <label for="txtImportGithubRepo">GitHub Repository</label>
+          <input type="text" id="txtImportGithubRepo" class="form-input" placeholder="e.g. LemLib/LemLib or https://github.com/myteam/robot-code" />
+          <span style="font-size:0.7rem;color:#94a3b8;display:block;margin-top:3px;">Accepts "owner/repo" or full GitHub URL.</span>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:12px;">
+          <div style="flex:1;">
+            <label for="txtImportGithubBranch">Git Branch</label>
+            <input type="text" id="txtImportGithubBranch" class="form-input" placeholder="main (or autodetect)" />
+          </div>
+          <div style="flex:1;">
+            <label for="txtImportGithubToken">GitHub Token (PAT)</label>
+            <input type="password" id="txtImportGithubToken" class="form-input" placeholder="Optional for public repos" />
+          </div>
+        </div>
+        <div id="githubImportStatus" style="font-size:0.75rem;padding:8px 12px;border-radius:6px;display:none;margin-bottom:8px;"></div>
+      </div>
+      <div class="team-modal-footer">
+        <button type="button" id="btnCancelGithubImport" class="btn-team-secondary">Cancel</button>
+        <button type="button" id="btnExecuteGithubImport" class="btn-team-primary" style="background:#16a34a;border-color:#22c55e;">
+          🚀 Clone &amp; Import Repository
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLANNER IMPORT CONFIRMATION MODAL (OWNER ONLY) -->
+  <div id="modalPlannerImportConfirm" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content" style="max-width:540px;">
+      <div class="team-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.4rem;">🗺️</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">Import from Visual Planner</h3>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;">Team Owner · Sync local routines into shared team workspace</p>
+          </div>
+        </div>
+        <button type="button" id="btnClosePlannerImportModal" class="btn-xs-clean" style="color:#94a3b8;background:none;border:none;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="team-modal-body">
+        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.78rem;color:#cbd5e1;line-height:1.45;">
+          <strong style="color:#38bdf8;">📌 Synchronize with Teammates:</strong><br/>
+          This action will read the active autonomous paths, robot configuration, and project files from your local browser's visual planner and update the shared team workspace for all connected members.
+        </div>
+        <div id="plannerImportPreviewBox" style="background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:12px;font-size:0.78rem;color:#e2e8f0;margin-bottom:12px;">
+          <!-- Dynamically populated with local routines summary -->
+        </div>
+        <div id="plannerImportStatus" style="font-size:0.75rem;padding:8px 12px;border-radius:6px;display:none;margin-bottom:8px;"></div>
+      </div>
+      <div class="team-modal-footer">
+        <button type="button" id="btnCancelPlannerImport" class="btn-team-secondary">Cancel</button>
+        <button type="button" id="btnExecutePlannerImport" class="btn-team-primary">
+          🗺️ Confirm &amp; Import to Team
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="teamToast" class="team-toast">
     <span id="teamToastIcon">✅</span>
@@ -1115,13 +1336,14 @@
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260928.k18"></script>
+  <script src="version.js?v=20260928.k22"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260928.k18"></script>
-  <script src="theme.js?v=20260928.k18"></script>
-  <script src="project-manager.js?v=20260928.k18"></script>
-  <script src="team.js?v=20260928.k18"></script>
+  <script src="firebase-config.js?v=20260928.k22"></script>
+  <script src="theme.js?v=20260928.k22"></script>
+  <script src="cpp-parser.js?v=20260928.k22"></script>
+  <script src="project-manager.js?v=20260928.k22"></script>
+  <script src="team.js?v=20260928.k22"></script>
 </body>
 </html>
