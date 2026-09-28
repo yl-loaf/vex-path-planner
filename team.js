@@ -2,6 +2,10 @@
 (function (global) {
   "use strict";
 
+  if (typeof window !== "undefined" && window.KeyboardEvent && !window.KeyboardEvent.prototype.getModifierState) {
+    window.KeyboardEvent.prototype.getModifierState = function() { return false; };
+  }
+
   // State
   let currentTeam = null;
   let currentUser = null; // { email, displayName, uid, photoURL, role }
@@ -163,6 +167,207 @@
     batteryVolts: 12.8,
     matchPeriod: "15s"
   };
+  let botConfig = bot;
+
+  // --------------------------------------------------------------------------
+  // AUTHENTIC LEMLIB KINEMATIC SIMULATION & MOTION CONTROL MATH
+  // --------------------------------------------------------------------------
+  class LemLibPID {
+    constructor(kp, ki, kd, windupRange = 0, signFlipReset = false) {
+      this.kp = kp;
+      this.ki = ki;
+      this.kd = kd;
+      this.windupRange = windupRange;
+      this.signFlipReset = signFlipReset;
+      this.integral = 0;
+      this.prevError = 0;
+    }
+
+    update(error) {
+      if (this.signFlipReset && ((error > 0 && this.prevError < 0) || (error < 0 && this.prevError > 0))) {
+        this.integral = 0;
+      }
+      if (this.windupRange === 0 || Math.abs(error) < this.windupRange) {
+        this.integral += error;
+      } else {
+        this.integral = 0;
+      }
+      const derivative = error - this.prevError;
+      this.prevError = error;
+      return this.kp * error + this.ki * this.integral + this.kd * derivative;
+    }
+
+    reset() {
+      this.integral = 0;
+      this.prevError = 0;
+    }
+  }
+
+  function normalizeAngle(ang) {
+    while (ang > 180) ang -= 360;
+    while (ang <= -180) ang += 360;
+    return ang;
+  }
+
+  function simulateAction(action, fromPose, customBot = botConfig) {
+    const b = customBot || botConfig || bot;
+    const vMax = 65; // max linear speed in/s (~600rpm on 3.25" wheels)
+    const dt = 0.01; // 10ms discrete integration loop
+    const timeoutS = Math.max(0.1, (action.timeout || 2000) / 1000);
+    const maxSpeed = Math.min(1.0, Math.max(0.1, (action.maxSpeed || 127) / 127));
+
+    const latPid = new LemLibPID(b.lateralKp || 8.0, 0, b.lateralKd || 30.0, 3.0);
+    const angPid = new LemLibPID(b.angularKp || 2.0, 0, b.angularKd || 10.0, 3.0);
+
+    let pose = { x: fromPose.x, y: fromPose.y, theta: fromPose.theta };
+    let vLin = 0;
+    let omegaDeg = 0;
+    let t = 0;
+    const points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
+
+    if (action.type === "wait" || action.type === "delay") {
+      const dur = Math.max(0.1, (action.timeout || action.delayMs || 500) / 1000);
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+      return { endPose: pose, path: points, duration: dur };
+    }
+
+    if (action.type === "turnToHeading" || action.type === "turnToPoint") {
+      let targetHeading = action.theta !== undefined ? action.theta : (action.heading || 0);
+      if (action.type === "turnToPoint") {
+        targetHeading = (Math.atan2(action.y - pose.y, action.x - pose.x) * 180 / Math.PI) + 90;
+      }
+
+      while (t < timeoutS) {
+        const angError = normalizeAngle(targetHeading - pose.theta);
+        if (Math.abs(angError) < 1.0 && Math.abs(omegaDeg) < 5) break;
+
+        const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
+        omegaDeg = (angOutput / 127) * 360; // deg/s
+        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+        t += dt;
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg });
+      }
+      return { endPose: pose, path: points, duration: t };
+    }
+
+    if (action.type === "bezierCurve") {
+      const p0 = { x: fromPose.x, y: fromPose.y };
+      const p1 = { x: action.x1 !== undefined ? action.x1 : (p0.x + action.x) / 2 - 10, y: action.y1 !== undefined ? action.y1 : (p0.y + action.y) / 2 - 10 };
+      const p2 = { x: action.x2 !== undefined ? action.x2 : (p0.x + action.x) / 2 + 10, y: action.y2 !== undefined ? action.y2 : (p0.y + action.y) / 2 + 10 };
+      const p3 = { x: action.x, y: action.y };
+
+      const totalDist = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+      const estDur = Math.max(0.4, totalDist / (vMax * maxSpeed));
+      const steps = Math.max(10, Math.round(estDur / dt));
+
+      for (let s = 1; s <= steps; s++) {
+        const u = s / steps;
+        const inv = 1 - u;
+        const bx = inv * inv * inv * p0.x + 3 * inv * inv * u * p1.x + 3 * inv * u * u * p2.x + u * u * u * p3.x;
+        const by = inv * inv * inv * p0.y + 3 * inv * inv * u * p1.y + 3 * inv * u * u * p2.y + u * u * u * p3.y;
+
+        const dx = 3 * inv * inv * (p1.x - p0.x) + 6 * inv * u * (p2.x - p1.x) + 3 * u * u * (p3.x - p2.x);
+        const dy = 3 * inv * inv * (p1.y - p0.y) + 6 * inv * u * (p2.y - p1.y) + 3 * u * u * (p3.y - p2.y);
+        const heading = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+
+        t += dt;
+        pose.x = bx;
+        pose.y = by;
+        pose.theta = heading;
+        vLin = vMax * maxSpeed;
+        points.push({ x: bx, y: by, theta: heading, t, vLin, omegaDeg: 0 });
+      }
+      return { endPose: pose, path: points, duration: t };
+    }
+
+    // Default: moveToPoint / moveToPose
+    const target = { x: action.x, y: action.y, theta: action.theta !== undefined ? action.theta : pose.theta };
+    while (t < timeoutS) {
+      const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
+      const targetHeading = (Math.atan2(target.y - pose.y, target.x - pose.x) * 180 / Math.PI) + 90;
+      const angError = normalizeAngle(targetHeading - pose.theta);
+
+      if (dist < (action.earlyExitRange || 1.5) && Math.abs(angError) < 3.0) break;
+
+      const latOutput = Math.max(-127, Math.min(127, latPid.update(dist))) * maxSpeed;
+      const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
+
+      vLin = (latOutput / 127) * vMax;
+      omegaDeg = (angOutput / 127) * 360;
+
+      const rad = ((pose.theta - 90) * Math.PI) / 180;
+      pose.x += Math.cos(rad) * vLin * dt;
+      pose.y -= Math.sin(rad) * vLin * dt;
+      pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+
+      t += dt;
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vLin), omegaDeg });
+    }
+
+    if (action.type === "moveToPose" && action.theta !== undefined) {
+      pose.theta = action.theta;
+    }
+
+    return { endPose: pose, path: points, duration: t };
+  }
+
+  function simulateRoutine(routine, botObj = botConfig) {
+    if (!routine) return { path: [], duration: 0 };
+    const b = botObj || botConfig || bot;
+    const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
+    let curPose = { ...startPose };
+    let fullPath = [{ x: curPose.x, y: curPose.y, theta: curPose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
+    let totalTime = 0;
+
+    (routine.actions || []).forEach(act => {
+      const seg = simulateAction(act, curPose, b);
+      if (seg && seg.path) {
+        seg.path.forEach((pt, i) => {
+          if (i > 0) fullPath.push({ ...pt, t: pt.t + totalTime });
+        });
+        curPose = { ...seg.endPose };
+        totalTime += seg.duration;
+      }
+    });
+
+    return { path: fullPath, duration: totalTime };
+  }
+
+  function getSimPoseAtTime(simResult, timeMs) {
+    const timeS = timeMs / 1000;
+    const pts = (simResult && simResult.path) || [];
+    if (pts.length === 0) return { x: -60, y: -60, theta: 0, v: 0 };
+    if (timeS <= 0) return { x: pts[0].x, y: pts[0].y, theta: pts[0].theta, v: pts[0].vLin || 0 };
+    if (timeS >= simResult.duration) {
+      const last = pts[pts.length - 1];
+      return { x: last.x, y: last.y, theta: last.theta, v: 0 };
+    }
+
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (timeS >= pts[i].t && timeS <= pts[i + 1].t) {
+        const segT = (timeS - pts[i].t) / (pts[i + 1].t - pts[i].t);
+        const p0 = pts[i];
+        const p1 = pts[i + 1];
+        return {
+          x: p0.x + (p1.x - p0.x) * segT,
+          y: p0.y + (p1.y - p0.y) * segT,
+          theta: p0.theta + (p1.theta - p0.theta) * segT,
+          v: p0.vLin + (p1.vLin - p0.vLin) * segT
+        };
+      }
+    }
+    const last = pts[pts.length - 1];
+    return { x: last.x, y: last.y, theta: last.theta, v: 0 };
+  }
+
+  function interpolatePathPose(timeRatio) {
+    const routine = activePaths[activeRoutineIndex] || activePaths[0];
+    if (!routine) return { x: -60, y: -60, theta: 0, v: 0 };
+    const simRes = simulateRoutine(routine, botConfig);
+    const totalDuration = (simRes && simRes.duration > 0) ? simRes.duration : 15.0;
+    const timeMs = Math.max(0, Math.min(1, timeRatio)) * totalDuration * 1000;
+    return getSimPoseAtTime(simRes, timeMs);
+  }
 
   let collisionConfig = {
     enabled: true,
@@ -3756,14 +3961,14 @@
           // Render CP1 & CP2 Handle Rays
           ctx.strokeStyle = "rgba(245, 158, 11, 0.6)";
           ctx.lineWidth = 1.5;
-          ctx.setLineDash([4, 4]);
+          if (ctx.setLineDash) ctx.setLineDash([4, 4]);
           ctx.beginPath();
           ctx.moveTo(x0, y0);
           ctx.lineTo(cp1x, cp1y);
           ctx.moveTo(x1, y1);
           ctx.lineTo(cp2x, cp2y);
           ctx.stroke();
-          ctx.setLineDash([]);
+          if (ctx.setLineDash) ctx.setLineDash([]);
 
           // Handle Dots
           ctx.fillStyle = "#f59e0b";
@@ -3780,7 +3985,7 @@
 
           ctx.strokeStyle = "#38bdf8";
           ctx.lineWidth = 3;
-          ctx.setLineDash([]);
+          if (ctx.setLineDash) ctx.setLineDash([]);
           ctx.beginPath();
           ctx.moveTo(x0, y0);
           ctx.lineTo(x1, y1);
@@ -3920,195 +4125,8 @@
   }
 
   // --------------------------------------------------------------------------
-  // AUTHENTIC LEMLIB KINEMATIC SIMULATION & ROBOT DRAWING
+  // ROBOT SIMULATION ANIMATION
   // --------------------------------------------------------------------------
-  class LemLibPID {
-    constructor(kp, ki, kd, windupRange = 0, signFlipReset = false) {
-      this.kp = kp;
-      this.ki = ki;
-      this.kd = kd;
-      this.windupRange = windupRange;
-      this.signFlipReset = signFlipReset;
-      this.integral = 0;
-      this.prevError = 0;
-    }
-
-    update(error) {
-      if (this.signFlipReset && ((error > 0 && this.prevError < 0) || (error < 0 && this.prevError > 0))) {
-        this.integral = 0;
-      }
-      if (this.windupRange === 0 || Math.abs(error) < this.windupRange) {
-        this.integral += error;
-      } else {
-        this.integral = 0;
-      }
-      const derivative = error - this.prevError;
-      this.prevError = error;
-      return this.kp * error + this.ki * this.integral + this.kd * derivative;
-    }
-
-    reset() {
-      this.integral = 0;
-      this.prevError = 0;
-    }
-  }
-
-  function normalizeAngle(ang) {
-    while (ang > 180) ang -= 360;
-    while (ang <= -180) ang += 360;
-    return ang;
-  }
-
-  function simulateAction(action, fromPose, customBot = botConfig) {
-    const b = customBot || botConfig;
-    const vMax = 65; // max linear speed in/s (~600rpm on 3.25" wheels)
-    const dt = 0.01; // 10ms discrete integration loop
-    const timeoutS = Math.max(0.1, (action.timeout || 2000) / 1000);
-    const maxSpeed = Math.min(1.0, Math.max(0.1, (action.maxSpeed || 127) / 127));
-
-    const latPid = new LemLibPID(b.lateralKp || 8.0, 0, b.lateralKd || 30.0, 3.0);
-    const angPid = new LemLibPID(b.angularKp || 2.0, 0, b.angularKd || 10.0, 3.0);
-
-    let pose = { x: fromPose.x, y: fromPose.y, theta: fromPose.theta };
-    let vLin = 0;
-    let omegaDeg = 0;
-    let t = 0;
-    const points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
-
-    if (action.type === "wait" || action.type === "delay") {
-      const dur = Math.max(0.1, (action.timeout || action.delayMs || 500) / 1000);
-      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
-      return { endPose: pose, path: points, duration: dur };
-    }
-
-    if (action.type === "turnToHeading" || action.type === "turnToPoint") {
-      let targetHeading = action.theta !== undefined ? action.theta : (action.heading || 0);
-      if (action.type === "turnToPoint") {
-        targetHeading = (Math.atan2(action.y - pose.y, action.x - pose.x) * 180 / Math.PI) + 90;
-      }
-
-      while (t < timeoutS) {
-        const angError = normalizeAngle(targetHeading - pose.theta);
-        if (Math.abs(angError) < 1.0 && Math.abs(omegaDeg) < 5) break;
-
-        const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
-        omegaDeg = (angOutput / 127) * 360; // deg/s
-        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
-        t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg });
-      }
-      return { endPose: pose, path: points, duration: t };
-    }
-
-    if (action.type === "bezierCurve") {
-      const p0 = { x: fromPose.x, y: fromPose.y };
-      const p1 = { x: action.x1 !== undefined ? action.x1 : (p0.x + action.x) / 2 - 10, y: action.y1 !== undefined ? action.y1 : (p0.y + action.y) / 2 - 10 };
-      const p2 = { x: action.x2 !== undefined ? action.x2 : (p0.x + action.x) / 2 + 10, y: action.y2 !== undefined ? action.y2 : (p0.y + action.y) / 2 + 10 };
-      const p3 = { x: action.x, y: action.y };
-
-      const totalDist = Math.hypot(p3.x - p0.x, p3.y - p0.y);
-      const estDur = Math.max(0.4, totalDist / (vMax * maxSpeed));
-      const steps = Math.max(10, Math.round(estDur / dt));
-
-      for (let s = 1; s <= steps; s++) {
-        const u = s / steps;
-        const inv = 1 - u;
-        const bx = inv * inv * inv * p0.x + 3 * inv * inv * u * p1.x + 3 * inv * u * u * p2.x + u * u * u * p3.x;
-        const by = inv * inv * inv * p0.y + 3 * inv * inv * u * p1.y + 3 * inv * u * u * p2.y + u * u * u * p3.y;
-
-        const dx = 3 * inv * inv * (p1.x - p0.x) + 6 * inv * u * (p2.x - p1.x) + 3 * u * u * (p3.x - p2.x);
-        const dy = 3 * inv * inv * (p1.y - p0.y) + 6 * inv * u * (p2.y - p1.y) + 3 * u * u * (p3.y - p2.y);
-        const heading = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
-
-        t += dt;
-        pose.x = bx;
-        pose.y = by;
-        pose.theta = heading;
-        vLin = vMax * maxSpeed;
-        points.push({ x: bx, y: by, theta: heading, t, vLin, omegaDeg: 0 });
-      }
-      return { endPose: pose, path: points, duration: t };
-    }
-
-    // Default: moveToPoint / moveToPose
-    const target = { x: action.x, y: action.y, theta: action.theta !== undefined ? action.theta : pose.theta };
-    while (t < timeoutS) {
-      const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
-      const targetHeading = (Math.atan2(target.y - pose.y, target.x - pose.x) * 180 / Math.PI) + 90;
-      const angError = normalizeAngle(targetHeading - pose.theta);
-
-      if (dist < (action.earlyExitRange || 1.5) && Math.abs(angError) < 3.0) break;
-
-      const latOutput = Math.max(-127, Math.min(127, latPid.update(dist))) * maxSpeed;
-      const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
-
-      vLin = (latOutput / 127) * vMax;
-      omegaDeg = (angOutput / 127) * 360;
-
-      const rad = ((pose.theta - 90) * Math.PI) / 180;
-      pose.x += Math.cos(rad) * vLin * dt;
-      pose.y -= Math.sin(rad) * vLin * dt;
-      pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
-
-      t += dt;
-      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vLin), omegaDeg });
-    }
-
-    if (action.type === "moveToPose" && action.theta !== undefined) {
-      pose.theta = action.theta;
-    }
-
-    return { endPose: pose, path: points, duration: t };
-  }
-
-  function simulateRoutine(routine, bot = botConfig) {
-    if (!routine) return { path: [], duration: 0 };
-    const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
-    let curPose = { ...startPose };
-    let fullPath = [{ x: curPose.x, y: curPose.y, theta: curPose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
-    let totalTime = 0;
-
-    (routine.actions || []).forEach(act => {
-      const seg = simulateAction(act, curPose, bot);
-      if (seg && seg.path) {
-        seg.path.forEach((pt, i) => {
-          if (i > 0) fullPath.push({ ...pt, t: pt.t + totalTime });
-        });
-        curPose = { ...seg.endPose };
-        totalTime += seg.duration;
-      }
-    });
-
-    return { path: fullPath, duration: totalTime };
-  }
-
-  function getSimPoseAtTime(simResult, timeMs) {
-    const timeS = timeMs / 1000;
-    const pts = simResult.path || [];
-    if (pts.length === 0) return { x: -60, y: -60, theta: 0, v: 0 };
-    if (timeS <= 0) return { x: pts[0].x, y: pts[0].y, theta: pts[0].theta, v: pts[0].vLin || 0 };
-    if (timeS >= simResult.duration) {
-      const last = pts[pts.length - 1];
-      return { x: last.x, y: last.y, theta: last.theta, v: 0 };
-    }
-
-    for (let i = 0; i < pts.length - 1; i++) {
-      if (timeS >= pts[i].t && timeS <= pts[i + 1].t) {
-        const segT = (timeS - pts[i].t) / (pts[i + 1].t - pts[i].t);
-        const p0 = pts[i];
-        const p1 = pts[i + 1];
-        return {
-          x: p0.x + (p1.x - p0.x) * segT,
-          y: p0.y + (p1.y - p0.y) * segT,
-          theta: p0.theta + (p1.theta - p0.theta) * segT,
-          v: p0.vLin + (p1.vLin - p0.vLin) * segT
-        };
-      }
-    }
-    const last = pts[pts.length - 1];
-    return { x: last.x, y: last.y, theta: last.theta, v: 0 };
-  }
-
   function drawSimAnimatedRobot(w, h) {
     const routine = activePaths[activeRoutineIndex] || activePaths[0];
     if (!routine) return;
