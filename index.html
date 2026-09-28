@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260927.k14" />
+  <link rel="stylesheet" href="style.css?v=20260928.k11" />
   <script>
     (function () {
       try {
@@ -919,6 +919,18 @@
                   <button type="button" class="btn-sm-subtle" id="btnChangeBotImg" title="Choose a different image file">Change Photo</button>
                 </div>
               </div>
+            </div>
+
+            <!-- Keyboard Shortcuts & Hotkeys Settings Card -->
+            <div class="bot-shortcuts-card" style="margin-top:12px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:1.3rem;">⌨️</span>
+                <div>
+                  <strong style="font-size:0.84rem;color:#f8fafc;display:block;">Keyboard Shortcuts &amp; Hotkeys</strong>
+                  <span style="font-size:0.72rem;color:#94a3b8;">Customize hotkeys for Bezier Curve tool (B), simulation, block duplication, and tabs.</span>
+                </div>
+              </div>
+              <button type="button" id="btnOpenShortcutsModal" class="btn-xs-clean" style="background:#2563eb;color:#ffffff;border:none;padding:5px 12px;border-radius:6px;font-weight:600;font-size:0.78rem;cursor:pointer;">Customize Shortcuts ⚙️</button>
             </div>
           </section>
         </div>
@@ -2282,7 +2294,10 @@ void autonomous() {
 
         <!-- Shortcuts Pane -->
         <div class="help-pane" data-pane="shortcuts">
-          <h3>Keyboard Shortcuts & Fast Controls</h3>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <h3 style="margin:0;">Keyboard Shortcuts &amp; Fast Controls</h3>
+            <button type="button" id="btnLaunchShortcutsFromHelp" class="btn-xs-clean" style="background:#2563eb;color:#ffffff;border:none;padding:5px 12px;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;">⚙️ Customize Shortcuts</button>
+          </div>
           
           <table class="help-table">
             <thead>
@@ -2992,22 +3007,22 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260927.k14"></script>
+  <script src="version.js?v=20260928.k11"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260927.k14"></script>
-  <script src="google-drive-sync.js?v=20260927.k14"></script>
-  <script src="session-guard.js?v=20260927.k14"></script>
-  <script src="theme.js?v=20260927.k14"></script>
-  <script src="v5-brain-serial.js?v=20260927.k14"></script>
-  <script src="project-manager.js?v=20260927.k14"></script>
-  <script src="cpp-parser.js?v=20260927.k14"></script>
-  <script src="scoring-engine.js?v=20260927.k14"></script>
-  <script src="app.js?v=20260927.k14"></script>
-  <script src="tutorial.js?v=20260927.k14"></script>
+  <script src="firebase-config.js?v=20260928.k11"></script>
+  <script src="google-drive-sync.js?v=20260928.k11"></script>
+  <script src="session-guard.js?v=20260928.k11"></script>
+  <script src="theme.js?v=20260928.k11"></script>
+  <script src="v5-brain-serial.js?v=20260928.k11"></script>
+  <script src="project-manager.js?v=20260928.k11"></script>
+  <script src="cpp-parser.js?v=20260928.k11"></script>
+  <script src="scoring-engine.js?v=20260928.k11"></script>
+  <script src="app.js?v=20260928.k11"></script>
+  <script src="tutorial.js?v=20260928.k11"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
@@ -3186,6 +3201,48 @@ void autonomous() {
           💡 Tip: Smooth Bezier curves allow LemLib to maintain linear speed, while Early Exit prevents zero-velocity stopping at corners.
         </span>
         <button type="button" id="btnSharpTurnModalDone" class="primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts & Hotkeys Modal -->
+  <div id="shortcutsModal" class="modal shortcuts-modal" hidden>
+    <div class="modal-content shortcuts-modal-content">
+      <div class="shortcuts-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="shortcuts-header-icon">⌨️</div>
+          <div>
+            <h3 style="margin:0;font-size:1.15rem;color:#f8fafc;">Keyboard Shortcuts &amp; Hotkeys</h3>
+            <p style="margin:2px 0 0;font-size:0.75rem;color:#94a3b8;">Customize keybindings for path planning tools, canvas actions, and simulations.</p>
+          </div>
+        </div>
+        <button type="button" class="shortcuts-close-btn" id="btnShortcutsClose" title="Close">✕</button>
+      </div>
+
+      <div class="shortcuts-modal-body">
+        <div class="shortcuts-search-row">
+          <span class="shortcuts-search-icon">🔍</span>
+          <input type="text" id="shortcutsSearchInput" placeholder="Search shortcuts (e.g., bezier, sim, duplicate, undo)..." />
+        </div>
+
+        <div class="shortcuts-recording-banner" id="shortcutsRecordingBanner" style="display:none;">
+          <span class="pulse-indicator">●</span>
+          <span id="shortcutsRecordingText">Press any key or key combination...</span>
+          <button type="button" id="btnCancelRecordShortcut" class="btn-xs-clean" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.2);color:#facc15;padding:2px 8px;border-radius:4px;cursor:pointer;">Cancel (Esc)</button>
+        </div>
+
+        <div class="shortcuts-table-wrap" id="shortcutsTableWrap">
+          <!-- Dynamically populated categories and shortcut rows -->
+        </div>
+      </div>
+
+      <div class="shortcuts-modal-footer">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button type="button" id="btnResetShortcutsDefaults" class="btn-subtle" title="Reset all shortcuts to factory defaults">↺ Reset to Defaults</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button type="button" id="btnShortcutsCloseBottom" class="btn-secondary">Close</button>
+        </div>
       </div>
     </div>
   </div>

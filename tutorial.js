@@ -13,7 +13,7 @@
   const TUTORIAL_STEPS = [
     {
       title: "Welcome to LemLib Autonomous Studio",
-      badge: "Step 1 of 7 · Overview",
+      badge: "Step 1 of 8 · Overview",
       icon: "🤖",
       targetSelector: ".neat-planner-header",
       content: `
@@ -21,7 +21,7 @@
         <div class="tutorial-highlights">
           <div class="tut-hl-item">
             <span class="tut-hl-icon">🗺️</span>
-            <div><strong>Visual Path Planner:</strong> Design multi-waypoint trajectories with Boomerang curves &amp; wait triggers.</div>
+            <div><strong>Visual Path Planner:</strong> Design multi-waypoint trajectories with Boomerang curves, Bezier splines &amp; wait triggers.</div>
           </div>
           <div class="tut-hl-item">
             <span class="tut-hl-icon">🏎️</span>
@@ -41,7 +41,7 @@
     },
     {
       title: "Designing Autonomous Action Flow",
-      badge: "Step 2 of 7 · Path Planning",
+      badge: "Step 2 of 8 · Path Planning",
       icon: "🎯",
       targetSelector: ".flowchart-panel",
       content: `
@@ -71,8 +71,41 @@
       `
     },
     {
+      title: "High-Speed Bezier Spline Curves & Tangent Control (B)",
+      badge: "Step 3 of 8 · Bezier Curves (B)",
+      icon: "🌊",
+      targetSelector: "#btnToolBezier",
+      content: `
+        <p>Master fluid continuous-curvature paths using LemLib's cubic Bezier splines to bypass slow stop-and-turn motions.</p>
+        <div class="tutorial-highlights">
+          <div class="tut-hl-item">
+            <span class="tut-hl-icon">⌨️</span>
+            <div><strong>Activating the Tool (Hotkey: <kbd>B</kbd>):</strong> Click the <strong>🌊 Bezier Tool</strong> button in the Simulation HUD or press <kbd>B</kbd> on your keyboard. The cursor turns into a precision crosshair.</div>
+          </div>
+          <div class="tut-hl-item">
+            <span class="tut-hl-icon">🖱️</span>
+            <div><strong>1-Click Field Insertion:</strong> Click anywhere on empty field space while in Bezier mode to immediately append a cubic Bezier spline with custom control handles.</div>
+          </div>
+          <div class="tut-hl-item">
+            <span class="tut-hl-icon">🎛️</span>
+            <div><strong>Manipulating Control Points (CP1 &amp; CP2):</strong>
+              <ul style="margin:4px 0 0 16px;padding:0;font-size:0.8rem;line-height:1.4;">
+                <li><strong>Tangent Handles:</strong> Click and drag the cyan control handles (<strong>CP1</strong> and <strong>CP2</strong>) extending from the start and end waypoints to sculpt the entry curve, apex, and exit arc.</li>
+                <li><strong>Lead Factor Distance:</strong> Pull handles further outward to increase curvature lead (<code>lead1</code> / <code>lead2</code>), creating wider high-speed sweeps around mobile goals and field ladders.</li>
+                <li><strong>Curvature Continuity:</strong> Match incoming and outgoing tangent vectors between consecutive Bezier curves to maintain maximum chassis speed without decelerating to 0 in/s.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="tut-hl-item">
+            <span class="tut-hl-icon">⚡</span>
+            <div><strong>Sharp Turn Optimizer:</strong> If two movements form a sharp angle (&ge;35°), the planner flags a braking bottleneck. Click <strong>✨ Convert to Bezier</strong> in the Bottleneck Analyzer to automatically insert smooth spline transitions and save up to <strong>1.5s–2.5s</strong> per match!</div>
+          </div>
+        </div>
+      `
+    },
+    {
       title: "Realistic 2D Kinematics & Match Simulator",
-      badge: "Step 3 of 7 · Simulation",
+      badge: "Step 4 of 8 · Simulation",
       icon: "🏎️",
       targetSelector: ".sim-hud-card",
       content: `
@@ -95,7 +128,7 @@
     },
     {
       title: "Robot Hardware & LemLib PID Tuning",
-      badge: "Step 4 of 7 · Hardware Setup",
+      badge: "Step 5 of 8 · Hardware Setup",
       icon: "🤖",
       targetSelector: "#tabBtnBot",
       content: `
@@ -118,7 +151,7 @@
     },
     {
       title: "PROS C++ Multi-File Studio & Smart Sync",
-      badge: "Step 5 of 7 · Coding & Compiler",
+      badge: "Step 6 of 8 · Coding & Compiler",
       icon: "💻",
       targetSelector: ".header-center-modes",
       content: `
@@ -145,7 +178,7 @@
     },
     {
       title: "VEX V5 Brain USB Flashing & Diagnostics",
-      badge: "Step 6 of 7 · Hardware Integration",
+      badge: "Step 7 of 8 · Hardware Integration",
       icon: "🔌",
       targetSelector: "#bannerBrainStatus",
       content: `
@@ -168,7 +201,7 @@
     },
     {
       title: "Visual Blocks & C++ Auton Translator FAQ",
-      badge: "Step 7 of 7 · Blocks FAQ & Help",
+      badge: "Step 8 of 8 · Blocks FAQ & Help",
       icon: "❓",
       targetSelector: ".neat-planner-header",
       content: `

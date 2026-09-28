@@ -8733,19 +8733,19 @@
       return;
     }
 
-    if ((e.key === "b" || e.key === "B") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (isShortcutMatch(e, customShortcuts.bezierTool)) {
       e.preventDefault();
       setBezierTool(!bezierToolActive);
       return;
     }
 
-    if ((e.key === "?" || e.key === "h" || e.key === "H") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (isShortcutMatch(e, customShortcuts.openHelp) || ((e.key === "?" || e.key === "h" || e.key === "H") && !e.ctrlKey && !e.metaKey && !e.altKey)) {
       e.preventDefault();
       openHelp();
       return;
     }
 
-    if (e.key === " ") {
+    if (isShortcutMatch(e, customShortcuts.toggleSim)) {
       e.preventDefault();
       if (simRunning) stopSim();
       else startSim();
@@ -14811,6 +14811,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       { id: "sim_sp_05x", cat: "▶️ Simulation", title: "Set Speed 0.5x (Slow Motion)", desc: "Half speed playback for precision debugging", keywords: "speed 0.5x slow motion", action: () => setSimSpeed(0.5) },
 
       // Category 4: Tools & Engineering Modals
+      { id: "tool_shortcuts", cat: "⚙️ Tools & Utilities", title: "Customize Keyboard Shortcuts & Hotkeys", desc: "Configure custom keys for Bezier curve tool (B), simulation, and blocks", keywords: "keyboard shortcut hotkey key bindings customize bezier", action: () => openShortcutsModal() },
       { id: "tool_mirror", cat: "⚙️ Tools & Utilities", title: "Open Alliance Routine Mirror", desc: "Transform routine across X-axis, Y-axis, or 180° rotation", shortcut: "Ctrl+Shift+M", keywords: "mirror alliance invert flip red blue rot180", action: () => openModalById("allianceMirrorModal") },
       { id: "tool_physics", cat: "⚙️ Tools & Utilities", title: "Open Real-Time Drive Physics Dyno", desc: "Inspect motor torque, traction limit, G-forces & 15s clock", shortcut: "Ctrl+Shift+P", keywords: "physics dyno traction gforce voltage battery clock", action: () => openModalById("drivePhysicsModal") },
       { id: "tool_flowchart", cat: "⚙️ Tools & Utilities", title: "Open Interactive Routine Flowchart", desc: "View full routine visual diagram", keywords: "flowchart diagram visual tree graph", action: () => openModalById("flowchartModal") },
@@ -14960,21 +14961,329 @@ lemlib::ControllerSettings ${currentMode}_controller(
     initGlobalShortcuts();
   }
 
+  // ---------------------------------------------------------------------------
+  // Custom Keyboard Shortcuts Manager & Modal
+  // ---------------------------------------------------------------------------
+  const SHORTCUTS_STORAGE_KEY = "lemlib_custom_shortcuts_v1";
+
+  const DEFAULT_SHORTCUTS = {
+    bezierTool: { id: "bezierTool", key: "b", code: "KeyB", ctrl: false, shift: false, alt: false, meta: false, label: "Toggle Bezier Spline Tool", desc: "Activate interactive cubic spline drawing mode on field", category: "Path Planning" },
+    toggleSim: { id: "toggleSim", key: " ", code: "Space", ctrl: false, shift: false, alt: false, meta: false, label: "Start / Stop Simulation", desc: "Run or pause the 2D kinematics physics simulation", category: "Simulation" },
+    commandPalette: { id: "commandPalette", key: "k", code: "KeyK", ctrl: true, shift: false, alt: false, meta: true, label: "Command Palette", desc: "Quick search for tools, actions, and autonomous commands", category: "Navigation" },
+    duplicateAction: { id: "duplicateAction", key: "d", code: "KeyD", ctrl: true, shift: false, alt: false, meta: true, label: "Duplicate Block / Routine", desc: "Clone active block or entire autonomous routine", category: "Editing" },
+    deleteAction: { id: "deleteAction", key: "Delete", code: "Delete", ctrl: false, shift: false, alt: false, meta: false, label: "Delete Selected Block", desc: "Remove selected motion or subsystem block from flow", category: "Editing" },
+    undo: { id: "undo", key: "z", code: "KeyZ", ctrl: true, shift: false, alt: false, meta: true, label: "Undo Edit", desc: "Revert last change to routine or bot settings", category: "Editing" },
+    redo: { id: "redo", key: "z", code: "KeyZ", ctrl: true, shift: true, alt: false, meta: true, label: "Redo Edit", desc: "Reapply previously undone modification", category: "Editing" },
+    openHelp: { id: "openHelp", key: "h", code: "KeyH", ctrl: false, shift: false, alt: false, meta: false, label: "Help & Documentation", desc: "Open comprehensive guides, field specs, and reference", category: "General" },
+    allianceMirror: { id: "allianceMirror", key: "m", code: "KeyM", ctrl: true, shift: true, alt: false, meta: true, label: "Alliance Mirroring Dialog", desc: "Mirror routine coordinates for opposite alliance field sides", category: "Tools" },
+    drivePhysics: { id: "drivePhysics", key: "p", code: "KeyP", ctrl: true, shift: true, alt: false, meta: true, label: "Drive Dynamics Dyno", desc: "Inspect motor torque, traction slip, and match timer", category: "Tools" },
+    genCode: { id: "genCode", key: "Enter", code: "Enter", ctrl: true, shift: false, alt: false, meta: true, label: "Generate LemLib C++ Code", desc: "Switch to Code tab and regenerate clean PROS C++", category: "Coding" },
+    tabFlowchart: { id: "tabFlowchart", key: "1", code: "Digit1", ctrl: false, shift: false, alt: true, meta: false, label: "Switch to Flowchart Tab", desc: "Navigate to visual block sequence editor", category: "Navigation" },
+    tabConditions: { id: "tabConditions", key: "2", code: "Digit2", ctrl: false, shift: false, alt: true, meta: false, label: "Switch to Conditions Tab", desc: "Navigate to wait triggers and sensor conditions", category: "Navigation" },
+    tabBot: { id: "tabBot", key: "3", code: "Digit3", ctrl: false, shift: false, alt: true, meta: false, label: "Switch to Robot Setup Tab", desc: "Navigate to chassis dimensions and PID settings", category: "Navigation" },
+    tabCode: { id: "tabCode", key: "4", code: "Digit4", ctrl: false, shift: false, alt: true, meta: false, label: "Switch to C++ IDE Tab", desc: "Navigate to full multi-file coding workspace", category: "Navigation" }
+  };
+
+  let customShortcuts = JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS));
+  let recordingShortcutId = null;
+
+  function loadShortcuts() {
+    try {
+      const saved = localStorage.getItem(SHORTCUTS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        for (const k of Object.keys(DEFAULT_SHORTCUTS)) {
+          if (parsed[k]) {
+            customShortcuts[k] = { ...DEFAULT_SHORTCUTS[k], ...parsed[k] };
+          }
+        }
+      }
+    } catch (_) {
+      customShortcuts = JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS));
+    }
+    updateBezierButtonLabel();
+  }
+
+  function saveShortcuts() {
+    try {
+      localStorage.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify(customShortcuts));
+    } catch (_) {}
+    updateBezierButtonLabel();
+  }
+
+  function formatShortcutKey(sc) {
+    if (!sc) return "None";
+    const parts = [];
+    if (sc.ctrl || sc.meta) parts.push("Ctrl");
+    if (sc.alt) parts.push("Alt");
+    if (sc.shift) parts.push("Shift");
+    let k = sc.key;
+    if (k === " " || sc.code === "Space") k = "Space";
+    else if (k === "Backspace") k = "Backspace";
+    else if (k === "Delete") k = "Delete";
+    else if (k === "Enter") k = "Enter";
+    else if (k && k.length === 1) k = k.toUpperCase();
+    parts.push(k);
+    return parts.join("+");
+  }
+
+  function updateBezierButtonLabel() {
+    const btn = document.getElementById("btnToolBezier");
+    if (btn && customShortcuts.bezierTool) {
+      const formatted = formatShortcutKey(customShortcuts.bezierTool);
+      btn.innerHTML = `🌊 Bezier Tool <kbd style="font-size:0.65rem;background:rgba(255,255,255,0.15);padding:1px 4px;border-radius:3px;margin-left:2px;">${escapeHtml(formatted)}</kbd>`;
+      btn.title = `Toggle Bezier Curve Path Tool (Hotkey: ${formatted}) - Drag control points between waypoints to create smooth curves`;
+    }
+  }
+
+  function isShortcutMatch(e, sc) {
+    if (!sc) return false;
+    const reqCtrl = !!(sc.ctrl || sc.meta);
+    const hasCtrl = !!(e.ctrlKey || e.metaKey);
+    if (reqCtrl !== hasCtrl) return false;
+
+    const reqAlt = !!sc.alt;
+    const hasAlt = !!e.altKey;
+    if (reqAlt !== hasAlt) return false;
+
+    const reqShift = !!sc.shift;
+    const hasShift = !!e.shiftKey;
+    if (reqShift !== hasShift) return false;
+
+    if (sc.key === " " || sc.code === "Space") {
+      return e.key === " " || e.code === "Space";
+    }
+
+    if (sc.key && e.key) {
+      return sc.key.toLowerCase() === e.key.toLowerCase();
+    }
+    return false;
+  }
+
+  function renderShortcutsList(searchQuery = "") {
+    const container = document.getElementById("shortcutsTableWrap");
+    if (!container) return;
+
+    const query = (searchQuery || "").trim().toLowerCase();
+    const categories = ["Path Planning", "Simulation", "Editing", "Navigation", "Tools", "Coding", "General"];
+
+    let html = "";
+
+    for (const cat of categories) {
+      const items = Object.values(customShortcuts).filter(sc => sc.category === cat);
+      const filtered = items.filter(sc => {
+        if (!query) return true;
+        const keyFormatted = formatShortcutKey(sc).toLowerCase();
+        return sc.label.toLowerCase().includes(query) || sc.desc.toLowerCase().includes(query) || keyFormatted.includes(query);
+      });
+
+      if (filtered.length === 0) continue;
+
+      html += `<div class="shortcuts-category-header"><span>${escapeHtml(cat)}</span><span style="font-size:0.68rem;color:#64748b;">${filtered.length} shortcuts</span></div>`;
+
+      for (const sc of filtered) {
+        const isRec = recordingShortcutId === sc.id;
+        const keyStr = formatShortcutKey(sc);
+        const isDefault = JSON.stringify(sc) === JSON.stringify(DEFAULT_SHORTCUTS[sc.id]);
+
+        html += `
+          <div class="shortcut-row ${isRec ? "recording" : ""}" data-shortcut-id="${sc.id}">
+            <div class="shortcut-info">
+              <span class="shortcut-label">${escapeHtml(sc.label)}</span>
+              <span class="shortcut-desc">${escapeHtml(sc.desc)}</span>
+            </div>
+            <div class="shortcut-key-wrap">
+              <button type="button" class="shortcut-kbd-btn ${isRec ? "recording" : ""}" data-btn-record="${sc.id}" title="Click to record a new key combination">
+                ${isRec ? `<span style="font-size:0.75rem;">⌨️ Press key...</span>` : `<kbd>${escapeHtml(keyStr)}</kbd>`}
+              </button>
+              ${!isDefault ? `<button type="button" class="shortcut-reset-item-btn" data-btn-reset-sc="${sc.id}" title="Reset this shortcut to default">↺</button>` : ""}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    if (!html) {
+      html = `<div style="text-align:center;padding:30px;color:#64748b;font-size:0.85rem;">No shortcuts match "<em>${escapeHtml(searchQuery)}</em>"</div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Wire recording click buttons
+    container.querySelectorAll("[data-btn-record]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.btnRecord;
+        startRecordingShortcut(id);
+      });
+    });
+
+    // Wire single item reset buttons
+    container.querySelectorAll("[data-btn-reset-sc]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.btnResetSc;
+        if (DEFAULT_SHORTCUTS[id]) {
+          customShortcuts[id] = JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS[id]));
+          saveShortcuts();
+          renderShortcutsList(document.getElementById("shortcutsSearchInput")?.value || "");
+          showToast(`↺ Reset ${customShortcuts[id].label} to [${formatShortcutKey(customShortcuts[id])}]`);
+        }
+      });
+    });
+  }
+
+  function startRecordingShortcut(scId) {
+    if (!customShortcuts[scId]) return;
+    recordingShortcutId = scId;
+    const banner = document.getElementById("shortcutsRecordingBanner");
+    const bannerText = document.getElementById("shortcutsRecordingText");
+    if (banner && bannerText) {
+      banner.style.display = "flex";
+      bannerText.innerHTML = `Recording new key for <strong>${escapeHtml(customShortcuts[scId].label)}</strong>... Press any key or combo (e.g. <kbd>B</kbd>, <kbd>V</kbd>, <kbd>Ctrl+D</kbd>).`;
+    }
+    renderShortcutsList(document.getElementById("shortcutsSearchInput")?.value || "");
+  }
+
+  function stopRecordingShortcut() {
+    recordingShortcutId = null;
+    const banner = document.getElementById("shortcutsRecordingBanner");
+    if (banner) banner.style.display = "none";
+    renderShortcutsList(document.getElementById("shortcutsSearchInput")?.value || "");
+  }
+
+  function openShortcutsModal() {
+    loadShortcuts();
+    const modal = document.getElementById("shortcutsModal");
+    if (modal) {
+      modal.hidden = false;
+      modal.style.display = "flex";
+      const search = document.getElementById("shortcutsSearchInput");
+      if (search) {
+        search.value = "";
+        setTimeout(() => search.focus(), 50);
+      }
+      stopRecordingShortcut();
+      renderShortcutsList();
+    }
+  }
+
+  function closeShortcutsModal() {
+    stopRecordingShortcut();
+    const modal = document.getElementById("shortcutsModal");
+    if (modal) {
+      modal.hidden = true;
+      modal.style.display = "none";
+    }
+  }
+
+  function wireShortcutsModal() {
+    loadShortcuts();
+
+    const btnOpenBot = document.getElementById("btnOpenShortcutsModal");
+    if (btnOpenBot) btnOpenBot.onclick = () => openShortcutsModal();
+
+    const btnLaunchHelp = document.getElementById("btnLaunchShortcutsFromHelp");
+    if (btnLaunchHelp) {
+      btnLaunchHelp.onclick = () => {
+        closeHelp();
+        openShortcutsModal();
+      };
+    }
+
+    const btnClose = document.getElementById("btnShortcutsClose");
+    if (btnClose) btnClose.onclick = () => closeShortcutsModal();
+
+    const btnCloseBottom = document.getElementById("btnShortcutsCloseBottom");
+    if (btnCloseBottom) btnCloseBottom.onclick = () => closeShortcutsModal();
+
+    const btnCancelRec = document.getElementById("btnCancelRecordShortcut");
+    if (btnCancelRec) btnCancelRec.onclick = () => stopRecordingShortcut();
+
+    const btnResetAll = document.getElementById("btnResetShortcutsDefaults");
+    if (btnResetAll) {
+      btnResetAll.onclick = () => {
+        customShortcuts = JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS));
+        saveShortcuts();
+        stopRecordingShortcut();
+        renderShortcutsList(document.getElementById("shortcutsSearchInput")?.value || "");
+        showToast("↺ All keyboard shortcuts restored to factory defaults.");
+      };
+    }
+
+    const searchInput = document.getElementById("shortcutsSearchInput");
+    if (searchInput) {
+      searchInput.addEventListener("input", () => {
+        renderShortcutsList(searchInput.value);
+      });
+    }
+
+    const modal = document.getElementById("shortcutsModal");
+    if (modal) {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeShortcutsModal();
+      });
+    }
+  }
+
   function initGlobalShortcuts() {
+    loadShortcuts();
+
     window.addEventListener("keydown", (e) => {
+      // 1. If currently recording a shortcut inside the Shortcuts Modal
+      if (recordingShortcutId) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (e.key === "Escape") {
+          stopRecordingShortcut();
+          return;
+        }
+
+        // Ignore pure modifier presses
+        if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) {
+          return;
+        }
+
+        const sc = customShortcuts[recordingShortcutId];
+        if (sc) {
+          sc.key = e.key;
+          sc.code = e.code;
+          sc.ctrl = e.ctrlKey;
+          sc.alt = e.altKey;
+          sc.shift = e.shiftKey;
+          sc.meta = e.metaKey;
+
+          saveShortcuts();
+          const label = sc.label;
+          const formatted = formatShortcutKey(sc);
+          stopRecordingShortcut();
+          showToast(`✓ Shortcut for ${label} set to [${formatted}]`);
+        }
+        return;
+      }
+
       const activeEl = document.activeElement;
       const tag = activeEl ? activeEl.tagName.toLowerCase() : "";
       const isInput = tag === "input" || tag === "textarea" || tag === "select" || (activeEl && activeEl.isContentEditable);
 
-      // Ctrl+K / Cmd+K: Open/Toggle Command Palette
-      const isCmdK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
-      if (isCmdK) {
+      // Modal escape close handlers
+      const shortcutsModal = document.getElementById("shortcutsModal");
+      if (shortcutsModal && !shortcutsModal.hidden) {
+        if (e.key === "Escape") {
+          closeShortcutsModal();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      // Command Palette
+      if (isShortcutMatch(e, customShortcuts.commandPalette)) {
         e.preventDefault();
         toggleCommandPaletteModal();
         return;
       }
 
-      // If Command Palette modal is open, let palette keydown listener handle keys
       const cmdPaletteModal = document.getElementById("commandPaletteModal");
       if (cmdPaletteModal && !cmdPaletteModal.hidden) {
         if (e.key === "Escape") {
@@ -14984,60 +15293,63 @@ lemlib::ControllerSettings ${currentMode}_controller(
         return;
       }
 
-      // Ctrl+Space or Cmd+Space: Toggle simulation
-      const isCmdSpace = (e.ctrlKey || e.metaKey) && (e.code === "Space" || e.key === " ");
-      if (isCmdSpace) {
-        e.preventDefault();
-        if (simRunning) stopSim();
-        else startSim();
-        return;
-      }
-
-      // Ctrl+Shift+M or Cmd+Shift+M: Alliance Mirror Modal
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "m") {
+      // Alliance Mirror Modal
+      if (isShortcutMatch(e, customShortcuts.allianceMirror)) {
         e.preventDefault();
         openModalById("allianceMirrorModal");
         if (typeof updateAllianceMirrorPreview === "function") updateAllianceMirrorPreview();
         return;
       }
 
-      // Ctrl+Shift+P or Cmd+Shift+P: Drive Physics Modal
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
+      // Drive Physics Modal
+      if (isShortcutMatch(e, customShortcuts.drivePhysics)) {
         e.preventDefault();
         openModalById("drivePhysicsModal");
         if (typeof updateDrivePhysicsDyno === "function") updateDrivePhysicsDyno();
         return;
       }
 
-      // Ctrl+Enter or Cmd+Enter: Switch to Code Tab & Generate C++ Code
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      // Generate C++ Code
+      if (isShortcutMatch(e, customShortcuts.genCode)) {
         e.preventDefault();
         switchPlannerTab("code");
         showToast("💻 Generated LemLib C++ Code!");
         return;
       }
 
-      // Alt+1, Alt+2, Alt+3, Alt+4: Switch Planner Tabs
-      if (e.altKey && !e.ctrlKey && !e.metaKey) {
-        if (e.key === "1") { e.preventDefault(); switchPlannerTab("flowchart"); return; }
-        if (e.key === "2") { e.preventDefault(); switchPlannerTab("conditions"); return; }
-        if (e.key === "3") { e.preventDefault(); switchPlannerTab("bot"); return; }
-        if (e.key === "4") { e.preventDefault(); switchPlannerTab("code"); return; }
-      }
+      // Switch Planner Tabs
+      if (isShortcutMatch(e, customShortcuts.tabFlowchart)) { e.preventDefault(); switchPlannerTab("flowchart"); return; }
+      if (isShortcutMatch(e, customShortcuts.tabConditions)) { e.preventDefault(); switchPlannerTab("conditions"); return; }
+      if (isShortcutMatch(e, customShortcuts.tabBot)) { e.preventDefault(); switchPlannerTab("bot"); return; }
+      if (isShortcutMatch(e, customShortcuts.tabCode)) { e.preventDefault(); switchPlannerTab("code"); return; }
 
       // Do NOT execute single-key shortcuts when typing in input/textarea/select
       if (isInput) return;
 
-      // Space key alone outside inputs: Toggle simulation
-      if (e.key === " " || e.code === "Space") {
+      // Bezier Tool
+      if (isShortcutMatch(e, customShortcuts.bezierTool)) {
+        e.preventDefault();
+        setBezierTool(!bezierToolActive);
+        return;
+      }
+
+      // Help & Documentation
+      if (isShortcutMatch(e, customShortcuts.openHelp) || ((e.key === "?" || e.key === "h" || e.key === "H") && !e.ctrlKey && !e.metaKey && !e.altKey)) {
+        e.preventDefault();
+        openHelp();
+        return;
+      }
+
+      // Start / Stop Simulation
+      if (isShortcutMatch(e, customShortcuts.toggleSim)) {
         e.preventDefault();
         if (simRunning) stopSim();
         else startSim();
         return;
       }
 
-      // Ctrl+D / Cmd+D: Duplicate selected block or routine
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+      // Duplicate selected block or routine
+      if (isShortcutMatch(e, customShortcuts.duplicateAction)) {
         e.preventDefault();
         if (selectedId) {
           duplicateActionById(selectedId);
@@ -15047,8 +15359,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
         return;
       }
 
-      // Delete / Backspace outside inputs: Delete selected block
-      if (e.key === "Delete" || e.key === "Backspace") {
+      // Delete selected block
+      if (isShortcutMatch(e, customShortcuts.deleteAction) || e.key === "Delete" || e.key === "Backspace") {
         if (selectedId) {
           e.preventDefault();
           openDeleteBlockModal(selectedId);
@@ -15056,16 +15368,16 @@ lemlib::ControllerSettings ${currentMode}_controller(
         return;
       }
 
-      // Ctrl+Z / Cmd+Z (Undo) and Ctrl+Shift+Z / Cmd+Shift+Z or Ctrl+Y (Redo)
-      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-        const key = e.key.toLowerCase();
-        if (key === "z" && !e.shiftKey) {
-          e.preventDefault();
-          undo();
-        } else if ((key === "z" && e.shiftKey) || key === "y") {
-          e.preventDefault();
-          redo();
-        }
+      // Undo & Redo
+      if (isShortcutMatch(e, customShortcuts.undo)) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if (isShortcutMatch(e, customShortcuts.redo) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y")) {
+        e.preventDefault();
+        redo();
+        return;
       }
     });
   }
@@ -15089,6 +15401,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
   wireScoringModal();
   wireBreadcrumbs();
   wireCommandPaletteModal();
+  wireShortcutsModal();
   initCoordPrecisionControls();
   loadLocal();
   syncPathSelect();

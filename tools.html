@@ -13,7 +13,7 @@
   <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
   <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
-  <link rel="stylesheet" href="style.css?v=20260927.k10" />
+  <link rel="stylesheet" href="style.css?v=20260928.k9" />
   <script>
     (function () {
       try {
@@ -964,6 +964,61 @@ chassis.turnToHeading(270, 1000);</div>
           <div class="tool-actions-row">
             <button type="button" class="btn-tool-action primary" id="btnCopyPurePursuitCode">
               📋 Copy chassis.follow() Code
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 6B: Bezier Curve Spline & Curvature Control Calculator -->
+      <article class="tool-card" data-category="motion" data-keywords="bezier curve spline control points cp1 cp2 tangent lead curvature continuous momentum arc">
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background:rgba(56, 189, 248, 0.15); border-color:rgba(56, 189, 248, 0.35); color:#38bdf8;">🌊</div>
+          <div class="tool-title-info">
+            <h3>Bezier Curve Spline &amp; Curvature Calculator</h3>
+            <p class="tool-tagline">Synthesize high-speed cubic Bezier paths, compute tangent control point offsets (CP1, CP2), and estimate momentum time savings vs. stop-and-turn motions.</p>
+          </div>
+          <span class="tool-category-badge">🏎️ Motion</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-form-grid cols-3">
+            <div class="tool-field">
+              <label>Start Pose (X₀, Y₀, θ₀)</label>
+              <input type="text" id="bezStartPose" value="0, 0, 0" placeholder="x, y, theta" />
+            </div>
+            <div class="tool-field">
+              <label>Target Pose (X₁, Y₁, θ₁)</label>
+              <input type="text" id="bezEndPose" value="36, 36, 90" placeholder="x, y, theta" />
+            </div>
+            <div class="tool-field">
+              <label>Lead Factors (Lead1, Lead2 in)</label>
+              <input type="number" id="bezLead" value="18" min="4" max="48" step="2" />
+            </div>
+          </div>
+
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Arc Length</span>
+              <strong class="result-val cyan" id="bezArcLength">52.4 in</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Min Curvature Radius (R)</span>
+              <strong class="result-val green" id="bezMinRadius">21.8 in</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Time Saved vs Stop-Turn</span>
+              <strong class="result-val purple" id="bezTimeSaved">~1.45 s</strong>
+            </div>
+          </div>
+
+          <div class="tool-field" style="margin-top:8px;">
+            <label>Calculated Control Handles &amp; LemLib Spline Code</label>
+            <div class="tool-code-preview" id="bezCodePreview">// CP1: (0.0, 18.0) · CP2: (18.0, 36.0)
+chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
+          </div>
+
+          <div class="tool-actions-row">
+            <button type="button" class="btn-tool-action primary" id="btnCopyBezCode">
+              📋 Copy LemLib Spline Code
             </button>
           </div>
         </div>
@@ -2071,6 +2126,100 @@ chassis.turnToHeading(270, 1000);</div>
       });
       if (btnRecalcScoreTool) btnRecalcScoreTool.addEventListener("click", updateToolScoring);
       updateToolScoring();
+
+      // 16. Bezier Curve Spline Calculator (Tool 6B)
+      const bezStartPose = document.getElementById("bezStartPose");
+      const bezEndPose = document.getElementById("bezEndPose");
+      const bezLead = document.getElementById("bezLead");
+      const bezArcLength = document.getElementById("bezArcLength");
+      const bezMinRadius = document.getElementById("bezMinRadius");
+      const bezTimeSaved = document.getElementById("bezTimeSaved");
+      const bezCodePreview = document.getElementById("bezCodePreview");
+      const btnCopyBezCode = document.getElementById("btnCopyBezCode");
+
+      function updateBezierToolCalc() {
+        const parsePose = (str, def) => {
+          const parts = (str || "").split(",").map(s => parseFloat(s.trim()));
+          return {
+            x: isNaN(parts[0]) ? def.x : parts[0],
+            y: isNaN(parts[1]) ? def.y : parts[1],
+            theta: isNaN(parts[2]) ? def.theta : parts[2],
+          };
+        };
+
+        const p0 = parsePose(bezStartPose?.value, { x: 0, y: 0, theta: 0 });
+        const p3 = parsePose(bezEndPose?.value, { x: 36, y: 36, theta: 90 });
+        const lead = Math.max(2, parseFloat(bezLead?.value || "18"));
+
+        const rad0 = (p0.theta * Math.PI) / 180;
+        const rad3 = (p3.theta * Math.PI) / 180;
+
+        const cp1 = { x: p0.x + Math.sin(rad0) * lead, y: p0.y + Math.cos(rad0) * lead };
+        const cp2 = { x: p3.x - Math.sin(rad3) * lead, y: p3.y - Math.cos(rad3) * lead };
+
+        // Approximate arc length
+        let totalLen = 0;
+        let prevPt = { x: p0.x, y: p0.y };
+        let minR = Infinity;
+
+        const N = 40;
+        for (let i = 1; i <= N; i++) {
+          const t = i / N;
+          const it = 1 - t;
+          const curPt = {
+            x: it * it * it * p0.x + 3 * it * it * t * cp1.x + 3 * it * t * t * cp2.x + t * t * t * p3.x,
+            y: it * it * it * p0.y + 3 * it * it * t * cp1.y + 3 * it * t * t * cp2.y + t * t * t * p3.y,
+          };
+          const segLen = Math.hypot(curPt.x - prevPt.x, curPt.y - prevPt.y);
+          totalLen += segLen;
+
+          // 1st and 2nd derivatives for curvature
+          const dx = 3 * it * it * (cp1.x - p0.x) + 6 * it * t * (cp2.x - cp1.x) + 3 * t * t * (p3.x - cp2.x);
+          const dy = 3 * it * it * (cp1.y - p0.y) + 6 * it * t * (cp2.y - cp1.y) + 3 * t * t * (p3.y - cp2.y);
+          const d2x = 6 * it * (cp2.x - 2 * cp1.x + p0.x) + 6 * t * (p3.x - 2 * cp2.x + cp1.x);
+          const d2y = 6 * it * (cp2.y - 2 * cp1.y + p0.y) + 6 * t * (p3.y - 2 * cp2.y + cp1.y);
+
+          const num = Math.abs(dx * d2y - dy * d2x);
+          const denom = Math.pow(dx * dx + dy * dy, 1.5);
+          if (denom > 1e-4) {
+            const k = num / denom;
+            if (k > 1e-4) {
+              const r = 1 / k;
+              if (r < minR) minR = r;
+            }
+          }
+          prevPt = curPt;
+        }
+
+        if (bezArcLength) bezArcLength.textContent = `${totalLen.toFixed(1)} in`;
+        if (bezMinRadius) bezMinRadius.textContent = minR < 999 ? `${minR.toFixed(1)} in` : "Straight";
+
+        // Estimated savings vs stop and pivot turn (~0.8s turn + deceleration penalty ~0.65s)
+        const straightDist = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+        const savedSec = Math.max(0.4, Math.min(2.8, (totalLen / straightDist) * 0.9 + 0.55));
+        if (bezTimeSaved) bezTimeSaved.textContent = `~${savedSec.toFixed(2)} s`;
+
+        const codeText = `// Tangent Control: CP1 (${cp1.x.toFixed(1)}, ${cp1.y.toFixed(1)}) · CP2 (${cp2.x.toFixed(1)}, ${cp2.y.toFixed(1)})\nchassis.moveToPose(${p3.x.toFixed(1)}, ${p3.y.toFixed(1)}, ${Math.round(p3.theta)}, 2500, {.lead = ${(lead / Math.max(1, straightDist)).toFixed(2)}, .maxSpeed = 127});`;
+        if (bezCodePreview) bezCodePreview.textContent = codeText;
+      }
+
+      [bezStartPose, bezEndPose, bezLead].forEach((el) => {
+        if (el) el.addEventListener("input", updateBezierToolCalc);
+        if (el) el.addEventListener("change", updateBezierToolCalc);
+      });
+      updateBezierToolCalc();
+
+      if (btnCopyBezCode) {
+        btnCopyBezCode.addEventListener("click", () => {
+          if (bezCodePreview) {
+            navigator.clipboard.writeText(bezCodePreview.textContent).then(() => {
+              showToast("✓ Copied LemLib Bezier Spline code to clipboard!");
+            }).catch(() => {
+              showToast("Copied code!");
+            });
+          }
+        });
+      }
     });
   </script>
 </body>
