@@ -3190,9 +3190,14 @@
     };
 
     // Update Ribbon Elements
-    document.getElementById("lblTeamName").textContent = currentTeam.teamName;
-    document.getElementById("lblVexNumber").textContent = `(${currentTeam.vexTeamNumber || "VEX Team"})`;
-    document.getElementById("lblTeamCode").textContent = currentTeam.teamCode;
+    const lblTeamName = document.getElementById("lblTeamName");
+    if (lblTeamName) lblTeamName.textContent = currentTeam.teamName;
+    const lblTeamRibbon = document.getElementById("lblTeamNameRibbon");
+    if (lblTeamRibbon) lblTeamRibbon.textContent = currentTeam.teamName;
+    const lblVexNum = document.getElementById("lblVexNumber");
+    if (lblVexNum) lblVexNum.textContent = `(${currentTeam.vexTeamNumber || "VEX Team"})`;
+    const lblCode = document.getElementById("lblTeamCode");
+    if (lblCode) lblCode.textContent = currentTeam.teamCode;
 
     // Load active paths from team payload
     if (currentTeam.pathPayload && Array.isArray(currentTeam.pathPayload.paths) && currentTeam.pathPayload.paths.length > 0) {
@@ -5008,6 +5013,47 @@
   // --------------------------------------------------------------------------
   function wireEvents() {
     initCanvasInteractions();
+
+    // Tools Dropdown Menu Toggle
+    const btnToolsDropdown = document.getElementById("btnToolsDropdown");
+    const toolsDropdownMenu = document.getElementById("toolsDropdownMenu");
+    if (btnToolsDropdown && toolsDropdownMenu) {
+      btnToolsDropdown.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isHidden = toolsDropdownMenu.hasAttribute("hidden") || toolsDropdownMenu.style.display === "none";
+        if (isHidden) {
+          toolsDropdownMenu.removeAttribute("hidden");
+          toolsDropdownMenu.style.display = "flex";
+        } else {
+          toolsDropdownMenu.setAttribute("hidden", "");
+          toolsDropdownMenu.style.display = "none";
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".tools-dropdown-wrap")) {
+          toolsDropdownMenu.setAttribute("hidden", "");
+          toolsDropdownMenu.style.display = "none";
+        }
+      });
+    }
+
+    document.getElementById("btnMenuManageTeam")?.addEventListener("click", () => {
+      if (toolsDropdownMenu) { toolsDropdownMenu.setAttribute("hidden", ""); toolsDropdownMenu.style.display = "none"; }
+      openTeamSettingsModal();
+    });
+    document.getElementById("btnMenuDriveSync")?.addEventListener("click", () => {
+      if (toolsDropdownMenu) { toolsDropdownMenu.setAttribute("hidden", ""); toolsDropdownMenu.style.display = "none"; }
+      document.getElementById("btnDriveSync")?.click();
+    });
+    document.getElementById("btnMenuGithubSync")?.addEventListener("click", () => {
+      if (toolsDropdownMenu) { toolsDropdownMenu.setAttribute("hidden", ""); toolsDropdownMenu.style.display = "none"; }
+      openGithubPushModal();
+    });
+    document.getElementById("btnMenuSyncLocal")?.addEventListener("click", () => {
+      if (toolsDropdownMenu) { toolsDropdownMenu.setAttribute("hidden", ""); toolsDropdownMenu.style.display = "none"; }
+      syncTeamProjectToLocalPlanner();
+    });
 
     // 1. Copy Team Code button
     const btnCopyCode = document.getElementById("btnCopyTeamCode");
