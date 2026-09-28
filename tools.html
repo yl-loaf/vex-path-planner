@@ -13,7 +13,7 @@
   <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
   <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
-  <link rel="stylesheet" href="style.css?v=20260928.k9" />
+  <link rel="stylesheet" href="style.css?v=20260928.k17" />
   <script>
     (function () {
       try {
@@ -574,6 +574,7 @@
     <div class="tools-header-center">
       <a href="index.html" class="tools-tab-link" title="Visual 2D Autonomous Path Planner">🗺️ Planner &amp; Sim</a>
       <a href="ide.html" class="tools-tab-link" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
+      <a href="team.html" class="tools-tab-link" title="Real-Time Team Collaboration &amp; Cloud Sync (BETA)">👥 Team Collab <span style="background:#f59e0b;color:#0b0f14;font-size:0.6rem;padding:1px 5px;border-radius:8px;font-weight:800;">BETA</span></a>
       <a href="tools.html" class="tools-tab-link active" title="Comprehensive Engineering Tools Suite">🛠️ Tools Suite</a>
       <a href="translator.html" class="tools-tab-link" title="Raw C++ Auton to Visual Blocks Translator">🔄 C++ Translator</a>
       <a href="stats.html" class="tools-tab-link" title="Site & User Visitor Analytics">📊 Stats</a>
@@ -611,11 +612,12 @@
     <div class="tools-toolbar">
       <div class="tools-search-wrap">
         <span class="tools-search-icon">🔍</span>
-        <input type="text" id="toolSearchInput" class="tools-search-input" placeholder="Search tools (e.g., Dyno, PID, Bottlenecks, Slew, Air, Mirror, Battery)..." />
+        <input type="text" id="toolSearchInput" class="tools-search-input" placeholder="Search tools (e.g., Team, Dyno, PID, Bottlenecks, Slew, Air, Mirror, Battery)..." />
       </div>
 
       <div class="tools-filter-pills" id="toolsFilterPills">
-        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">14</span>)</button>
+        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">15</span>)</button>
+        <button type="button" class="tool-pill" data-filter="collab">👥 Team &amp; Cloud</button>
         <button type="button" class="tool-pill" data-filter="motion">🏎️ Motion &amp; Dyno</button>
         <button type="button" class="tool-pill" data-filter="tuning">🎛️ PID &amp; Bottlenecks</button>
         <button type="button" class="tool-pill" data-filter="routines">🔄 Routines &amp; Symmetry</button>
@@ -625,6 +627,50 @@
 
     <!-- Tools Grid Container -->
     <div class="tools-grid" id="toolsGrid">
+
+      <!-- TOOL 0: Real-Time Team Collaboration & Cloud Sync (BETA) -->
+      <article class="tool-card highlight" data-category="collab" data-keywords="team collaboration cloud real-time multi-user cursor pin comments strategy voting version history 500 gmail">
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background:rgba(56, 189, 248, 0.15); border-color:rgba(56, 189, 248, 0.3); color:#38bdf8;">👥</div>
+          <div class="tool-title-info">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <h3>Real-Time Team Collaboration &amp; Cloud Sync</h3>
+              <span style="background:#f59e0b;color:#0b0f14;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius:10px;">BETA</span>
+            </div>
+            <p class="tool-tagline">Multi-user real-time autonomous path editing with live collaborator cursors, strategy consensus voting, collaborative field pin comments, and up to 500 version history snapshots.</p>
+          </div>
+          <span class="tool-category-badge" style="background:rgba(56, 189, 248, 0.15);color:#38bdf8;border-color:rgba(56, 189, 248, 0.3);">👥 Collab</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Collaboration</span>
+              <strong class="result-val green">Live Multi-User</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Version History</span>
+              <strong class="result-val cyan">Up to 500 Checkpoints</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Account Rule</span>
+              <strong class="result-val amber">1 Gmail = 1 Team</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.73rem; color:var(--muted); line-height:1.4;">
+            Programmers, drivers, and coaches can tweak waypoints together during pit strategy meetings. Drop collaborative pins on the field canvas, vote on autonomous match strategies, and track who edited what with full author attribution.
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="team.html" class="btn-tool-action primary" id="btnLaunchTeamWorkspace" title="Launch Real-Time Team Collaboration Workspace">
+              🚀 Launch Team Collab (BETA)
+            </a>
+            <a href="team.html" class="btn-tool-action" title="View Team Version History and Strategy Voting">
+              📜 500-Version History
+            </a>
+          </div>
+        </div>
+      </article>
 
       <!-- TOOL 1: Real-Time Velocity vs Target & 15s+ Bottleneck Analyzer -->
       <article class="tool-card highlight" data-category="tuning" data-keywords="velocity bottleneck target acceleration lag slew 15s simulation pid tuning saturation">

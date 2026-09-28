@@ -976,7 +976,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.wireVersionHistoryUI();
     }
 
-    createVersionSnapshot(fileName = "src/autons.cpp", source = "manual", label = "", explicitContent = null) {
+    createVersionSnapshot(fileName = "src/autons.cpp", source = "manual", label = "", explicitContent = null, authorInfo = null) {
       if (!fileName) fileName = "src/autons.cpp";
       const content = explicitContent !== null ? explicitContent : this.getFile(fileName);
       if (!content || typeof content !== "string" || content.trim().length === 0) return null;
@@ -1003,6 +1003,12 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       else if (source === "manual") defaultLabel = "Manual Checkpoint";
       else if (source === "initial") defaultLabel = "Initial Workspace Baseline";
 
+      const isTeam = Boolean(this.isTeam || this.project?.isTeam || (typeof window !== "undefined" && window.location && window.location.pathname.includes("team")));
+      const auth = authorInfo || (typeof window !== "undefined" && window.currentUserTeamMember) || null;
+      let userEmail = auth?.email || (typeof localStorage !== "undefined" ? localStorage.getItem("lemlib_saved_google_email") : "") || "";
+      let userName = auth?.displayName || (userEmail ? userEmail.split("@")[0] : "Programmer");
+      let userRole = auth?.role || "Programmer";
+
       const snapshot = {
         id: "v_" + now + "_" + Math.random().toString(36).substring(2, 7),
         fileName,
@@ -1012,11 +1018,16 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         source,
         label: label || defaultLabel,
         linesCount: content.split("\n").length,
-        sizeBytes: typeof Blob !== "undefined" ? new Blob([content]).size : content.length
+        sizeBytes: typeof Blob !== "undefined" ? new Blob([content]).size : content.length,
+        authorEmail: userEmail,
+        authorName: userName,
+        authorRole: userRole,
+        actionSummary: label || defaultLabel
       };
 
       list.unshift(snapshot);
-      if (list.length > 50) list.length = 50;
+      const maxLimit = isTeam ? 500 : 50;
+      if (list.length > maxLimit) list.length = maxLimit;
 
       // Persist to IndexedDB asynchronously
       idbPut("file_versions_history", this.versions).catch(() => {});
@@ -1214,6 +1225,14 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           sourceName = "Baseline";
         }
 
+        const authorLine = (v.authorName || v.authorEmail)
+          ? `<div style="font-size:0.7rem;color:#38bdf8;margin:3px 0;display:flex;align-items:center;gap:4px;">
+               <span>👤</span>
+               <span style="font-weight:600;">${String(v.authorName || v.authorEmail).replace(/</g, '&lt;')}</span>
+               <span style="background:rgba(56,189,248,0.18);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.62rem;font-weight:700;">${String(v.authorRole || 'Member').replace(/</g, '&lt;')}</span>
+             </div>`
+          : '';
+
         const card = document.createElement("div");
         card.className = `version-item-card ${isSelected ? 'selected' : ''} ${isCurrent ? 'current-active' : ''}`;
         card.innerHTML = `
@@ -1222,6 +1241,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
             <span class="version-date">${v.dateStr}</span>
           </div>
           <div class="version-item-label">${v.label || 'Saved Version'}</div>
+          ${authorLine}
           <div class="version-item-footer">
             <span>${v.linesCount} lines · ${(v.sizeBytes / 1024).toFixed(1)} KB</span>
             ${isCurrent ? '<span class="version-active-tag">CURRENT ACTIVE</span>' : ''}

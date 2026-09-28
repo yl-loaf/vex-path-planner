@@ -103,11 +103,149 @@ function getStats() {
   return {
     totalViews: 0,
     uniqueVisitors: 0,
-    pages: { home: 0, ide: 0, translator: 0, stats: 0, other: 0 },
+    pages: { home: 0, ide: 0, translator: 0, stats: 0, tools: 0, team: 0, other: 0 },
     visitors: [],
     ips: []
   };
 }
+
+// ============================================================================
+// REAL-TIME TEAM COLLABORATION & CLOUD SYNC STORAGE ENGINE (BETA)
+// Enforces 1 Gmail Account = 1 Team Rule; Stores up to 500 Version Histories
+// ============================================================================
+const teamsDir = path.join(__dirname, 'data', 'teams');
+if (!fs.existsSync(teamsDir)) {
+  fs.mkdirSync(teamsDir, { recursive: true });
+}
+const userTeamsIndexFile = path.join(teamsDir, 'user_teams.json');
+
+function cleanEmailKey(email) {
+  if (!email || typeof email !== 'string') return '';
+  return email.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '_');
+}
+
+function getUserTeamsIndex() {
+  try {
+    if (fs.existsSync(userTeamsIndexFile)) {
+      return JSON.parse(fs.readFileSync(userTeamsIndexFile, 'utf8'));
+    }
+  } catch (e) {
+    console.error('Error reading user_teams index:', e);
+  }
+  return {};
+}
+
+function saveUserTeamsIndex(index) {
+  try {
+    fs.writeFileSync(userTeamsIndexFile, JSON.stringify(index, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error saving user_teams index:', e);
+  }
+}
+
+function getTeamFilePath(teamId) {
+  const cleanId = String(teamId).trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(teamsDir, `team_${cleanId}.json`);
+}
+
+function getTeam(teamId) {
+  try {
+    const fp = getTeamFilePath(teamId);
+    if (fs.existsSync(fp)) {
+      return JSON.parse(fs.readFileSync(fp, 'utf8'));
+    }
+  } catch (e) {
+    console.error(`Error reading team ${teamId}:`, e);
+  }
+  return null;
+}
+
+function saveTeam(team) {
+  try {
+    if (!team || !team.teamId) return false;
+    const fp = getTeamFilePath(team.teamId);
+    fs.writeFileSync(fp, JSON.stringify(team, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    console.error('Error saving team:', e);
+    return false;
+  }
+}
+
+function findTeamByCode(code) {
+  if (!code) return null;
+  const cleanCode = String(code).trim().toUpperCase();
+  try {
+    const files = fs.readdirSync(teamsDir);
+    for (const f of files) {
+      if (f.startsWith('team_') && f.endsWith('.json')) {
+        try {
+          const raw = fs.readFileSync(path.join(teamsDir, f), 'utf8');
+          const data = JSON.parse(raw);
+          if (data && String(data.teamCode || '').toUpperCase() === cleanCode) {
+            return data;
+          }
+          if (data && String(data.teamId || '').toLowerCase() === cleanCode.toLowerCase()) {
+            return data;
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.error('Error scanning teams by code:', e);
+  }
+  return null;
+}
+
+// In-Memory Real-Time Rooms for Live Cursor & SSE Synchronization
+const teamRooms = new Map(); // teamId -> Set of res objects
+const teamPresences = new Map(); // teamId -> Map of email -> presence object
+
+const ROLE_COLORS = {
+  Programmer: '#38bdf8', // Cyan
+  Driver: '#10b981',     // Emerald Green
+  Coach: '#f59e0b',      // Amber
+  Strategist: '#a855f7', // Purple
+  Builder: '#ec4899',    // Pink
+  Scout: '#6366f1'       // Indigo
+};
+
+function getRoleColor(role) {
+  return ROLE_COLORS[role] || '#38bdf8';
+}
+
+function broadcastToTeam(teamId, eventName, payload, excludeEmail = null) {
+  const room = teamRooms.get(teamId);
+  if (!room || room.size === 0) return;
+  const msg = `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const client of room) {
+    if (excludeEmail && client.userEmail === excludeEmail) continue;
+    try {
+      client.write(msg);
+    } catch (_) {
+      room.delete(client);
+    }
+  }
+}
+
+// Clean stale presences every 10 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [teamId, pMap] of teamPresences.entries()) {
+    let changed = false;
+    for (const [email, presence] of pMap.entries()) {
+      if (now - presence.lastSeen > 20000) {
+        pMap.delete(email);
+        changed = true;
+      }
+    }
+    if (changed) {
+      broadcastToTeam(teamId, 'presence', {
+        activeMembers: Array.from(pMap.values())
+      });
+    }
+  }
+}, 10000);
 
 function saveStats(stats) {
   try {
@@ -157,6 +295,7 @@ app.use((req, res, next) => {
     else if (pathUrl.includes('translator')) pageKey = 'translator';
     else if (pathUrl.includes('stats')) pageKey = 'stats';
     else if (pathUrl.includes('tools')) pageKey = 'tools';
+    else if (pathUrl.includes('team')) pageKey = 'team';
 
     stats.pages[pageKey] = (stats.pages[pageKey] || 0) + 1;
 
@@ -269,6 +408,693 @@ app.get('/api/project/status', (req, res) => {
     name: data.project.name,
     fileCount: Object.keys(files).length
   });
+});
+
+// ============================================================================
+// TEAM COLLABORATION REST & SSE ENDPOINTS
+// - 1 Gmail account belongs to exactly 1 team
+// - Multiple members per team with roles (Programmer, Driver, Coach, Strategist)
+// - Real-time sync, live presence & cursors
+// - Collaborative pin comments & strategy consensus voting
+// - Up to 500 version history snapshots with author attribution
+// ============================================================================
+
+// 1. Get current user's team
+app.get('/api/team/my-team', (req, res) => {
+  const { email } = req.query;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'Missing email parameter' });
+  }
+
+  const clean = cleanEmailKey(email);
+  const userTeams = getUserTeamsIndex();
+  const teamId = userTeams[clean];
+
+  if (!teamId) {
+    return res.json({ hasTeam: false });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) {
+    // Stale index reference cleanup
+    delete userTeams[clean];
+    saveUserTeamsIndex(userTeams);
+    return res.json({ hasTeam: false });
+  }
+
+  const pMap = teamPresences.get(team.teamId) || new Map();
+  res.json({
+    hasTeam: true,
+    teamId: team.teamId,
+    team,
+    activeMembers: Array.from(pMap.values())
+  });
+});
+
+// 2. Create a new team (Enforces 1 Gmail = 1 Team rule)
+app.post('/api/team/create', (req, res) => {
+  const { email, displayName, teamName, vexTeamNumber, role, photoURL, projectData, pathsData } = req.body || {};
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid Gmail address is required to create a team' });
+  }
+
+  const clean = cleanEmailKey(email);
+  const userTeams = getUserTeamsIndex();
+
+  if (userTeams[clean]) {
+    const existingTeam = getTeam(userTeams[clean]);
+    if (existingTeam) {
+      return res.status(400).json({
+        error: `This Google account (${email}) already belongs to team "${existingTeam.teamName}". Each Gmail account can belong to only 1 team at a time. Please leave your current team first.`,
+        currentTeamId: existingTeam.teamId,
+        currentTeamName: existingTeam.teamName
+      });
+    }
+  }
+
+  const teamId = 'team_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
+  // Generate friendly 6-char team code (e.g. VEX-742)
+  const teamCode = 'VEX-' + Math.floor(100 + Math.random() * 900);
+  const now = Date.now();
+  const userRole = role || 'Programmer';
+  const userDisp = (displayName && String(displayName).trim()) || email.split('@')[0];
+
+  const initialMember = {
+    email: email.trim().toLowerCase(),
+    displayName: userDisp,
+    role: userRole,
+    color: getRoleColor(userRole),
+    joinedAt: now,
+    photoURL: photoURL || '',
+    isOwner: true
+  };
+
+  const initialSnapshot = {
+    id: 'v_' + now + '_init',
+    timestamp: now,
+    dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    authorEmail: email.trim().toLowerCase(),
+    authorName: userDisp,
+    authorRole: userRole,
+    authorColor: getRoleColor(userRole),
+    actionSummary: 'Team initialized & autonomous workspace created',
+    editType: 'team_init',
+    snapshot: pathsData || null
+  };
+
+  const newTeam = {
+    teamId,
+    teamCode,
+    teamName: (teamName && String(teamName).trim()) || 'VEX High Stakes Team',
+    vexTeamNumber: (vexTeamNumber && String(vexTeamNumber).trim().toUpperCase()) || '99999X',
+    ownerEmail: email.trim().toLowerCase(),
+    createdAt: now,
+    updatedAt: now,
+    members: [initialMember],
+    pathPayload: pathsData || {
+      paths: [
+        {
+          id: 'p_default',
+          name: 'Red Left Mogo Rush',
+          pose: { x: -60, y: -60, theta: 0 },
+          actions: [
+            { id: 'a_1', type: 'moveToPoint', x: -24, y: -24, timeout: 2000, maxSpeed: 115, earlyExitRange: 2, comment: 'Rush alliance goal' },
+            { id: 'a_2', type: 'moveToPose', x: 0, y: 48, theta: 90, timeout: 2500, lead: 0.6, comment: 'Score preload in corner' }
+          ]
+        }
+      ]
+    },
+    project: projectData || null,
+    versionHistory: [initialSnapshot],
+    comments: [
+      {
+        id: 'cmt_welcome',
+        x: -24,
+        y: -24,
+        text: '📍 Strategy Tip: Clamp preload here before 12s mark. Drop pin comments anywhere on field to discuss routines!',
+        authorEmail: email.trim().toLowerCase(),
+        authorName: userDisp,
+        authorRole: userRole,
+        authorColor: getRoleColor(userRole),
+        timestamp: now,
+        resolved: false,
+        replies: []
+      }
+    ],
+    strategies: [
+      {
+        id: 'strat_plan_a',
+        title: 'Plan A: Center Mobile Goal Rush',
+        description: 'Primary match routine: Rush center goal, clamp alliance mogo, sweep 3 side rings, park before 14.5s.',
+        targetRoutine: 'Red Left Mogo Rush',
+        authorEmail: email.trim().toLowerCase(),
+        authorName: userDisp,
+        createdAt: now,
+        status: 'active',
+        votes: {
+          [email.trim().toLowerCase()]: 'rocket'
+        }
+      }
+    ]
+  };
+
+  saveTeam(newTeam);
+  userTeams[clean] = teamId;
+  saveUserTeamsIndex(userTeams);
+
+  console.log(`[TeamCollab] Created team "${newTeam.teamName}" (${newTeam.teamCode}) for ${email}`);
+  res.json({ success: true, team: newTeam });
+});
+
+// 3. Join an existing team by Team Code (Enforces 1 Gmail = 1 Team rule)
+app.post('/api/team/join', (req, res) => {
+  const { email, displayName, teamCode, role, photoURL } = req.body || {};
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid Gmail address is required to join a team' });
+  }
+  if (!teamCode || !String(teamCode).trim()) {
+    return res.status(400).json({ error: 'Team Code is required (e.g. VEX-742)' });
+  }
+
+  const clean = cleanEmailKey(email);
+  const userTeams = getUserTeamsIndex();
+
+  const team = findTeamByCode(teamCode);
+  if (!team) {
+    return res.status(404).json({ error: `Team with code "${teamCode}" not found. Please verify the 6-character code with your teammate.` });
+  }
+
+  // Check if user is already registered in a different team
+  if (userTeams[clean] && userTeams[clean] !== team.teamId) {
+    const existingTeam = getTeam(userTeams[clean]);
+    return res.status(400).json({
+      error: `This Google account (${email}) already belongs to team "${existingTeam?.teamName || userTeams[clean]}". A Google account can only belong to 1 team at a time. Please leave your current team before joining a new one.`,
+      currentTeamId: userTeams[clean]
+    });
+  }
+
+  const userRole = role || 'Driver';
+  const userDisp = (displayName && String(displayName).trim()) || email.split('@')[0];
+  const userEmailNorm = email.trim().toLowerCase();
+  const now = Date.now();
+
+  // Check if member already in roster
+  let member = team.members.find(m => m.email.toLowerCase() === userEmailNorm);
+  if (!member) {
+    member = {
+      email: userEmailNorm,
+      displayName: userDisp,
+      role: userRole,
+      color: getRoleColor(userRole),
+      joinedAt: now,
+      photoURL: photoURL || '',
+      isOwner: false
+    };
+    team.members.push(member);
+
+    // Record join in version history with author attribution (stores up to 500)
+    team.versionHistory.unshift({
+      id: 'v_' + now + '_join',
+      timestamp: now,
+      dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      authorEmail: userEmailNorm,
+      authorName: userDisp,
+      authorRole: userRole,
+      authorColor: getRoleColor(userRole),
+      actionSummary: `${userDisp} joined the team as ${userRole}`,
+      editType: 'member_join',
+      snapshot: null
+    });
+    if (team.versionHistory.length > 500) {
+      team.versionHistory.length = 500;
+    }
+
+    team.updatedAt = now;
+    saveTeam(team);
+    broadcastToTeam(team.teamId, 'member_joined', { member, team });
+  }
+
+  userTeams[clean] = team.teamId;
+  saveUserTeamsIndex(userTeams);
+
+  console.log(`[TeamCollab] User ${email} joined team "${team.teamName}" (${team.teamCode}) as ${userRole}`);
+  res.json({ success: true, team });
+});
+
+// 4. Leave team
+app.post('/api/team/leave', (req, res) => {
+  const { email, teamId } = req.body || {};
+  if (!email || !teamId) {
+    return res.status(400).json({ error: 'Missing email or teamId' });
+  }
+
+  const clean = cleanEmailKey(email);
+  const userTeams = getUserTeamsIndex();
+  delete userTeams[clean];
+  saveUserTeamsIndex(userTeams);
+
+  const team = getTeam(teamId);
+  if (team) {
+    const userEmailNorm = email.trim().toLowerCase();
+    const removedMember = team.members.find(m => m.email.toLowerCase() === userEmailNorm);
+    team.members = team.members.filter(m => m.email.toLowerCase() !== userEmailNorm);
+
+    if (team.members.length > 0) {
+      if (removedMember && removedMember.isOwner) {
+        team.members[0].isOwner = true;
+        team.ownerEmail = team.members[0].email;
+      }
+      const now = Date.now();
+      team.versionHistory.unshift({
+        id: 'v_' + now + '_leave',
+        timestamp: now,
+        dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        authorEmail: userEmailNorm,
+        authorName: removedMember?.displayName || email.split('@')[0],
+        authorRole: removedMember?.role || 'Member',
+        authorColor: removedMember?.color || '#94a3b8',
+        actionSummary: `${removedMember?.displayName || email} left the team`,
+        editType: 'member_leave',
+        snapshot: null
+      });
+      if (team.versionHistory.length > 500) team.versionHistory.length = 500;
+      team.updatedAt = now;
+      saveTeam(team);
+      broadcastToTeam(teamId, 'member_left', { email: userEmailNorm, team });
+    }
+  }
+
+  console.log(`[TeamCollab] User ${email} left team ${teamId}`);
+  res.json({ success: true });
+});
+
+// 5. Get full team data & active presences
+app.get('/api/team/data', (req, res) => {
+  const { teamId } = req.query;
+  if (!teamId) {
+    return res.status(400).json({ error: 'Missing teamId parameter' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) {
+    return res.status(404).json({ error: 'Team not found' });
+  }
+
+  const pMap = teamPresences.get(team.teamId) || new Map();
+  res.json({
+    success: true,
+    team,
+    activeMembers: Array.from(pMap.values())
+  });
+});
+
+// 6. Real-time path & action sync edit (Stores up to 500 version history entries with author attribution)
+app.post('/api/team/sync-edit', (req, res) => {
+  const { teamId, email, authorName, authorRole, editType, changeSummary, pathPayload, projectPayload, createSnapshot } = req.body || {};
+  if (!teamId) {
+    return res.status(400).json({ error: 'Missing teamId parameter' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) {
+    return res.status(404).json({ error: 'Team not found' });
+  }
+
+  const now = Date.now();
+  team.updatedAt = now;
+
+  if (pathPayload !== undefined && pathPayload !== null) {
+    team.pathPayload = pathPayload;
+  }
+  if (projectPayload !== undefined && projectPayload !== null) {
+    team.project = projectPayload;
+  }
+
+  const userEmailNorm = (email && String(email).trim().toLowerCase()) || '';
+  const member = team.members.find(m => m.email.toLowerCase() === userEmailNorm);
+  const finalRole = authorRole || member?.role || 'Programmer';
+  const finalName = authorName || member?.displayName || (email ? email.split('@')[0] : 'Teammate');
+  const finalColor = member?.color || getRoleColor(finalRole);
+
+  if (createSnapshot !== false) {
+    const linesCount = (pathPayload && Array.isArray(pathPayload.paths))
+      ? pathPayload.paths.reduce((acc, p) => acc + (p.actions ? p.actions.length : 0), 0)
+      : 0;
+
+    const snapshotItem = {
+      id: 'v_' + now + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: now,
+      dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      authorEmail: userEmailNorm,
+      authorName: finalName,
+      authorRole: finalRole,
+      authorColor: finalColor,
+      actionSummary: changeSummary || 'Modified autonomous routine',
+      editType: editType || 'waypoint_edit',
+      snapshot: pathPayload || null,
+      linesCount
+    };
+
+    if (!team.versionHistory) team.versionHistory = [];
+    team.versionHistory.unshift(snapshotItem);
+
+    // Enforce up to 500 team version histories!
+    if (team.versionHistory.length > 500) {
+      team.versionHistory.length = 500;
+    }
+  }
+
+  saveTeam(team);
+
+  // Broadcast change immediately to all other connected team members
+  broadcastToTeam(teamId, 'sync', {
+    email: userEmailNorm,
+    authorName: finalName,
+    authorRole: finalRole,
+    editType: editType || 'waypoint_edit',
+    changeSummary: changeSummary || 'Modified autonomous routine',
+    pathPayload: team.pathPayload,
+    projectPayload: team.project,
+    versionCount: team.versionHistory ? team.versionHistory.length : 0,
+    updatedAt: now
+  }, userEmailNorm);
+
+  res.json({
+    success: true,
+    versionCount: team.versionHistory ? team.versionHistory.length : 0,
+    updatedAt: now
+  });
+});
+
+// 7. Presence Heartbeat & Live Cursor Sharing
+app.post('/api/team/presence', (req, res) => {
+  const { teamId, email, displayName, role, cursor, activeWaypoint, activeRoutine } = req.body || {};
+  if (!teamId || !email) {
+    return res.status(400).json({ error: 'Missing teamId or email' });
+  }
+
+  let pMap = teamPresences.get(teamId);
+  if (!pMap) {
+    pMap = new Map();
+    teamPresences.set(teamId, pMap);
+  }
+
+  const clean = email.trim().toLowerCase();
+  const userRole = role || 'Programmer';
+  const userDisp = displayName || email.split('@')[0];
+
+  pMap.set(clean, {
+    email: clean,
+    displayName: userDisp,
+    role: userRole,
+    color: getRoleColor(userRole),
+    cursor: cursor || null,
+    activeWaypoint: activeWaypoint || null,
+    activeRoutine: activeRoutine || null,
+    lastSeen: Date.now()
+  });
+
+  const activeMembers = Array.from(pMap.values());
+
+  // Broadcast presence & cursor to all other clients in the room
+  broadcastToTeam(teamId, 'presence', { activeMembers }, clean);
+
+  res.json({ success: true, activeMembers });
+});
+
+// 8. Server-Sent Events (SSE) Stream for Instant Multi-User Sync
+app.get('/api/team/events', (req, res) => {
+  const { teamId, email } = req.query;
+  if (!teamId) {
+    return res.status(400).send('Missing teamId');
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+
+  let room = teamRooms.get(teamId);
+  if (!room) {
+    room = new Set();
+    teamRooms.set(teamId, room);
+  }
+
+  res.userEmail = email ? email.trim().toLowerCase() : '';
+  room.add(res);
+
+  // Send initial connection event
+  const pMap = teamPresences.get(teamId) || new Map();
+  res.write(`event: connected\ndata: ${JSON.stringify({ connected: true, activeMembers: Array.from(pMap.values()) })}\n\n`);
+
+  // Heartbeat ping every 15s to keep connection alive through reverse proxies
+  const pingTimer = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch (_) {
+      clearInterval(pingTimer);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(pingTimer);
+    room.delete(res);
+    if (res.userEmail) {
+      const p = teamPresences.get(teamId);
+      if (p) {
+        p.delete(res.userEmail);
+        broadcastToTeam(teamId, 'presence', { activeMembers: Array.from(p.values()) });
+      }
+    }
+  });
+});
+
+// 9. Collaborative Field Pin Comments
+app.post('/api/team/comment/add', (req, res) => {
+  const { teamId, email, authorName, authorRole, x, y, text } = req.body || {};
+  if (!teamId || !text || text.trim() === '') {
+    return res.status(400).json({ error: 'Missing comment text or teamId' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const now = Date.now();
+  const userRole = authorRole || 'Coach';
+  const newComment = {
+    id: 'cmt_' + now + '_' + Math.random().toString(36).substring(2, 6),
+    x: Number(x) || 0,
+    y: Number(y) || 0,
+    text: text.trim(),
+    authorEmail: (email || '').trim().toLowerCase(),
+    authorName: authorName || (email ? email.split('@')[0] : 'Teammate'),
+    authorRole: userRole,
+    authorColor: getRoleColor(userRole),
+    timestamp: now,
+    resolved: false,
+    replies: []
+  };
+
+  if (!team.comments) team.comments = [];
+  team.comments.unshift(newComment);
+  team.updatedAt = now;
+  saveTeam(team);
+
+  broadcastToTeam(teamId, 'comment_update', { comments: team.comments, newComment });
+  res.json({ success: true, comments: team.comments, comment: newComment });
+});
+
+app.post('/api/team/comment/reply', (req, res) => {
+  const { teamId, commentId, email, authorName, authorRole, text } = req.body || {};
+  if (!teamId || !commentId || !text || text.trim() === '') {
+    return res.status(400).json({ error: 'Missing reply text or commentId' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const target = (team.comments || []).find(c => c.id === commentId);
+  if (!target) return res.status(404).json({ error: 'Comment not found' });
+
+  const now = Date.now();
+  const userRole = authorRole || 'Programmer';
+  const reply = {
+    id: 'rep_' + now + '_' + Math.random().toString(36).substring(2, 6),
+    text: text.trim(),
+    authorEmail: (email || '').trim().toLowerCase(),
+    authorName: authorName || (email ? email.split('@')[0] : 'Teammate'),
+    authorRole: userRole,
+    authorColor: getRoleColor(userRole),
+    timestamp: now
+  };
+
+  if (!target.replies) target.replies = [];
+  target.replies.push(reply);
+  team.updatedAt = now;
+  saveTeam(team);
+
+  broadcastToTeam(teamId, 'comment_update', { comments: team.comments });
+  res.json({ success: true, comments: team.comments });
+});
+
+app.post('/api/team/comment/resolve', (req, res) => {
+  const { teamId, commentId, resolved } = req.body || {};
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const target = (team.comments || []).find(c => c.id === commentId);
+  if (target) {
+    target.resolved = resolved !== undefined ? Boolean(resolved) : !target.resolved;
+    team.updatedAt = Date.now();
+    saveTeam(team);
+    broadcastToTeam(teamId, 'comment_update', { comments: team.comments });
+  }
+  res.json({ success: true, comments: team.comments || [] });
+});
+
+app.post('/api/team/comment/delete', (req, res) => {
+  const { teamId, commentId } = req.body || {};
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  team.comments = (team.comments || []).filter(c => c.id !== commentId);
+  team.updatedAt = Date.now();
+  saveTeam(team);
+  broadcastToTeam(teamId, 'comment_update', { comments: team.comments });
+  res.json({ success: true, comments: team.comments });
+});
+
+// 10. Autonomous Strategy Consensus & Voting Board
+app.post('/api/team/strategy/add', (req, res) => {
+  const { teamId, email, authorName, title, description, targetRoutine } = req.body || {};
+  if (!teamId || !title || title.trim() === '') {
+    return res.status(400).json({ error: 'Missing strategy title or teamId' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const now = Date.now();
+  const userEmailNorm = (email || '').trim().toLowerCase();
+  const newStrategy = {
+    id: 'strat_' + now + '_' + Math.random().toString(36).substring(2, 6),
+    title: title.trim(),
+    description: (description && description.trim()) || '',
+    targetRoutine: targetRoutine || '',
+    authorEmail: userEmailNorm,
+    authorName: authorName || (email ? email.split('@')[0] : 'Teammate'),
+    createdAt: now,
+    status: 'active',
+    votes: {
+      [userEmailNorm]: 'rocket'
+    }
+  };
+
+  if (!team.strategies) team.strategies = [];
+  team.strategies.unshift(newStrategy);
+  team.updatedAt = now;
+  saveTeam(team);
+
+  broadcastToTeam(teamId, 'strategy_update', { strategies: team.strategies });
+  res.json({ success: true, strategies: team.strategies, strategy: newStrategy });
+});
+
+app.post('/api/team/strategy/vote', (req, res) => {
+  const { teamId, strategyId, email, vote } = req.body || {};
+  if (!teamId || !strategyId || !email) {
+    return res.status(400).json({ error: 'Missing parameters' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const target = (team.strategies || []).find(s => s.id === strategyId);
+  if (target) {
+    if (!target.votes) target.votes = {};
+    const userEmailNorm = email.trim().toLowerCase();
+    if (target.votes[userEmailNorm] === vote) {
+      delete target.votes[userEmailNorm]; // toggle off
+    } else {
+      target.votes[userEmailNorm] = vote; // 'yes' | 'no' | 'rocket'
+    }
+    team.updatedAt = Date.now();
+    saveTeam(team);
+    broadcastToTeam(teamId, 'strategy_update', { strategies: team.strategies });
+  }
+
+  res.json({ success: true, strategies: team.strategies || [] });
+});
+
+app.post('/api/team/strategy/delete', (req, res) => {
+  const { teamId, strategyId } = req.body || {};
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  team.strategies = (team.strategies || []).filter(s => s.id !== strategyId);
+  team.updatedAt = Date.now();
+  saveTeam(team);
+  broadcastToTeam(teamId, 'strategy_update', { strategies: team.strategies });
+  res.json({ success: true, strategies: team.strategies });
+});
+
+// 11. Restore any of the up to 500 Version Histories
+app.post('/api/team/version/restore', (req, res) => {
+  const { teamId, versionId, email, authorName, authorRole } = req.body || {};
+  if (!teamId || !versionId) {
+    return res.status(400).json({ error: 'Missing teamId or versionId' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const targetVersion = (team.versionHistory || []).find(v => v.id === versionId);
+  if (!targetVersion || !targetVersion.snapshot) {
+    return res.status(404).json({ error: 'Version snapshot payload not found' });
+  }
+
+  const now = Date.now();
+  const userEmailNorm = (email || '').trim().toLowerCase();
+  const userDisp = authorName || (email ? email.split('@')[0] : 'Teammate');
+  const userRole = authorRole || 'Programmer';
+
+  // Restore path payload
+  team.pathPayload = targetVersion.snapshot;
+  team.updatedAt = now;
+
+  // Record restoration snapshot in version history with full attribution
+  const restoreSnapshot = {
+    id: 'v_' + now + '_restored',
+    timestamp: now,
+    dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    authorEmail: userEmailNorm,
+    authorName: userDisp,
+    authorRole: userRole,
+    authorColor: getRoleColor(userRole),
+    actionSummary: `Restored version from ${targetVersion.dateStr} (${targetVersion.actionSummary})`,
+    editType: 'version_restore',
+    snapshot: targetVersion.snapshot,
+    restoredFromId: versionId
+  };
+
+  team.versionHistory.unshift(restoreSnapshot);
+  if (team.versionHistory.length > 500) team.versionHistory.length = 500;
+
+  saveTeam(team);
+
+  broadcastToTeam(teamId, 'sync', {
+    email: userEmailNorm,
+    authorName: userDisp,
+    authorRole: userRole,
+    editType: 'version_restore',
+    changeSummary: restoreSnapshot.actionSummary,
+    pathPayload: team.pathPayload,
+    versionCount: team.versionHistory.length,
+    updatedAt: now
+  });
+
+  res.json({ success: true, team });
 });
 
 // Single-Instance Account Session Coordination
@@ -706,6 +1532,12 @@ app.get(['/stats', '/stats.html'], (req, res) => {
 app.get(['/tools', '/tools.html'], (req, res) => {
   res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'tools.html'));
+});
+
+// Real-Time Team Collaboration & Cloud Sync Page Route (BETA)
+app.get(['/team', '/team.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
+  res.sendFile(path.join(__dirname, 'team.html'));
 });
 
 // Google Search Console & SEO Routes

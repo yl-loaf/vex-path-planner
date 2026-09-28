@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="shortcut icon" href="favicon.ico" />
+  <link rel="canonical" href="https://yl-loaf.github.io/vex-path-planner/team.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Real-Time Team Collaboration &amp; Cloud Sync (BETA) · VEX V5 LemLib Suite</title>
+  <meta name="description" content="Collaborate in real time with teammates on VEX V5 LemLib autonomous paths. Live multi-user cursor editing, strategy consensus voting, collaborative field pin comments, and up to 500 version history checkpoints." />
+  <meta property="og:title" content="Real-Time Team Collaboration &amp; Cloud Sync (BETA) · VEX V5 LemLib" />
+  <meta property="og:description" content="Multi-user real-time path planning, live cursors, strategy voting, and 500-entry version history for VEX robotics teams." />
+  <link rel="stylesheet" href="style.css?v=20260928.k18" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('vex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    /* =========================================================================
+       TEAM COLLABORATION SUITE STYLES (BETA)
+       ========================================================================= */
+    .team-page-body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Top Sticky Navigation */
+    .team-nav-header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    }
+
+    .team-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-team-back {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-team-back:hover {
+      background: #334155;
+      color: #ffffff;
+      border-color: #475569;
+    }
+
+    .team-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .team-title-wrap h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 0;
+      color: var(--text-heading);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-beta-pill {
+      background: #f59e0b;
+      color: #0b0f14;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Center Navigation Tabs */
+    .team-nav-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .team-nav-tab {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .team-nav-tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .team-nav-tab.active {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+
+    /* Team Ribbon Strip */
+    .team-sub-ribbon {
+      background: #090e17;
+      border-bottom: 1px solid #1e293b;
+      padding: 8px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+    }
+
+    .team-info-pill-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .team-code-badge {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #38bdf8;
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-family: ui-monospace, monospace;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .team-code-badge:hover {
+      background: rgba(56, 189, 248, 0.25);
+    }
+
+    .team-presence-avatars {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .presence-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #334155;
+      color: #ffffff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      border: 2px solid #38bdf8;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      cursor: pointer;
+    }
+    .presence-avatar.driver { border-color: #10b981; }
+    .presence-avatar.coach { border-color: #f59e0b; }
+    .presence-avatar.strategist { border-color: #a855f7; }
+    .presence-avatar.programmer { border-color: #38bdf8; }
+
+    .presence-pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      border: 2px solid #0f172a;
+    }
+
+    /* Main 3-Column Layout */
+    .team-workspace {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 100px);
+      min-height: 600px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .team-col-left {
+      width: 320px;
+      min-width: 280px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+
+    .team-col-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #06090e;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .team-col-right {
+      width: 420px;
+      min-width: 340px;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+
+    /* Card Panels in Columns */
+    .team-section-card {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .team-section-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 0 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Member Roster List */
+    .member-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 6px;
+      font-size: 0.78rem;
+    }
+    .member-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .member-role-tag {
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .member-role-tag.programmer { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+    .member-role-tag.driver { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .member-role-tag.coach { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .member-role-tag.strategist { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+
+    /* Field Canvas Wrap */
+    .field-canvas-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #teamFieldCanvas {
+      max-width: 100%;
+      max-height: 100%;
+      background: #0f172a;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      border: 2px solid #1e293b;
+      cursor: crosshair;
+    }
+
+    /* Collaborator Live Cursors on Canvas */
+    .teammate-cursor {
+      position: absolute;
+      pointer-events: none;
+      z-index: 150;
+      transition: transform 0.08s ease-out;
+      transform: translate(-2px, -2px);
+    }
+    .cursor-pointer-svg {
+      width: 20px;
+      height: 20px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+    .cursor-label {
+      position: absolute;
+      top: 16px;
+      left: 12px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      white-space: nowrap;
+      color: #0b0f14;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    /* Comment Pins on Canvas */
+    .field-pin-marker {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      cursor: pointer;
+      z-index: 140;
+      transition: transform 0.15s ease;
+    }
+    .field-pin-marker:hover {
+      transform: translate(-50%, -110%) scale(1.15);
+    }
+    .pin-bubble {
+      background: #f59e0b;
+      color: #0b0f14;
+      width: 26px;
+      height: 26px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      border: 2px solid #ffffff;
+    }
+    .pin-bubble span {
+      transform: rotate(45deg);
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+    .pin-bubble.resolved {
+      background: #64748b;
+      opacity: 0.7;
+    }
+
+    /* Comment Popover */
+    .comment-popover {
+      position: absolute;
+      background: #0f172a;
+      border: 1px solid #38bdf8;
+      border-radius: 8px;
+      padding: 12px;
+      width: 280px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+      z-index: 180;
+      font-size: 0.78rem;
+    }
+
+    /* Strategy Voting Cards */
+    .strategy-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .strategy-card.approved {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: rgba(34, 197, 94, 0.04);
+    }
+    .strategy-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .strategy-title {
+      font-weight: 700;
+      color: #f8fafc;
+      font-size: 0.85rem;
+    }
+    .strategy-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+    .strategy-vote-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-vote-pill {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .btn-vote-pill:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+    .btn-vote-pill.active {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+      color: #38bdf8;
+      font-weight: 700;
+    }
+
+    /* Right Panel Tabs */
+    .right-tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: #090e17;
+    }
+    .right-tab-btn {
+      flex: 1;
+      padding: 10px 12px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .right-tab-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .right-tab-btn.active {
+      color: #38bdf8;
+      border-bottom-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    /* Version History List (Up to 500 Checkpoints) */
+    .version-item-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .version-item-card:hover {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.04);
+    }
+    .version-item-card.active {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.08);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+    }
+
+    .version-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .version-author-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    .version-time-tag {
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+    .version-summary-text {
+      font-size: 0.8rem;
+      color: #e2e8f0;
+      line-height: 1.35;
+      margin: 4px 0 8px;
+    }
+    .version-actions-strip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Action Blocks Flow in Right Panel */
+    .action-block-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      transition: border-color 0.15s ease;
+    }
+    .action-block-card:hover {
+      border-color: #475569;
+    }
+    .action-block-card.selected {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.05);
+    }
+    .action-num-badge {
+      background: #1e293b;
+      color: #94a3b8;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+
+    /* Bottom Control Bar on Canvas */
+    .field-controls-bar {
+      background: #090e17;
+      border-top: 1px solid #1e293b;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    /* Modal Dialogs */
+    .team-modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .team-modal-content {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+    }
+    .team-modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .team-modal-body {
+      padding: 20px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .team-modal-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #1e293b;
+      background: #090e17;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #090d16;
+      border: 1px solid #334155;
+      color: #ffffff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+
+    .btn-team-primary {
+      background: #0284c7;
+      border: 1px solid #0369a1;
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-team-primary:hover {
+      background: #0369a1;
+    }
+    .btn-team-secondary {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .btn-team-secondary:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+
+    /* Toast Notification */
+    .team-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #0f172a;
+      border: 1px solid #38bdf8;
+      border-radius: 8px;
+      padding: 10px 16px;
+      color: #ffffff;
+      font-size: 0.82rem;
+      font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .team-toast.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body class="team-page-body">
+
+  <!-- Top Sticky Navigation Bar -->
+  <header class="team-nav-header">
+    <div class="team-header-left">
+      <a href="index.html" class="btn-team-back" title="Return to Visual Autonomous Path Planner">
+        ← Visual Planner
+      </a>
+      <div class="team-title-wrap">
+        <h1>👥 Real-Time Team Collaboration &amp; Cloud Sync <span class="badge-beta-pill">BETA</span></h1>
+      </div>
+    </div>
+
+    <!-- Center Navigation Tabs across all pages -->
+    <nav class="team-nav-tabs">
+      <a href="index.html" class="team-nav-tab" title="Visual 2D Autonomous Path Planner">🗺️ Planner &amp; Sim</a>
+      <a href="ide.html" class="team-nav-tab" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
+      <a href="team.html" class="team-nav-tab active" title="Real-Time Team Collaboration &amp; Cloud Sync">👥 Team Collab</a>
+      <a href="tools.html" class="team-nav-tab" title="Engineering Tools Suite">🛠️ Tools Suite</a>
+      <a href="translator.html" class="team-nav-tab" title="Raw C++ Auton to Visual Blocks Translator">🔄 C++ Translator</a>
+      <a href="stats.html" class="team-nav-tab" title="Site &amp; User Visitor Analytics">📊 Stats</a>
+    </nav>
+
+    <!-- Header Actions: Theme & Google Auth -->
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button type="button" class="btn-theme-toggle" data-theme-toggle aria-label="Toggle theme" title="Toggle Light/Dark Theme">
+        <span class="theme-toggle-icon">☀️</span>
+        <span class="theme-toggle-text">Theme</span>
+      </button>
+
+      <div id="authArea" class="auth-area">
+        <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
+        <span id="authUser" class="auth-user" hidden></span>
+        <button id="btnSwitchAccount" type="button" class="switch-account-btn" hidden title="Switch Google account">Switch</button>
+        <button id="btnSignOut" type="button" hidden title="Sign out of Google account">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Secondary Team Information Ribbon -->
+  <div class="team-sub-ribbon">
+    <div class="team-info-pill-group">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-weight:700;color:#f8fafc;" id="lblTeamName">Loading Team...</span>
+        <span style="color:#64748b;" id="lblVexNumber">(VEX Team #)</span>
+      </div>
+
+      <div class="team-code-badge" id="btnCopyTeamCode" title="Click to copy Team Code to share with teammates">
+        <span>📋 Code:</span>
+        <strong id="lblTeamCode">---</strong>
+        <span style="font-size:0.7rem;opacity:0.7;">(Click to Copy)</span>
+      </div>
+
+      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:700;" id="connStatusPill">
+        <span class="presence-pulse" style="position:static;display:inline-block;"></span>
+        <span id="connStatusText">Connected · Live Sync</span>
+      </div>
+    </div>
+
+    <!-- Active Collaborator Presence Avatars -->
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:0.72rem;color:var(--muted);">Online Now:</span>
+        <div class="team-presence-avatars" id="presenceAvatarsWrap">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <button type="button" class="btn-xs-clean" id="btnManageTeam" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;">
+        ⚙️ Team Settings
+      </button>
+    </div>
+  </div>
+
+  <!-- Main 3-Column Collaborative Workspace -->
+  <main class="team-workspace">
+
+    <!-- LEFT COLUMN: Roster, Auton Selector, Strategy Voting & Pin Comments -->
+    <aside class="team-col-left">
+      <!-- Team Members Roster -->
+      <section class="team-section-card">
+        <div class="team-section-title">
+          <span>👥 Team Members (<span id="memberCountBadge">0</span>)</span>
+          <button type="button" class="btn-xs-clean" id="btnInviteMember" style="color:#38bdf8;background:none;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;">+ Invite</button>
+        </div>
+        <div id="teamMemberList">
+          <!-- Dynamically populated -->
+        </div>
+        <div style="font-size:0.68rem;color:#64748b;margin-top:6px;line-height:1.35;">
+          ℹ️ 1 Gmail account belongs to 1 team at a time. All teammates edit with live cursor presence.
+        </div>
+      </section>
+
+      <!-- Active Autonomous Routine Selector -->
+      <section class="team-section-card">
+        <div class="team-section-title">
+          <span>🎯 Autonomous Routine</span>
+          <button type="button" class="btn-xs-clean" id="btnAddRoutine" style="color:#38bdf8;background:none;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;">+ New</button>
+        </div>
+        <select id="selTeamRoutine" class="form-input" style="padding:6px 10px;font-size:0.8rem;margin-bottom:8px;">
+          <!-- Dynamically populated -->
+        </select>
+        <div style="display:flex;gap:6px;">
+          <button type="button" id="btnRenameRoutine" class="btn-team-secondary" style="flex:1;padding:5px 8px;font-size:0.72rem;">✏️ Rename</button>
+          <button type="button" id="btnDupRoutine" class="btn-team-secondary" style="flex:1;padding:5px 8px;font-size:0.72rem;">📋 Duplicate</button>
+        </div>
+      </section>
+
+      <!-- Strategy Consensus & Voting Board -->
+      <section class="team-section-card" style="flex:1;">
+        <div class="team-section-title">
+          <span>🗳️ Match Strategy Consensus</span>
+          <button type="button" class="btn-xs-clean" id="btnProposeStrategy" style="color:#38bdf8;background:none;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;">+ Propose</button>
+        </div>
+        <div id="strategyCardsList">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- Collaborative Pin Comments Panel -->
+      <section class="team-section-card">
+        <div class="team-section-title">
+          <span>📍 Field Pin Comments</span>
+          <button type="button" class="btn-xs-clean" id="btnTogglePinTool" style="background:#f59e0b;color:#0b0f14;border:none;padding:2px 8px;border-radius:10px;font-weight:700;cursor:pointer;font-size:0.7rem;">+ Drop Pin</button>
+        </div>
+        <div id="pinCommentsList" style="max-height:160px;overflow-y:auto;">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+    </aside>
+
+    <!-- CENTER COLUMN: Interactive Live Field Canvas & Cursors -->
+    <section class="team-col-center">
+      <!-- Top Canvas Status Strip -->
+      <div style="padding:8px 16px;background:#090e17;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;font-size:0.75rem;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span>📍 Pose: <strong id="lblCursorCoords" style="color:#38bdf8;">X: 0.0" | Y: 0.0" | θ: 0.0°</strong></span>
+          <span style="color:#475569;">|</span>
+          <span id="lblActiveEditingStatus" style="color:#94a3b8;">Move any waypoint or click to drop strategy pin</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button type="button" id="btnCenterCanvasPinTool" class="btn-team-secondary" style="padding:4px 10px;font-size:0.72rem;display:inline-flex;align-items:center;gap:4px;">
+            <span>📍</span> Drop Pin Comment
+          </button>
+          <button type="button" id="btnAutoTuneCurve" class="btn-team-secondary" style="padding:4px 10px;font-size:0.72rem;">
+            ⚡ Auto-Smooth Path
+          </button>
+        </div>
+      </div>
+
+      <!-- Field Canvas Container with Collaborator Cursor Overlay -->
+      <div class="field-canvas-container" id="fieldCanvasContainer">
+        <canvas id="teamFieldCanvas" width="600" height="600"></canvas>
+        <div id="teammateCursorsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
+          <!-- Dynamically rendered collaborator cursors -->
+        </div>
+        <div id="fieldPinsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
+          <!-- Dynamically rendered comment pins -->
+        </div>
+      </div>
+
+      <!-- Bottom Playback & Simulation Scrubber -->
+      <div class="field-controls-bar">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button type="button" id="btnSimPlay" class="btn-team-primary" style="padding:6px 14px;font-size:0.78rem;">▶ Play 15s Sim</button>
+          <button type="button" id="btnSimReset" class="btn-team-secondary" style="padding:6px 12px;font-size:0.78rem;">↺ Reset</button>
+          <span style="font-family:ui-monospace, monospace;font-size:0.85rem;color:#f8fafc;font-weight:700;margin-left:6px;" id="lblSimTime">0.00s / 15.00s</span>
+        </div>
+
+        <div style="flex:1;max-width:360px;margin:0 12px;">
+          <input type="range" id="simScrubber" min="0" max="15000" step="50" value="0" style="width:100%;accent-color:#38bdf8;" />
+        </div>
+
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:0.72rem;color:var(--muted);">Actions: <strong id="lblTotalActionsCount" style="color:#ffffff;">0</strong></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: Split Tabs (Live Action Blocks Flow vs 500-Entry Team Version History) -->
+    <aside class="team-col-right">
+      <!-- Top Segmented Tabs -->
+      <div class="right-tab-bar">
+        <button type="button" class="right-tab-btn active" id="tabBtnActions" data-tab="actions">
+          <span>🧩 Action Flow</span>
+          <span style="background:rgba(56,189,248,0.2);color:#38bdf8;padding:1px 6px;border-radius:10px;font-size:0.68rem;" id="badgeActionsCount">0</span>
+        </button>
+        <button type="button" class="right-tab-btn" id="tabBtnVersions" data-tab="versions">
+          <span>📜 Version History</span>
+          <span style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 6px;border-radius:10px;font-size:0.68rem;" id="badgeVersionsCount">0 / 500</span>
+        </button>
+      </div>
+
+      <!-- TAB PANE 1: Action Flow Blocks -->
+      <div id="paneActions" style="flex:1;display:flex;flex-direction:column;padding:14px;overflow-y:auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-size:0.8rem;font-weight:700;color:var(--text-heading);">Action Sequence</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" id="btnAddActionMovePoint" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.72rem;font-weight:700;">+ MovePoint</button>
+            <button type="button" id="btnAddActionMovePose" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.72rem;font-weight:700;">+ MovePose</button>
+            <button type="button" id="btnAddActionTurn" class="btn-xs-clean" style="background:#7c3aed;color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.72rem;font-weight:700;">+ Turn</button>
+          </div>
+        </div>
+
+        <div id="actionsListContainer">
+          <!-- Dynamically populated action blocks -->
+        </div>
+
+        <!-- Manual Checkpoint Button -->
+        <div style="margin-top:auto;padding-top:14px;border-top:1px solid #1e293b;">
+          <button type="button" id="btnManualCheckpoint" class="btn-team-primary" style="width:100%;justify-content:center;padding:9px;">
+            💾 Save Team Checkpoint (Auto-attributing You)
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB PANE 2: Team Version History (Up to 500 Snapshots with Author Attribution) -->
+      <div id="paneVersions" style="flex:1;display:none;flex-direction:column;padding:14px;overflow-y:auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div>
+            <h3 style="margin:0;font-size:0.95rem;color:#f8fafc;">Team Version History</h3>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;">Stores up to 500 checkpoints · Shows who edited what</p>
+          </div>
+          <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 8px;border-radius:10px;font-weight:700;" id="lblVersionCapPill">
+            Max 500
+          </span>
+        </div>
+
+        <!-- Filter / Search Row -->
+        <div style="margin-bottom:10px;">
+          <input type="text" id="inputFilterVersions" class="form-input" placeholder="Search edits (e.g. programmer, waypoint, clamp)..." style="font-size:0.78rem;padding:6px 10px;" />
+        </div>
+
+        <!-- Version Items Container -->
+        <div id="teamVersionsList">
+          <!-- Dynamically populated snapshots with author badges -->
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- =========================================================================
+       MODALS & OVERLAYS
+       ========================================================================= -->
+
+  <!-- TEAM GATEWAY MODAL (Shown if user is not in a team) -->
+  <div id="modalTeamGate" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content" style="max-width:540px;">
+      <div class="team-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.4rem;">👥</span>
+          <div>
+            <h2 style="margin:0;font-size:1.15rem;color:#f8fafc;">Join or Create Team Workspace <span class="badge-beta-pill">BETA</span></h2>
+            <p style="margin:2px 0 0;font-size:0.75rem;color:#94a3b8;">Real-time multi-user editing, live cursors &amp; 500 version checkpoints</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="team-modal-body">
+        <!-- Explanatory Banner -->
+        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.78rem;line-height:1.45;color:#cbd5e1;">
+          <strong style="color:#38bdf8;">📌 Team Collaboration Rules:</strong><br/>
+          • Different Gmail addresses collaborate on the same team.<br/>
+          • <strong>1 Gmail account belongs to 1 team at a time</strong>.<br/>
+          • Complete audit history: tracks who edited what and stores up to <strong>500 version histories</strong>!
+        </div>
+
+        <!-- Google Auth Warning if not signed in -->
+        <div id="gateAuthRequired" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px;margin-bottom:16px;text-align:center;">
+          <p style="margin:0 0 10px;font-size:0.82rem;color:#fbbf24;">Please sign in with your Google account to access your team workspace:</p>
+          <button type="button" id="btnGateSignIn" class="btn-team-primary" style="margin:0 auto;">Sign in with Google</button>
+        </div>
+
+        <div id="gateOptions" style="display:block;">
+          <!-- Tabs: Create vs Join -->
+          <div style="display:flex;border-bottom:1px solid #334155;margin-bottom:16px;">
+            <button type="button" id="tabGateCreate" class="btn-xs-clean" style="flex:1;padding:8px;border:none;background:rgba(56,189,248,0.12);color:#38bdf8;font-weight:700;font-size:0.82rem;border-bottom:2px solid #38bdf8;cursor:pointer;">
+              ✨ Create a Team
+            </button>
+            <button type="button" id="tabGateJoin" class="btn-xs-clean" style="flex:1;padding:8px;border:none;background:transparent;color:#94a3b8;font-weight:700;font-size:0.82rem;border-bottom:2px solid transparent;cursor:pointer;">
+              🔗 Join by Team Code
+            </button>
+          </div>
+
+          <!-- PANE 1: Create Team -->
+          <div id="paneGateCreate">
+            <div class="form-group">
+              <label for="txtNewTeamName">Team Name</label>
+              <input type="text" id="txtNewTeamName" class="form-input" placeholder="e.g. 99999X Thunder" value="99999X Override Team" />
+            </div>
+            <div class="form-group">
+              <label for="txtNewVexNumber">VEX Team Number</label>
+              <input type="text" id="txtNewVexNumber" class="form-input" placeholder="e.g. 99999X" value="99999X" />
+            </div>
+            <div class="form-group">
+              <label for="selNewRole">Your Role on Drive Team</label>
+              <select id="selNewRole" class="form-input">
+                <option value="Programmer" selected>💻 Programmer (C++ &amp; LemLib Autons)</option>
+                <option value="Driver">🎮 Driver (Match Execution &amp; Waypoints)</option>
+                <option value="Coach">📋 Coach (Match Strategy &amp; Scouting)</option>
+                <option value="Strategist">🎯 Strategist (Alliances &amp; Field Routing)</option>
+              </select>
+            </div>
+            <button type="button" id="btnSubmitCreateTeam" class="btn-team-primary" style="width:100%;justify-content:center;padding:10px;margin-top:6px;">
+              🚀 Create Team &amp; Start Collaborating
+            </button>
+          </div>
+
+          <!-- PANE 2: Join Team -->
+          <div id="paneGateJoin" style="display:none;">
+            <div class="form-group">
+              <label for="txtJoinCode">6-Digit Team Code</label>
+              <input type="text" id="txtJoinCode" class="form-input" placeholder="e.g. VEX-742" style="font-family:ui-monospace, monospace;text-transform:uppercase;font-size:1.1rem;letter-spacing:0.1em;text-align:center;" />
+              <span style="font-size:0.7rem;color:#94a3b8;display:block;margin-top:4px;">Ask your teammate for their team code (displayed at the top of their screen).</span>
+            </div>
+            <div class="form-group">
+              <label for="selJoinRole">Your Role on Drive Team</label>
+              <select id="selJoinRole" class="form-input">
+                <option value="Driver" selected>🎮 Driver (Match Execution &amp; Waypoints)</option>
+                <option value="Programmer">💻 Programmer (C++ &amp; LemLib Autons)</option>
+                <option value="Coach">📋 Coach (Match Strategy &amp; Scouting)</option>
+                <option value="Strategist">🎯 Strategist (Alliances &amp; Field Routing)</option>
+              </select>
+            </div>
+            <button type="button" id="btnSubmitJoinTeam" class="btn-team-primary" style="width:100%;justify-content:center;padding:10px;margin-top:6px;">
+              🔗 Join Team Workspace
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VERSION DIFF & RESTORE MODAL -->
+  <div id="modalVersionInspect" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content" style="max-width:720px;">
+      <div class="team-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.3rem;">📜</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;" id="lblInspectVersionTitle">Version Details</h3>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;" id="lblInspectVersionMeta">Author and timestamp</p>
+          </div>
+        </div>
+        <button type="button" id="btnCloseInspectModal" class="btn-xs-clean" style="color:#94a3b8;background:none;border:none;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="team-modal-body">
+        <div id="inspectAuthorAttributionBox" style="background:#090e17;border:1px solid #1e293b;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;">
+          <!-- Dynamically populated author, role, and summary -->
+        </div>
+
+        <div style="margin-bottom:8px;font-size:0.75rem;font-weight:700;color:#94a3b8;text-transform:uppercase;">
+          Code / Autonomous Routines Snapshot:
+        </div>
+        <pre id="inspectCodeView" style="background:#050910;border:1px solid #1e293b;border-radius:8px;padding:12px;font-family:ui-monospace, monospace;font-size:0.72rem;color:#7dd3fc;max-height:280px;overflow:auto;margin:0;line-height:1.45;white-space:pre-wrap;"></pre>
+      </div>
+      <div class="team-modal-footer">
+        <button type="button" id="btnExportVersionSnapshot" class="btn-team-secondary">📥 Export Snapshot</button>
+        <button type="button" id="btnConfirmRestoreVersion" class="btn-team-primary" style="background:#16a34a;border-color:#22c55e;">
+          ⏮️ Restore This Version (Auto-Backs Up)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROPOSE STRATEGY MODAL -->
+  <div id="modalProposeStrategy" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content">
+      <div class="team-modal-header">
+        <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">Propose Match Autonomous Strategy</h3>
+        <button type="button" id="btnCloseStrategyModal" class="btn-xs-clean" style="color:#94a3b8;background:none;border:none;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="team-modal-body">
+        <div class="form-group">
+          <label for="txtStratTitle">Strategy Name / Match Target</label>
+          <input type="text" id="txtStratTitle" class="form-input" placeholder="e.g. Plan A: 6-Ring Center Rush &amp; Descore" />
+        </div>
+        <div class="form-group">
+          <label for="txtStratDesc">Tactical Instructions for Drive Team</label>
+          <textarea id="txtStratDesc" class="form-input" rows="3" placeholder="e.g. Clamp alliance mogo immediately, sweep side rings, driver clears corner zone before 14s..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="selStratRoutine">Associated Autonomous Routine</label>
+          <select id="selStratRoutine" class="form-input">
+            <!-- Dynamically populated from active routines -->
+          </select>
+        </div>
+      </div>
+      <div class="team-modal-footer">
+        <button type="button" id="btnCancelStrategy" class="btn-team-secondary">Cancel</button>
+        <button type="button" id="btnSubmitStrategy" class="btn-team-primary">🗳️ Propose to Team</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="teamToast" class="team-toast">
+    <span id="teamToastIcon">✅</span>
+    <span id="teamToastMsg">Action completed</span>
+  </div>
+
+  <!-- Scripts -->
+  <script src="version.js?v=20260928.k18"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=20260928.k18"></script>
+  <script src="theme.js?v=20260928.k18"></script>
+  <script src="project-manager.js?v=20260928.k18"></script>
+  <script src="team.js?v=20260928.k18"></script>
+</body>
+</html>
