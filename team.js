@@ -73,6 +73,211 @@
     }
   }
 
+  function cleanEmailKey(email) {
+    if (!email || typeof email !== "string") return "";
+    return email.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "_");
+  }
+
+  function resolveApiUrl(path) {
+    const host = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname : "";
+    // On pure static hosts like GitHub Pages, backend endpoints do not exist. Return null to use Firestore directly.
+    if (host.includes("github.io")) {
+      return null;
+    }
+    const pathname = (typeof window !== "undefined" && window.location) ? window.location.pathname : "";
+    if (pathname.includes("/vex-path-planner/")) {
+      return "/vex-path-planner" + path;
+    }
+    return path;
+  }
+
+  async function safeFetchJson(url, options = {}) {
+    if (!url) return null;
+    try {
+      const res = await fetch(url, options);
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok || !contentType.includes("application/json")) {
+        return null;
+      }
+      return await res.json();
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // FIRESTORE DUAL-CLOUD INTEGRATION (Supports GitHub Pages & Serverless)
+  // --------------------------------------------------------------------------
+  let firestoreUnsub = null;
+
+  function getFirestoreDb() {
+    if (typeof firebase !== "undefined" && firebase.firestore) {
+      try {
+        return firebase.firestore();
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  async function fsCheckUserTeam(cleanEmail) {
+    const db = getFirestoreDb();
+    if (!db) return null;
+    try {
+      const rosterDoc = await db.collection("team_rosters").doc(cleanEmail).get();
+      if (rosterDoc.exists && rosterDoc.data().teamId) {
+        const teamDoc = await db.collection("teams").doc(rosterDoc.data().teamId).get();
+        if (teamDoc.exists) {
+          return teamDoc.data();
+        }
+      }
+    } catch (e) {
+      console.warn("[TeamCollab] Firestore check notice:", e);
+    }
+    return null;
+  }
+
+  async function fsCreateTeam(newTeam, cleanEmail) {
+    const db = getFirestoreDb();
+    if (!db) return newTeam;
+    try {
+      await db.collection("teams").doc(newTeam.teamId).set(newTeam);
+      await db.collection("team_rosters").doc(cleanEmail).set({
+        teamId: newTeam.teamId,
+        email: cleanEmail,
+        teamName: newTeam.teamName,
+        joinedAt: Date.now()
+      });
+    } catch (e) {
+      console.warn("[TeamCollab] Firestore team create notice:", e);
+    }
+    return newTeam;
+  }
+
+  async function fsJoinTeam(teamCode, userObj) {
+    const db = getFirestoreDb();
+    if (!db) return { error: "Database unavailable" };
+    try {
+      const clean = cleanEmailKey(userObj.email);
+      // Check existing team membership
+      const existing = await db.collection("team_rosters").doc(clean).get();
+      if (existing.exists && existing.data().teamId) {
+        return { error: "This Google account already belongs to a team. Each Gmail account can belong to only 1 team at a time." };
+      }
+
+      const query = await db.collection("teams").where("teamCode", "==", teamCode).limit(1).get();
+      if (query.empty) {
+        return { error: `Team with code "${teamCode}" not found.` };
+      }
+
+      const teamDoc = query.docs[0];
+      const team = teamDoc.data();
+      const normEmail = userObj.email.trim().toLowerCase();
+
+      if (!team.members.some(m => m.email.toLowerCase() === normEmail)) {
+        team.members.push({
+          email: normEmail,
+          displayName: userObj.displayName,
+          role: userObj.role,
+          color: getRoleColor(userObj.role),
+          joinedAt: Date.now(),
+          photoURL: userObj.photoURL || "",
+          isOwner: false
+        });
+
+        if (!team.versionHistory) team.versionHistory = [];
+        team.versionHistory.unshift({
+          id: "v_" + Date.now() + "_join",
+          timestamp: Date.now(),
+          dateStr: new Date().toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          authorEmail: normEmail,
+          authorName: userObj.displayName,
+          authorRole: userObj.role,
+          authorColor: getRoleColor(userObj.role),
+          actionSummary: `${userObj.displayName} joined the team as ${userObj.role}`,
+          editType: "member_join",
+          snapshot: null
+        });
+        if (team.versionHistory.length > 500) team.versionHistory.length = 500;
+        team.updatedAt = Date.now();
+
+        await teamDoc.ref.set(team, { merge: true });
+      }
+
+      await db.collection("team_rosters").doc(clean).set({
+        teamId: team.teamId,
+        email: clean,
+        teamName: team.teamName,
+        joinedAt: Date.now()
+      });
+
+      return { success: true, team };
+    } catch (e) {
+      return { error: e.message || "Failed to join team in Firestore" };
+    }
+  }
+
+  async function fsLeaveTeam(teamId, cleanEmail) {
+    const db = getFirestoreDb();
+    if (!db) return true;
+    try {
+      await db.collection("team_rosters").doc(cleanEmail).delete();
+      const teamDoc = await db.collection("teams").doc(teamId).get();
+      if (teamDoc.exists) {
+        const team = teamDoc.data();
+        team.members = (team.members || []).filter(m => cleanEmailKey(m.email) !== cleanEmail);
+        team.updatedAt = Date.now();
+        await teamDoc.ref.set(team, { merge: true });
+      }
+    } catch (e) {
+      console.warn("[TeamCollab] Firestore leave notice:", e);
+    }
+    return true;
+  }
+
+  async function fsSaveTeamDoc(team) {
+    const db = getFirestoreDb();
+    if (!db || !team || !team.teamId) return false;
+    try {
+      await db.collection("teams").doc(team.teamId).set(team, { merge: true });
+      return true;
+    } catch (e) {
+      console.warn("[TeamCollab] Firestore sync error:", e);
+      return false;
+    }
+  }
+
+  function fsSubscribeTeam(teamId) {
+    if (firestoreUnsub) {
+      try { firestoreUnsub(); } catch (_) {}
+      firestoreUnsub = null;
+    }
+    const db = getFirestoreDb();
+    if (!db || !teamId) return;
+
+    try {
+      firestoreUnsub = db.collection("teams").doc(teamId).onSnapshot((doc) => {
+        if (doc && doc.exists) {
+          const remote = doc.data();
+          if (remote && remote.updatedAt > (currentTeam?.updatedAt || 0)) {
+            currentTeam = remote;
+            if (remote.pathPayload && remote.pathPayload.paths) {
+              activePaths = remote.pathPayload.paths;
+              renderRoutinesSelector(false);
+              renderActionBlocks();
+              drawField();
+            }
+            renderStrategies();
+            renderPinComments();
+            renderVersionHistory();
+            renderMemberList();
+          }
+        }
+      });
+    } catch (e) {
+      console.warn("[TeamCollab] Firestore live listener notice:", e);
+    }
+  }
+
   // --------------------------------------------------------------------------
   // AUTHENTICATION & TEAM INITIALIZATION
   // --------------------------------------------------------------------------

@@ -145,7 +145,8 @@ function saveUserTeamsIndex(index) {
 
 function getTeamFilePath(teamId) {
   const cleanId = String(teamId).trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-  return path.join(teamsDir, `team_${cleanId}.json`);
+  const fileName = cleanId.startsWith('team_') ? `${cleanId}.json` : `team_${cleanId}.json`;
+  return path.join(teamsDir, fileName);
 }
 
 function getTeam(teamId) {
@@ -420,7 +421,7 @@ app.get('/api/project/status', (req, res) => {
 // ============================================================================
 
 // 1. Get current user's team
-app.get('/api/team/my-team', (req, res) => {
+app.get(['/api/team/my-team', '/vex-path-planner/api/team/my-team'], (req, res) => {
   const { email } = req.query;
   if (!email || typeof email !== 'string') {
     return res.status(400).json({ error: 'Missing email parameter' });
@@ -452,7 +453,7 @@ app.get('/api/team/my-team', (req, res) => {
 });
 
 // 2. Create a new team (Enforces 1 Gmail = 1 Team rule)
-app.post('/api/team/create', (req, res) => {
+app.post(['/api/team/create', '/vex-path-planner/api/team/create'], (req, res) => {
   const { email, displayName, teamName, vexTeamNumber, role, photoURL, projectData, pathsData } = req.body || {};
   if (!email || typeof email !== 'string' || !email.includes('@')) {
     return res.status(400).json({ error: 'Valid Gmail address is required to create a team' });
@@ -567,7 +568,7 @@ app.post('/api/team/create', (req, res) => {
 });
 
 // 3. Join an existing team by Team Code (Enforces 1 Gmail = 1 Team rule)
-app.post('/api/team/join', (req, res) => {
+app.post(['/api/team/join', '/vex-path-planner/api/team/join'], (req, res) => {
   const { email, displayName, teamCode, role, photoURL } = req.body || {};
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'Valid Gmail address is required to join a team' });
@@ -642,7 +643,7 @@ app.post('/api/team/join', (req, res) => {
 });
 
 // 4. Leave team
-app.post('/api/team/leave', (req, res) => {
+app.post(['/api/team/leave', '/vex-path-planner/api/team/leave'], (req, res) => {
   const { email, teamId } = req.body || {};
   if (!email || !teamId) {
     return res.status(400).json({ error: 'Missing email or teamId' });
@@ -689,7 +690,7 @@ app.post('/api/team/leave', (req, res) => {
 });
 
 // 5. Get full team data & active presences
-app.get('/api/team/data', (req, res) => {
+app.get(['/api/team/data', '/vex-path-planner/api/team/data'], (req, res) => {
   const { teamId } = req.query;
   if (!teamId) {
     return res.status(400).json({ error: 'Missing teamId parameter' });
@@ -709,7 +710,7 @@ app.get('/api/team/data', (req, res) => {
 });
 
 // 6. Real-time path & action sync edit (Stores up to 500 version history entries with author attribution)
-app.post('/api/team/sync-edit', (req, res) => {
+app.post(['/api/team/sync-edit', '/vex-path-planner/api/team/sync-edit'], (req, res) => {
   const { teamId, email, authorName, authorRole, editType, changeSummary, pathPayload, projectPayload, createSnapshot } = req.body || {};
   if (!teamId) {
     return res.status(400).json({ error: 'Missing teamId parameter' });
@@ -787,7 +788,7 @@ app.post('/api/team/sync-edit', (req, res) => {
 });
 
 // 7. Presence Heartbeat & Live Cursor Sharing
-app.post('/api/team/presence', (req, res) => {
+app.post(['/api/team/presence', '/vex-path-planner/api/team/presence'], (req, res) => {
   const { teamId, email, displayName, role, cursor, activeWaypoint, activeRoutine } = req.body || {};
   if (!teamId || !email) {
     return res.status(400).json({ error: 'Missing teamId or email' });
@@ -823,7 +824,7 @@ app.post('/api/team/presence', (req, res) => {
 });
 
 // 8. Server-Sent Events (SSE) Stream for Instant Multi-User Sync
-app.get('/api/team/events', (req, res) => {
+app.get(['/api/team/events', '/vex-path-planner/api/team/events'], (req, res) => {
   const { teamId, email } = req.query;
   if (!teamId) {
     return res.status(400).send('Missing teamId');
@@ -872,7 +873,7 @@ app.get('/api/team/events', (req, res) => {
 });
 
 // 9. Collaborative Field Pin Comments
-app.post('/api/team/comment/add', (req, res) => {
+app.post(['/api/team/comment/add', '/vex-path-planner/api/team/comment/add'], (req, res) => {
   const { teamId, email, authorName, authorRole, x, y, text } = req.body || {};
   if (!teamId || !text || text.trim() === '') {
     return res.status(400).json({ error: 'Missing comment text or teamId' });
@@ -906,7 +907,7 @@ app.post('/api/team/comment/add', (req, res) => {
   res.json({ success: true, comments: team.comments, comment: newComment });
 });
 
-app.post('/api/team/comment/reply', (req, res) => {
+app.post(['/api/team/comment/reply', '/vex-path-planner/api/team/comment/reply'], (req, res) => {
   const { teamId, commentId, email, authorName, authorRole, text } = req.body || {};
   if (!teamId || !commentId || !text || text.trim() === '') {
     return res.status(400).json({ error: 'Missing reply text or commentId' });
@@ -939,7 +940,7 @@ app.post('/api/team/comment/reply', (req, res) => {
   res.json({ success: true, comments: team.comments });
 });
 
-app.post('/api/team/comment/resolve', (req, res) => {
+app.post(['/api/team/comment/resolve', '/vex-path-planner/api/team/comment/resolve'], (req, res) => {
   const { teamId, commentId, resolved } = req.body || {};
   const team = getTeam(teamId);
   if (!team) return res.status(404).json({ error: 'Team not found' });
@@ -954,7 +955,7 @@ app.post('/api/team/comment/resolve', (req, res) => {
   res.json({ success: true, comments: team.comments || [] });
 });
 
-app.post('/api/team/comment/delete', (req, res) => {
+app.post(['/api/team/comment/delete', '/vex-path-planner/api/team/comment/delete'], (req, res) => {
   const { teamId, commentId } = req.body || {};
   const team = getTeam(teamId);
   if (!team) return res.status(404).json({ error: 'Team not found' });
@@ -967,7 +968,7 @@ app.post('/api/team/comment/delete', (req, res) => {
 });
 
 // 10. Autonomous Strategy Consensus & Voting Board
-app.post('/api/team/strategy/add', (req, res) => {
+app.post(['/api/team/strategy/add', '/vex-path-planner/api/team/strategy/add'], (req, res) => {
   const { teamId, email, authorName, title, description, targetRoutine } = req.body || {};
   if (!teamId || !title || title.trim() === '') {
     return res.status(400).json({ error: 'Missing strategy title or teamId' });
@@ -1001,7 +1002,7 @@ app.post('/api/team/strategy/add', (req, res) => {
   res.json({ success: true, strategies: team.strategies, strategy: newStrategy });
 });
 
-app.post('/api/team/strategy/vote', (req, res) => {
+app.post(['/api/team/strategy/vote', '/vex-path-planner/api/team/strategy/vote'], (req, res) => {
   const { teamId, strategyId, email, vote } = req.body || {};
   if (!teamId || !strategyId || !email) {
     return res.status(400).json({ error: 'Missing parameters' });
@@ -1027,7 +1028,7 @@ app.post('/api/team/strategy/vote', (req, res) => {
   res.json({ success: true, strategies: team.strategies || [] });
 });
 
-app.post('/api/team/strategy/delete', (req, res) => {
+app.post(['/api/team/strategy/delete', '/vex-path-planner/api/team/strategy/delete'], (req, res) => {
   const { teamId, strategyId } = req.body || {};
   const team = getTeam(teamId);
   if (!team) return res.status(404).json({ error: 'Team not found' });
@@ -1040,7 +1041,7 @@ app.post('/api/team/strategy/delete', (req, res) => {
 });
 
 // 11. Restore any of the up to 500 Version Histories
-app.post('/api/team/version/restore', (req, res) => {
+app.post(['/api/team/version/restore', '/vex-path-planner/api/team/version/restore'], (req, res) => {
   const { teamId, versionId, email, authorName, authorRole } = req.body || {};
   if (!teamId || !versionId) {
     return res.status(400).json({ error: 'Missing teamId or versionId' });
@@ -1595,6 +1596,11 @@ app.get(['/root-domain-index.html', '/root-domain-index'], (req, res) => {
 app.get(['/', '/index.html'], (req, res) => {
   res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Explicit 404 handler for API routes to never return HTML document
+app.all(['/api/*', '/vex-path-planner/api/*'], (req, res) => {
+  res.status(404).json({ error: `API route ${req.path} not found` });
 });
 
 // Fallback to index.html with no-cache
