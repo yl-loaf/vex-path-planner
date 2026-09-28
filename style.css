@@ -12897,6 +12897,50 @@ body.palette-drag-active .action-flow-empty-dropzone {
   height: 100%;
 }
 
+.team-col-center .canvas-wrap {
+  min-height: 0 !important;
+  flex: 1 1 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 8px !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  background: #080d1a !important;
+}
+
+.team-canvas-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+  height: 100%;
+  width: auto;
+}
+
+#teamFieldCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: #0f172a;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  cursor: crosshair;
+}
+
+.monaco-editor-container:empty {
+  pointer-events: none;
+}
+
 .team-col-right {
   width: 380px;
   flex-shrink: 0;

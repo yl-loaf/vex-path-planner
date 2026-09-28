@@ -590,82 +590,116 @@
     return result;
   }
 
+  let monacoInitAttempts = 0;
   function initMonaco() {
     const container = document.getElementById("monacoEditorContainer");
-    if (!container || !window.require) return;
-    try {
-      window.require.config({
-        paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs" }
-      });
-      window.MonacoEnvironment = {
-        getWorkerUrl: function() {
-          const proxyCode = `
-            self.MonacoEnvironment = { baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/' };
-            importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/base/worker/workerMain.js');
-          `;
-          return "data:text/javascript;charset=utf-8," + encodeURIComponent(proxyCode);
-        }
-      };
-      window.require(["vs/editor/editor.main"], function() {
-        try {
-          monacoInstance = window.monaco;
-          setupMonacoEngine(container);
-        } catch (setupErr) {
-          console.error("[Monaco] Setup failed:", setupErr);
-        }
-      });
-    } catch (_) {}
+    if (!container) return;
+
+    if (window.monaco && window.monaco.editor) {
+      monacoInstance = window.monaco;
+      setupMonacoEngine(container);
+      return;
+    }
+
+    if (window.require && typeof window.require === "function") {
+      try {
+        window.require.config({
+          paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs" }
+        });
+        window.MonacoEnvironment = {
+          getWorkerUrl: function() {
+            const proxyCode = `
+              self.MonacoEnvironment = { baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/' };
+              importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/base/worker/workerMain.js');
+            `;
+            return "data:text/javascript;charset=utf-8," + encodeURIComponent(proxyCode);
+          }
+        };
+        window.require(["vs/editor/editor.main"], function() {
+          try {
+            monacoInstance = window.monaco;
+            setupMonacoEngine(container);
+          } catch (setupErr) {
+            console.warn("[Monaco] Setup error:", setupErr);
+          }
+        });
+        return;
+      } catch (e) {
+        console.warn("[Monaco] Loader error:", e);
+      }
+    }
+
+    // If require/monaco not yet loaded, retry up to 25 times (~5s)
+    if (monacoInitAttempts < 25) {
+      monacoInitAttempts++;
+      setTimeout(initMonaco, 200);
+    }
   }
 
   function setupMonacoEngine(container) {
+    if (!monacoInstance || !monacoInstance.editor || monacoEditor) return;
     const isLight = document.documentElement.getAttribute("data-theme") === "light";
-    const initialContent = elCodeEditor ? elCodeEditor.value : "";
-    monacoInstance.editor.defineTheme("lemlib-dark", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [
-        { token: "comment", foreground: "64748b", fontStyle: "italic" },
-        { token: "keyword", foreground: "38bdf8", fontStyle: "bold" },
-        { token: "string", foreground: "34d399" },
-        { token: "number", foreground: "fb7185" },
-        { token: "type", foreground: "818cf8" },
-        { token: "identifier", foreground: "f8fafc" }
-      ],
-      colors: {
-        "editor.background": "#020617",
-        "editor.foreground": "#f8fafc",
-        "editor.lineHighlightBackground": "#0f172a",
-        "editorLineNumber.foreground": "#475569"
-      }
-    });
+    const initialContent = (currentTeam?.projectFiles && currentTeam.projectFiles[activeIdeFile]) || (elCodeEditor ? elCodeEditor.value : "") || generateLemLibCpp(activePaths, activeRoutineIndex);
 
-    monacoEditor = monacoInstance.editor.create(container, {
-      value: initialContent,
-      language: "cpp",
-      theme: "lemlib-dark",
-      automaticLayout: true,
-      fontSize: 13.5,
-      lineHeight: 20,
-      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace',
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      smoothScrolling: true,
-      wordWrap: "off",
-      tabSize: 4
-    });
+    try {
+      monacoInstance.editor.defineTheme("lemlib-dark", {
+        base: "vs-dark",
+        inherit: true,
+        rules: [
+          { token: "comment", foreground: "64748b", fontStyle: "italic" },
+          { token: "keyword", foreground: "38bdf8", fontStyle: "bold" },
+          { token: "string", foreground: "34d399" },
+          { token: "number", foreground: "fb7185" },
+          { token: "type", foreground: "818cf8" },
+          { token: "identifier", foreground: "f8fafc" }
+        ],
+        colors: {
+          "editor.background": "#020617",
+          "editor.foreground": "#f8fafc",
+          "editor.lineHighlightBackground": "#0f172a",
+          "editorLineNumber.foreground": "#475569"
+        }
+      });
+    } catch (_) {}
 
-    monacoEditor.onDidChangeModelContent(() => {
-      const val = monacoEditor.getValue();
-      if (elCodeEditor) {
-        elCodeEditor.value = val;
-        const event = new Event("input", { bubbles: true });
-        elCodeEditor.dispatchEvent(event);
-      }
-    });
+    try {
+      monacoEditor = monacoInstance.editor.create(container, {
+        value: initialContent,
+        language: "cpp",
+        theme: "lemlib-dark",
+        automaticLayout: true,
+        fontSize: 13.5,
+        lineHeight: 20,
+        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace',
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        smoothScrolling: true,
+        wordWrap: "off",
+        tabSize: 4
+      });
 
-    isMonacoReady = true;
-    const wrapper = document.getElementById("ideEditorWrapper");
-    if (wrapper) wrapper.classList.add("monaco-active");
+      monacoEditor.onDidChangeModelContent(() => {
+        const val = monacoEditor.getValue();
+        if (elCodeEditor) {
+          elCodeEditor.value = val;
+          const event = new Event("input", { bubbles: true });
+          elCodeEditor.dispatchEvent(event);
+        }
+      });
+
+      isMonacoReady = true;
+      const wrapper = document.getElementById("ideEditorWrapper");
+      if (wrapper) wrapper.classList.add("monaco-active");
+
+      requestAnimationFrame(() => {
+        try { monacoEditor.layout(); } catch(_) {}
+      });
+      setTimeout(() => {
+        try { monacoEditor.layout(); } catch(_) {}
+      }, 100);
+    } catch (createErr) {
+      console.warn("[Monaco] Creation notice:", createErr);
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -3847,99 +3881,120 @@
   }
 
   function drawField() {
-    if (!ctx || !canvas) return;
-    const w = canvas.width;
-    const h = canvas.height;
+    const cv = document.getElementById("teamFieldCanvas");
+    if (!cv) return;
+    const context = cv.getContext("2d");
+    if (!context) return;
+    if (cv.width !== 900 || cv.height !== 900) {
+      cv.width = 900;
+      cv.height = 900;
+    }
+    const w = cv.width;
+    const h = cv.height;
 
-    ctx.clearRect(0, 0, w, h);
+    context.clearRect(0, 0, w, h);
 
     // 1. Draw Field Background Image or High-Contrast Foam Tiles
     if (fieldImgLoaded && fieldImg.complete && fieldImg.naturalWidth > 0) {
-      ctx.drawImage(fieldImg, 0, 0, w, h);
+      context.drawImage(fieldImg, 0, 0, w, h);
     } else {
       // 6x6 Grid = 36 Foam Tiles
       const tileSize = w / 6;
       for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
-          ctx.fillStyle = (r + c) % 2 === 0 ? "#111827" : "#0f172a";
-          ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(c * tileSize, r * tileSize, tileSize, tileSize);
+          context.fillStyle = (r + c) % 2 === 0 ? "#111827" : "#0f172a";
+          context.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+          context.strokeStyle = "rgba(255, 255, 255, 0.08)";
+          context.lineWidth = 1;
+          context.strokeRect(c * tileSize, r * tileSize, tileSize, tileSize);
         }
       }
 
       // Alliance Starting Zones
-      ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
-      ctx.fillRect(0, 0, tileSize * 2, tileSize * 2);
-      ctx.fillStyle = "rgba(59, 130, 246, 0.15)";
-      ctx.fillRect(w - tileSize * 2, h - tileSize * 2, tileSize * 2, tileSize * 2);
+      context.fillStyle = "rgba(239, 68, 68, 0.15)";
+      context.fillRect(0, 0, tileSize * 2, tileSize * 2);
+      context.fillStyle = "rgba(59, 130, 246, 0.15)";
+      context.fillRect(w - tileSize * 2, h - tileSize * 2, tileSize * 2, tileSize * 2);
     }
 
     // 2. Draw Tile Grid Overlay & Scale Ticks
     const tileSize = w / 6;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-    ctx.lineWidth = 1;
+    context.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    context.lineWidth = 1;
     for (let i = 1; i < 6; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * tileSize, 0);
-      ctx.lineTo(i * tileSize, h);
-      ctx.moveTo(0, i * tileSize);
-      ctx.lineTo(w, i * tileSize);
-      ctx.stroke();
+      context.beginPath();
+      context.moveTo(i * tileSize, 0);
+      context.lineTo(i * tileSize, h);
+      context.moveTo(0, i * tileSize);
+      context.lineTo(w, i * tileSize);
+      context.stroke();
     }
 
     // 3. Draw Odometry Coordinate Axes (X: Blue/Cyan, Y: Red/Amber)
-    ctx.lineWidth = 2;
+    context.lineWidth = 2;
     // X Axis Line (Horizontal, Y=0)
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
-    ctx.beginPath();
-    ctx.moveTo(0, h / 2);
-    ctx.lineTo(w, h / 2);
-    ctx.stroke();
+    context.strokeStyle = "rgba(56, 189, 248, 0.4)";
+    context.beginPath();
+    context.moveTo(0, h / 2);
+    context.lineTo(w, h / 2);
+    context.stroke();
 
     // Y Axis Line (Vertical, X=0)
-    ctx.strokeStyle = "rgba(239, 68, 68, 0.4)";
-    ctx.beginPath();
-    ctx.moveTo(w / 2, 0);
-    ctx.lineTo(w / 2, h);
-    ctx.stroke();
+    context.strokeStyle = "rgba(239, 68, 68, 0.4)";
+    context.beginPath();
+    context.moveTo(w / 2, 0);
+    context.lineTo(w / 2, h);
+    context.stroke();
 
     // Center Origin Badge
-    ctx.fillStyle = "#38bdf8";
-    ctx.beginPath();
-    ctx.arc(w / 2, h / 2, 4, 0, Math.PI * 2);
-    ctx.fill();
+    context.fillStyle = "#38bdf8";
+    context.beginPath();
+    context.arc(w / 2, h / 2, 4, 0, Math.PI * 2);
+    context.fill();
 
     // Field Coordinate Axis Labels (-60", -36", -12", 0", +12", +36", +60")
-    ctx.fillStyle = "rgba(248, 250, 252, 0.6)";
-    ctx.font = "9px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
+    context.fillStyle = "rgba(248, 250, 252, 0.6)";
+    context.font = "9px monospace";
+    context.textAlign = "center";
+    context.textBaseline = "bottom";
 
     const inchTicks = [-60, -36, -12, 12, 36, 60];
     inchTicks.forEach(inch => {
       const px = inchToPx(inch, w);
       const py = inchToPx(inch, h, true);
-      ctx.fillText(`${inch}"`, px, h - 3);
-      ctx.fillText(`${-inch}"`, 14, py + 3);
+      context.fillText(`${inch}"`, px, h - 3);
+      context.fillText(`${-inch}"`, 14, py + 3);
     });
 
     // Outer Perimeter Border Frame
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(1, 1, w - 2, h - 2);
+    context.strokeStyle = "rgba(56, 189, 248, 0.6)";
+    context.lineWidth = 3;
+    context.strokeRect(1, 1, w - 2, h - 2);
 
     // Draw Field Obstacles (Loaders, Mobile Goals, Center Ladder)
     if (collisionConfig.enabled && collisionConfig.showObstacleOverlays) {
       const routineReport = evaluateRoutineCollisions();
       const liveHitObstacleIds = new Set(routineReport.collidingObstacleIds);
-      drawFieldObstacles(ctx, liveHitObstacleIds);
+      drawFieldObstacles(context, liveHitObstacleIds);
     }
 
     // Current Routine
-    const routine = activePaths[activeRoutineIndex] || activePaths[0];
-    if (!routine) return;
+    let routine = activePaths[activeRoutineIndex] || activePaths[0];
+    if (!routine && currentTeam?.pathPayload?.paths?.length) {
+      activePaths = currentTeam.pathPayload.paths;
+      routine = activePaths[0];
+    }
+    if (!routine) {
+      routine = {
+        id: "p_default",
+        name: "Red Left Mogo Rush",
+        pose: { x: -60, y: -60, theta: 0 },
+        actions: [
+          { id: "a_1", type: "moveToPoint", x: -24, y: -24, timeout: 2000, maxSpeed: 115, earlyExitRange: 2, comment: "Rush alliance goal" },
+          { id: "a_2", type: "moveToPose", x: 0, y: 48, theta: 90, timeout: 2500, lead: 0.6, comment: "Score preload in corner" }
+        ]
+      };
+    }
 
     const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
     const waypoints = [{ x: startPose.x, y: startPose.y, theta: startPose.theta, type: "start", id: "start_pose" }];
@@ -4394,7 +4449,7 @@
       const cy = (e.clientY - rect.top) * scaleY;
 
       const ix = pxToInch(cx, canvas.width);
-      const iy = pxToInch(cy, canvas.height);
+      const iy = pxToInch(cy, canvas.height, true);
 
       // Handle Pin Comment Drop Mode
       if (isPinDropMode) {
@@ -6192,6 +6247,9 @@
         }
         if (viewFieldContainer) viewFieldContainer.style.display = "flex";
         drawField();
+        requestAnimationFrame(() => drawField());
+        setTimeout(drawField, 50);
+        setTimeout(drawField, 200);
       } else if (mode === "ide") {
         if (btnViewModeIde) {
           btnViewModeIde.classList.add("active");
@@ -6202,9 +6260,17 @@
         if (viewIdeContainer) viewIdeContainer.style.display = "flex";
         renderIdeFile(activeIdeFile || "src/autons.cpp");
         if (monacoEditor) {
+          requestAnimationFrame(() => {
+            try { monacoEditor.layout(); } catch(_) {}
+          });
           setTimeout(() => {
             try { monacoEditor.layout(); } catch(_) {}
-          }, 60);
+          }, 50);
+          setTimeout(() => {
+            try { monacoEditor.layout(); } catch(_) {}
+          }, 200);
+        } else if (!isMonacoReady) {
+          initMonaco();
         }
       } else if (mode === "suggestions") {
         if (btnViewModeSuggestions) {
@@ -7065,18 +7131,31 @@
     wireDebugPanel();
     wireEvents();
     drawField();
+    requestAnimationFrame(() => drawField());
+    setTimeout(drawField, 100);
+    setTimeout(drawField, 300);
 
     if (window.ResizeObserver) {
       const ro = new ResizeObserver(() => {
         drawField();
+        if (monacoEditor && isMonacoReady) {
+          try { monacoEditor.layout(); } catch (_) {}
+        }
       });
       const cWrap = document.getElementById("fieldCanvasContainer");
       if (cWrap) ro.observe(cWrap);
       const cBox = document.getElementById("teamCanvasBox");
       if (cBox) ro.observe(cBox);
+      const ideContainer = document.getElementById("teamIdeContainer");
+      if (ideContainer) ro.observe(ideContainer);
+      const ideWrapper = document.getElementById("ideEditorWrapper");
+      if (ideWrapper) ro.observe(ideWrapper);
     }
     window.addEventListener("resize", () => {
       drawField();
+      if (monacoEditor && isMonacoReady) {
+        try { monacoEditor.layout(); } catch (_) {}
+      }
     });
 
     if (window.location.hash === "#join") {
