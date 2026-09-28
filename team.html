@@ -1078,9 +1078,15 @@
             <button type="button" id="btnProposeCodeSuggestion" class="btn-xs-clean" style="background:#f59e0b;border:1px solid #d97706;color:#0b0f14;padding:4px 10px;border-radius:6px;font-size:0.72rem;font-weight:800;cursor:pointer;">💡 Propose Suggestion</button>
           </div>
         </div>
-        <!-- Editor Textarea -->
-        <div style="flex:1;position:relative;display:flex;flex-direction:column;min-height:0;">
-          <textarea id="txtTeamIdeCode" spellcheck="false" style="flex:1;background:#020617;color:#38bdf8;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:0.82rem;line-height:1.5;padding:12px;border:none;outline:none;resize:none;tab-size:2;"></textarea>
+        <!-- Main Code Editor Area -->
+        <div class="ide-editor-wrapper" id="ideEditorWrapper">
+          <div class="ide-line-numbers" id="ideLineNumbers"></div>
+          <div class="ide-editor-stage" id="ideEditorStage">
+            <!-- Monaco VS Code Editor Mount -->
+            <div id="monacoEditorContainer" class="monaco-editor-container"></div>
+            <pre class="ide-code-highlight" id="ideCodeHighlight" aria-hidden="true"><code id="ideCodeHighlightInner"></code></pre>
+            <textarea id="txtTeamIdeCode" class="ide-code-textarea" spellcheck="false" placeholder="// Write or edit PROS C++ code here..."></textarea>
+          </div>
         </div>
         <div style="background:#090e17;border-top:1px solid #1e293b;padding:4px 12px;display:flex;align-items:center;justify-content:space-between;font-size:0.7rem;color:#64748b;">
           <span id="lblIdeStatus">LemLib PROS C++ Auton File · Auto-synced with Action Blocks</span>
@@ -1692,6 +1698,368 @@
     </div>
   </div>
 
+  <!-- Debug & Telemetry Side Panel (Collapsible) -->
+  <aside class="panel debug-panel" id="debugSidePanel" hidden>
+    <div class="panel-header debug-panel-header">
+      <div class="debug-title-wrap">
+        <span class="debug-badge">DEBUGGER</span>
+        <h2>🐞 Telemetry &amp; Inspector</h2>
+      </div>
+      <button type="button" id="btnDebugClose" class="debug-close-btn" title="Close Debug Panel">✕</button>
+    </div>
+
+    <nav class="debug-tabs">
+      <button type="button" class="debug-tab active" data-tab="devices">⚙️ Variables</button>
+      <button type="button" class="debug-tab" data-tab="brain">🧠 Brain</button>
+      <button type="button" class="debug-tab" data-tab="diagnostics">🔍 Diagnostics (<span id="debugDiagBadge">0</span>)</button>
+      <button type="button" class="debug-tab" data-tab="step">⏯️ Stepper</button>
+      <button type="button" class="debug-tab" data-tab="terminal">📟 Terminal</button>
+      <button type="button" class="debug-tab" data-tab="tuning">📈 PID Tuning</button>
+    </nav>
+
+    <div class="debug-content">
+      <!-- Variables & Subsystems Tab -->
+      <div class="debug-pane active" id="debugPaneDevices">
+        <div class="debug-sec-desc">Devices and variables indexed from <code>include/robot-config.h</code> &amp; project headers. Click any item to copy snippet:</div>
+        <div id="debugDevicesList" class="debug-devices-list">
+          <!-- Dynamically populated from ProjectManager -->
+        </div>
+      </div>
+
+      <!-- VEX V5 Brain Telemetry & Control Tab -->
+      <div class="debug-pane" id="debugPaneBrain">
+        <div class="debug-brain-header">
+          <div class="debug-brain-status-line">
+            <span class="brain-status-dot disconnected" id="debugBrainDot"></span>
+            <strong id="debugBrainStatusName">VEX V5 Brain: Disconnected</strong>
+          </div>
+          <button type="button" id="btnDebugConnectBrain" class="btn-xs-compile">🔌 Connect USB</button>
+        </div>
+
+        <!-- Brain Metrics Grid -->
+        <div class="debug-brain-grid" id="debugBrainMetricsGrid">
+          <div class="debug-brain-metric">
+            <div class="metric-label">Battery Level</div>
+            <div class="metric-val text-green" id="debugBrainBattVal">--% (-- V)</div>
+            <div class="brain-batt-bar"><div class="brain-batt-fill" id="debugBrainBattBar" style="width:0%;"></div></div>
+          </div>
+          <div class="debug-brain-metric">
+            <div class="metric-label">Brain Temp</div>
+            <div class="metric-val" id="debugBrainTempVal">-- °C</div>
+          </div>
+          <div class="debug-brain-metric">
+            <div class="metric-label">VEXos Kernel</div>
+            <div class="metric-val" id="debugBrainVexosVal">v1.1.4</div>
+          </div>
+          <div class="debug-brain-metric">
+            <div class="metric-label">Active Slot</div>
+            <div class="metric-val" id="debugBrainSlotVal">Slot 1</div>
+          </div>
+        </div>
+
+        <!-- Program Control & Flash actions -->
+        <div class="debug-brain-actions">
+          <div class="debug-slot-picker-row">
+            <label for="debugSlotSelect" style="font-size:0.75rem;color:#94a3b8;">Target Slot:</label>
+            <select id="debugSlotSelect" class="debug-slot-select">
+              <option value="1">Slot 1 (Override_Auton)</option>
+              <option value="2">Slot 2 (Skills_60s)</option>
+              <option value="3">Slot 3 (Solo_AWP)</option>
+              <option value="4">Slot 4 (Empty)</option>
+              <option value="5">Slot 5 (Empty)</option>
+              <option value="6">Slot 6 (Empty)</option>
+              <option value="7">Slot 7 (Empty)</option>
+              <option value="8">Slot 8 (Empty)</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <button type="button" id="btnDebugUploadAuton" class="primary" style="flex:1;padding:6px;font-size:0.75rem;">⚡ Flash Auton to Brain</button>
+            <button type="button" id="btnDebugRunProgram" style="background:#16a34a;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.75rem;cursor:pointer;">▶ Run</button>
+            <button type="button" id="btnDebugStopProgram" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.75rem;cursor:pointer;">⏹ Stop</button>
+          </div>
+        </div>
+
+        <!-- Smart Port Monitor List -->
+        <div style="margin-top:12px;">
+          <div style="font-size:0.72rem;font-weight:700;color:#cbd5e1;margin-bottom:6px;">Smart Port Device Live Status:</div>
+          <div class="debug-smartports-list" id="debugSmartportsList">
+            <!-- Dynamically populated from V5BrainSerial -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Cross-Script Diagnostics Tab -->
+      <div class="debug-pane" id="debugPaneDiagnostics">
+        <div class="debug-diag-summary" id="debugDiagSummary">
+          <span class="debug-diag-status-dot green"></span>
+          <strong>Project Syntax Check: Clean</strong>
+        </div>
+        <div id="debugDiagList" class="debug-diag-list">
+          <!-- Diagnostic errors and warnings -->
+        </div>
+      </div>
+
+      <!-- Step Debugger Tab -->
+      <div class="debug-pane" id="debugPaneStep">
+        <div class="debug-step-controls">
+          <button type="button" id="btnDebugStepReset" title="Reset to Start">⏮️ Reset</button>
+          <button type="button" id="btnDebugStepPrev" title="Previous Action">◀ Step Back</button>
+          <button type="button" id="btnDebugStepNext" class="primary" title="Execute Next Action">Step Next ▶</button>
+        </div>
+        <div class="debug-step-readout">
+          <div class="debug-step-row"><span>Active Step:</span><strong id="debugActiveStepLabel">Step 0 (Start)</strong></div>
+          <div class="debug-step-row"><span>Simulated Pose:</span><strong id="debugStepPose">(X: -60.0", Y: -60.0", θ: 0.0°)</strong></div>
+          <div class="debug-step-row"><span>Elapsed Sim Time:</span><strong id="debugStepTime">0.00 s</strong></div>
+        </div>
+        <div class="debug-step-log" id="debugStepLog">
+          <div class="step-log-entry info">[START] Autonomous routine initialized at origin tile.</div>
+        </div>
+      </div>
+
+      <!-- Terminal Output Tab -->
+      <div class="debug-pane" id="debugPaneTerminal">
+        <div class="debug-term-header">
+          <span>VEX V5 Live CDC Stream (115200 baud)</span>
+          <button type="button" id="btnClearDebugTerminal" class="btn-xs-clean">🧹 Clear</button>
+        </div>
+        <pre class="debug-terminal-console" id="debugTerminalConsole">[PROS Kernel 4.1.0 Initialized]
+[LemLib 0.5.4] Chassis calibrated. Inertial IMU zeroed.
+[AUTON] Starting 'red_rush_auton' routine...</pre>
+      </div>
+
+      <!-- PID Tuning Graph Tab -->
+      <div class="debug-pane" id="debugPaneTuning">
+        <!-- Real-Time Velocity vs Target & 15s+ Acceleration Bottleneck Analyzer -->
+        <div class="bottleneck-analyzer-card">
+          <div class="bottleneck-analyzer-header">
+            <div class="bottleneck-title-row">
+              <span class="bottleneck-icon">⚡</span>
+              <div>
+                <h3 class="bottleneck-title">Velocity vs. Target (15s+ Bottlenecks)</h3>
+                <p class="bottleneck-desc">Real-time velocity tracking vs target profile during 15s+ simulation to pinpoint acceleration bottlenecks &amp; slew limits.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Field Scoring Engine & Dynamic Elements Modal (BETA) -->
+  <div id="scoringModal" class="modal scoring-modal" hidden>
+    <div class="modal-card scoring-modal-card">
+      <div class="scoring-modal-header">
+        <div class="scoring-modal-title-wrap">
+          <span class="scoring-badge">VRC Override (2026-27) · Game Engine &amp; Dynamic Tracking</span>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <h2 id="scoringModalTitle" style="margin:0;">🎯 Override Scoring Engine <span class="badge-beta-text">BETA</span></h2>
+            <button type="button" class="btn-xs-clean" id="btnLaunchCommentGuideFromModal" style="background:rgba(56,189,248,0.2);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 10px;border-radius:6px;cursor:pointer;">❓ Comment Tutorial</button>
+          </div>
+        </div>
+        <button type="button" id="scoringModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="scoring-modal-body">
+        <p class="scoring-modal-desc">
+          Simulates official <strong>VRC Override (2026-27)</strong> field mechanics: <strong>Pins</strong> (63 on field), <strong>4 Wall Loaders</strong> (always ready), <strong>4 Perimeter Toggles</strong> (CW/CCW), and <strong>9 Goals</strong> with live pin stacking. Robot carries exactly <strong>1 Pin at a time</strong>.
+        </p>
+
+        <!-- Top Master Controls -->
+        <div class="scoring-master-panel">
+          <div class="scoring-master-row">
+            <label class="collision-toggle-switch">
+              <input type="checkbox" id="chkScoringMaster" checked />
+              <span class="collision-slider"></span>
+              <span class="collision-toggle-text"><strong>Enable Override Dynamic Tracker (Beta)</strong></span>
+            </label>
+            <div class="scoring-status-pill active" id="scoringModalStatusPill">
+              🟢 Beta: Active &amp; Tracking
+            </div>
+          </div>
+
+          <div class="scoring-config-grid">
+            <div class="scoring-config-item">
+              <label>Alliance Color</label>
+              <select id="selScoringAlliance" class="scoring-select">
+                <option value="red" selected>🔴 Red Alliance</option>
+                <option value="blue">🔵 Blue Alliance</option>
+              </select>
+            </div>
+            <div class="scoring-config-item">
+              <label>Competition Mode</label>
+              <select id="selScoringGameMode" class="scoring-select">
+                <option value="match15" selected>⏱️ 15s Match Autonomous</option>
+                <option value="skills60">⏱️ 60s Autonomous Skills</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time Scoreboard Strip -->
+        <div class="scoring-live-scoreboard">
+          <div class="score-hero-box">
+            <span class="score-hero-label">Projected Autonomous Score</span>
+            <div class="score-hero-val" id="scoreModalTotalPoints">0 <span class="score-unit">pts</span></div>
+            <span class="score-awp-badge" id="scoreModalAwpBadge">Toggles Owned: 0/4 · Pins Stacked: 0</span>
+          </div>
+
+          <div class="score-breakdown-grid">
+            <div class="score-metric-cell">
+              <span class="score-cell-label">Carried Pin</span>
+              <strong class="score-cell-val" id="scoreModalCarriedPin">None (Empty)</strong>
+              <span class="score-cell-sub">Max 1 Pin on Robot</span>
+            </div>
+            <div class="score-metric-cell">
+              <span class="score-cell-label">Pins Stacked on Goals</span>
+              <strong class="score-cell-val" id="scoreModalStackedCount">0 Pins</strong>
+              <span class="score-cell-sub">5 pts / color · 10 pts / yellow</span>
+            </div>
+            <div class="score-metric-cell">
+              <span class="score-cell-label">Toggles Controlled</span>
+              <strong class="score-cell-val" id="scoreModalTogglesCount">0 Active</strong>
+              <span class="score-cell-sub">CW / CCW wall triggers</span>
+            </div>
+            <div class="score-metric-cell">
+              <span class="score-cell-label">Match Loaders</span>
+              <strong class="score-cell-val" id="scoreModalLoaderStatus">4 Ready</strong>
+              <span class="score-cell-sub">Replenishing Pins</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Trigger Actions & Subsystem Bar -->
+        <div class="scoring-subsystem-bar">
+          <div class="subsystem-status-chip" id="subsystemChipPin">
+            <span class="sub-dot off" id="dotSubPin"></span>
+            <span>Robot Pin: <strong id="lblSubPin">NONE</strong></span>
+          </div>
+          <button type="button" class="btn-sub-quick" id="btnTestCollectPin" title="Trigger pin collection">📌 Collect Pin</button>
+          <button type="button" class="btn-sub-quick" id="btnTestDepositPin" title="Deposit carried pin into nearest goal">🥅 Deposit Pin</button>
+          <button type="button" class="btn-sub-quick" id="btnTestToggleCW" title="Turn nearest toggle CW">🔄 Toggle CW</button>
+          <button type="button" class="btn-sub-quick" id="btnTestToggleCCW" title="Turn nearest toggle CCW">🔁 Toggle CCW</button>
+          <button type="button" class="btn-sub-quick" id="btnResetFieldElements" title="Reset all pins, toggles and goal stacks to initial field state">↺ Reset Field</button>
+        </div>
+
+        <div class="scoring-hint-box">
+          💡 <strong>VRC Override Autonomous Comment Triggers:</strong><br/>
+          • <code>// pin collected</code> — Robot grabs nearest pin (from field or wall loader) and carries it (1 pin max).<br/>
+          • <code>// pin deposited</code> — Drops carried pin into nearest goal and stacks it (tracks color &amp; yellow pins).<br/>
+          • <code>// turn toggle CW</code> / <code>// turn toggle CCW</code> — Turns nearest wall toggle and changes its alliance color!
+        </div>
+      </div>
+
+      <div class="scoring-modal-footer">
+        <span class="scoring-footer-note">
+          ⚡ <strong>VRC Override (2026-27):</strong> 63 Pins, 4 Wall Loaders, 4 Perimeter Toggles, 9 Stacking Goals.
+        </span>
+        <button type="button" id="scoringModalDoneBtn" class="primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Field Collision Detection & Obstacle Manager Modal -->
+  <div id="collisionModal" class="modal collision-modal" hidden>
+    <div class="modal-card collision-modal-card">
+      <div class="collision-modal-header">
+        <div class="collision-modal-title-wrap">
+          <span class="collision-badge">VEX High Stakes Field Collision Engine</span>
+          <h2 id="collisionModalTitle">🛡️ Map &amp; Robot Collision Detection</h2>
+        </div>
+        <button type="button" id="collisionModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+      </div>
+
+      <div class="collision-modal-body">
+        <p class="collision-modal-desc">
+          Evaluates real-time geometric collisions between your robot's chassis and the official VEX High Stakes field map, including <strong>perimeter walls</strong>, <strong>wall match loaders</strong>, <strong>mobile goals</strong>, and the <strong>center ladder</strong>.
+        </p>
+
+        <!-- Top Master Controls -->
+        <div class="collision-master-panel">
+          <div class="collision-master-row">
+            <label class="collision-toggle-switch">
+              <input type="checkbox" id="chkCollisionMaster" checked />
+              <span class="collision-slider"></span>
+              <span class="collision-toggle-text"><strong>Enable Collision Detection</strong> (Real-time &amp; Trajectory)</span>
+            </label>
+            <div class="collision-status-pill clean" id="collisionModalStatusPill">
+              🟢 Clean: No Collisions Detected
+            </div>
+          </div>
+
+          <div class="collision-config-grid">
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionLoaders" checked />
+              <span>🚪 Check Wall Loaders (4 Match Loaders)</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionGoals" checked />
+              <span>🥅 Check Mobile Goals (8 Field Mogos)</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionWalls" checked />
+              <span>🧱 Check Field Walls (±70.5")</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionLadder" checked />
+              <span>🪜 Check Center Ladder Structure</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionOverlays" checked />
+              <span>👁️ Highlight Obstacles &amp; Hit Zones on Field</span>
+            </label>
+            <label class="collision-sub-toggle">
+              <input type="checkbox" id="chkCollisionStopSim" />
+              <span>🛑 Auto-Pause Simulation on Impact</span>
+            </label>
+          </div>
+
+          <div class="collision-buffer-row">
+            <div class="collision-buffer-label">
+              <span>Safety Clearance Cushion:</span>
+              <strong id="collisionBufferVal">0.0" (Exact Chassis Bounding Box)</strong>
+            </div>
+            <input type="range" id="rngCollisionBuffer" min="0" max="3" step="0.25" value="0" class="collision-slider-input" />
+            <span class="collision-buffer-hint">Adds extra clearance margin around your robot bumpers to prevent scraping.</span>
+          </div>
+        </div>
+
+        <!-- Live Collision Diagnostics Summary Table -->
+        <div class="collision-diag-panel">
+          <div class="collision-diag-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <h3 style="margin:0;">⚠️ Path Trajectory Collision Report</h3>
+              <span class="collision-diag-count" id="collisionReportCount">0 collisions</span>
+            </div>
+          </div>
+          <div class="collision-diag-table-wrap">
+            <table class="collision-diag-table" id="collisionDiagTable">
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>Action Type</th>
+                  <th>Timestamp</th>
+                  <th>Severity</th>
+                  <th>Robot Pose (X, Y, θ)</th>
+                  <th>Obstacle Collided</th>
+                </tr>
+              </thead>
+              <tbody id="collisionDiagTbody">
+                <tr><td colspan="6" class="collision-empty-row">✨ Path is 100% collision-free! Robot clears all walls, loaders, and goals.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="collision-modal-footer">
+        <span style="font-size:0.75rem;color:#94a3b8;">
+          💡 Tip: You can drag any waypoint or start pose directly on the field canvas to see real-time collision feedback.
+        </span>
+        <button type="button" id="collisionModalDoneBtn" class="primary">Done</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="teamToast" class="team-toast">
     <span id="teamToastIcon">✅</span>
@@ -1699,17 +2067,18 @@
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260928.k54"></script>
+  <script src="version.js?v=20260928.k56"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260928.k54"></script>
-  <script src="theme.js?v=20260928.k54"></script>
-  <script src="cpp-parser.js?v=20260928.k54"></script>
-  <script src="project-manager.js?v=20260928.k54"></script>
-  <script src="v5-brain-serial.js?v=20260928.k54"></script>
-  <script src="scoring-engine.js?v=20260928.k54"></script>
-  <script src="google-drive-sync.js?v=20260928.k54"></script>
-  <script src="team.js?v=20260928.k54"></script>
+  <script src="firebase-config.js?v=20260928.k56"></script>
+  <script src="theme.js?v=20260928.k56"></script>
+  <script src="cpp-parser.js?v=20260928.k56"></script>
+  <script src="project-manager.js?v=20260928.k56"></script>
+  <script src="v5-brain-serial.js?v=20260928.k56"></script>
+  <script src="scoring-engine.js?v=20260928.k56"></script>
+  <script src="google-drive-sync.js?v=20260928.k56"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+  <script src="team.js?v=20260928.k56"></script>
 </body>
 </html>

@@ -135,6 +135,1239 @@
   let activeIdeFile = "autons.cpp";
   let pendingRemoteState = null;
 
+  // Editor and Monaco state
+  let elLineNumbers = null;
+  let elCodeEditor = null;
+  let elCodeHighlight = null;
+  let elCodeHighlightInner = null;
+  let isMonacoReady = false;
+  let monacoInstance = null;
+  let monacoEditor = null;
+  let lastLineCount = -1;
+
+  // Robot Drive specs & collision configurations (matching app.js)
+  let bot = {
+    trackWidth: 12.0,
+    robotW: 14.0,
+    robotL: 14.0,
+    wheelDiam: 3.25,
+    driveRpm: 600,
+    defaultMaxSpeed: 127,
+    defaultMinSpeed: 0,
+    lateralDrift: 1.0,
+    turnDrift: 1.0,
+    defaultLead: 0.6,
+    motorCount: 6,
+    robotWeightLbs: 15.0,
+    wheelTraction: 0.85,
+    batteryVolts: 12.8,
+    matchPeriod: "15s"
+  };
+
+  let collisionConfig = {
+    enabled: true,
+    checkWalls: true,
+    checkLoaders: true,
+    checkGoals: true,
+    checkLadder: true,
+    safetyBuffer: 0.0,
+    showObstacleOverlays: true,
+    showSafeClearanceZones: false,
+    stopSimOnCollision: false,
+    disabledObstacleIds: {},
+    clampedObstacleIds: {}
+  };
+
+  const FIELD_OBSTACLES = {
+    walls: [
+      { id: "wall_west", name: "West Wall (Left)", type: "wall", axis: "x", value: -70.5, sign: -1, label: "Left Perimeter Wall (-70.5\")" },
+      { id: "wall_east", name: "East Wall (Right)", type: "wall", axis: "x", value: 70.5, sign: 1, label: "Right Perimeter Wall (+70.5\")" },
+      { id: "wall_south", name: "South Wall (Bottom)", type: "wall", axis: "y", value: -70.5, sign: -1, label: "Bottom Perimeter Wall (-70.5\")" },
+      { id: "wall_north", name: "North Wall (Top)", type: "wall", axis: "y", value: 70.5, sign: 1, label: "Top Perimeter Wall (+70.5\")" }
+    ],
+    loaders: [
+      {
+        id: "loader_red_tl",
+        name: "Red Loader (Top-Left)",
+        color: "red",
+        wall: "west",
+        minX: -70.5, maxX: -60.0,
+        minY: 51.5, maxY: 65.5,
+        center: { x: -65.25, y: 58.5 },
+        width: 10.5, height: 14.0,
+        label: "Red Match Loader (Top-Left, Y=58.5\")"
+      },
+      {
+        id: "loader_red_bl",
+        name: "Red Loader (Bottom-Left)",
+        color: "red",
+        wall: "west",
+        minX: -70.5, maxX: -60.0,
+        minY: -65.5, maxY: -51.5,
+        center: { x: -65.25, y: -58.5 },
+        width: 10.5, height: 14.0,
+        label: "Red Match Loader (Bottom-Left, Y=-58.5\")"
+      },
+      {
+        id: "loader_blue_tr",
+        name: "Blue Loader (Top-Right)",
+        color: "blue",
+        wall: "east",
+        minX: 60.0, maxX: 70.5,
+        minY: 51.5, maxY: 65.5,
+        center: { x: 65.25, y: 58.5 },
+        width: 10.5, height: 14.0,
+        label: "Blue Match Loader (Top-Right, Y=58.5\")"
+      },
+      {
+        id: "loader_blue_br",
+        name: "Blue Loader (Bottom-Right)",
+        color: "blue",
+        wall: "east",
+        minX: 60.0, maxX: 70.5,
+        minY: -65.5, maxY: -51.5,
+        center: { x: 65.25, y: -58.5 },
+        width: 10.5, height: 14.0,
+        label: "Blue Match Loader (Bottom-Right, Y=-58.5\")"
+      }
+    ],
+    goals: [
+      { id: "goal_center", name: "Middle Goal", color: "yellow", x: 0.0, y: 0.0, radius: 3.1, label: "Middle Goal (0\", 0\")" },
+      { id: "goal_red_1", name: "Red Mobile Goal 1", color: "red", x: -48.0, y: -24.0, radius: 3.1, label: "Red Mogo (-48\", -24\")" },
+      { id: "goal_red_2", name: "Red Mobile Goal 2", color: "red", x: -24.0, y: -48.0, radius: 3.1, label: "Red Mogo (-24\", -48\")" },
+      { id: "goal_blue_1", name: "Blue Mobile Goal 1", color: "blue", x: 48.0, y: 24.0, radius: 3.1, label: "Blue Mogo (48\", 24\")" },
+      { id: "goal_blue_2", name: "Blue Mobile Goal 2", color: "blue", x: 24.0, y: 48.0, radius: 3.1, label: "Blue Mogo (24\", 48\")" },
+      { id: "goal_neutral_tl", name: "Neutral Mobile Goal (Top-Left)", color: "yellow", x: -24.0, y: 48.0, radius: 3.1, label: "Neutral Mogo (-24\", 48\")" },
+      { id: "goal_neutral_ml", name: "Neutral Mobile Goal (Mid-Left)", color: "yellow", x: -48.0, y: 24.0, radius: 3.1, label: "Neutral Mogo (-48\", 24\")" },
+      { id: "goal_neutral_mr", name: "Neutral Mobile Goal (Mid-Right)", color: "yellow", x: 48.0, y: -24.0, radius: 3.1, label: "Neutral Mogo (48\", -24\")" },
+      { id: "goal_neutral_br", name: "Neutral Mobile Goal (Bottom-Right)", color: "yellow", x: 24.0, y: -48.0, radius: 3.1, label: "Neutral Mogo (24\", -48\")" }
+    ],
+    ladder: []
+  };
+
+  // State management helpers
+  function markDirty() {}
+  function renderFlow() {
+    if (typeof renderActionBlocks === "function") renderActionBlocks();
+  }
+
+  // Active Bezier Curve path editing tool support
+  let bezierToolActive = false;
+  function setBezierTool(active) {
+    bezierToolActive = !!active;
+    const btn = document.getElementById("btnToolBezier");
+    const banner = document.getElementById("bezierBanner");
+    if (btn) {
+      btn.style.background = active ? "rgba(6,182,212,0.3)" : "rgba(6,182,212,0.15)";
+      btn.style.borderColor = active ? "#06b6d4" : "rgba(6,182,212,0.3)";
+    }
+    if (banner) {
+      banner.style.display = active ? "flex" : "none";
+    }
+    if (canvas) {
+      canvas.style.cursor = active ? "crosshair" : "default";
+    }
+    drawField();
+  }
+
+  // --------------------------------------------------------------------------
+  // EDITOR RENDERING & HIGH FIDELITY SYNTAX HIGHLIGHTING (FALLBACK & MONACO)
+  // --------------------------------------------------------------------------
+  function initTeamEditor() {
+    elLineNumbers = document.getElementById("ideLineNumbers");
+    elCodeEditor = document.getElementById("txtTeamIdeCode");
+    elCodeHighlight = document.getElementById("ideCodeHighlight");
+    elCodeHighlightInner = document.getElementById("ideCodeHighlightInner");
+
+    if (elCodeEditor) {
+      elCodeEditor.addEventListener("scroll", () => {
+        if (elLineNumbers) elLineNumbers.scrollTop = elCodeEditor.scrollTop;
+        if (elCodeHighlight) {
+          elCodeHighlight.scrollTop = elCodeEditor.scrollTop;
+          elCodeHighlight.scrollLeft = elCodeEditor.scrollLeft;
+        }
+      });
+      elCodeEditor.addEventListener("input", () => {
+        updateLineNumbers();
+        renderSyntaxHighlight();
+      });
+    }
+
+    initMonaco();
+  }
+
+  function updateLineNumbers() {
+    if (!elLineNumbers || !elCodeEditor) return;
+    const lines = elCodeEditor.value.split("\n").length;
+    if (lines === lastLineCount) return;
+    lastLineCount = lines;
+    let html = "";
+    for (let i = 1; i <= lines; i++) {
+      html += `<div>${i}</div>`;
+    }
+    elLineNumbers.innerHTML = html;
+  }
+
+  function renderSyntaxHighlight() {
+    if (!elCodeEditor || !elCodeHighlightInner) return;
+    const code = elCodeEditor.value || "";
+    elCodeHighlightInner.innerHTML = highlightCppCode(code);
+  }
+
+  function highlightCppCode(code) {
+    if (!code) return "";
+    const tokenRegex = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|#\s*(?:include|define|pragma|ifdef|ifndef|endif|else|elif|undef)[^\n]*|\b(?:0x[0-9a-fA-F]+|\d+(?:\.\d+)?)\b|\b(?:void|int|float|double|bool|char|const|return|if|else|while|for|struct|class|public|private|protected|auto|namespace|using|true|false|nullptr|enum|virtual|override|static|sizeof|typedef|switch|case|default|break|continue|extern)\b|\b(?:lemlib|pros|chassis|ControllerSettings|Drivetrain|OdomSensors|TrackingWheel|Controller|Motor|MotorGroup|ADIPiston|Imu|Optical|Distance|Rotation|AngularDirection|DriveSide)\b|\b(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|waitUntilDone|waitUntil|setPose|getPose|calibrate|setSensors|set_value|move|move_velocity|brake|delay|autonomous|initialize|opcontrol|disabled)\b|\b(?:x|y|theta|timeout|maxSpeed|minSpeed|earlyExitRange|lead|forwards|async|driveLeft|driveRight|intake|clamp|arm|imu)\b|[{}()\[\]]|::|->|\.|=|==|!=|<=|>=|&&|\|\||[+\-*\/%<>&|^!;,]/g;
+    let result = "";
+    let lastIndex = 0;
+    let match;
+    while ((match = tokenRegex.exec(code)) !== null) {
+      if (match.index > lastIndex) {
+        result += escapeHtml(code.substring(lastIndex, match.index));
+      }
+      const token = match[0];
+      const escaped = escapeHtml(token);
+      if (token.startsWith("/*") || token.startsWith("//")) {
+        result += `<span class="cpp-comment">${escaped}</span>`;
+      } else if (token.startsWith('"') || token.startsWith("'")) {
+        result += `<span class="cpp-string">${escaped}</span>`;
+      } else if (token.startsWith("#")) {
+        result += `<span class="cpp-preproc">${escaped}</span>`;
+      } else if (/^\d/.test(token) || token.startsWith("0x")) {
+        result += `<span class="cpp-number">${escaped}</span>`;
+      } else if (/^(void|int|float|double|bool|char|const|return|if|else|while|for|struct|class|public|private|protected|auto|namespace|using|true|false|nullptr|enum|virtual|override|static|sizeof|typedef|switch|case|default|break|continue|extern)$/.test(token)) {
+        result += `<span class="cpp-keyword">${escaped}</span>`;
+      } else if (/^(lemlib|pros|chassis|ControllerSettings|Drivetrain|OdomSensors|TrackingWheel|Controller|Motor|MotorGroup|ADIPiston|Imu|Optical|Distance|Rotation|AngularDirection|DriveSide)$/.test(token)) {
+        result += `<span class="cpp-type">${escaped}</span>`;
+      } else if (/^(moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|waitUntilDone|waitUntil|setPose|getPose|calibrate|setSensors|set_value|move|move_velocity|brake|delay|autonomous|initialize|opcontrol|disabled)$/.test(token)) {
+        result += `<span class="cpp-fn">${escaped}</span>`;
+      } else if (/^(x|y|theta|timeout|maxSpeed|minSpeed|earlyExitRange|lead|forwards|async|driveLeft|driveRight|intake|clamp|arm|imu)$/.test(token)) {
+        result += `<span class="cpp-member">${escaped}</span>`;
+      } else if (/^[{}()\[\]]$/.test(token)) {
+        result += `<span class="cpp-bracket">${escaped}</span>`;
+      } else if (/^[+\-*\/%<>&|^!;,=]|::|->|\.$/.test(token)) {
+        result += `<span class="cpp-operator">${escaped}</span>`;
+      } else {
+        result += `<span class="cpp-ident">${escaped}</span>`;
+      }
+      lastIndex = tokenRegex.lastIndex;
+    }
+    if (lastIndex < code.length) {
+      result += escapeHtml(code.substring(lastIndex));
+    }
+    if (code.endsWith("\n")) {
+      result += "\n";
+    }
+    return result;
+  }
+
+  function initMonaco() {
+    const container = document.getElementById("monacoEditorContainer");
+    if (!container || !window.require) return;
+    try {
+      window.require.config({
+        paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs" }
+      });
+      window.MonacoEnvironment = {
+        getWorkerUrl: function() {
+          const proxyCode = `
+            self.MonacoEnvironment = { baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/' };
+            importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/base/worker/workerMain.js');
+          `;
+          return "data:text/javascript;charset=utf-8," + encodeURIComponent(proxyCode);
+        }
+      };
+      window.require(["vs/editor/editor.main"], function() {
+        try {
+          monacoInstance = window.monaco;
+          setupMonacoEngine(container);
+        } catch (setupErr) {
+          console.error("[Monaco] Setup failed:", setupErr);
+        }
+      });
+    } catch (_) {}
+  }
+
+  function setupMonacoEngine(container) {
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    const initialContent = elCodeEditor ? elCodeEditor.value : "";
+    monacoInstance.editor.defineTheme("lemlib-dark", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "64748b", fontStyle: "italic" },
+        { token: "keyword", foreground: "38bdf8", fontStyle: "bold" },
+        { token: "string", foreground: "34d399" },
+        { token: "number", foreground: "fb7185" },
+        { token: "type", foreground: "818cf8" },
+        { token: "identifier", foreground: "f8fafc" }
+      ],
+      colors: {
+        "editor.background": "#020617",
+        "editor.foreground": "#f8fafc",
+        "editor.lineHighlightBackground": "#0f172a",
+        "editorLineNumber.foreground": "#475569"
+      }
+    });
+
+    monacoEditor = monacoInstance.editor.create(container, {
+      value: initialContent,
+      language: "cpp",
+      theme: "lemlib-dark",
+      automaticLayout: true,
+      fontSize: 13.5,
+      lineHeight: 20,
+      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace',
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      smoothScrolling: true,
+      wordWrap: "off",
+      tabSize: 4
+    });
+
+    monacoEditor.onDidChangeModelContent(() => {
+      const val = monacoEditor.getValue();
+      if (elCodeEditor) {
+        elCodeEditor.value = val;
+        const event = new Event("input", { bubbles: true });
+        elCodeEditor.dispatchEvent(event);
+      }
+    });
+
+    isMonacoReady = true;
+    const wrapper = document.getElementById("ideEditorWrapper");
+    if (wrapper) wrapper.classList.add("monaco-active");
+  }
+
+  // --------------------------------------------------------------------------
+  // FIELD COLLISION DETECTION ENGINE (Walls, Loaders & Goals)
+  // --------------------------------------------------------------------------
+  function getRobotCorners(x, y, thetaDeg, extraBuffer = 0) {
+    const hl = (bot.robotL || 14.0) / 2 + extraBuffer;
+    const hw = (bot.robotW || 14.0) / 2 + extraBuffer;
+    const rad = (thetaDeg * Math.PI) / 180;
+    const fx = Math.sin(rad), fy = Math.cos(rad);
+    const rx = Math.cos(rad), ry = -Math.sin(rad);
+    return [
+      { x: x + hl * fx + hw * rx, y: y + hl * fy + hw * ry },
+      { x: x + hl * fx - hw * rx, y: y + hl * fy - hw * ry },
+      { x: x - hl * fx - hw * rx, y: y - hl * fy - hw * ry },
+      { x: x - hl * fx + hw * rx, y: y - hl * fy + hw * ry }
+    ];
+  }
+
+  function checkWallCollision(x, y, thetaDeg, buffer = 0) {
+    if (!collisionConfig.checkWalls) return null;
+    const corners = getRobotCorners(x, y, thetaDeg, buffer);
+    const half = 70.5;
+    for (const c of corners) {
+      if (c.x < -half) {
+        return { type: "wall", id: "wall_west", name: "West Perimeter Wall", penetration: Math.abs(c.x - (-half)), point: { x: c.x, y: c.y } };
+      }
+      if (c.x > half) {
+        return { type: "wall", id: "wall_east", name: "East Perimeter Wall", penetration: Math.abs(c.x - half), point: { x: c.x, y: c.y } };
+      }
+      if (c.y < -half) {
+        return { type: "wall", id: "wall_south", name: "South Perimeter Wall", penetration: Math.abs(c.y - (-half)), point: { x: c.x, y: c.y } };
+      }
+      if (c.y > half) {
+        return { type: "wall", id: "wall_north", name: "North Perimeter Wall", penetration: Math.abs(c.y - half), point: { x: c.x, y: c.y } };
+      }
+    }
+    return null;
+  }
+
+  function checkAABBvsOBB(aabb, x, y, thetaDeg, buffer = 0) {
+    const corners = getRobotCorners(x, y, thetaDeg, buffer);
+    const boxMinX = aabb.minX;
+    const boxMaxX = aabb.maxX;
+    const boxMinY = aabb.minY;
+    const boxMaxY = aabb.maxY;
+
+    const boxCorners = [
+      { x: boxMinX, y: boxMinY },
+      { x: boxMaxX, y: boxMinY },
+      { x: boxMaxX, y: boxMaxY },
+      { x: boxMinX, y: boxMaxY }
+    ];
+
+    const rad = (thetaDeg * Math.PI) / 180;
+    const axes = [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: Math.sin(rad), y: Math.cos(rad) },
+      { x: Math.cos(rad), y: -Math.sin(rad) }
+    ];
+
+    let minOverlap = Infinity;
+
+    for (const axis of axes) {
+      let minA = Infinity, maxA = -Infinity;
+      for (const p of corners) {
+        const proj = p.x * axis.x + p.y * axis.y;
+        if (proj < minA) minA = proj;
+        if (proj > maxA) maxA = proj;
+      }
+
+      let minB = Infinity, maxB = -Infinity;
+      for (const p of boxCorners) {
+        const proj = p.x * axis.x + p.y * axis.y;
+        if (proj < minB) minB = proj;
+        if (proj > maxB) maxB = proj;
+      }
+
+      if (maxA < minB || maxB < minA) return null;
+
+      const overlap = Math.min(maxA - minB, maxB - minA);
+      if (overlap < minOverlap) minOverlap = overlap;
+    }
+
+    return { hit: true, penetration: minOverlap };
+  }
+
+  function checkCircleVsOBB(circleX, circleY, radius, robotX, robotY, thetaDeg, buffer = 0) {
+    const dx = circleX - robotX;
+    const dy = circleY - robotY;
+    const rad = (thetaDeg * Math.PI) / 180;
+    const fx = Math.sin(rad), fy = Math.cos(rad);
+    const rx = Math.cos(rad), ry = -Math.sin(rad);
+
+    const localX = dx * rx + dy * ry;
+    const localY = dx * fx + dy * fy;
+
+    const hl = (bot.robotL || 14.0) / 2 + buffer;
+    const hw = (bot.robotW || 14.0) / 2 + buffer;
+
+    const clampX = Math.max(-hw, Math.min(hw, localX));
+    const clampY = Math.max(-hl, Math.min(hl, localY));
+
+    const distX = localX - clampX;
+    const distY = localY - clampY;
+    const distSq = distX * distX + distY * distY;
+
+    if (distSq <= radius * radius) {
+      const dist = Math.sqrt(distSq);
+      const penetration = radius - dist;
+      return { hit: true, penetration: Math.max(0.1, penetration) };
+    }
+    return null;
+  }
+
+  function checkRobotCollisionAtPose(x, y, thetaDeg, buffer = 0) {
+    if (!collisionConfig.enabled) return { hit: false, obstacles: [] };
+    const hits = [];
+
+    if (collisionConfig.checkWalls) {
+      const wallHit = checkWallCollision(x, y, thetaDeg, buffer);
+      if (wallHit) hits.push(wallHit);
+    }
+
+    if (collisionConfig.checkLoaders) {
+      for (const loader of FIELD_OBSTACLES.loaders) {
+        if (collisionConfig.disabledObstacleIds[loader.id]) continue;
+        const res = checkAABBvsOBB(loader, x, y, thetaDeg, buffer);
+        if (res) {
+          hits.push({
+            type: "loader",
+            id: loader.id,
+            name: loader.name,
+            color: loader.color,
+            penetration: res.penetration,
+            obstacle: loader
+          });
+        }
+      }
+    }
+
+    if (collisionConfig.checkGoals) {
+      for (const goal of FIELD_OBSTACLES.goals) {
+        if (collisionConfig.disabledObstacleIds[goal.id]) continue;
+        if (collisionConfig.clampedObstacleIds[goal.id]) continue;
+        const res = checkCircleVsOBB(goal.x, goal.y, goal.radius, x, y, thetaDeg, buffer);
+        if (res) {
+          hits.push({
+            type: "goal",
+            id: goal.id,
+            name: goal.name,
+            color: goal.color,
+            penetration: res.penetration,
+            obstacle: goal
+          });
+        }
+      }
+    }
+
+    if (collisionConfig.checkLadder) {
+      for (const lad of FIELD_OBSTACLES.ladder) {
+        if (collisionConfig.disabledObstacleIds[lad.id]) continue;
+        const res = checkCircleVsOBB(lad.x, lad.y, lad.radius, x, y, thetaDeg, buffer);
+        if (res) {
+          hits.push({
+            type: "ladder",
+            id: lad.id,
+            name: lad.name,
+            penetration: res.penetration,
+            obstacle: lad
+          });
+        }
+      }
+    }
+
+    return { hit: hits.length > 0, obstacles: hits };
+  }
+
+  function evaluateRoutineCollisions() {
+    if (!collisionConfig.enabled) {
+      return { totalCollisions: 0, collisions: [], collidingObstacleIds: new Set() };
+    }
+    const collisions = [];
+    const collidingObstacleIds = new Set();
+    const buf = collisionConfig.safetyBuffer || 0;
+
+    const routine = activePaths[activeRoutineIndex] || activePaths[0];
+    if (!routine) return { totalCollisions: 0, collisions: [], collidingObstacleIds: new Set() };
+
+    const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
+    const actions = (routine.actions || []).filter(a => a.x !== undefined && a.y !== undefined);
+
+    const samplesCount = 50;
+    for (let i = 0; i <= samplesCount; i++) {
+      const timeRatio = i / samplesCount;
+      const poseAtT = interpolatePathPose(timeRatio);
+      const col = checkRobotCollisionAtPose(poseAtT.x, poseAtT.y, poseAtT.theta, buf);
+      if (col.hit) {
+        col.obstacles.forEach(obs => {
+          if (!collidingObstacleIds.has(obs.id)) {
+            collidingObstacleIds.add(obs.id);
+            const actionsCount = actions.length;
+            const stepIdx = Math.min(actionsCount, Math.floor(timeRatio * (actionsCount + 1)));
+            const actType = stepIdx === 0 ? "Start Pose" : (actions[stepIdx - 1]?.type || "Move");
+            const actId = stepIdx === 0 ? "start_pose" : (actions[stepIdx - 1]?.id || `act_${stepIdx}`);
+
+            collisions.push({
+              stepIdx,
+              actionId: actId,
+              actionType: actType,
+              t: timeRatio * 15.0,
+              point: { x: poseAtT.x, y: poseAtT.y, theta: poseAtT.theta, t: timeRatio * 15.0 },
+              obstacle: obs,
+              penetration: obs.penetration || 0.5
+            });
+          }
+        });
+      }
+    }
+
+    return {
+      totalCollisions: collisions.length,
+      collisions: collisions,
+      collidingObstacleIds: collidingObstacleIds
+    };
+  }
+
+  function getCollisionSeverity(c) {
+    if (!c) return { level: "UNKNOWN", label: "—", color: "#94a3b8", badgeCss: "background:#334155;color:#cbd5e1;" };
+    const obsType = c.obstacle ? c.obstacle.type : "";
+    const obsName = c.obstacle ? (c.obstacle.name || "").toLowerCase() : "";
+    const pen = c.penetration || 0;
+
+    if (obsType === "wall" || obsName.includes("wall") || obsName.includes("ladder") || pen >= 1.5) {
+      return {
+        level: "CRITICAL",
+        label: "🛑 CRITICAL",
+        color: "#ef4444",
+        bg: "rgba(239, 68, 68, 0.18)",
+        border: "#f87171",
+        badgeCss: "background:rgba(239, 68, 68, 0.2); border:1px solid #ef4444; color:#fca5a5;"
+      };
+    } else if (pen >= 0.5 || obsType === "goal" || obsType === "loader") {
+      return {
+        level: "MAJOR",
+        label: "⚠️ MAJOR",
+        color: "#f97316",
+        bg: "rgba(249, 115, 22, 0.18)",
+        border: "#fb923c",
+        badgeCss: "background:rgba(249, 115, 22, 0.2); border:1px solid #f97316; color:#fdba74;"
+      };
+    } else {
+      return {
+        level: "MINOR",
+        label: "🟡 MINOR",
+        color: "#eab308",
+        bg: "rgba(234, 179, 8, 0.18)",
+        border: "#fde047",
+        badgeCss: "background:rgba(234, 179, 8, 0.2); border:1px solid #eab308; color:#fef08a;"
+      };
+    }
+  }
+
+  function badgeClass(type) {
+    if (type === "ifElse") return "control";
+    if (type === "custom") return "custom";
+    if (type === "wait") return "wait";
+    if (type === "bezierCurve") return "bezier";
+    const t = String(type || "").toLowerCase();
+    if (t.includes("move")) return "move";
+    if (t.includes("turn")) return "turn";
+    if (t.includes("swing")) return "swing";
+    return "move";
+  }
+
+  function drawRoundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function drawFieldObstacles(ctx, activeCollidingObstacleIds = new Set()) {
+    if (!ctx || !canvas) return;
+    const scale = canvas.width / 144.0;
+
+    if (collisionConfig.checkLoaders) {
+      for (const loader of FIELD_OBSTACLES.loaders) {
+        if (collisionConfig.disabledObstacleIds[loader.id]) continue;
+        const isHit = activeCollidingObstacleIds.has(loader.id);
+        const tl = { cx: inchToPx(loader.minX, canvas.width), cy: inchToPx(loader.maxY, canvas.height) };
+        const br = { cx: inchToPx(loader.maxX, canvas.width), cy: inchToPx(loader.minY, canvas.height) };
+        const w = br.cx - tl.cx;
+        const h = br.cy - tl.cy;
+
+        ctx.save();
+        if (isHit) {
+          ctx.shadowColor = "#ef4444";
+          ctx.shadowBlur = 16;
+        }
+
+        ctx.fillStyle = isHit ? "rgba(239, 68, 68, 0.45)" : (loader.color === "red" ? "rgba(220, 38, 38, 0.20)" : "rgba(37, 99, 235, 0.20)");
+        ctx.strokeStyle = isHit ? "#ef4444" : (loader.color === "red" ? "#ef4444" : "#3b82f6");
+        ctx.lineWidth = isHit ? 2.5 : 1.5;
+
+        drawRoundedRect(ctx, tl.cx, tl.cy, w, h, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        const plateW = 1.8 * scale;
+        ctx.fillStyle = isHit ? "#ef4444" : (loader.color === "red" ? "#991b1b" : "#1e40af");
+        if (loader.wall === "west") {
+          ctx.fillRect(tl.cx, tl.cy + 2, plateW, h - 4);
+          ctx.beginPath();
+          ctx.moveTo(tl.cx + plateW, tl.cy + 3);
+          ctx.lineTo(br.cx - 3, tl.cy + h * 0.22);
+          ctx.lineTo(br.cx - 3, br.cy - h * 0.22);
+          ctx.lineTo(tl.cx + plateW, br.cy - 3);
+          ctx.strokeStyle = loader.color === "red" ? "#fca5a5" : "#93c5fd";
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+        } else {
+          ctx.fillRect(br.cx - plateW, tl.cy + 2, plateW, h - 4);
+          ctx.beginPath();
+          ctx.moveTo(br.cx - plateW, tl.cy + 3);
+          ctx.lineTo(tl.cx + 3, tl.cy + h * 0.22);
+          ctx.lineTo(tl.cx + 3, br.cy - h * 0.22);
+          ctx.lineTo(br.cx - plateW, br.cy - 3);
+          ctx.strokeStyle = loader.color === "red" ? "#fca5a5" : "#93c5fd";
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = isHit ? "#fff" : "#f1f5f9";
+        ctx.font = "bold 8.5px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const centerC = { cx: inchToPx(loader.center.x, canvas.width), cy: inchToPx(loader.center.y, canvas.height) };
+        ctx.fillText(loader.color === "red" ? "RED LOADER" : "BLUE LOADER", centerC.cx, centerC.cy);
+        ctx.restore();
+      }
+    }
+
+    if (collisionConfig.checkGoals) {
+      for (const goal of FIELD_OBSTACLES.goals) {
+        if (collisionConfig.disabledObstacleIds[goal.id]) continue;
+        const isClamped = !!collisionConfig.clampedObstacleIds[goal.id];
+        const isHit = activeCollidingObstacleIds.has(goal.id);
+        const cx = inchToPx(goal.x, canvas.width);
+        const cy = inchToPx(goal.y, canvas.height);
+        const r = goal.radius * scale;
+
+        ctx.save();
+        if (isClamped) ctx.globalAlpha = 0.45;
+        if (isHit) {
+          ctx.shadowColor = "#ef4444";
+          ctx.shadowBlur = 18;
+        }
+
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3;
+          const px = cx + r * Math.cos(a);
+          const py = cy + r * Math.sin(a);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+
+        if (isHit) {
+          ctx.fillStyle = "rgba(239, 68, 68, 0.75)";
+          ctx.strokeStyle = "#fff";
+        } else if (goal.color === "red") {
+          ctx.fillStyle = "rgba(220, 38, 38, 0.75)";
+          ctx.strokeStyle = "#fca5a5";
+        } else if (goal.color === "blue") {
+          ctx.fillStyle = "rgba(37, 99, 235, 0.75)";
+          ctx.strokeStyle = "#93c5fd";
+        } else {
+          ctx.fillStyle = "rgba(30, 41, 59, 0.85)";
+          ctx.strokeStyle = "#eab308";
+        }
+
+        ctx.lineWidth = isHit ? 3.0 : 1.8;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+        if (!isHit) {
+          ctx.fillStyle = goal.color === "yellow" ? "#eab308" : (goal.color === "red" ? "#ef4444" : "#3b82f6");
+          ctx.fill();
+        }
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // SCORING ENGINE INTEGRATION HELPERS
+  // --------------------------------------------------------------------------
+  function updateScoringHUD() {
+    if (typeof ScoringEngine === "undefined") return;
+    const score = calculateAutonScore();
+
+    const hPoints = document.getElementById("scoreModalTotalPoints");
+    const hBadge = document.getElementById("scoreModalAwpBadge");
+    const hCarried = document.getElementById("scoreModalCarriedPin");
+    const hStacked = document.getElementById("scoreModalStackedCount");
+    const hToggles = document.getElementById("scoreModalTogglesCount");
+    const hLoader = document.getElementById("scoreModalLoaderStatus");
+
+    if (hPoints) hPoints.innerHTML = `${score.points} <span class="score-unit">pts</span>`;
+    if (hBadge) hBadge.textContent = `Toggles Owned: ${score.toggles}/4 · Pins Stacked: ${score.pins}`;
+
+    const carried = ScoringEngine.getCarriedPin ? ScoringEngine.getCarriedPin() : null;
+    if (hCarried) hCarried.textContent = carried ? `${carried.color.toUpperCase()} Pin` : "None (Empty)";
+    if (hStacked) hStacked.textContent = `${score.pins} Pins`;
+    if (hToggles) hToggles.textContent = `${score.toggles} Active`;
+
+    const dotPin = document.getElementById("dotSubPin");
+    const lblPin = document.getElementById("lblSubPin");
+    if (dotPin && lblPin) {
+      if (carried) {
+        dotPin.className = "sub-dot on";
+        lblPin.textContent = carried.color.toUpperCase();
+      } else {
+        dotPin.className = "sub-dot off";
+        lblPin.textContent = "NONE";
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // DEBUGGER DEVICE INDEXING & PROJECT CHECKERS
+  // --------------------------------------------------------------------------
+  function refreshDebugDevices() {
+    const container = document.getElementById("debugDevicesList");
+    if (!container || !window.ProjectManager) return;
+    window.ProjectManager.indexVariables();
+    const syms = window.ProjectManager.symbols || {};
+    container.innerHTML = "";
+
+    const allItems = [
+      ...(syms.motors || []),
+      ...(syms.pistons || []),
+      ...(syms.sensors || []),
+      ...(syms.functions || []),
+    ];
+
+    if (allItems.length === 0) {
+      container.innerHTML = `<div style="font-size:0.75rem;color:#64748b;padding:10px;">No devices declared in include/robot-config.h yet.</div>`;
+      return;
+    }
+
+    allItems.forEach((item) => {
+      const card = document.createElement("div");
+      card.className = "debug-dev-card";
+      card.title = "Click to copy code snippet to clipboard";
+      card.innerHTML = `
+        <div class="debug-dev-card-head">
+          <span class="debug-dev-name">${escapeHtml(item.name)}</span>
+          <span class="debug-dev-type">${escapeHtml(item.type || 'Function')}</span>
+        </div>
+        <div class="debug-dev-meta">
+          <span>${escapeHtml(item.file || 'robot-config.h')}</span>
+          <code>${escapeHtml(item.snippet || '')}</code>
+        </div>
+      `;
+      card.onclick = () => {
+        if (item.snippet) {
+          navigator.clipboard?.writeText(item.snippet);
+          showToast(`📋 Copied '${item.snippet}' to clipboard!`);
+        }
+      };
+      container.appendChild(card);
+    });
+  }
+
+  function refreshDebugDiagnostics() {
+    const summary = document.getElementById("debugDiagSummary");
+    const list = document.getElementById("debugDiagList");
+    const badge = document.getElementById("debugDiagBadge");
+    if (!list || !window.ProjectManager) return;
+
+    const currentAutonFile = "autons.cpp";
+    const content = (currentTeam?.projectFiles && currentTeam.projectFiles[currentAutonFile]) || "";
+    const res = window.ProjectManager.analyzeCodeDiagnostics(currentAutonFile, content);
+    list.innerHTML = "";
+
+    const totalIssues = res.errors.length + res.warnings.length;
+    if (badge) badge.textContent = totalIssues;
+
+    if (summary) {
+      if (res.errors.length === 0) {
+        summary.innerHTML = `<span class="debug-diag-status-dot green"></span><strong>Current File (${escapeHtml(currentAutonFile)}): Clean (0 Errors)</strong>`;
+      } else {
+        summary.innerHTML = `<span class="debug-diag-status-dot red"></span><strong>${escapeHtml(currentAutonFile)}: ${res.errors.length} error(s)</strong>`;
+      }
+    }
+
+    if (totalIssues === 0) {
+      list.innerHTML = `
+        <div style="font-size:0.75rem;color:#22c55e;background:rgba(34,197,94,0.1);padding:10px;border-radius:6px;border:1px solid rgba(34,197,94,0.3);">
+          ✅ No syntax, missing semicolon, or bracket errors in <strong>${escapeHtml(currentAutonFile)}</strong>.
+        </div>
+      `;
+      return;
+    }
+
+    res.errors.forEach((err) => {
+      const item = document.createElement("div");
+      item.className = "ide-diag-item error";
+      item.innerHTML = `<span class="ide-diag-badge">ERROR</span> <span class="ide-diag-file">${escapeHtml(err.file)}:${err.line}</span> — ${escapeHtml(err.message)}`;
+      list.appendChild(item);
+    });
+
+    res.warnings.forEach((warn) => {
+      const item = document.createElement("div");
+      item.className = "ide-diag-item warning";
+      item.innerHTML = `<span class="ide-diag-badge">WARN</span> <span class="ide-diag-file">${escapeHtml(warn.file)}:${warn.line}</span> — ${escapeHtml(warn.message)}`;
+      list.appendChild(item);
+    });
+  }
+
+  function computePoses() {
+    const routine = activePaths[activeRoutineIndex] || activePaths[0];
+    if (!routine) return [];
+    const poses = [];
+    const samplesCount = 100;
+    for (let i = 0; i <= samplesCount; i++) {
+      const t = i / samplesCount;
+      const poseAtT = interpolatePathPose(t);
+      poses.push({
+        x: poseAtT.x,
+        y: poseAtT.y,
+        theta: poseAtT.theta,
+        t: t * 15.0
+      });
+    }
+    return poses;
+  }
+
+  // Dual presence sync states
+  let firestorePresenceUnsub = null;
+
+  function sendFirestorePresence(cursor = null) {
+    const db = getFirestoreDb();
+    if (!db || !currentTeam || !currentUser || !currentUser.email) return;
+    const emailKey = cleanEmailKey(currentUser.email);
+    const now = Date.now();
+    db.collection("teams").doc(currentTeam.teamId).collection("presence").doc(emailKey).set({
+      email: currentUser.email,
+      displayName: currentUser.displayName || currentUser.email.split("@")[0],
+      role: currentUser.role || "Programmer",
+      color: currentUser.color || getRoleColor(currentUser.role || "Programmer"),
+      cursor,
+      updatedAt: now,
+      activeWaypoint: draggedWaypointIndex >= 0 ? draggedWaypointIndex : null,
+      activeRoutine: activePaths[activeRoutineIndex]?.name || null
+    }, { merge: true }).catch(() => {});
+  }
+
+  function startFirestorePresenceSubscription(teamId) {
+    const db = getFirestoreDb();
+    if (!db || !teamId) return;
+    if (firestorePresenceUnsub) {
+      try { firestorePresenceUnsub(); } catch (_) {}
+      firestorePresenceUnsub = null;
+    }
+    try {
+      firestorePresenceUnsub = db.collection("teams").doc(teamId).collection("presence").onSnapshot((snap) => {
+        if (snap) {
+          const membersPresence = [];
+          snap.forEach(doc => {
+            const p = doc.data();
+            if (p && Date.now() - p.updatedAt < 20000) {
+              membersPresence.push(p);
+            }
+          });
+          renderTeammateCursors(membersPresence);
+        }
+      });
+    } catch (_) {}
+  }
+
+  // --------------------------------------------------------------------------
+  // MODAL WIRE HANDLERS
+  // --------------------------------------------------------------------------
+  function wireScoringModal() {
+    const modal = document.getElementById("scoringModal");
+    const btnOpenBeta = document.getElementById("btnScoringBeta");
+    const btnClose = document.getElementById("scoringModalClose");
+    const btnDone = document.getElementById("scoringModalDoneBtn");
+
+    const chkMaster = document.getElementById("chkScoringMaster");
+    const selAlliance = document.getElementById("selScoringAlliance");
+    const selGameMode = document.getElementById("selScoringGameMode");
+    const btnTestCollect = document.getElementById("btnTestCollectPin");
+    const btnTestDeposit = document.getElementById("btnTestDepositPin");
+    const btnTestCW = document.getElementById("btnTestToggleCW");
+    const btnTestCCW = document.getElementById("btnTestToggleCCW");
+    const btnResetField = document.getElementById("btnResetFieldElements");
+
+    if (!modal) return;
+
+    function openModal() {
+      if (typeof ScoringEngine !== "undefined") {
+        if (chkMaster) chkMaster.checked = ScoringEngine.getIsEnabled();
+        if (selAlliance) selAlliance.value = ScoringEngine.getAllianceColor();
+        if (selGameMode) selGameMode.value = ScoringEngine.getGameMode();
+      }
+      updateScoringHUD();
+      modal.hidden = false;
+      modal.classList.add("open");
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    if (btnOpenBeta) btnOpenBeta.addEventListener("click", openModal);
+    if (btnClose) btnClose.addEventListener("click", closeModal);
+    if (btnDone) btnDone.addEventListener("click", closeModal);
+
+    if (chkMaster && typeof ScoringEngine !== "undefined") {
+      chkMaster.addEventListener("change", (e) => {
+        ScoringEngine.setEnabled(e.target.checked);
+        showToast(e.target.checked ? "🎯 Beta: Override Field Engine Enabled!" : "⚪ Beta: Override Field Engine Disabled");
+        drawField();
+        updateScoringHUD();
+      });
+    }
+
+    if (selAlliance && typeof ScoringEngine !== "undefined") {
+      selAlliance.addEventListener("change", (e) => {
+        ScoringEngine.setAllianceColor(e.target.value);
+        drawField();
+        updateScoringHUD();
+      });
+    }
+
+    if (selGameMode && typeof ScoringEngine !== "undefined") {
+      selGameMode.addEventListener("change", (e) => {
+        ScoringEngine.setGameMode(e.target.value);
+        drawField();
+        updateScoringHUD();
+      });
+    }
+
+    if (btnTestCollect && typeof ScoringEngine !== "undefined") {
+      btnTestCollect.addEventListener("click", () => {
+        const routine = activePaths[activeRoutineIndex] || activePaths[0];
+        const p = routine ? routine.pose : { x: -60, y: -60 };
+        ScoringEngine.collectNearestPin(p.x, p.y);
+        showToast("📌 Pin collected by robot (1 pin max).");
+        updateScoringHUD();
+        drawField();
+      });
+    }
+
+    if (btnTestDeposit && typeof ScoringEngine !== "undefined") {
+      btnTestDeposit.addEventListener("click", () => {
+        const routine = activePaths[activeRoutineIndex] || activePaths[0];
+        const p = routine ? routine.pose : { x: -60, y: -60 };
+        const res = ScoringEngine.depositCarriedPin(p.x, p.y);
+        if (res && res.goal) {
+          showToast(`🥅 Deposited pin into ${res.goal.name}!`);
+        } else {
+          showToast("⚠️ No pin carried by robot to deposit.");
+        }
+        updateScoringHUD();
+        drawField();
+      });
+    }
+
+    if (btnTestCW && typeof ScoringEngine !== "undefined") {
+      btnTestCW.addEventListener("click", () => {
+        const routine = activePaths[activeRoutineIndex] || activePaths[0];
+        const p = routine ? routine.pose : { x: -60, y: -60 };
+        const tog = ScoringEngine.turnToggle(p.x, p.y, "CW");
+        if (tog) showToast(`🔄 Turned ${tog.name} CW (${tog.state.toUpperCase()})!`);
+        updateScoringHUD();
+        drawField();
+      });
+    }
+
+    if (btnTestCCW && typeof ScoringEngine !== "undefined") {
+      btnTestCCW.addEventListener("click", () => {
+        const routine = activePaths[activeRoutineIndex] || activePaths[0];
+        const p = routine ? routine.pose : { x: -60, y: -60 };
+        const tog = ScoringEngine.turnToggle(p.x, p.y, "CCW");
+        if (tog) showToast(`🔁 Turned ${tog.name} CCW (${tog.state.toUpperCase()})!`);
+        updateScoringHUD();
+        drawField();
+      });
+    }
+
+    if (btnResetField && typeof ScoringEngine !== "undefined") {
+      btnResetField.addEventListener("click", () => {
+        ScoringEngine.resetFieldElements();
+        showToast("↺ Reset all field pins, loaders, toggles, and goals.");
+        updateScoringHUD();
+        drawField();
+      });
+    }
+
+    updateScoringHUD();
+  }
+
+  function wireCollisionModal() {
+    const modal = document.getElementById("collisionModal");
+    const btnOpenHud = document.getElementById("btnHudCollisionModal");
+    const btnClose = document.getElementById("collisionModalClose");
+    const btnDone = document.getElementById("collisionModalDoneBtn");
+
+    const chkMaster = document.getElementById("chkCollisionMaster");
+    const chkLoaders = document.getElementById("chkCollisionLoaders");
+    const chkGoals = document.getElementById("chkCollisionGoals");
+    const chkWalls = document.getElementById("chkCollisionWalls");
+    const chkLadder = document.getElementById("chkCollisionLadder");
+    const chkOverlays = document.getElementById("chkCollisionOverlays");
+    const chkStopSim = document.getElementById("chkCollisionStopSim");
+    const rngBuffer = document.getElementById("rngCollisionBuffer");
+    const bufferVal = document.getElementById("collisionBufferVal");
+
+    const statusPill = document.getElementById("collisionModalStatusPill");
+    const reportCount = document.getElementById("collisionReportCount");
+    const diagTbody = document.getElementById("collisionDiagTbody");
+
+    if (!modal) return;
+
+    function openModal() {
+      syncInputs();
+      renderDiagnosticsTable();
+      modal.hidden = false;
+      modal.classList.add("open");
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.classList.remove("open");
+    }
+
+    function syncInputs() {
+      if (chkMaster) chkMaster.checked = !!collisionConfig.enabled;
+      if (chkLoaders) chkLoaders.checked = !!collisionConfig.checkLoaders;
+      if (chkGoals) chkGoals.checked = !!collisionConfig.checkGoals;
+      if (chkWalls) chkWalls.checked = !!collisionConfig.checkWalls;
+      if (chkLadder) chkLadder.checked = !!collisionConfig.checkLadder;
+      if (chkOverlays) chkOverlays.checked = !!collisionConfig.showObstacleOverlays;
+      if (chkStopSim) chkStopSim.checked = !!collisionConfig.stopSimOnCollision;
+      if (rngBuffer) rngBuffer.value = String(collisionConfig.safetyBuffer || 0);
+      if (bufferVal) {
+        const val = Number(collisionConfig.safetyBuffer || 0);
+        bufferVal.textContent = val === 0 ? '0.0" (Exact Chassis Bounding Box)' : `+${val.toFixed(2)}" Safety Cushion`;
+      }
+    }
+
+    function updateConfigAndRedraw() {
+      if (chkMaster) collisionConfig.enabled = chkMaster.checked;
+      if (chkLoaders) collisionConfig.checkLoaders = chkLoaders.checked;
+      if (chkGoals) collisionConfig.checkGoals = chkGoals.checked;
+      if (chkWalls) collisionConfig.checkWalls = chkWalls.checked;
+      if (chkLadder) collisionConfig.checkLadder = chkLadder.checked;
+      if (chkOverlays) collisionConfig.showObstacleOverlays = chkOverlays.checked;
+      if (chkStopSim) collisionConfig.stopSimOnCollision = chkStopSim.checked;
+      if (rngBuffer) {
+        collisionConfig.safetyBuffer = parseFloat(rngBuffer.value) || 0;
+        if (bufferVal) {
+          const val = collisionConfig.safetyBuffer;
+          bufferVal.textContent = val === 0 ? '0.0" (Exact Chassis Bounding Box)' : `+${val.toFixed(2)}" Safety Cushion`;
+        }
+      }
+
+      drawField();
+      renderDiagnosticsTable();
+    }
+
+    function renderDiagnosticsTable() {
+      const report = evaluateRoutineCollisions();
+      const num = report.totalCollisions;
+
+      if (reportCount) {
+        reportCount.textContent = num === 0 ? "0 collisions (Clean)" : `${num} collision${num > 1 ? "s" : ""} detected`;
+        reportCount.className = `collision-diag-count ${num > 0 ? "danger" : ""}`;
+      }
+
+      if (statusPill) {
+        if (!collisionConfig.enabled) {
+          statusPill.className = "collision-status-pill muted";
+          statusPill.textContent = "🛡️ Collision Engine Disabled";
+        } else if (num === 0) {
+          statusPill.className = "collision-status-pill clean";
+          statusPill.textContent = "🟢 Clean: No Collisions Detected";
+        } else {
+          statusPill.className = "collision-status-pill alert";
+          statusPill.textContent = `💥 Alert: ${num} Collision${num > 1 ? "s" : ""} in Routine`;
+        }
+      }
+
+      const hudStatus = document.getElementById("hudCollisionStatus");
+      if (hudStatus) hudStatus.textContent = num === 0 ? "Clear" : "Impact!";
+
+      if (!diagTbody) return;
+
+      if (!collisionConfig.enabled) {
+        diagTbody.innerHTML = `<tr><td colspan="6" class="collision-empty-row">⚠️ Collision detection is currently disabled. Toggle master switch above to activate checks.</td></tr>`;
+        return;
+      }
+
+      if (num === 0) {
+        diagTbody.innerHTML = `<tr><td colspan="6" class="collision-empty-row">✨ Path is 100% collision-free! Robot clears all walls, loaders, and goals.</td></tr>`;
+        return;
+      }
+
+      let rowsHtml = "";
+      report.collisions.forEach((c) => {
+        const sev = getCollisionSeverity(c);
+        rowsHtml += `
+          <tr class="collision-hit-row">
+            <td><strong>#${c.stepIdx + 1}</strong></td>
+            <td><span class="badge ${badgeClass(c.actionType)}">${c.actionType}</span></td>
+            <td><strong>${c.point ? c.point.t.toFixed(2) + "s" : "—"}</strong></td>
+            <td><span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:0.75rem; font-weight:700; ${sev.badgeCss}">${sev.label}</span></td>
+            <td><code>(${c.point ? c.point.x.toFixed(1) : 0}", ${c.point ? c.point.y.toFixed(1) : 0}", ${c.point ? Math.round(c.point.theta) : 0}°)</code></td>
+            <td><strong style="color:#ef4444;">💥 ${escapeHtml(c.obstacle.name)}</strong></td>
+          </tr>
+        `;
+      });
+
+      diagTbody.innerHTML = rowsHtml;
+    }
+
+    if (btnOpenHud) btnOpenHud.onclick = openModal;
+    if (btnClose) btnClose.onclick = closeModal;
+    if (btnDone) btnDone.onclick = closeModal;
+
+    [chkMaster, chkLoaders, chkGoals, chkWalls, chkLadder, chkOverlays, chkStopSim].forEach(chk => {
+      chk?.addEventListener("change", updateConfigAndRedraw);
+    });
+    rngBuffer?.addEventListener("input", updateConfigAndRedraw);
+  }
+
+  function wireDebugPanel() {
+    const panel = document.getElementById("debugSidePanel");
+    const btnToggle = document.getElementById("btnToggleDebug");
+    const btnClose = document.getElementById("btnDebugClose");
+    const tabs = document.querySelectorAll(".debug-tab");
+    const panes = document.querySelectorAll(".debug-pane");
+
+    if (!panel) return;
+
+    if (btnToggle) {
+      btnToggle.onclick = () => {
+        panel.hidden = !panel.hidden;
+        btnToggle.classList.toggle("active", !panel.hidden);
+        if (!panel.hidden) {
+          refreshDebugDevices();
+          refreshDebugDiagnostics();
+        }
+      };
+    }
+
+    if (btnClose) {
+      btnClose.onclick = () => {
+        panel.hidden = true;
+        if (btnToggle) btnToggle.classList.remove("active");
+      };
+    }
+
+    tabs.forEach((tab) => {
+      tab.onclick = () => {
+        tabs.forEach((t) => t.classList.remove("active"));
+        panes.forEach((p) => p.classList.remove("active"));
+        tab.classList.add("active");
+        const targetId = tab.dataset.tab;
+        const targetPane = document.getElementById(`debugPane${targetId.charAt(0).toUpperCase() + targetId.slice(1)}`);
+        if (targetPane) targetPane.classList.add("active");
+
+        if (targetId === "devices") refreshDebugDevices();
+        if (targetId === "diagnostics") refreshDebugDiagnostics();
+      };
+    });
+
+    const btnConnect = document.getElementById("btnDebugConnectBrain");
+    if (btnConnect) {
+      btnConnect.onclick = async () => {
+        if (window.V5BrainSerial) {
+          const ok = await window.V5BrainSerial.connect();
+          if (ok) showToast("Connected V5 Brain!");
+        }
+      };
+    }
+
+    const btnRun = document.getElementById("btnDebugRunProgram");
+    if (btnRun) {
+      btnRun.onclick = () => {
+        const slot = parseInt(document.getElementById("debugSlotSelect")?.value || "1", 10);
+        window.V5BrainSerial?.startProgram(slot);
+        showToast(`Running slot ${slot} program...`);
+      };
+    }
+
+    const btnStop = document.getElementById("btnDebugStopProgram");
+    if (btnStop) {
+      btnStop.onclick = () => {
+        window.V5BrainSerial?.stopProgram();
+        showToast("Stopped program.");
+      };
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // INTEGRATED C++ IDE STUDIO & MULTI-FILE CODE MANAGER
+  // --------------------------------------------------------------------------
+  let activeIdeFile = "autons.cpp";
+  let pendingRemoteState = null;
+
   function generateLemLibCpp(paths, activeIdx = 0) {
     const routine = (paths && paths[activeIdx]) || (paths && paths[0]) || { pose: { x: -60, y: -60, theta: 0 }, actions: [] };
     const pose = routine.pose || { x: -60, y: -60, theta: 0 };
@@ -1312,6 +2545,9 @@
     const db = getFirestoreDb();
     if (!db || !teamId) return;
 
+    // Start direct client-side Firestore presence/cursors subscription
+    startFirestorePresenceSubscription(teamId);
+
     try {
       firestoreUnsub = db.collection("teams").doc(teamId).onSnapshot((doc) => {
         if (doc && doc.exists) {
@@ -2101,7 +3337,6 @@
   }
 
   function startPresenceHeartbeat() {
-    if (isStaticHost) return;
     // Send periodic presence update every 7 seconds
     setInterval(() => {
       sendPresence();
@@ -2109,7 +3344,14 @@
   }
 
   function sendPresence(cursor = null) {
-    if (isStaticHost || !currentTeam || !currentUser || !currentUser.email) return;
+    if (!currentTeam || !currentUser || !currentUser.email) return;
+
+    // Direct Firestore real-time client-side presence write (works on github.io too!)
+    if (getFirestoreDb()) {
+      sendFirestorePresence(cursor);
+    }
+
+    if (isStaticHost) return;
     const apiRoute = resolveApiUrl("/api/team/presence");
     if (!apiRoute) return;
     fetch(apiRoute, {
@@ -2262,6 +3504,13 @@
     ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
     ctx.lineWidth = 3;
     ctx.strokeRect(1, 1, w - 2, h - 2);
+
+    // Draw Field Obstacles (Loaders, Mobile Goals, Center Ladder)
+    if (collisionConfig.enabled && collisionConfig.showObstacleOverlays) {
+      const routineReport = evaluateRoutineCollisions();
+      const liveHitObstacleIds = new Set(routineReport.collidingObstacleIds);
+      drawFieldObstacles(ctx, liveHitObstacleIds);
+    }
 
     // Current Routine
     const routine = activePaths[activeRoutineIndex] || activePaths[0];
@@ -3681,6 +4930,7 @@
     const lbl = document.getElementById("lblSimTime");
     if (sc) sc.value = simTimeMs;
     if (lbl) lbl.textContent = `${(simTimeMs / 1000).toFixed(2)}s / 15.00s`;
+    drawField();
   }
 
   // --------------------------------------------------------------------------
@@ -5231,6 +6481,10 @@
   // --------------------------------------------------------------------------
   window.addEventListener("DOMContentLoaded", () => {
     initAuth();
+    initTeamEditor();
+    wireScoringModal();
+    wireCollisionModal();
+    wireDebugPanel();
     wireEvents();
     drawField();
     if (window.location.hash === "#join") {
