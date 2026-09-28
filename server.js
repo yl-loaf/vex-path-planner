@@ -125,6 +125,14 @@ function cleanEmailKey(email) {
   return email.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '_');
 }
 
+function getCleanEmailKeys(email) {
+  if (!email || typeof email !== 'string') return [];
+  const norm = email.trim().toLowerCase();
+  const k1 = norm.replace(/[^a-z0-9_.-]/g, '_');
+  const k2 = norm.replace(/[^a-z0-9]/g, '_');
+  return Array.from(new Set([norm, k1, k2]));
+}
+
 function getUserTeamsIndex() {
   try {
     if (fs.existsSync(userTeamsIndexFile)) {
@@ -142,6 +150,34 @@ function saveUserTeamsIndex(index) {
   } catch (e) {
     console.error('Error saving user_teams index:', e);
   }
+}
+
+function findUserTeamId(email, userTeams) {
+  if (!email) return null;
+  const index = userTeams || getUserTeamsIndex();
+  const keys = getCleanEmailKeys(email);
+  for (const k of keys) {
+    if (index[k]) return index[k];
+  }
+  return null;
+}
+
+function setUserTeamMapping(email, teamId) {
+  const index = getUserTeamsIndex();
+  const keys = getCleanEmailKeys(email);
+  for (const k of keys) {
+    index[k] = teamId;
+  }
+  saveUserTeamsIndex(index);
+}
+
+function removeUserTeamMapping(email) {
+  const index = getUserTeamsIndex();
+  const keys = getCleanEmailKeys(email);
+  for (const k of keys) {
+    delete index[k];
+  }
+  saveUserTeamsIndex(index);
 }
 
 function getTeamFilePath(teamId) {
@@ -175,6 +211,22 @@ function saveTeam(team) {
     return true;
   } catch (e) {
     console.error('Error saving team:', e);
+    return false;
+  }
+}
+
+function deleteTeam(teamId) {
+  try {
+    if (!teamId) return false;
+    const fp = getTeamFilePath(teamId);
+    if (fs.existsSync(fp)) {
+      fs.unlinkSync(fp);
+    }
+    if (typeof teamPresences !== 'undefined') teamPresences.delete(teamId);
+    if (typeof teamSSEClients !== 'undefined') teamSSEClients.delete(teamId);
+    return true;
+  } catch (e) {
+    console.error(`Error deleting team ${teamId}:`, e);
     return false;
   }
 }
@@ -493,10 +545,7 @@ app.get(['/api/team/my-team', '/vex-path-planner/api/team/my-team'], (req, res) 
     return res.status(400).json({ error: 'Missing email parameter' });
   }
 
-  const clean = cleanEmailKey(email);
-  const userTeams = getUserTeamsIndex();
-  const teamId = userTeams[clean];
-
+  const teamId = findUserTeamId(email);
   if (!teamId) {
     return res.json({ hasTeam: false });
   }
@@ -504,8 +553,7 @@ app.get(['/api/team/my-team', '/vex-path-planner/api/team/my-team'], (req, res) 
   const team = getTeam(teamId);
   if (!team) {
     // Stale index reference cleanup
-    delete userTeams[clean];
-    saveUserTeamsIndex(userTeams);
+    removeUserTeamMapping(email);
     return res.json({ hasTeam: false });
   }
 
@@ -519,24 +567,43 @@ app.get(['/api/team/my-team', '/vex-path-planner/api/team/my-team'], (req, res) 
   });
 });
 
-// 2. Create a new team (Enforces 1 Gmail = 1 Team rule)
+// 2. Create a new team (Enforces 1 Gmail = 1 Team rule with seamless self-service overwrite/leave support)
 app.post(['/api/team/create', '/vex-path-planner/api/team/create'], (req, res) => {
-  const { email, displayName, teamName, vexTeamNumber, role, photoURL, projectData, pathsData } = req.body || {};
+  const { email, displayName, teamName, vexTeamNumber, role, photoURL, projectData, pathsData, leaveExisting, forceRecreate } = req.body || {};
   if (!email || typeof email !== 'string' || !email.includes('@')) {
-    return res.status(400).json({ error: 'Valid Gmail address is required to create a team' });
+    return res.status(400).json({ error: 'Valid Gmail address is required to register a team' });
   }
 
-  const clean = cleanEmailKey(email);
-  const userTeams = getUserTeamsIndex();
-
-  if (userTeams[clean]) {
-    const existingTeam = getTeam(userTeams[clean]);
+  const existingTeamId = findUserTeamId(email);
+  if (existingTeamId) {
+    const existingTeam = getTeam(existingTeamId);
     if (existingTeam) {
-      return res.status(400).json({
-        error: `This Google account (${email}) already belongs to team "${existingTeam.teamName}". Each Gmail account can belong to only 1 team at a time. Please leave your current team first.`,
-        currentTeamId: existingTeam.teamId,
-        currentTeamName: existingTeam.teamName
-      });
+      if (leaveExisting || forceRecreate) {
+        // Automatically leave/clean previous team so new team can be registered
+        const norm = email.trim().toLowerCase();
+        existingTeam.members = (existingTeam.members || []).filter(m => m.email.toLowerCase() !== norm);
+        if (existingTeam.members.length === 0) {
+          deleteTeam(existingTeamId);
+        } else {
+          if (existingTeam.ownerEmail && existingTeam.ownerEmail.toLowerCase() === norm) {
+            existingTeam.ownerEmail = existingTeam.members[0].email;
+            existingTeam.members[0].isOwner = true;
+          }
+          existingTeam.updatedAt = Date.now();
+          saveTeam(existingTeam);
+        }
+        removeUserTeamMapping(email);
+      } else {
+        return res.status(400).json({
+          error: `This Google account (${email}) already belongs to team "${existingTeam.teamName}". Each Gmail account can belong to only 1 team at a time. Please leave your current team first or choose to overwrite it.`,
+          code: 'ALREADY_IN_TEAM',
+          currentTeamId: existingTeam.teamId,
+          currentTeamName: existingTeam.teamName
+        });
+      }
+    } else {
+      // Stale pointer cleanup
+      removeUserTeamMapping(email);
     }
   }
 
@@ -570,6 +637,24 @@ app.post(['/api/team/create', '/vex-path-planner/api/team/create'], (req, res) =
     snapshot: pathsData || null
   };
 
+  const defaultPaths = {
+    paths: [
+      {
+        id: 'p_default',
+        name: 'Red Left Mogo Rush',
+        pose: { x: -60, y: -60, theta: 0 },
+        actions: [
+          { id: 'a_1', type: 'moveToPoint', x: -24, y: -24, timeout: 2000, maxSpeed: 115, earlyExitRange: 2, comment: 'Rush alliance goal' },
+          { id: 'a_2', type: 'moveToPose', x: 0, y: 48, theta: 90, timeout: 2500, lead: 0.6, comment: 'Score preload in corner' }
+        ]
+      }
+    ]
+  };
+
+  const cleanPathsData = (pathsData && Array.isArray(pathsData.paths) && pathsData.paths.length > 0)
+    ? pathsData
+    : defaultPaths;
+
   const newTeam = {
     teamId,
     teamCode,
@@ -580,19 +665,7 @@ app.post(['/api/team/create', '/vex-path-planner/api/team/create'], (req, res) =
     createdAt: now,
     updatedAt: now,
     members: [initialMember],
-    pathPayload: pathsData || {
-      paths: [
-        {
-          id: 'p_default',
-          name: 'Red Left Mogo Rush',
-          pose: { x: -60, y: -60, theta: 0 },
-          actions: [
-            { id: 'a_1', type: 'moveToPoint', x: -24, y: -24, timeout: 2000, maxSpeed: 115, earlyExitRange: 2, comment: 'Rush alliance goal' },
-            { id: 'a_2', type: 'moveToPose', x: 0, y: 48, theta: 90, timeout: 2500, lead: 0.6, comment: 'Score preload in corner' }
-          ]
-        }
-      ]
-    },
+    pathPayload: cleanPathsData,
     project: projectData || null,
     versionHistory: [initialSnapshot],
     comments: [
@@ -628,8 +701,7 @@ app.post(['/api/team/create', '/vex-path-planner/api/team/create'], (req, res) =
   };
 
   saveTeam(newTeam);
-  userTeams[clean] = teamId;
-  saveUserTeamsIndex(userTeams);
+  setUserTeamMapping(email, teamId);
 
   console.log(`[TeamCollab] Created team "${newTeam.teamName}" (${newTeam.teamCode}) for ${email}`);
   newTeam.otpInfo = getTeamOtpInfo(newTeam);
@@ -735,12 +807,32 @@ app.post(['/api/team/join', '/vex-path-planner/api/team/join'], (req, res) => {
   }
 
   // Check if user is already registered in a different team
-  if (userTeams[clean] && userTeams[clean] !== team.teamId) {
-    const existingTeam = getTeam(userTeams[clean]);
-    return res.status(400).json({
-      error: `This Google account (${email}) already belongs to team "${existingTeam?.teamName || userTeams[clean]}". A Google account can only belong to 1 team at a time. Please leave your current team before joining a new one.`,
-      currentTeamId: userTeams[clean]
-    });
+  const existingTeamId = findUserTeamId(email);
+  if (existingTeamId && existingTeamId !== team.teamId) {
+    const existingTeam = getTeam(existingTeamId);
+    if (req.body && req.body.leaveExisting) {
+      if (existingTeam) {
+        existingTeam.members = (existingTeam.members || []).filter(m => m.email.toLowerCase() !== email.trim().toLowerCase());
+        if (existingTeam.members.length === 0) {
+          deleteTeam(existingTeamId);
+        } else {
+          if (existingTeam.ownerEmail && existingTeam.ownerEmail.toLowerCase() === email.trim().toLowerCase()) {
+            existingTeam.ownerEmail = existingTeam.members[0].email;
+            existingTeam.members[0].isOwner = true;
+          }
+          existingTeam.updatedAt = Date.now();
+          saveTeam(existingTeam);
+        }
+      }
+      removeUserTeamMapping(email);
+    } else {
+      return res.status(400).json({
+        error: `This Google account (${email}) already belongs to team "${existingTeam?.teamName || existingTeamId}". A Google account can only belong to 1 team at a time. Please leave your current team before joining a new one.`,
+        code: 'ALREADY_IN_TEAM',
+        currentTeamId: existingTeamId,
+        currentTeamName: existingTeam?.teamName
+      });
+    }
   }
 
   const userRole = role || 'Driver';
@@ -784,8 +876,7 @@ app.post(['/api/team/join', '/vex-path-planner/api/team/join'], (req, res) => {
     broadcastToTeam(team.teamId, 'member_joined', { member, team });
   }
 
-  userTeams[clean] = team.teamId;
-  saveUserTeamsIndex(userTeams);
+  setUserTeamMapping(email, team.teamId);
 
   console.log(`[TeamCollab] User ${email} joined team "${team.teamName}" (${team.teamCode}) as ${userRole}`);
   team.otpInfo = getTeamOtpInfo(team);
@@ -799,15 +890,13 @@ app.post(['/api/team/leave', '/vex-path-planner/api/team/leave'], (req, res) => 
     return res.status(400).json({ error: 'Missing email' });
   }
 
-  const clean = cleanEmailKey(email);
-  const userTeams = getUserTeamsIndex();
-  const targetTeamId = teamId || userTeams[clean];
+  const targetTeamId = teamId || findUserTeamId(email);
   if (!targetTeamId) {
+    removeUserTeamMapping(email);
     return res.json({ success: true, message: 'User was not in any team' });
   }
 
-  delete userTeams[clean];
-  saveUserTeamsIndex(userTeams);
+  removeUserTeamMapping(email);
 
   const team = getTeam(targetTeamId);
   if (team) {
@@ -836,12 +925,14 @@ app.post(['/api/team/leave', '/vex-path-planner/api/team/leave'], (req, res) => 
       if (team.versionHistory.length > 500) team.versionHistory.length = 500;
       team.updatedAt = now;
       saveTeam(team);
-      broadcastToTeam(teamId, 'member_left', { email: userEmailNorm, team });
+      broadcastToTeam(targetTeamId, 'member_left', { email: userEmailNorm, team });
+    } else {
+      deleteTeam(targetTeamId);
     }
   }
 
-  console.log(`[TeamCollab] User ${email} left team ${teamId}`);
-  res.json({ success: true });
+  console.log(`[TeamCollab] User ${email} left team ${targetTeamId}`);
+  res.json({ success: true, message: 'Successfully left team' });
 });
 
 // 5. Get full team data & active presences

@@ -1059,7 +1059,7 @@
             <span id="badgeAuthStatus" style="font-size:0.7rem;background:rgba(34,197,94,0.15);color:#4ade80;padding:2px 8px;border-radius:10px;font-weight:700;">Account Ready</span>
           </label>
           <div style="display:flex;gap:8px;">
-            <input type="email" id="txtUserAccountEmail" class="form-input" placeholder="e.g. rainforest.cck3@gmail.com" value="rainforest.cck3@gmail.com" style="flex:1;font-size:0.84rem;" />
+            <input type="email" id="txtUserAccountEmail" class="form-input" placeholder="e.g. rainforest.cck3@gmail.com" style="flex:1;font-size:0.84rem;" />
             <button type="button" id="btnGateSignInDirect" class="btn-team-secondary" style="font-size:0.76rem;padding:6px 12px;white-space:nowrap;" title="Authenticate with Google Popup if supported">
               🔐 Google Sign-In
             </button>
@@ -1070,16 +1070,16 @@
         <div id="gateOptions" style="display:block;">
           <!-- Tabs: Create vs Join -->
           <div style="display:flex;border-bottom:1px solid #334155;margin-bottom:18px;">
-            <button type="button" id="tabGateCreate" class="btn-xs-clean" style="flex:1;padding:10px 8px;border:none;background:transparent;color:#94a3b8;font-weight:700;font-size:0.84rem;border-bottom:2px solid transparent;cursor:pointer;">
-              ✨ Create a Team
+            <button type="button" id="tabGateCreate" class="btn-xs-clean" style="flex:1;padding:10px 8px;border:none;background:rgba(56,189,248,0.12);color:#38bdf8;font-weight:700;font-size:0.84rem;border-bottom:2px solid #38bdf8;cursor:pointer;">
+              ✨ Register / Create Team
             </button>
-            <button type="button" id="tabGateJoin" class="btn-xs-clean" style="flex:1;padding:10px 8px;border:none;background:rgba(56,189,248,0.12);color:#38bdf8;font-weight:700;font-size:0.84rem;border-bottom:2px solid #38bdf8;cursor:pointer;">
+            <button type="button" id="tabGateJoin" class="btn-xs-clean" style="flex:1;padding:10px 8px;border:none;background:transparent;color:#94a3b8;font-weight:700;font-size:0.84rem;border-bottom:2px solid transparent;cursor:pointer;">
               🔗 Join Existing Team (5-Min OTP)
             </button>
           </div>
 
           <!-- PANE 1: Create Team -->
-          <div id="paneGateCreate" style="display:none;">
+          <div id="paneGateCreate" style="display:block;">
             <div class="form-group">
               <label for="txtNewTeamName">Team Name</label>
               <input type="text" id="txtNewTeamName" class="form-input" placeholder="e.g. 99999X Thunder" value="99999X Override Team" />
@@ -1154,7 +1154,7 @@
           </div>
 
           <!-- PANE 2: Join Team -->
-          <div id="paneGateJoin" style="display:block;">
+          <div id="paneGateJoin" style="display:none;">
             <!-- 5-Minute OTP Security Callout -->
             <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.76rem;line-height:1.45;color:#fef3c7;">
               <strong style="color:#fbbf24;">🛡️ 5-Minute Authorization OTP Required:</strong><br/>
@@ -1364,14 +1364,14 @@
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260928.k29"></script>
+  <script src="version.js?v=20260928.k32"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260928.k29"></script>
-  <script src="theme.js?v=20260928.k29"></script>
-  <script src="cpp-parser.js?v=20260928.k29"></script>
-  <script src="project-manager.js?v=20260928.k29"></script>
-  <script src="team.js?v=20260928.k29"></script>
+  <script src="firebase-config.js?v=20260928.k32"></script>
+  <script src="theme.js?v=20260928.k32"></script>
+  <script src="cpp-parser.js?v=20260928.k32"></script>
+  <script src="project-manager.js?v=20260928.k32"></script>
+  <script src="team.js?v=20260928.k32"></script>
 </body>
 </html>

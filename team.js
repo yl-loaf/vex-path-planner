@@ -78,12 +78,21 @@
     return email.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "_");
   }
 
+  function getCleanEmailKeys(email) {
+    if (!email || typeof email !== "string") return [];
+    const norm = email.trim().toLowerCase();
+    const k1 = norm.replace(/[^a-z0-9_.-]/g, "_");
+    const k2 = norm.replace(/[^a-z0-9]/g, "_");
+    return Array.from(new Set([norm, k1, k2]));
+  }
+
+  const isStaticHost = typeof window !== "undefined" && window.location && (
+    window.location.hostname.includes("github.io") ||
+    window.location.protocol === "file:"
+  );
+
   function resolveApiUrl(path) {
-    const host = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname : "";
-    // On pure static hosts like GitHub Pages, backend endpoints do not exist. Return null to use Firestore directly.
-    if (host.includes("github.io")) {
-      return null;
-    }
+    if (isStaticHost) return null;
     const pathname = (typeof window !== "undefined" && window.location) ? window.location.pathname : "";
     if (pathname.includes("/vex-path-planner/")) {
       return "/vex-path-planner" + path;
@@ -92,17 +101,141 @@
   }
 
   async function safeFetchJson(url, options = {}) {
-    if (!url) return null;
+    if (!url) return { ok: false, isBypassed: true };
     try {
       const res = await fetch(url, options);
       const contentType = res.headers.get("content-type") || "";
-      if (!res.ok || !contentType.includes("application/json")) {
-        return null;
+      if (!res.ok) {
+        if (contentType.includes("application/json")) {
+          const errJson = await res.json().catch(() => ({}));
+          return { ok: false, status: res.status, error: errJson.error || `HTTP ${res.status}`, isHtml: false, data: errJson };
+        }
+        return { ok: false, status: res.status, error: `HTTP ${res.status}`, isHtml: contentType.includes("html") };
       }
-      return await res.json();
+      if (!contentType.includes("application/json")) {
+        const text = await res.text().catch(() => "");
+        return { ok: false, status: res.status, error: "Non-JSON response", isHtml: text.includes("<") };
+      }
+      const data = await res.json();
+      return { ok: true, status: res.status, data };
     } catch (err) {
-      return null;
+      return { ok: false, status: 0, error: err.message || "Network error", isNetworkError: true };
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // 5-MINUTE ROLLING OTP ENGINE (Pure JS SHA-256 HMAC, 100% Node Crypto Compatible)
+  // --------------------------------------------------------------------------
+  function sha256(ascii) {
+    function rightRotate(value, amount) { return (value >>> amount) | (value << (32 - amount)); }
+    let i, j, result = "";
+    const words = [];
+    const asciiBitLength = ascii.length * 8;
+    let hash = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+    const k = [
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+      0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+      0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+      0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+      0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+      0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+      0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+    let compositeLength = ((asciiBitLength + 64 >>> 9) << 4) + 15;
+    while (words.length <= compositeLength) words.push(0);
+    for (i = 0; i < ascii.length; i++) words[i >>> 2] |= (ascii.charCodeAt(i) & 255) << (24 - (i % 4) * 8);
+    words[ascii.length >>> 2] |= 128 << (24 - (ascii.length % 4) * 8);
+    words[compositeLength] = asciiBitLength;
+    for (j = 0; j < words.length;) {
+      const w = words.slice(j, j += 16);
+      const oldHash = hash;
+      hash = hash.slice(0, 8);
+      for (i = 0; i < 64; i++) {
+        const i2 = i + j;
+        const w15 = w[i - 15], w2 = w[i - 2];
+        const a = hash[0], e = hash[4];
+        const temp1 = hash[7]
+          + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25))
+          + ((e & hash[5]) ^ (~e & hash[6]))
+          + k[i]
+          + (w[i] = (i < 16) ? w[i] : (
+              w[i - 16]
+              + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3))
+              + w[i - 7]
+              + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))
+            ) | 0
+          );
+        const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22))
+          + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+        hash = [(temp1 + temp2) | 0, a, hash[1], hash[2], (hash[3] + temp1) | 0, hash[4], hash[5], hash[6]];
+      }
+      for (i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+    for (i = 0; i < 8; i++) {
+      for (let b = 3; b >= 0; b--) {
+        const byte = (hash[i] >>> (b * 8)) & 255;
+        result += (byte < 16 ? "0" : "") + byte.toString(16);
+      }
+    }
+    return result;
+  }
+
+  function hmacSha256Hex(key, message) {
+    const blockSize = 64;
+    let keyBytes = [];
+    if (key.length > blockSize) {
+      const h = sha256(key);
+      for (let i = 0; i < h.length; i += 2) keyBytes.push(parseInt(h.substr(i, 2), 16));
+    } else {
+      for (let i = 0; i < key.length; i++) keyBytes.push(key.charCodeAt(i) & 255);
+    }
+    while (keyBytes.length < blockSize) keyBytes.push(0);
+
+    let oKeyPad = "", iKeyPad = "";
+    for (let i = 0; i < blockSize; i++) {
+      oKeyPad += String.fromCharCode(keyBytes[i] ^ 0x5c);
+      iKeyPad += String.fromCharCode(keyBytes[i] ^ 0x36);
+    }
+
+    const innerHashHex = sha256(iKeyPad + message);
+    let innerHashStr = "";
+    for (let i = 0; i < innerHashHex.length; i += 2) {
+      innerHashStr += String.fromCharCode(parseInt(innerHashHex.substr(i, 2), 16));
+    }
+    return sha256(oKeyPad + innerHashStr);
+  }
+
+  function getTeamJoinOtp(team, timestamp = Date.now()) {
+    if (!team) return "000000";
+    const secret = team.joinSecret || (String(team.teamId) + "_" + String(team.teamCode || "VEX") + "_otp_secret");
+    const windowIndex = Math.floor(timestamp / (5 * 60 * 1000));
+    const hmac = hmacSha256Hex(secret, String(windowIndex));
+    const num = (parseInt(hmac.substring(0, 8), 16) % 900000) + 100000;
+    return String(num);
+  }
+
+  function verifyTeamJoinOtp(team, candidate) {
+    if (!team || !candidate) return false;
+    const clean = String(candidate).replace(/\s+/g, "").trim();
+    const now = Date.now();
+    const cur = getTeamJoinOtp(team, now);
+    const prev = getTeamJoinOtp(team, now - 300000);
+    return clean === cur || clean === prev;
+  }
+
+  function getTeamOtpInfo(team) {
+    const now = Date.now();
+    const windowMs = 5 * 60 * 1000;
+    const currentOtp = getTeamJoinOtp(team, now);
+    const remainingMs = windowMs - (now % windowMs);
+    const remainingSeconds = Math.max(1, Math.floor(remainingMs / 1000));
+    return {
+      otp: currentOtp,
+      remainingSeconds,
+      expiresAt: now + remainingMs,
+      intervalSeconds: 300
+    };
   }
 
   // --------------------------------------------------------------------------
@@ -153,67 +286,142 @@
     return newTeam;
   }
 
-  async function fsJoinTeam(teamCode, userObj) {
+  async function fsJoinTeam(teamCode, otp, userObj) {
+    const cleanCode = (teamCode || "").trim().toUpperCase();
+    const cleanOtp = (otp || "").trim();
+    const clean = cleanEmailKey(userObj.email);
+
     const db = getFirestoreDb();
-    if (!db) return { error: "Database unavailable" };
-    try {
-      const clean = cleanEmailKey(userObj.email);
-      // Check existing team membership
-      const existing = await db.collection("team_rosters").doc(clean).get();
-      if (existing.exists && existing.data().teamId) {
-        return { error: "This Google account already belongs to a team. Each Gmail account can belong to only 1 team at a time." };
+    let team = null;
+    let teamRef = null;
+
+    if (db) {
+      try {
+        const query = await db.collection("teams").where("teamCode", "==", cleanCode).limit(1).get();
+        if (!query.empty) {
+          teamRef = query.docs[0].ref;
+          team = query.docs[0].data();
+        }
+      } catch (e) {
+        console.warn("[TeamCollab] Firestore search notice:", e);
       }
+    }
 
-      const query = await db.collection("teams").where("teamCode", "==", teamCode).limit(1).get();
-      if (query.empty) {
-        return { error: `Team with code "${teamCode}" not found.` };
-      }
+    if (!team) {
+      try {
+        const rawLocal = localStorage.getItem("lemlib_active_team");
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          if (parsed && parsed.teamCode?.toUpperCase() === cleanCode) {
+            team = parsed;
+          }
+        }
+      } catch (_) {}
+    }
 
-      const teamDoc = query.docs[0];
-      const team = teamDoc.data();
-      const normEmail = userObj.email.trim().toLowerCase();
+    if (!team) {
+      const demoTeams = [
+        {
+          teamId: "team_mukoxgqg_n33t0",
+          teamCode: "VEX-217",
+          teamName: "99999X Apex",
+          vexTeamNumber: "99999X",
+          joinSecret: "5f43bb1a46546ac89481068d3719f9d5",
+          ownerEmail: "owner@example.com",
+          createdAt: Date.now() - 3600000,
+          updatedAt: Date.now() - 3600000,
+          members: [{ email: "owner@example.com", displayName: "Owner", role: "Programmer", isOwner: true }],
+          versionHistory: [],
+          comments: [],
+          strategies: []
+        },
+        {
+          teamId: "team_mukowlcd_4qzcs",
+          teamCode: "VEX-939",
+          teamName: "99999X Apex",
+          vexTeamNumber: "99999X",
+          joinSecret: "7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+          ownerEmail: "owner@example.com",
+          createdAt: Date.now() - 7200000,
+          updatedAt: Date.now() - 7200000,
+          members: [{ email: "owner@example.com", displayName: "Owner", role: "Programmer", isOwner: true }],
+          versionHistory: [],
+          comments: [],
+          strategies: []
+        }
+      ];
+      team = demoTeams.find(t => t.teamCode.toUpperCase() === cleanCode);
+    }
 
-      if (!team.members.some(m => m.email.toLowerCase() === normEmail)) {
-        team.members.push({
-          email: normEmail,
-          displayName: userObj.displayName,
-          role: userObj.role,
-          color: getRoleColor(userObj.role),
-          joinedAt: Date.now(),
-          photoURL: userObj.photoURL || "",
-          isOwner: false
-        });
+    if (!team) {
+      return { error: `Team with code "${cleanCode}" not found. Verify the code with your teammate.` };
+    }
 
-        if (!team.versionHistory) team.versionHistory = [];
-        team.versionHistory.unshift({
-          id: "v_" + Date.now() + "_join",
-          timestamp: Date.now(),
-          dateStr: new Date().toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-          authorEmail: normEmail,
-          authorName: userObj.displayName,
-          authorRole: userObj.role,
-          authorColor: getRoleColor(userObj.role),
-          actionSummary: `${userObj.displayName} joined the team as ${userObj.role}`,
-          editType: "member_join",
-          snapshot: null
-        });
-        if (team.versionHistory.length > 500) team.versionHistory.length = 500;
-        team.updatedAt = Date.now();
+    // Enforce 5-Minute Rolling OTP validation
+    if (!verifyTeamJoinOtp(team, cleanOtp)) {
+      return {
+        error: `Invalid or expired Join OTP for team "${team.teamName}". Join codes rotate every 5 minutes for security. Please request the current live OTP from an active teammate.`
+      };
+    }
 
-        await teamDoc.ref.set(team, { merge: true });
-      }
-
-      await db.collection("team_rosters").doc(clean).set({
-        teamId: team.teamId,
-        email: clean,
-        teamName: team.teamName,
-        joinedAt: Date.now()
+    const normEmail = userObj.email.trim().toLowerCase();
+    const now = Date.now();
+    team.members = team.members || [];
+    if (!team.members.some(m => m.email.toLowerCase() === normEmail)) {
+      team.members.push({
+        email: normEmail,
+        displayName: userObj.displayName,
+        role: userObj.role,
+        color: getRoleColor(userObj.role),
+        joinedAt: now,
+        photoURL: userObj.photoURL || "",
+        isOwner: false
       });
 
-      return { success: true, team };
-    } catch (e) {
-      return { error: e.message || "Failed to join team in Firestore" };
+      team.versionHistory = team.versionHistory || [];
+      team.versionHistory.unshift({
+        id: "v_" + now + "_join",
+        timestamp: now,
+        dateStr: new Date(now).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        authorEmail: normEmail,
+        authorName: userObj.displayName,
+        authorRole: userObj.role,
+        authorColor: getRoleColor(userObj.role),
+        actionSummary: `${userObj.displayName} joined the team as ${userObj.role}`,
+        editType: "member_join",
+        snapshot: null
+      });
+      if (team.versionHistory.length > 500) team.versionHistory.length = 500;
+      team.updatedAt = now;
     }
+
+    if (db) {
+      try {
+        if (teamRef) {
+          await teamRef.set(team, { merge: true });
+        } else {
+          await db.collection("teams").doc(team.teamId).set(team);
+        }
+        await db.collection("team_rosters").doc(clean).set({
+          teamId: team.teamId,
+          email: clean,
+          teamName: team.teamName,
+          joinedAt: now
+        });
+      } catch (e) {
+        console.warn("[TeamCollab] Firestore join save warning:", e);
+      }
+    }
+
+    try {
+      localStorage.setItem("lemlib_active_team", JSON.stringify(team));
+      localStorage.setItem("lemlib_user_team_id", team.teamId);
+      const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+      uTeams[clean] = team.teamId;
+      localStorage.setItem("lemlib_user_teams", JSON.stringify(uTeams));
+    } catch (_) {}
+
+    return { success: true, team };
   }
 
   async function fsLeaveTeam(teamId, cleanEmail) {
@@ -469,29 +677,58 @@
         uid: "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
       };
     }
-    try {
-      const res = await fetch(`/api/team/my-team?email=${encodeURIComponent(currentUser.email)}`);
-      const data = await res.json();
-      const setupView = document.getElementById("teamSetupJoinView");
-      const wsView = document.getElementById("teamWorkspaceView");
-      const gate = document.getElementById("modalTeamGate");
-      if (gate) gate.style.display = "none";
 
-      if (data.hasTeam && data.team) {
-        currentTeam = data.team;
-        if (setupView) setupView.style.display = "none";
-        if (wsView) wsView.style.display = "flex";
-        onTeamLoaded();
-      } else {
-        // Show Team Setup & Join Page (user not in team)
-        currentTeam = null;
-        if (wsView) wsView.style.display = "none";
-        if (setupView) setupView.style.display = "block";
-        loadAvailableTeams();
+    const clean = cleanEmailKey(currentUser.email);
+    let loadedTeam = null;
+
+    // 1. Try server REST API (if not on static host)
+    const apiRoute = resolveApiUrl(`/api/team/my-team?email=${encodeURIComponent(currentUser.email)}`);
+    if (apiRoute) {
+      const res = await safeFetchJson(apiRoute);
+      if (res.ok && res.data) {
+        if (res.data.hasTeam && res.data.team) {
+          loadedTeam = res.data.team;
+        }
       }
-    } catch (err) {
-      console.error("Error checking user team:", err);
-      showToast("Network error checking team status", "⚠️");
+    }
+
+    // 2. Fallback to Firestore if server unavailable or returned 404/405/HTML
+    if (!loadedTeam) {
+      loadedTeam = await fsCheckUserTeam(clean);
+    }
+
+    // 3. Fallback to LocalStorage
+    if (!loadedTeam) {
+      try {
+        const rawLocal = localStorage.getItem("lemlib_active_team");
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+          const userKeys = getCleanEmailKeys(currentUser.email);
+          const hasMatch = userKeys.some(k => uTeams[k] === parsed.teamId) || parsed.ownerEmail?.toLowerCase() === currentUser.email.toLowerCase();
+          if (parsed && parsed.teamId && hasMatch) {
+            loadedTeam = parsed;
+          }
+        }
+      } catch (_) {}
+    }
+
+    const setupView = document.getElementById("teamSetupJoinView");
+    const wsView = document.getElementById("teamWorkspaceView");
+    const gate = document.getElementById("modalTeamGate");
+    if (gate) gate.style.display = "none";
+
+    if (loadedTeam) {
+      currentTeam = loadedTeam;
+      if (!currentTeam.otpInfo) currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
+      if (setupView) setupView.style.display = "none";
+      if (wsView) wsView.style.display = "flex";
+      onTeamLoaded();
+    } else {
+      currentTeam = null;
+      if (wsView) wsView.style.display = "none";
+      if (setupView) setupView.style.display = "block";
+      loadAvailableTeams();
     }
   }
 
@@ -499,59 +736,108 @@
   async function loadAvailableTeams() {
     const listEl = document.getElementById("availableTeamsList");
     if (!listEl) return;
-    try {
-      const res = await fetch("/api/team/available");
-      const data = await res.json();
-      if (!data.success || !Array.isArray(data.teams) || data.teams.length === 0) {
-        listEl.innerHTML = `<div style="text-align:center;padding:12px;color:#94a3b8;font-size:0.75rem;">No active teams found. Create the first team on the "Create a Team" tab!</div>`;
-        return;
+
+    let teams = [];
+    const apiRoute = resolveApiUrl("/api/team/available");
+    if (apiRoute) {
+      const res = await safeFetchJson(apiRoute);
+      if (res.ok && res.data?.teams) {
+        teams = res.data.teams;
       }
-      listEl.innerHTML = "";
-      data.teams.forEach(team => {
-        const item = document.createElement("div");
-        item.style.cssText = "background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;";
-        const curOtp = team.otpInfo?.otp || "------";
-        const remSec = team.otpInfo?.remainingSeconds || 300;
-        const m = Math.floor(remSec / 60);
-        const s = remSec % 60;
-        const timerStr = `(${m}:${s < 10 ? '0' : ''}${s})`;
-
-        item.innerHTML = `
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              <span style="font-weight:700;font-size:0.82rem;color:#f8fafc;">${escapeHtml(team.teamName)}</span>
-              <span style="font-size:0.7rem;color:#64748b;">(${escapeHtml(team.vexTeamNumber)})</span>
-              <span style="font-size:0.68rem;background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 6px;border-radius:6px;font-family:monospace;font-weight:700;">Code: ${escapeHtml(team.teamCode)}</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:3px;font-size:0.72rem;color:#94a3b8;">
-              <span>👥 ${team.memberCount || 1} member${team.memberCount === 1 ? '' : 's'}</span>
-              <span>·</span>
-              <span style="color:#fbbf24;font-family:monospace;font-weight:700;">🔐 Live OTP: ${curOtp} <span style="font-size:0.68rem;color:#94a3b8;">${timerStr}</span></span>
-            </div>
-          </div>
-          <button type="button" class="btn-xs-clean btn-quick-join" data-code="${escapeHtml(team.teamCode)}" data-otp="${curOtp}" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);padding:6px 10px;border-radius:6px;font-size:0.74rem;font-weight:700;white-space:nowrap;cursor:pointer;">
-            ⚡ Fill Code &amp; OTP
-          </button>
-        `;
-        listEl.appendChild(item);
-      });
-
-      listEl.querySelectorAll(".btn-quick-join").forEach(btn => {
-        btn.onclick = () => {
-          const code = btn.getAttribute("data-code");
-          const otp = btn.getAttribute("data-otp");
-          const codeInput = document.getElementById("txtJoinCode");
-          const otpInput = document.getElementById("txtJoinOtp");
-          if (codeInput) codeInput.value = code;
-          if (otpInput) otpInput.value = otp;
-          showToast(`⚡ Filled Team Code (${code}) and Live OTP (${otp})! Click Verify & Join below.`, "📋");
-          const joinBtn = document.getElementById("btnSubmitJoinTeam");
-          if (joinBtn) joinBtn.scrollIntoView({ behavior: "smooth", block: "center" });
-        };
-      });
-    } catch (e) {
-      listEl.innerHTML = `<div style="text-align:center;padding:12px;color:#ef4444;font-size:0.75rem;">Failed to load available teams</div>`;
     }
+
+    // If server not available or returned empty, check Firestore
+    if (teams.length === 0) {
+      const db = getFirestoreDb();
+      if (db) {
+        try {
+          const snap = await db.collection("teams").limit(10).get();
+          if (!snap.empty) {
+            teams = snap.docs.map(doc => {
+              const d = doc.data();
+              return {
+                teamId: d.teamId,
+                teamName: d.teamName,
+                vexTeamNumber: d.vexTeamNumber,
+                teamCode: d.teamCode,
+                memberCount: (d.members || []).length,
+                otpInfo: getTeamOtpInfo(d)
+              };
+            });
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Fallback to sample available teams so user can always test live 5-min OTP join
+    if (teams.length === 0) {
+      const demoTeams = [
+        {
+          teamId: "team_mukoxgqg_n33t0",
+          teamCode: "VEX-217",
+          teamName: "99999X Apex",
+          vexTeamNumber: "99999X",
+          joinSecret: "5f43bb1a46546ac89481068d3719f9d5",
+          memberCount: 2
+        },
+        {
+          teamId: "team_mukowlcd_4qzcs",
+          teamCode: "VEX-939",
+          teamName: "99999X Apex",
+          vexTeamNumber: "99999X",
+          joinSecret: "7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+          memberCount: 1
+        }
+      ];
+      teams = demoTeams.map(d => ({
+        ...d,
+        otpInfo: getTeamOtpInfo(d)
+      }));
+    }
+
+    listEl.innerHTML = "";
+    teams.forEach(team => {
+      const item = document.createElement("div");
+      item.style.cssText = "background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;";
+      const curOtp = team.otpInfo?.otp || getTeamJoinOtp(team);
+      const remSec = team.otpInfo?.remainingSeconds || 300;
+      const m = Math.floor(remSec / 60);
+      const s = remSec % 60;
+      const timerStr = `(${m}:${s < 10 ? '0' : ''}${s})`;
+
+      item.innerHTML = `
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:0.82rem;color:#f8fafc;">${escapeHtml(team.teamName)}</span>
+            <span style="font-size:0.7rem;color:#64748b;">(${escapeHtml(team.vexTeamNumber)})</span>
+            <span style="font-size:0.68rem;background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 6px;border-radius:6px;font-family:monospace;font-weight:700;">Code: ${escapeHtml(team.teamCode)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:3px;font-size:0.72rem;color:#94a3b8;">
+            <span>👥 ${team.memberCount || 1} member${team.memberCount === 1 ? '' : 's'}</span>
+            <span>·</span>
+            <span style="color:#fbbf24;font-family:monospace;font-weight:700;">🔐 Live OTP: ${curOtp} <span style="font-size:0.68rem;color:#94a3b8;">${timerStr}</span></span>
+          </div>
+        </div>
+        <button type="button" class="btn-xs-clean btn-quick-join" data-code="${escapeHtml(team.teamCode)}" data-otp="${curOtp}" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);padding:6px 10px;border-radius:6px;font-size:0.74rem;font-weight:700;white-space:nowrap;cursor:pointer;">
+          ⚡ Fill Code &amp; OTP
+        </button>
+      `;
+      listEl.appendChild(item);
+    });
+
+    listEl.querySelectorAll(".btn-quick-join").forEach(btn => {
+      btn.onclick = () => {
+        const code = btn.getAttribute("data-code");
+        const otp = btn.getAttribute("data-otp");
+        const codeInput = document.getElementById("txtJoinCode");
+        const otpInput = document.getElementById("txtJoinOtp");
+        if (codeInput) codeInput.value = code;
+        if (otpInput) otpInput.value = otp;
+        showToast(`⚡ Filled Team Code (${code}) and Live OTP (${otp})! Click Verify & Join below.`, "📋");
+        const joinBtn = document.getElementById("btnSubmitJoinTeam");
+        if (joinBtn) joinBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+      };
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -1951,24 +2237,39 @@
       };
     }
 
-    function showJoinAlert(msg, isError = true) {
+    function showJoinAlert(msg, isError = true, extraHtml = "") {
       const box = document.getElementById("joinAlertBox");
       if (!box) return;
       box.style.display = "block";
       box.style.background = isError ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)";
       box.style.border = isError ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(34,197,94,0.4)";
       box.style.color = isError ? "#fca5a5" : "#86efac";
-      box.innerHTML = (isError ? "⚠️ " : "✅ ") + escapeHtml(msg);
+      box.innerHTML = `<div>${(isError ? "⚠️ " : "✅ ") + escapeHtml(msg)}</div>${extraHtml || ""}`;
+      try { box.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {}
     }
 
-    function showCreateAlert(msg, isError = true) {
+    function showCreateAlert(msg, isError = true, extraHtml = "") {
       const box = document.getElementById("createAlertBox");
       if (!box) return;
       box.style.display = "block";
       box.style.background = isError ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)";
       box.style.border = isError ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(34,197,94,0.4)";
       box.style.color = isError ? "#fca5a5" : "#86efac";
-      box.innerHTML = (isError ? "⚠️ " : "✅ ") + escapeHtml(msg);
+      box.innerHTML = `<div>${(isError ? "⚠️ " : "✅ ") + escapeHtml(msg)}</div>${extraHtml || ""}`;
+      try { box.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {}
+    }
+
+    function finalizeTeamLoaded(teamObj, toastMsg) {
+      currentTeam = teamObj;
+      currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
+      const gate = document.getElementById("modalTeamGate");
+      if (gate) gate.style.display = "none";
+      const setupView = document.getElementById("teamSetupJoinView");
+      if (setupView) setupView.style.display = "none";
+      const wsView = document.getElementById("teamWorkspaceView");
+      if (wsView) wsView.style.display = "flex";
+      showToast(toastMsg || `Team "${teamObj.teamName}" loaded!`, "🎉");
+      onTeamLoaded();
     }
 
     // 3. Create Team submit & Initial Source Radio wiring
@@ -1997,111 +2298,274 @@
     const btnSubmitCreate = document.getElementById("btnSubmitCreateTeam");
     if (btnSubmitCreate) {
       btnSubmitCreate.onclick = async () => {
-        const emailInput = document.getElementById("txtUserAccountEmail");
-        const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
-        if (!emailVal || !emailVal.includes("@")) {
-          showCreateAlert("Please enter a valid Gmail address above.");
-          return;
-        }
-
-        currentUser = {
-          email: emailVal.toLowerCase(),
-          displayName: (currentUser && currentUser.displayName) || emailVal.split("@")[0],
-          uid: (currentUser && currentUser.uid) || "user_" + emailVal.replace(/[^a-z0-9]/g, "_"),
-          photoURL: (currentUser && currentUser.photoURL) || ""
-        };
-        localStorage.setItem("lemlib_saved_google_email", currentUser.email);
-        localStorage.setItem("lemlib_saved_google_user", JSON.stringify(currentUser));
-
-        const name = document.getElementById("txtNewTeamName")?.value.trim() || "VEX High Stakes Team";
-        const vexNum = document.getElementById("txtNewVexNumber")?.value.trim() || "99999X";
-        const role = document.getElementById("selNewRole")?.value || "Programmer";
-        const selectedSource = document.querySelector('input[name="initProjectSource"]:checked')?.value || "template";
-
-        let pathsData = null;
-        let projectData = null;
-        let repoInfo = null;
-
-        btnSubmitCreate.disabled = true;
-
-        if (selectedSource === "planner") {
-          btnSubmitCreate.textContent = "Importing Planner Routines...";
-          const local = getLocalPlannerPayload();
-          pathsData = { paths: local.paths };
-          projectData = local.project;
-        } else if (selectedSource === "github") {
-          const repoVal = document.getElementById("txtGateGithubRepo")?.value.trim();
-          const branchVal = document.getElementById("txtGateGithubBranch")?.value.trim();
-          const tokenVal = document.getElementById("txtGateGithubToken")?.value.trim();
-
-          if (!repoVal) {
-            showCreateAlert("Please enter a GitHub repository (e.g. LemLib/LemLib or full URL)");
-            btnSubmitCreate.disabled = false;
+        try {
+          const emailInput = document.getElementById("txtUserAccountEmail");
+          const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+          if (!emailVal || !emailVal.includes("@")) {
+            showCreateAlert("Please enter a valid Gmail address above.");
+            if (emailInput) {
+              emailInput.focus();
+              emailInput.style.borderColor = "#ef4444";
+            }
             return;
           }
-          if (tokenVal) localStorage.setItem("github_pat_token", tokenVal);
+          if (emailInput) emailInput.style.borderColor = "#334155";
 
-          btnSubmitCreate.textContent = "Cloning GitHub Repository...";
-          try {
-            const cloneRes = await fetch("/api/github/clone", {
+          currentUser = {
+            email: emailVal.toLowerCase(),
+            displayName: (currentUser && currentUser.displayName) || emailVal.split("@")[0],
+            uid: (currentUser && currentUser.uid) || "user_" + emailVal.replace(/[^a-z0-9]/g, "_"),
+            photoURL: (currentUser && currentUser.photoURL) || ""
+          };
+          localStorage.setItem("lemlib_saved_google_email", currentUser.email);
+          localStorage.setItem("lemlib_saved_google_user", JSON.stringify(currentUser));
+
+          const name = document.getElementById("txtNewTeamName")?.value.trim() || "VEX High Stakes Team";
+          const vexNum = document.getElementById("txtNewVexNumber")?.value.trim() || "99999X";
+          const role = document.getElementById("selNewRole")?.value || "Programmer";
+          const selectedSource = document.querySelector('input[name="initProjectSource"]:checked')?.value || "template";
+
+          let pathsData = null;
+          let projectData = null;
+          let repoInfo = null;
+
+          btnSubmitCreate.disabled = true;
+
+          if (selectedSource === "planner") {
+            btnSubmitCreate.textContent = "Importing Planner Routines...";
+            const local = getLocalPlannerPayload();
+            if (local.paths && local.paths.length > 0) {
+              pathsData = { paths: local.paths };
+            }
+            projectData = local.project;
+          } else if (selectedSource === "github") {
+            const repoVal = document.getElementById("txtGateGithubRepo")?.value.trim();
+            const branchVal = document.getElementById("txtGateGithubBranch")?.value.trim();
+            const tokenVal = document.getElementById("txtGateGithubToken")?.value.trim();
+
+            if (!repoVal) {
+              showCreateAlert("Please enter a GitHub repository (e.g. LemLib/LemLib or full URL)");
+              btnSubmitCreate.disabled = false;
+              return;
+            }
+            if (tokenVal) localStorage.setItem("github_pat_token", tokenVal);
+
+            btnSubmitCreate.textContent = "Cloning GitHub Repository...";
+            try {
+              const cloneRes = await fetch(resolveApiUrl("/api/github/clone") || "/api/github/clone", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
+              });
+              const cloneData = await cloneRes.json();
+              if (!cloneData.success || !cloneData.files) {
+                throw new Error(cloneData.error || "Failed to clone GitHub repository");
+              }
+              const detectedPaths = parseGithubAutonFiles(cloneData.files, cloneData.repoName);
+              pathsData = { paths: detectedPaths };
+              projectData = { name: cloneData.repoName || repoVal, files: cloneData.files };
+              repoInfo = { repo: repoVal, branch: cloneData.branch, fileCount: cloneData.fileCount };
+            } catch (err) {
+              btnSubmitCreate.disabled = false;
+              btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
+              showCreateAlert("GitHub clone failed: " + err.message);
+              return;
+            }
+          }
+
+          btnSubmitCreate.textContent = "Creating Team...";
+
+          let teamCreated = null;
+          const apiRoute = resolveApiUrl("/api/team/create");
+          if (apiRoute) {
+            const srvRes = await safeFetchJson(apiRoute, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
+              body: JSON.stringify({
+                email: currentUser.email,
+                displayName: currentUser.displayName,
+                teamName: name,
+                vexTeamNumber: vexNum,
+                role,
+                photoURL: currentUser.photoURL,
+                pathsData,
+                projectData,
+                repoInfo
+              })
             });
-            const cloneData = await cloneRes.json();
-            if (!cloneData.success || !cloneData.files) {
-              throw new Error(cloneData.error || "Failed to clone GitHub repository");
+
+            if (srvRes.ok && srvRes.data?.success && srvRes.data?.team) {
+              teamCreated = srvRes.data.team;
+            } else if (!srvRes.ok && !srvRes.isHtml && srvRes.status !== 404 && srvRes.status !== 405) {
+              btnSubmitCreate.disabled = false;
+              btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
+
+              const errData = srvRes.data || {};
+              if (errData.code === "ALREADY_IN_TEAM" || (srvRes.error && srvRes.error.includes("already belongs to team"))) {
+                const existingName = errData.currentTeamName || "Existing Team";
+                const extra = `
+                  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                    <button type="button" id="btnAlertOpenExisting" class="btn-team-primary" style="padding:6px 12px;font-size:0.76rem;background:#0284c7;border-color:#38bdf8;">
+                      🚀 Open "${escapeHtml(existingName)}" Workspace
+                    </button>
+                    <button type="button" id="btnAlertLeaveAndCreate" class="btn-team-secondary" style="padding:6px 12px;font-size:0.76rem;border-color:#ef4444;color:#fca5a5;">
+                      🔄 Leave Old Team & Register "${escapeHtml(name)}"
+                    </button>
+                  </div>
+                `;
+                showCreateAlert(srvRes.error, true, extra);
+
+                document.getElementById("btnAlertOpenExisting")?.addEventListener("click", async () => {
+                  showToast("Loading your team workspace...", "⏳");
+                  await checkUserTeam();
+                });
+
+                document.getElementById("btnAlertLeaveAndCreate")?.addEventListener("click", async () => {
+                  btnSubmitCreate.disabled = true;
+                  btnSubmitCreate.textContent = "Overwriting Team...";
+                  showToast("Leaving previous team and registering new team...", "🔄");
+                  const recreateRes = await safeFetchJson(apiRoute, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      email: currentUser.email,
+                      displayName: currentUser.displayName,
+                      teamName: name,
+                      vexTeamNumber: vexNum,
+                      role,
+                      photoURL: currentUser.photoURL,
+                      pathsData,
+                      projectData,
+                      repoInfo,
+                      leaveExisting: true
+                    })
+                  });
+                  if (recreateRes.ok && recreateRes.data?.success && recreateRes.data?.team) {
+                    finalizeTeamLoaded(recreateRes.data.team, `Team "${recreateRes.data.team.teamName}" registered!`);
+                  } else {
+                    btnSubmitCreate.disabled = false;
+                    btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
+                    showCreateAlert(recreateRes.error || "Failed to recreate team");
+                  }
+                });
+                return;
+              }
+
+              showCreateAlert(srvRes.error || "Failed to create team");
+              return;
             }
-            const detectedPaths = parseGithubAutonFiles(cloneData.files, cloneData.repoName);
-            pathsData = { paths: detectedPaths };
-            projectData = { name: cloneData.repoName || repoVal, files: cloneData.files };
-            repoInfo = { repo: repoVal, branch: cloneData.branch, fileCount: cloneData.fileCount };
-          } catch (err) {
-            btnSubmitCreate.disabled = false;
-            btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
-            showCreateAlert("GitHub clone failed: " + err.message);
-            return;
           }
-        }
 
-        btnSubmitCreate.textContent = "Creating Team...";
+          // If on static host (GitHub Pages) or server returned 404/405/HTML/offline, create client-side
+          if (!teamCreated) {
+            const now = Date.now();
+            const teamId = "team_" + now.toString(36) + "_" + Math.random().toString(36).substring(2, 7);
+            const teamCode = "VEX-" + Math.floor(100 + Math.random() * 900);
+            const joinSecret = (typeof window !== "undefined" && window.crypto && typeof window.crypto.getRandomValues === "function")
+              ? Array.from(window.crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, "0")).join("")
+              : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
 
-        try {
-          const res = await fetch("/api/team/create", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            const initialMember = {
               email: currentUser.email,
               displayName: currentUser.displayName,
+              role,
+              color: getRoleColor(role),
+              joinedAt: now,
+              photoURL: currentUser.photoURL || "",
+              isOwner: true
+            };
+
+            const initialSnapshot = {
+              id: "v_" + now + "_init",
+              timestamp: now,
+              dateStr: new Date(now).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+              authorEmail: currentUser.email,
+              authorName: currentUser.displayName,
+              authorRole: role,
+              authorColor: getRoleColor(role),
+              actionSummary: "Team initialized & autonomous workspace created",
+              editType: "team_init",
+              snapshot: pathsData || null
+            };
+
+            const newTeamObj = {
+              teamId,
+              teamCode,
+              joinSecret,
               teamName: name,
               vexTeamNumber: vexNum,
-              role,
-              photoURL: currentUser.photoURL,
-              pathsData,
-              projectData,
-              repoInfo
-            })
-          });
-          const data = await res.json();
-          btnSubmitCreate.disabled = false;
-          btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
-          if (data.error) {
-            showCreateAlert(data.error);
-          } else if (data.success && data.team) {
-            currentTeam = data.team;
-            const gate = document.getElementById("modalTeamGate");
-            if (gate) gate.style.display = "none";
-            const setupView = document.getElementById("teamSetupJoinView");
-            if (setupView) setupView.style.display = "none";
-            const wsView = document.getElementById("teamWorkspaceView");
-            if (wsView) wsView.style.display = "flex";
-            showToast(`Team "${data.team.teamName}" created!`, "🎉");
-            onTeamLoaded();
+              ownerEmail: currentUser.email,
+              createdAt: now,
+              updatedAt: now,
+              members: [initialMember],
+              pathPayload: pathsData || {
+                paths: [
+                  {
+                    id: "p_default",
+                    name: "Red Left Mogo Rush",
+                    pose: { x: -60, y: -60, theta: 0 },
+                    actions: [
+                      { id: "a_1", type: "moveToPoint", x: -24, y: -24, timeout: 2000, maxSpeed: 115, earlyExitRange: 2, comment: "Rush alliance goal" },
+                      { id: "a_2", type: "moveToPose", x: 0, y: 48, theta: 90, timeout: 2500, lead: 0.6, comment: "Score preload in corner" }
+                    ]
+                  }
+                ]
+              },
+              project: projectData || null,
+              versionHistory: [initialSnapshot],
+              comments: [
+                {
+                  id: "cmt_welcome",
+                  x: -24,
+                  y: -24,
+                  text: "📍 Strategy Tip: Clamp preload here before 12s mark. Drop pin comments anywhere on field to discuss routines!",
+                  authorEmail: currentUser.email,
+                  authorName: currentUser.displayName,
+                  authorRole: role,
+                  authorColor: getRoleColor(role),
+                  timestamp: now,
+                  resolved: false,
+                  replies: []
+                }
+              ],
+              strategies: [
+                {
+                  id: "strat_plan_a",
+                  title: "Plan A: Center Mobile Goal Rush",
+                  description: "Primary match routine: Rush center goal, clamp alliance mogo, sweep 3 side rings, park before 14.5s.",
+                  targetRoutine: "Red Left Mogo Rush",
+                  authorEmail: currentUser.email,
+                  authorName: currentUser.displayName,
+                  createdAt: now,
+                  status: "active",
+                  votes: {
+                    [currentUser.email]: "rocket"
+                  }
+                }
+              ]
+            };
+
+            await fsCreateTeam(newTeamObj, cleanEmailKey(currentUser.email));
+            try {
+              localStorage.setItem("lemlib_active_team", JSON.stringify(newTeamObj));
+              localStorage.setItem("lemlib_user_team_id", teamId);
+              const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+              const userKeys = getCleanEmailKeys(currentUser.email);
+              userKeys.forEach(k => { uTeams[k] = teamId; });
+              localStorage.setItem("lemlib_user_teams", JSON.stringify(uTeams));
+            } catch (_) {}
+
+            teamCreated = newTeamObj;
           }
-        } catch (err) {
+
           btnSubmitCreate.disabled = false;
           btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
-          showCreateAlert("Network error creating team: " + err.message);
+          finalizeTeamLoaded(teamCreated, `Team "${teamCreated.teamName}" created!`);
+        } catch (submitErr) {
+          console.error("Team registration error:", submitErr);
+          btnSubmitCreate.disabled = false;
+          btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
+          showCreateAlert("Error while registering team: " + (submitErr.message || submitErr));
         }
       };
     }
@@ -2109,74 +2573,139 @@
     // 4. Join Team submit with 5-minute constantly changing OTP
     const btnSubmitJoin = document.getElementById("btnSubmitJoinTeam");
     if (btnSubmitJoin) {
-      btnSubmitJoin.onclick = () => {
-        const emailInput = document.getElementById("txtUserAccountEmail");
-        const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
-        if (!emailVal || !emailVal.includes("@")) {
-          showJoinAlert("Please enter a valid Gmail address above.");
-          return;
-        }
-
-        currentUser = {
-          email: emailVal.toLowerCase(),
-          displayName: (currentUser && currentUser.displayName) || emailVal.split("@")[0],
-          uid: (currentUser && currentUser.uid) || "user_" + emailVal.replace(/[^a-z0-9]/g, "_"),
-          photoURL: (currentUser && currentUser.photoURL) || ""
-        };
-        localStorage.setItem("lemlib_saved_google_email", currentUser.email);
-        localStorage.setItem("lemlib_saved_google_user", JSON.stringify(currentUser));
-
-        const code = document.getElementById("txtJoinCode")?.value.trim().toUpperCase();
-        const otp = document.getElementById("txtJoinOtp")?.value.trim();
-        const role = document.getElementById("selJoinRole")?.value || "Driver";
-
-        if (!code) {
-          showJoinAlert("Please enter the 6-character Team Code (e.g. VEX-742), or select a team from the Available Teams list below.");
-          return;
-        }
-        if (!otp) {
-          showJoinAlert("Please enter the live 5-minute authorization OTP from an active teammate, or click 'Fill Code & OTP' below.");
-          return;
-        }
-
-        btnSubmitJoin.disabled = true;
-        btnSubmitJoin.textContent = "Verifying OTP & Joining...";
-
-        fetch("/api/team/join", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: currentUser.email,
-            displayName: currentUser.displayName,
-            teamCode: code,
-            otp,
-            role,
-            photoURL: currentUser.photoURL
-          })
-        })
-        .then(r => r.json())
-        .then(data => {
-          btnSubmitJoin.disabled = false;
-          btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
-          if (data.error) {
-            showJoinAlert(data.error);
-          } else if (data.success && data.team) {
-            currentTeam = data.team;
-            const gate = document.getElementById("modalTeamGate");
-            if (gate) gate.style.display = "none";
-            const setupView = document.getElementById("teamSetupJoinView");
-            if (setupView) setupView.style.display = "none";
-            const wsView = document.getElementById("teamWorkspaceView");
-            if (wsView) wsView.style.display = "flex";
-            showToast(`Joined team "${data.team.teamName}"! You are authorized across sessions.`, "🎉");
-            onTeamLoaded();
+      btnSubmitJoin.onclick = async () => {
+        try {
+          const emailInput = document.getElementById("txtUserAccountEmail");
+          const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+          if (!emailVal || !emailVal.includes("@")) {
+            showJoinAlert("Please enter a valid Gmail address above.");
+            if (emailInput) {
+              emailInput.focus();
+              emailInput.style.borderColor = "#ef4444";
+            }
+            return;
           }
-        })
-        .catch(err => {
+          if (emailInput) emailInput.style.borderColor = "#334155";
+
+          currentUser = {
+            email: emailVal.toLowerCase(),
+            displayName: (currentUser && currentUser.displayName) || emailVal.split("@")[0],
+            uid: (currentUser && currentUser.uid) || "user_" + emailVal.replace(/[^a-z0-9]/g, "_"),
+            photoURL: (currentUser && currentUser.photoURL) || ""
+          };
+          localStorage.setItem("lemlib_saved_google_email", currentUser.email);
+          localStorage.setItem("lemlib_saved_google_user", JSON.stringify(currentUser));
+
+          const code = document.getElementById("txtJoinCode")?.value.trim().toUpperCase();
+          const otp = document.getElementById("txtJoinOtp")?.value.trim();
+          const role = document.getElementById("selJoinRole")?.value || "Driver";
+
+          if (!code) {
+            showJoinAlert("Please enter the 6-character Team Code (e.g. VEX-742), or select a team from the Available Teams list below.");
+            return;
+          }
+          if (!otp) {
+            showJoinAlert("Please enter the live 5-minute authorization OTP from an active teammate, or click 'Fill Code & OTP' below.");
+            return;
+          }
+
+          btnSubmitJoin.disabled = true;
+          btnSubmitJoin.textContent = "Verifying OTP & Joining...";
+
+          let teamJoined = null;
+          const apiRoute = resolveApiUrl("/api/team/join");
+          if (apiRoute) {
+            const srvRes = await safeFetchJson(apiRoute, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: currentUser.email,
+                displayName: currentUser.displayName,
+                teamCode: code,
+                otp,
+                role,
+                photoURL: currentUser.photoURL
+              })
+            });
+
+            if (srvRes.ok && srvRes.data?.success && srvRes.data?.team) {
+              teamJoined = srvRes.data.team;
+            } else if (!srvRes.ok && !srvRes.isHtml && srvRes.status !== 404 && srvRes.status !== 405) {
+              btnSubmitJoin.disabled = false;
+              btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
+
+              const errData = srvRes.data || {};
+              if (errData.code === "ALREADY_IN_TEAM" || (srvRes.error && srvRes.error.includes("already belongs to team"))) {
+                const extra = `
+                  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                    <button type="button" id="btnJoinAlertOpenExisting" class="btn-team-primary" style="padding:6px 12px;font-size:0.76rem;background:#0284c7;border-color:#38bdf8;">
+                      🚀 Open My Current Team
+                    </button>
+                    <button type="button" id="btnJoinAlertLeaveAndJoin" class="btn-team-secondary" style="padding:6px 12px;font-size:0.76rem;border-color:#ef4444;color:#fca5a5;">
+                      🔄 Leave Old Team & Join "${escapeHtml(code)}"
+                    </button>
+                  </div>
+                `;
+                showJoinAlert(srvRes.error, true, extra);
+
+                document.getElementById("btnJoinAlertOpenExisting")?.addEventListener("click", () => {
+                  checkUserTeam();
+                });
+
+                document.getElementById("btnJoinAlertLeaveAndJoin")?.addEventListener("click", async () => {
+                  btnSubmitJoin.disabled = true;
+                  btnSubmitJoin.textContent = "Transferring...";
+                  showToast("Leaving old team and joining new team...", "🔄");
+                  const transferRes = await safeFetchJson(apiRoute, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      email: currentUser.email,
+                      displayName: currentUser.displayName,
+                      teamCode: code,
+                      otp,
+                      role,
+                      photoURL: currentUser.photoURL,
+                      leaveExisting: true
+                    })
+                  });
+                  if (transferRes.ok && transferRes.data?.success && transferRes.data?.team) {
+                    finalizeTeamLoaded(transferRes.data.team, `Joined team "${transferRes.data.team.teamName}"!`);
+                  } else {
+                    btnSubmitJoin.disabled = false;
+                    btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
+                    showJoinAlert(transferRes.error || "Failed to transfer to new team");
+                  }
+                });
+                return;
+              }
+
+              showJoinAlert(srvRes.error || "Failed to join team");
+              return;
+            }
+          }
+
+          // If on static host (GitHub Pages) or server returned 404/405/HTML/offline, join client-side
+          if (!teamJoined) {
+            const fsRes = await fsJoinTeam(code, otp, currentUser);
+            if (fsRes.error) {
+              btnSubmitJoin.disabled = false;
+              btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
+              showJoinAlert(fsRes.error);
+              return;
+            }
+            teamJoined = fsRes.team;
+          }
+
           btnSubmitJoin.disabled = false;
           btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
-          showJoinAlert("Network error joining team: " + err.message);
-        });
+          finalizeTeamLoaded(teamJoined, `Joined team "${teamJoined.teamName}"! You are authorized across sessions.`);
+        } catch (joinErr) {
+          console.error("Team join error:", joinErr);
+          btnSubmitJoin.disabled = false;
+          btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
+          showJoinAlert("Error while joining team: " + (joinErr.message || joinErr));
+        }
       };
     }
 
@@ -2643,6 +3172,11 @@
     initAuth();
     wireEvents();
     drawField();
+    if (window.location.hash === "#join") {
+      document.getElementById("tabGateJoin")?.click();
+    } else if (window.location.hash === "#create") {
+      document.getElementById("tabGateCreate")?.click();
+    }
   });
 
 })(window);
