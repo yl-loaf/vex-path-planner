@@ -258,6 +258,22 @@
     return null;
   }
 
+  async function ensureFirebaseAuth() {
+    if (typeof firebase !== "undefined" && firebase.auth) {
+      try {
+        const auth = firebase.auth();
+        if (!auth.currentUser) {
+          const res = await auth.signInAnonymously();
+          return res ? res.user : null;
+        }
+        return auth.currentUser;
+      } catch (e) {
+        console.warn("[TeamCollab] Firebase anonymous auth notice:", e);
+      }
+    }
+    return null;
+  }
+
   async function fsCheckUserTeam(cleanEmail) {
     if (!cleanEmail) return null;
     const db = getFirestoreDb();
@@ -265,6 +281,7 @@
 
     if (db) {
       try {
+        await ensureFirebaseAuth();
         for (const k of keys) {
           const rosterDoc = await db.collection("team_rosters").doc(k).get();
           if (rosterDoc.exists && rosterDoc.data()?.teamId) {
@@ -307,7 +324,21 @@
     const cleanKeys = getCleanEmailKeys(cleanEmail);
     if (db) {
       try {
+        await ensureFirebaseAuth();
+        const codeKey = (newTeam.teamCode || "").trim().toUpperCase();
+        const cleanCodeKey = codeKey.replace(/[^A-Z0-9]/g, "");
+
         await db.collection("teams").doc(newTeam.teamId).set(newTeam, { merge: true });
+        if (codeKey) {
+          await db.collection("teams").doc(codeKey).set(newTeam, { merge: true });
+        }
+        if (cleanCodeKey && cleanCodeKey !== codeKey) {
+          await db.collection("teams").doc(cleanCodeKey).set(newTeam, { merge: true });
+        }
+        if (newTeam.vexTeamNumber) {
+          await db.collection("teams").doc(newTeam.vexTeamNumber.toUpperCase()).set(newTeam, { merge: true });
+        }
+
         for (const k of cleanKeys) {
           await db.collection("team_rosters").doc(k).set({
             teamId: newTeam.teamId,
@@ -325,6 +356,7 @@
 
   async function fsJoinTeam(teamCode, otp, userObj) {
     const cleanCode = (teamCode || "").trim().toUpperCase();
+    const targetClean = cleanCode.replace(/[^A-Z0-9]/g, "");
     const cleanOtp = (otp || "").trim();
     const normEmail = (userObj?.email || "user@example.com").trim().toLowerCase();
     const userRole = userObj?.role || "Driver";
@@ -337,46 +369,69 @@
 
     if (db) {
       try {
-        const query = await db.collection("teams").where("teamCode", "==", cleanCode).limit(1).get();
-        if (!query.empty) {
-          teamRef = query.docs[0].ref;
-          team = query.docs[0].data();
-        } else {
-          const targetClean = cleanCode.replace(/[^A-Z0-9]/g, "");
-          const variants = Array.from(new Set([cleanCode, targetClean, "VEX-" + targetClean]));
-          for (const v of variants) {
-            if (!team && v) {
-              const q2 = await db.collection("teams").where("teamCode", "==", v).limit(1).get();
-              if (!q2.empty) {
-                teamRef = q2.docs[0].ref;
-                team = q2.docs[0].data();
+        await ensureFirebaseAuth();
+      } catch (_) {}
+
+      // 1. Direct doc lookups (fastest & permission/index safe)
+      const lookupKeys = Array.from(new Set([
+        cleanCode,
+        targetClean,
+        "VEX-" + targetClean,
+        teamCode
+      ].filter(Boolean)));
+
+      for (const k of lookupKeys) {
+        if (!team) {
+          try {
+            const docSnap = await db.collection("teams").doc(k).get();
+            if (docSnap && docSnap.exists) {
+              teamRef = docSnap.ref;
+              team = docSnap.data();
+            }
+          } catch (docErr) {
+            console.warn("[TeamCollab] Direct doc search notice for " + k + ":", docErr);
+          }
+        }
+      }
+
+      // 2. Collection queries fallback
+      if (!team) {
+        try {
+          const query = await db.collection("teams").where("teamCode", "==", cleanCode).limit(1).get();
+          if (!query.empty) {
+            teamRef = query.docs[0].ref;
+            team = query.docs[0].data();
+          } else {
+            const variants = Array.from(new Set([cleanCode, targetClean, "VEX-" + targetClean]));
+            for (const v of variants) {
+              if (!team && v) {
+                const q2 = await db.collection("teams").where("teamCode", "==", v).limit(1).get();
+                if (!q2.empty) {
+                  teamRef = q2.docs[0].ref;
+                  team = q2.docs[0].data();
+                }
               }
             }
           }
+        } catch (e) {
+          console.warn("[TeamCollab] Firestore search notice:", e);
         }
-      } catch (e) {
-        console.warn("[TeamCollab] Firestore search notice:", e);
       }
 
+      // 3. Scan recent docs fallback
       if (!team) {
         try {
-          const directDoc = await db.collection("teams").doc(cleanCode).get();
-          if (directDoc.exists) {
-            teamRef = directDoc.ref;
-            team = directDoc.data();
-          } else {
-            const snap = await db.collection("teams").limit(30).get();
-            if (!snap.empty) {
-              const foundDoc = snap.docs.find(d => {
-                const dData = d.data() || {};
-                const dCode = (dData.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-                const targetCode = cleanCode.replace(/[^A-Z0-9]/g, "");
-                return dCode === targetCode || dData.teamId === cleanCode || (dData.vexTeamNumber && dData.vexTeamNumber.toUpperCase() === cleanCode);
-              });
-              if (foundDoc) {
-                teamRef = foundDoc.ref;
-                team = foundDoc.data();
-              }
+          const snap = await db.collection("teams").limit(50).get();
+          if (!snap.empty) {
+            const foundDoc = snap.docs.find(d => {
+              const dData = d.data() || {};
+              const dCode = (dData.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+              const dVex = (dData.vexTeamNumber || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+              return dCode === targetClean || dData.teamId === cleanCode || dVex === targetClean;
+            });
+            if (foundDoc) {
+              teamRef = foundDoc.ref;
+              team = foundDoc.data();
             }
           }
         } catch (_) {}
@@ -389,8 +444,7 @@
         if (rawLocal) {
           const parsed = JSON.parse(rawLocal);
           const pCode = (parsed.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-          const targetCode = cleanCode.replace(/[^A-Z0-9]/g, "");
-          if (parsed && (pCode === targetCode || parsed.teamId === cleanCode)) {
+          if (parsed && (pCode === targetClean || parsed.teamId === cleanCode)) {
             team = parsed;
           }
         }
@@ -428,7 +482,7 @@
           strategies: []
         }
       ];
-      team = demoTeams.find(t => (t.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "") === cleanCode.replace(/[^A-Z0-9]/g, ""));
+      team = demoTeams.find(t => (t.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "") === targetClean);
     }
 
     if (!team) {
@@ -480,11 +534,18 @@
 
     if (db) {
       try {
-        if (teamRef) {
-          await teamRef.set(team, { merge: true });
-        } else {
-          await db.collection("teams").doc(team.teamId).set(team, { merge: true });
+        await ensureFirebaseAuth();
+        const codeKey = (team.teamCode || "").trim().toUpperCase();
+        const cleanCodeKey = codeKey.replace(/[^A-Z0-9]/g, "");
+
+        await db.collection("teams").doc(team.teamId).set(team, { merge: true });
+        if (codeKey) {
+          await db.collection("teams").doc(codeKey).set(team, { merge: true });
         }
+        if (cleanCodeKey && cleanCodeKey !== codeKey) {
+          await db.collection("teams").doc(cleanCodeKey).set(team, { merge: true });
+        }
+
         const cleanKeys = getCleanEmailKeys(normEmail);
         for (const k of cleanKeys) {
           await db.collection("team_rosters").doc(k).set({
@@ -515,6 +576,7 @@
     const db = getFirestoreDb();
     if (!db) return true;
     try {
+      await ensureFirebaseAuth();
       await db.collection("team_rosters").doc(cleanEmail).delete();
       const teamDoc = await db.collection("teams").doc(teamId).get();
       if (teamDoc.exists) {
@@ -533,7 +595,17 @@
     const db = getFirestoreDb();
     if (!db || !team || !team.teamId) return false;
     try {
+      await ensureFirebaseAuth();
+      const codeKey = (team.teamCode || "").trim().toUpperCase();
+      const cleanCodeKey = codeKey.replace(/[^A-Z0-9]/g, "");
+
       await db.collection("teams").doc(team.teamId).set(team, { merge: true });
+      if (codeKey) {
+        await db.collection("teams").doc(codeKey).set(team, { merge: true });
+      }
+      if (cleanCodeKey && cleanCodeKey !== codeKey) {
+        await db.collection("teams").doc(cleanCodeKey).set(team, { merge: true });
+      }
       return true;
     } catch (e) {
       console.warn("[TeamCollab] Firestore sync error:", e);
@@ -724,34 +796,15 @@
       }
     }
 
-    let remaining = (otpInfo && typeof otpInfo.remainingSeconds === 'number') ? otpInfo.remainingSeconds : 300;
-    let currentOtp = (otpInfo && otpInfo.otp) || "------";
-    renderOtpDisplay(currentOtp, remaining);
+    const refreshTicker = () => {
+      if (!currentTeam) return;
+      const fresh = getTeamOtpInfo(currentTeam);
+      currentTeam.otpInfo = fresh;
+      renderOtpDisplay(fresh.otp, fresh.remainingSeconds);
+    };
 
-    otpIntervalTimer = setInterval(async () => {
-      remaining--;
-      if (remaining <= 0) {
-        // Fetch refreshed 5-minute rolling OTP from server
-        if (currentTeam && currentTeam.teamId && currentUser && currentUser.email) {
-          try {
-            const res = await fetch(`/api/team/otp?teamId=${encodeURIComponent(currentTeam.teamId)}&email=${encodeURIComponent(currentUser.email)}`);
-            const data = await res.json();
-            if (data.success && data.otp) {
-              currentOtp = data.otp;
-              remaining = data.remainingSeconds || 300;
-              currentTeam.otpInfo = data;
-            } else {
-              remaining = 300;
-            }
-          } catch (_) {
-            remaining = 300;
-          }
-        } else {
-          remaining = 300;
-        }
-      }
-      renderOtpDisplay(currentOtp, remaining);
-    }, 1000);
+    refreshTicker();
+    otpIntervalTimer = setInterval(refreshTicker, 1000);
   }
 
   async function checkUserTeam() {

@@ -30,6 +30,15 @@ if (typeof firebase !== "undefined" && firebase.initializeApp) {
     if (!firebase.apps || !firebase.apps.length) {
       firebase.initializeApp(window.FIREBASE_CONFIG);
     }
+    if (firebase.auth) {
+      firebase.auth().onAuthStateChanged((user) => {
+        if (!user) {
+          firebase.auth().signInAnonymously().catch((err) => {
+            console.warn("Firebase anonymous auth notice:", err);
+          });
+        }
+      });
+    }
   } catch (e) {
     console.warn("Firebase initialization warning:", e);
   }
