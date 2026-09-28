@@ -1,4 +1,4 @@
-// team.js - Real-Time Multi-User Collaboration & Cloud Sync Engine (BETA)
+// team.js - Real-Time Multi-User Collaboration & Cloud Sync Engine (ALPHA)
 (function (global) {
   "use strict";
 
