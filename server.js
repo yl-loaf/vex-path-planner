@@ -661,6 +661,41 @@ app.get(['/api/team/otp', '/vex-path-planner/api/team/otp'], (req, res) => {
   });
 });
 
+// 2.7 Get available teams looking for teammates (supports testing & open collaboration)
+app.get(['/api/team/available', '/vex-path-planner/api/team/available'], (req, res) => {
+  try {
+    const files = fs.readdirSync(teamsDir);
+    const teams = [];
+    for (const f of files) {
+      if (f.startsWith('team_') && f.endsWith('.json')) {
+        try {
+          const raw = fs.readFileSync(path.join(teamsDir, f), 'utf8');
+          const data = JSON.parse(raw);
+          if (data && data.teamId && data.teamCode) {
+            const otpInfo = getTeamOtpInfo(data);
+            teams.push({
+              teamId: data.teamId,
+              teamName: data.teamName || 'VEX Team Workspace',
+              vexTeamNumber: data.vexTeamNumber || 'VEX',
+              teamCode: data.teamCode,
+              memberCount: (data.members || []).length,
+              ownerEmail: data.ownerEmail ? data.ownerEmail.replace(/(?<=.{3}).(?=.*@)/g, '*') : '',
+              createdAt: data.createdAt,
+              otpInfo
+            });
+          }
+        } catch (_) {}
+      }
+    }
+    // Sort recently created/active first
+    teams.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json({ success: true, teams });
+  } catch (err) {
+    console.error('Error fetching available teams:', err);
+    res.status(500).json({ error: 'Failed to load available teams' });
+  }
+});
+
 // 3. Join an existing team by Team Code & 5-minute OTP (Enforces 1 Gmail = 1 Team rule)
 app.post(['/api/team/join', '/vex-path-planner/api/team/join'], (req, res) => {
   const { email, displayName, teamCode, otp, role, photoURL } = req.body || {};
@@ -760,16 +795,21 @@ app.post(['/api/team/join', '/vex-path-planner/api/team/join'], (req, res) => {
 // 4. Leave team
 app.post(['/api/team/leave', '/vex-path-planner/api/team/leave'], (req, res) => {
   const { email, teamId } = req.body || {};
-  if (!email || !teamId) {
-    return res.status(400).json({ error: 'Missing email or teamId' });
+  if (!email) {
+    return res.status(400).json({ error: 'Missing email' });
   }
 
   const clean = cleanEmailKey(email);
   const userTeams = getUserTeamsIndex();
+  const targetTeamId = teamId || userTeams[clean];
+  if (!targetTeamId) {
+    return res.json({ success: true, message: 'User was not in any team' });
+  }
+
   delete userTeams[clean];
   saveUserTeamsIndex(userTeams);
 
-  const team = getTeam(teamId);
+  const team = getTeam(targetTeamId);
   if (team) {
     const userEmailNorm = email.trim().toLowerCase();
     const removedMember = team.members.find(m => m.email.toLowerCase() === userEmailNorm);

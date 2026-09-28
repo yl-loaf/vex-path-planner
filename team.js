@@ -286,11 +286,13 @@
     const btnSignOut = document.getElementById("btnSignOut");
     const btnSwitchAccount = document.getElementById("btnSwitchAccount");
     const authUser = document.getElementById("authUser");
-    const btnGateSignIn = document.getElementById("btnGateSignIn");
+    const btnGateSignInDirect = document.getElementById("btnGateSignInDirect");
+    const txtUserAccountEmail = document.getElementById("txtUserAccountEmail");
+    const badgeAuthStatus = document.getElementById("badgeAuthStatus");
 
     function updateAuthUI(user) {
-      currentUser = user;
-      if (user) {
+      if (user && user.email) {
+        currentUser = user;
         if (btnGoogleSignIn) btnGoogleSignIn.hidden = true;
         if (btnSignOut) btnSignOut.hidden = false;
         if (btnSwitchAccount) btnSwitchAccount.hidden = false;
@@ -298,25 +300,60 @@
           authUser.hidden = false;
           authUser.textContent = user.displayName || user.email;
         }
-        document.getElementById("gateAuthRequired").style.display = "none";
-        document.getElementById("gateOptions").style.display = "block";
-        checkUserTeam();
+        if (txtUserAccountEmail) txtUserAccountEmail.value = user.email;
+        if (badgeAuthStatus) {
+          badgeAuthStatus.textContent = "Google Verified";
+          badgeAuthStatus.style.background = "rgba(34,197,94,0.15)";
+          badgeAuthStatus.style.color = "#4ade80";
+        }
       } else {
+        const savedEmail = (txtUserAccountEmail && txtUserAccountEmail.value.trim()) ||
+          localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+        let savedObj = null;
+        try { savedObj = JSON.parse(localStorage.getItem("lemlib_saved_google_user")); } catch (_) {}
+        currentUser = {
+          email: savedEmail.toLowerCase(),
+          displayName: (savedObj && savedObj.displayName) || savedEmail.split("@")[0],
+          uid: (savedObj && savedObj.uid) || "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
+        };
         if (btnGoogleSignIn) btnGoogleSignIn.hidden = false;
         if (btnSignOut) btnSignOut.hidden = true;
         if (btnSwitchAccount) btnSwitchAccount.hidden = true;
-        if (authUser) authUser.hidden = true;
-        const gateAuth = document.getElementById("gateAuthRequired");
-        if (gateAuth) gateAuth.style.display = "block";
-        const gateOpts = document.getElementById("gateOptions");
-        if (gateOpts) gateOpts.style.display = "none";
-        const wsView = document.getElementById("teamWorkspaceView");
-        if (wsView) wsView.style.display = "none";
-        const setupView = document.getElementById("teamSetupJoinView");
-        if (setupView) setupView.style.display = "block";
-        const gateModal = document.getElementById("modalTeamGate");
-        if (gateModal) gateModal.style.display = "none";
+        if (authUser) {
+          authUser.hidden = false;
+          authUser.textContent = currentUser.displayName || currentUser.email;
+        }
+        if (txtUserAccountEmail) txtUserAccountEmail.value = currentUser.email;
+        if (badgeAuthStatus) {
+          badgeAuthStatus.textContent = "Workspace Account";
+          badgeAuthStatus.style.background = "rgba(56,189,248,0.15)";
+          badgeAuthStatus.style.color = "#38bdf8";
+        }
       }
+
+      const gateOpts = document.getElementById("gateOptions");
+      if (gateOpts) gateOpts.style.display = "block";
+      checkUserTeam();
+    }
+
+    if (txtUserAccountEmail) {
+      txtUserAccountEmail.addEventListener("change", () => {
+        const val = txtUserAccountEmail.value.trim();
+        if (val && val.includes("@")) {
+          currentUser = {
+            email: val.toLowerCase(),
+            displayName: val.split("@")[0],
+            uid: "user_" + val.replace(/[^a-z0-9]/g, "_")
+          };
+          localStorage.setItem("lemlib_saved_google_email", currentUser.email);
+          localStorage.setItem("lemlib_saved_google_user", JSON.stringify(currentUser));
+          if (authUser) {
+            authUser.hidden = false;
+            authUser.textContent = currentUser.email;
+          }
+          checkUserTeam();
+        }
+      });
     }
 
     if (typeof firebase !== "undefined" && firebase.auth) {
@@ -333,61 +370,26 @@
           } catch (_) {}
           updateAuthUI(user);
         } else {
-          // Check saved localStorage fallback
-          const savedEmail = localStorage.getItem("lemlib_saved_google_email");
-          if (savedEmail) {
-            let savedObj = null;
-            try { savedObj = JSON.parse(localStorage.getItem("lemlib_saved_google_user")); } catch (_) {}
-            updateAuthUI({
-              email: savedEmail,
-              displayName: (savedObj && savedObj.displayName) || savedEmail.split("@")[0],
-              uid: (savedObj && savedObj.uid) || "uid_" + savedEmail
-            });
-          } else {
-            updateAuthUI(null);
-          }
+          updateAuthUI(null);
         }
       });
     } else {
-      // Local fallback
-      const savedEmail = localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
-      updateAuthUI({
-        email: savedEmail,
-        displayName: savedEmail.split("@")[0],
-        uid: "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
-      });
+      updateAuthUI(null);
     }
 
     const triggerSignIn = () => {
       if (typeof firebase !== "undefined" && firebase.auth) {
         const provider = new firebase.auth.GoogleAuthProvider();
         firebase.auth().signInWithPopup(provider).catch((err) => {
-          // Fallback prompt
-          const fallbackEmail = prompt("Enter your Gmail address to sign in:", "rainforest.cck3@gmail.com");
-          if (fallbackEmail && fallbackEmail.includes("@")) {
-            localStorage.setItem("lemlib_saved_google_email", fallbackEmail.trim());
-            updateAuthUI({
-              email: fallbackEmail.trim(),
-              displayName: fallbackEmail.split("@")[0],
-              uid: "user_" + fallbackEmail.replace(/[^a-z0-9]/g, "_")
-            });
-          }
+          showToast("Google sign-in popup closed or restricted in preview. You can enter your email directly.", "ℹ️");
         });
       } else {
-        const fallbackEmail = prompt("Enter your Gmail address to sign in:", "rainforest.cck3@gmail.com");
-        if (fallbackEmail && fallbackEmail.includes("@")) {
-          localStorage.setItem("lemlib_saved_google_email", fallbackEmail.trim());
-          updateAuthUI({
-            email: fallbackEmail.trim(),
-            displayName: fallbackEmail.split("@")[0],
-            uid: "user_" + fallbackEmail.replace(/[^a-z0-9]/g, "_")
-          });
-        }
+        showToast("Firebase Auth not loaded; using direct workspace email.", "ℹ️");
       }
     };
 
     if (btnGoogleSignIn) btnGoogleSignIn.onclick = triggerSignIn;
-    if (btnGateSignIn) btnGateSignIn.onclick = triggerSignIn;
+    if (btnGateSignInDirect) btnGateSignInDirect.onclick = triggerSignIn;
 
     if (btnSignOut) {
       btnSignOut.onclick = () => {
@@ -458,7 +460,15 @@
   }
 
   async function checkUserTeam() {
-    if (!currentUser || !currentUser.email) return;
+    if (!currentUser || !currentUser.email) {
+      const emailInput = document.getElementById("txtUserAccountEmail");
+      const savedEmail = (emailInput && emailInput.value.trim()) || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+      currentUser = {
+        email: savedEmail.toLowerCase(),
+        displayName: savedEmail.split("@")[0],
+        uid: "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
+      };
+    }
     try {
       const res = await fetch(`/api/team/my-team?email=${encodeURIComponent(currentUser.email)}`);
       const data = await res.json();
@@ -477,10 +487,70 @@
         currentTeam = null;
         if (wsView) wsView.style.display = "none";
         if (setupView) setupView.style.display = "block";
+        loadAvailableTeams();
       }
     } catch (err) {
       console.error("Error checking user team:", err);
       showToast("Network error checking team status", "⚠️");
+    }
+  }
+
+  let availableTeamsInterval = null;
+  async function loadAvailableTeams() {
+    const listEl = document.getElementById("availableTeamsList");
+    if (!listEl) return;
+    try {
+      const res = await fetch("/api/team/available");
+      const data = await res.json();
+      if (!data.success || !Array.isArray(data.teams) || data.teams.length === 0) {
+        listEl.innerHTML = `<div style="text-align:center;padding:12px;color:#94a3b8;font-size:0.75rem;">No active teams found. Create the first team on the "Create a Team" tab!</div>`;
+        return;
+      }
+      listEl.innerHTML = "";
+      data.teams.forEach(team => {
+        const item = document.createElement("div");
+        item.style.cssText = "background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;";
+        const curOtp = team.otpInfo?.otp || "------";
+        const remSec = team.otpInfo?.remainingSeconds || 300;
+        const m = Math.floor(remSec / 60);
+        const s = remSec % 60;
+        const timerStr = `(${m}:${s < 10 ? '0' : ''}${s})`;
+
+        item.innerHTML = `
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-weight:700;font-size:0.82rem;color:#f8fafc;">${escapeHtml(team.teamName)}</span>
+              <span style="font-size:0.7rem;color:#64748b;">(${escapeHtml(team.vexTeamNumber)})</span>
+              <span style="font-size:0.68rem;background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 6px;border-radius:6px;font-family:monospace;font-weight:700;">Code: ${escapeHtml(team.teamCode)}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:3px;font-size:0.72rem;color:#94a3b8;">
+              <span>👥 ${team.memberCount || 1} member${team.memberCount === 1 ? '' : 's'}</span>
+              <span>·</span>
+              <span style="color:#fbbf24;font-family:monospace;font-weight:700;">🔐 Live OTP: ${curOtp} <span style="font-size:0.68rem;color:#94a3b8;">${timerStr}</span></span>
+            </div>
+          </div>
+          <button type="button" class="btn-xs-clean btn-quick-join" data-code="${escapeHtml(team.teamCode)}" data-otp="${curOtp}" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);padding:6px 10px;border-radius:6px;font-size:0.74rem;font-weight:700;white-space:nowrap;cursor:pointer;">
+            ⚡ Fill Code &amp; OTP
+          </button>
+        `;
+        listEl.appendChild(item);
+      });
+
+      listEl.querySelectorAll(".btn-quick-join").forEach(btn => {
+        btn.onclick = () => {
+          const code = btn.getAttribute("data-code");
+          const otp = btn.getAttribute("data-otp");
+          const codeInput = document.getElementById("txtJoinCode");
+          const otpInput = document.getElementById("txtJoinOtp");
+          if (codeInput) codeInput.value = code;
+          if (otpInput) otpInput.value = otp;
+          showToast(`⚡ Filled Team Code (${code}) and Live OTP (${otp})! Click Verify & Join below.`, "📋");
+          const joinBtn = document.getElementById("btnSubmitJoinTeam");
+          if (joinBtn) joinBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+        };
+      });
+    } catch (e) {
+      listEl.innerHTML = `<div style="text-align:center;padding:12px;color:#ef4444;font-size:0.75rem;">Failed to load available teams</div>`;
     }
   }
 
@@ -1869,7 +1939,36 @@
         tabGateCreate.style.borderBottom = "2px solid transparent";
         if (paneGateJoin) paneGateJoin.style.display = "block";
         if (paneGateCreate) paneGateCreate.style.display = "none";
+        loadAvailableTeams();
       };
+    }
+
+    const btnRefresh = document.getElementById("btnRefreshAvailableTeams");
+    if (btnRefresh) {
+      btnRefresh.onclick = () => {
+        loadAvailableTeams();
+        showToast("Refreshed available teams list", "🔄");
+      };
+    }
+
+    function showJoinAlert(msg, isError = true) {
+      const box = document.getElementById("joinAlertBox");
+      if (!box) return;
+      box.style.display = "block";
+      box.style.background = isError ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)";
+      box.style.border = isError ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(34,197,94,0.4)";
+      box.style.color = isError ? "#fca5a5" : "#86efac";
+      box.innerHTML = (isError ? "⚠️ " : "✅ ") + escapeHtml(msg);
+    }
+
+    function showCreateAlert(msg, isError = true) {
+      const box = document.getElementById("createAlertBox");
+      if (!box) return;
+      box.style.display = "block";
+      box.style.background = isError ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)";
+      box.style.border = isError ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(34,197,94,0.4)";
+      box.style.color = isError ? "#fca5a5" : "#86efac";
+      box.innerHTML = (isError ? "⚠️ " : "✅ ") + escapeHtml(msg);
     }
 
     // 3. Create Team submit & Initial Source Radio wiring
@@ -1898,12 +1997,24 @@
     const btnSubmitCreate = document.getElementById("btnSubmitCreateTeam");
     if (btnSubmitCreate) {
       btnSubmitCreate.onclick = async () => {
-        if (!currentUser || !currentUser.email) {
-          alert("Please sign in with Google first.");
+        const emailInput = document.getElementById("txtUserAccountEmail");
+        const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+        if (!emailVal || !emailVal.includes("@")) {
+          showCreateAlert("Please enter a valid Gmail address above.");
           return;
         }
-        const name = document.getElementById("txtNewTeamName")?.value.trim();
-        const vexNum = document.getElementById("txtNewVexNumber")?.value.trim();
+
+        currentUser = {
+          email: emailVal.toLowerCase(),
+          displayName: (currentUser && currentUser.displayName) || emailVal.split("@")[0],
+          uid: (currentUser && currentUser.uid) || "user_" + emailVal.replace(/[^a-z0-9]/g, "_"),
+          photoURL: (currentUser && currentUser.photoURL) || ""
+        };
+        localStorage.setItem("lemlib_saved_google_email", currentUser.email);
+        localStorage.setItem("lemlib_saved_google_user", JSON.stringify(currentUser));
+
+        const name = document.getElementById("txtNewTeamName")?.value.trim() || "VEX High Stakes Team";
+        const vexNum = document.getElementById("txtNewVexNumber")?.value.trim() || "99999X";
         const role = document.getElementById("selNewRole")?.value || "Programmer";
         const selectedSource = document.querySelector('input[name="initProjectSource"]:checked')?.value || "template";
 
@@ -1924,7 +2035,7 @@
           const tokenVal = document.getElementById("txtGateGithubToken")?.value.trim();
 
           if (!repoVal) {
-            alert("Please enter a GitHub repository (e.g. LemLib/LemLib or full URL)");
+            showCreateAlert("Please enter a GitHub repository (e.g. LemLib/LemLib or full URL)");
             btnSubmitCreate.disabled = false;
             return;
           }
@@ -1948,7 +2059,7 @@
           } catch (err) {
             btnSubmitCreate.disabled = false;
             btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
-            alert("GitHub clone failed: " + err.message);
+            showCreateAlert("GitHub clone failed: " + err.message);
             return;
           }
         }
@@ -1975,7 +2086,7 @@
           btnSubmitCreate.disabled = false;
           btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
           if (data.error) {
-            alert(data.error);
+            showCreateAlert(data.error);
           } else if (data.success && data.team) {
             currentTeam = data.team;
             const gate = document.getElementById("modalTeamGate");
@@ -1990,7 +2101,7 @@
         } catch (err) {
           btnSubmitCreate.disabled = false;
           btnSubmitCreate.textContent = "🚀 Create Team & Start Collaborating";
-          alert("Network error creating team: " + err.message);
+          showCreateAlert("Network error creating team: " + err.message);
         }
       };
     }
@@ -1999,20 +2110,32 @@
     const btnSubmitJoin = document.getElementById("btnSubmitJoinTeam");
     if (btnSubmitJoin) {
       btnSubmitJoin.onclick = () => {
-        if (!currentUser || !currentUser.email) {
-          alert("Please sign in with Google first.");
+        const emailInput = document.getElementById("txtUserAccountEmail");
+        const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+        if (!emailVal || !emailVal.includes("@")) {
+          showJoinAlert("Please enter a valid Gmail address above.");
           return;
         }
+
+        currentUser = {
+          email: emailVal.toLowerCase(),
+          displayName: (currentUser && currentUser.displayName) || emailVal.split("@")[0],
+          uid: (currentUser && currentUser.uid) || "user_" + emailVal.replace(/[^a-z0-9]/g, "_"),
+          photoURL: (currentUser && currentUser.photoURL) || ""
+        };
+        localStorage.setItem("lemlib_saved_google_email", currentUser.email);
+        localStorage.setItem("lemlib_saved_google_user", JSON.stringify(currentUser));
+
         const code = document.getElementById("txtJoinCode")?.value.trim().toUpperCase();
         const otp = document.getElementById("txtJoinOtp")?.value.trim();
         const role = document.getElementById("selJoinRole")?.value || "Driver";
 
         if (!code) {
-          alert("Please enter the 6-character Team Code (e.g. VEX-742)");
+          showJoinAlert("Please enter the 6-character Team Code (e.g. VEX-742), or select a team from the Available Teams list below.");
           return;
         }
         if (!otp) {
-          alert("Please enter the live 5-minute authorization OTP from an active teammate on the workspace.");
+          showJoinAlert("Please enter the live 5-minute authorization OTP from an active teammate, or click 'Fill Code & OTP' below.");
           return;
         }
 
@@ -2036,7 +2159,7 @@
           btnSubmitJoin.disabled = false;
           btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
           if (data.error) {
-            alert(data.error);
+            showJoinAlert(data.error);
           } else if (data.success && data.team) {
             currentTeam = data.team;
             const gate = document.getElementById("modalTeamGate");
@@ -2052,7 +2175,7 @@
         .catch(err => {
           btnSubmitJoin.disabled = false;
           btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
-          alert("Network error joining team: " + err.message);
+          showJoinAlert("Network error joining team: " + err.message);
         });
       };
     }

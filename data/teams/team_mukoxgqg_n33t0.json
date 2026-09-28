@@ -6,7 +6,7 @@
   "vexTeamNumber": "99999X",
   "ownerEmail": "owner@example.com",
   "createdAt": 1790566275832,
-  "updatedAt": 1790566275869,
+  "updatedAt": 1790566961019,
   "members": [
     {
       "email": "owner@example.com",
@@ -36,6 +36,42 @@
     "name": "LemLib/LemLib"
   },
   "versionHistory": [
+    {
+      "id": "v_1790566961019_leave",
+      "timestamp": 1790566961019,
+      "dateStr": "Sep 28, 2026 · 03:42:41 AM",
+      "authorEmail": "rainforest.cck3@gmail.com",
+      "authorName": "rainforest.cck3",
+      "authorRole": "Driver",
+      "authorColor": "#10b981",
+      "actionSummary": "rainforest.cck3 left the team",
+      "editType": "member_leave",
+      "snapshot": null
+    },
+    {
+      "id": "v_1790566941293_join",
+      "timestamp": 1790566941293,
+      "dateStr": "Sep 28, 2026 · 03:42:21 AM",
+      "authorEmail": "rainforest.cck3@gmail.com",
+      "authorName": "rainforest.cck3",
+      "authorRole": "Driver",
+      "authorColor": "#10b981",
+      "actionSummary": "rainforest.cck3 joined the team as Driver",
+      "editType": "member_join",
+      "snapshot": null
+    },
+    {
+      "id": "v_1790566785456_join",
+      "timestamp": 1790566785456,
+      "dateStr": "Sep 28, 2026 · 03:39:45 AM",
+      "authorEmail": "test.joiner@gmail.com",
+      "authorName": "Test Joiner",
+      "authorRole": "Driver",
+      "authorColor": "#10b981",
+      "actionSummary": "Test Joiner joined the team as Driver",
+      "editType": "member_join",
+      "snapshot": null
+    },
     {
       "id": "v_1790566275869_import",
       "timestamp": 1790566275869,
