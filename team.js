@@ -3340,13 +3340,6 @@
     const gate = document.getElementById("modalTeamGate");
     if (gate) gate.style.display = "none";
 
-    // Auto show Google Drive project selector page if user doesn't have local data on incognito/new device
-    if (!hasLocalData && (loadedTeam || window.GoogleDriveSync)) {
-      setTimeout(() => {
-        checkAndShowDriveProjectSelector();
-      }, 300);
-    }
-
     if (loadedTeam) {
       currentTeam = loadedTeam;
       if (!currentTeam.otpInfo) currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
@@ -3354,6 +3347,9 @@
       if (wsView) wsView.style.display = "flex";
       try { fsSaveTeamDoc(currentTeam); } catch (_) {}
       onTeamLoaded();
+      requestAnimationFrame(() => {
+        drawField();
+      });
     } else {
       currentTeam = null;
       if (wsView) wsView.style.display = "none";
