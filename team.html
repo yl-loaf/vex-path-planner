@@ -854,6 +854,9 @@
           </div>
         </div>
 
+        <button type="button" class="btn-xs-clean" id="btnSyncLocalPlanner" style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;font-weight:700;display:inline-flex;align-items:center;gap:4px;" title="Sync team project & routines into your local browser planner & IDE">
+          📲 Sync to Local
+        </button>
         <button type="button" class="btn-xs-clean" id="btnDriveSync" style="background:#1e293b;border:1px solid #334155;color:#38bdf8;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;display:inline-flex;align-items:center;gap:4px;" title="Sync active team state to your personal Google Drive">
           ☁️ Drive Sync
         </button>
@@ -926,50 +929,111 @@
       </section>
     </aside>
 
-    <!-- CENTER COLUMN: Interactive Live Field Canvas & Cursors -->
+    <!-- CENTER COLUMN: Interactive Live Field Canvas & Cursors / Integrated IDE -->
     <section class="team-col-center">
-      <!-- Top Canvas Status Strip -->
-      <div style="padding:8px 16px;background:#090e17;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;font-size:0.75rem;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span>📍 Pose: <strong id="lblCursorCoords" style="color:#38bdf8;">X: 0.0" | Y: 0.0" | θ: 0.0°</strong></span>
-          <span style="color:#475569;">|</span>
-          <span id="lblActiveEditingStatus" style="color:#94a3b8;">Move any waypoint or click to drop strategy pin</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button type="button" id="btnCenterCanvasPinTool" class="btn-team-secondary" style="padding:4px 10px;font-size:0.72rem;display:inline-flex;align-items:center;gap:4px;">
-            <span>📍</span> Drop Pin Comment
-          </button>
-          <button type="button" id="btnAutoTuneCurve" class="btn-team-secondary" style="padding:4px 10px;font-size:0.72rem;">
-            ⚡ Auto-Smooth Path
-          </button>
-        </div>
-      </div>
-
-      <!-- Field Canvas Container with Collaborator Cursor Overlay -->
-      <div class="field-canvas-container" id="fieldCanvasContainer">
-        <canvas id="teamFieldCanvas" width="600" height="600"></canvas>
-        <div id="teammateCursorsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
-          <!-- Dynamically rendered collaborator cursors -->
-        </div>
-        <div id="fieldPinsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
-          <!-- Dynamically rendered comment pins -->
-        </div>
-      </div>
-
-      <!-- Bottom Playback & Simulation Scrubber -->
-      <div class="field-controls-bar">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button type="button" id="btnSimPlay" class="btn-team-primary" style="padding:6px 14px;font-size:0.78rem;">▶ Play 15s Sim</button>
-          <button type="button" id="btnSimReset" class="btn-team-secondary" style="padding:6px 12px;font-size:0.78rem;">↺ Reset</button>
-          <span style="font-family:ui-monospace, monospace;font-size:0.85rem;color:#f8fafc;font-weight:700;margin-left:6px;" id="lblSimTime">0.00s / 15.00s</span>
-        </div>
-
-        <div style="flex:1;max-width:360px;margin:0 12px;">
-          <input type="range" id="simScrubber" min="0" max="15000" step="50" value="0" style="width:100%;accent-color:#38bdf8;" />
-        </div>
-
+      <!-- Mode View Switcher Strip -->
+      <div style="background:#0b0f19;border-bottom:1px solid #1e293b;padding:6px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <div style="display:flex;align-items:center;gap:6px;">
-          <span style="font-size:0.72rem;color:var(--muted);">Actions: <strong id="lblTotalActionsCount" style="color:#ffffff;">0</strong></span>
+          <button type="button" id="btnViewModeField" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:1px solid #0369a1;padding:4px 10px;border-radius:6px;font-weight:700;font-size:0.75rem;cursor:pointer;">🗺️ Field &amp; Sim</button>
+          <button type="button" id="btnViewModeIde" class="btn-xs-clean" style="background:#1e293b;color:#cbd5e1;border:1px solid #334155;padding:4px 10px;border-radius:6px;font-weight:700;font-size:0.75rem;cursor:pointer;">💻 Integrated C++ IDE</button>
+          <button type="button" id="btnViewModeSuggestions" class="btn-xs-clean" style="background:#1e293b;color:#cbd5e1;border:1px solid #334155;padding:4px 10px;border-radius:6px;font-weight:700;font-size:0.75rem;cursor:pointer;">💡 Suggestions <span id="badgeSuggestionsCount" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 5px;border-radius:8px;font-size:0.65rem;">0</span></button>
+        </div>
+        <div id="lblRolePermissionStatus" style="font-size:0.72rem;color:#38bdf8;font-weight:600;display:flex;align-items:center;gap:6px;">
+          <span>💻 Programmer View</span>
+        </div>
+      </div>
+
+      <!-- Teammate Edit Diff Banner -->
+      <div id="teamDiffBanner" style="display:none;background:rgba(56,189,248,0.15);border-bottom:1px solid rgba(56,189,248,0.4);padding:8px 14px;font-size:0.78rem;color:#e0f2fe;align-items:center;justify-content:space-between;z-index:10;">
+        <span>⚡ Teammate updated blocks or C++ code! Review incoming changes.</span>
+        <button type="button" id="btnReviewDiffs" class="btn-xs-clean" style="background:#0284c7;color:#ffffff;border:none;padding:3px 10px;border-radius:6px;font-weight:700;cursor:pointer;">🔍 View Diffs &amp; Merge</button>
+      </div>
+
+      <!-- VIEW 1: FIELD CANVAS & SIMULATOR -->
+      <div id="teamFieldViewContainer" style="display:flex;flex-direction:column;flex:1;min-height:0;position:relative;">
+        <!-- Top Canvas Status Strip -->
+        <div style="padding:8px 16px;background:#090e17;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;font-size:0.75rem;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span>📍 Pose: <strong id="lblCursorCoords" style="color:#38bdf8;">X: 0.0" | Y: 0.0" | θ: 0.0°</strong></span>
+            <span style="color:#475569;">|</span>
+            <span id="lblActiveEditingStatus" style="color:#94a3b8;">Move any waypoint or click to drop strategy pin</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button type="button" id="btnCenterCanvasPinTool" class="btn-team-secondary" style="padding:4px 10px;font-size:0.72rem;display:inline-flex;align-items:center;gap:4px;">
+              <span>📍</span> Drop Pin Comment
+            </button>
+            <button type="button" id="btnAutoTuneCurve" class="btn-team-secondary" style="padding:4px 10px;font-size:0.72rem;">
+              ⚡ Auto-Smooth Path
+            </button>
+          </div>
+        </div>
+
+        <!-- Field Canvas Container with Collaborator Cursor Overlay -->
+        <div class="field-canvas-container" id="fieldCanvasContainer">
+          <canvas id="teamFieldCanvas" width="600" height="600"></canvas>
+          <div id="teammateCursorsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
+            <!-- Dynamically rendered collaborator cursors -->
+          </div>
+          <div id="fieldPinsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
+            <!-- Dynamically rendered comment pins -->
+          </div>
+        </div>
+
+        <!-- Bottom Playback & Simulation Scrubber -->
+        <div class="field-controls-bar">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button type="button" id="btnSimPlay" class="btn-team-primary" style="padding:6px 14px;font-size:0.78rem;">▶ Play 15s Sim</button>
+            <button type="button" id="btnSimReset" class="btn-team-secondary" style="padding:6px 12px;font-size:0.78rem;">↺ Reset</button>
+            <span style="font-family:ui-monospace, monospace;font-size:0.85rem;color:#f8fafc;font-weight:700;margin-left:6px;" id="lblSimTime">0.00s / 15.00s</span>
+          </div>
+
+          <div style="flex:1;max-width:360px;margin:0 12px;">
+            <input type="range" id="simScrubber" min="0" max="15000" step="50" value="0" style="width:100%;accent-color:#38bdf8;" />
+          </div>
+
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:0.72rem;color:var(--muted);">Actions: <strong id="lblTotalActionsCount" style="color:#ffffff;">0</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 2: INTEGRATED C++ IDE STUDIO FOR PROGRAMMERS -->
+      <div id="teamIdeContainer" style="display:none;flex:1;flex-direction:column;background:#030712;overflow:hidden;min-height:0;">
+        <!-- IDE Header File Tabs -->
+        <div style="background:#090d16;border-bottom:1px solid #1e293b;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="display:flex;align-items:center;gap:4px;" id="ideFileTabs">
+            <button type="button" class="right-tab-btn active" data-file="autons.cpp" style="padding:4px 10px;font-size:0.75rem;">autons.cpp ⚡</button>
+            <button type="button" class="right-tab-btn" data-file="main.cpp" style="padding:4px 10px;font-size:0.75rem;">main.cpp</button>
+            <button type="button" class="right-tab-btn" data-file="config.cpp" style="padding:4px 10px;font-size:0.75rem;">config.cpp</button>
+            <button type="button" class="right-tab-btn" data-file="driver_control.cpp" style="padding:4px 10px;font-size:0.75rem;">driver_control.cpp</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" id="btnSyncCppFromBlocks" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#38bdf8;padding:4px 8px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">⚡ Sync from Blocks</button>
+            <button type="button" id="btnSaveCppCode" class="btn-xs-clean" style="background:#16a34a;border:1px solid #22c55e;color:#ffffff;padding:4px 10px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">💾 Save C++ Code</button>
+            <button type="button" id="btnProposeCodeSuggestion" class="btn-xs-clean" style="background:#f59e0b;border:1px solid #d97706;color:#0b0f14;padding:4px 10px;border-radius:6px;font-size:0.72rem;font-weight:800;cursor:pointer;">💡 Propose Suggestion</button>
+          </div>
+        </div>
+        <!-- Editor Textarea -->
+        <div style="flex:1;position:relative;display:flex;flex-direction:column;min-height:0;">
+          <textarea id="txtTeamIdeCode" spellcheck="false" style="flex:1;background:#020617;color:#38bdf8;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:0.82rem;line-height:1.5;padding:12px;border:none;outline:none;resize:none;tab-size:2;"></textarea>
+        </div>
+        <div style="background:#090e17;border-top:1px solid #1e293b;padding:4px 12px;display:flex;align-items:center;justify-content:space-between;font-size:0.7rem;color:#64748b;">
+          <span id="lblIdeStatus">LemLib PROS C++ Auton File · Auto-synced with Action Blocks</span>
+          <span id="lblIdeLines">Lines: 0</span>
+        </div>
+      </div>
+
+      <!-- VIEW 3: TEAM SUGGESTIONS BOARD -->
+      <div id="teamSuggestionsContainer" style="display:none;flex:1;flex-direction:column;padding:16px;background:#030712;overflow-y:auto;min-height:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">💡 Team Code &amp; Path Suggestions</h3>
+            <p style="margin:2px 0 0;font-size:0.75rem;color:#94a3b8;">Teammates without write permission or members proposing changes submit suggestions here for review.</p>
+          </div>
+          <button type="button" id="btnNewSuggestion" class="btn-team-primary" style="padding:6px 12px;font-size:0.78rem;background:#f59e0b;border-color:#d97706;color:#0b0f14;font-weight:800;">+ Propose Suggestion</button>
+        </div>
+        <div id="suggestionsList">
+          <!-- Dynamically populated suggestions -->
         </div>
       </div>
     </section>
@@ -984,12 +1048,28 @@
         </button>
         <button type="button" class="right-tab-btn" id="tabBtnVersions" data-tab="versions">
           <span>📜 Version History</span>
-          <span style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 6px;border-radius:10px;font-size:0.68rem;" id="badgeVersionsCount">0 / 500</span>
+          <span style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 6px;border-radius:10px;font-size:0.68rem;" id="badgeVersionsCount">0</span>
         </button>
       </div>
 
       <!-- TAB PANE 1: Action Flow Blocks -->
       <div id="paneActions" style="flex:1;display:flex;flex-direction:column;padding:14px;overflow-y:auto;">
+        <!-- Visual Block Palette -->
+        <div style="background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:10px;margin-bottom:12px;">
+          <div style="font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
+            <span>🧩 Action Block Palette</span>
+            <span style="font-size:0.68rem;color:#38bdf8;text-transform:none;">Click to insert</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <button type="button" id="btnPaletteMovePoint" class="btn-xs-clean" style="background:#0284c7;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">📍 MoveToPoint</button>
+            <button type="button" id="btnPaletteMovePose" class="btn-xs-clean" style="background:#0369a1;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">🧭 MoveToPose</button>
+            <button type="button" id="btnPaletteTurn" class="btn-xs-clean" style="background:#7c3aed;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">🔄 TurnToHeading</button>
+            <button type="button" id="btnPaletteWait" class="btn-xs-clean" style="background:#d97706;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">⏱️ Delay / Wait</button>
+            <button type="button" id="btnPaletteCustom" class="btn-xs-clean" style="background:#16a34a;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">⚙️ Custom C++</button>
+            <button type="button" id="btnPaletteSetPose" class="btn-xs-clean" style="background:#475569;color:#fff;padding:6px;border-radius:6px;font-size:0.72rem;font-weight:700;text-align:left;display:flex;align-items:center;gap:4px;cursor:pointer;">🤖 Reset Pose</button>
+          </div>
+        </div>
+
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <span style="font-size:0.8rem;font-weight:700;color:var(--text-heading);">Action Sequence</span>
           <div style="display:flex;gap:6px;">
@@ -1011,15 +1091,15 @@
         </div>
       </div>
 
-      <!-- TAB PANE 2: Team Version History (Up to 500 Snapshots with Author Attribution) -->
+      <!-- TAB PANE 2: Team Version History -->
       <div id="paneVersions" style="flex:1;display:none;flex-direction:column;padding:14px;overflow-y:auto;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <div>
             <h3 style="margin:0;font-size:0.95rem;color:#f8fafc;">Team Version History</h3>
-            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;">Stores up to 500 checkpoints · Shows who edited what</p>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;">Stores checkpoints with full author attribution</p>
           </div>
           <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 8px;border-radius:10px;font-weight:700;" id="lblVersionCapPill">
-            Max 500
+            Checkpoints
           </span>
         </div>
 
@@ -1361,6 +1441,101 @@
         <button type="button" id="btnExecutePlannerImport" class="btn-team-primary">
           🗺️ Confirm &amp; Import to Team
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEAM SETTINGS & MEMBER PERMISSIONS MODAL -->
+  <div id="modalTeamSettings" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content" style="max-width:680px;">
+      <div class="team-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.3rem;">⚙️</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">Team Settings &amp; Roles Permission Matrix</h3>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;">Control who is Admin, who can Edit Code, and handle Suggestions</p>
+          </div>
+        </div>
+        <button type="button" id="btnCloseTeamSettingsModal" class="btn-xs-clean" style="color:#94a3b8;background:none;border:none;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="team-modal-body">
+        <div style="margin-bottom:14px;background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:12px;">
+          <div style="font-weight:700;font-size:0.82rem;color:#38bdf8;margin-bottom:4px;" id="lblSettingsTeamHeader">Team Details</div>
+          <div style="font-size:0.75rem;color:#cbd5e1;display:flex;gap:16px;flex-wrap:wrap;">
+            <span>Code: <strong id="lblSettingsCode" style="color:#f8fafc;">---</strong></span>
+            <span>5-Min Join OTP: <strong id="lblSettingsOtp" style="color:#f59e0b;">------</strong></span>
+            <span>Members: <strong id="lblSettingsMemCount" style="color:#4ade80;">0</strong></span>
+          </div>
+        </div>
+
+        <div style="font-weight:700;font-size:0.8rem;color:#94a3b8;text-transform:uppercase;margin-bottom:8px;">👥 Member Roles &amp; Edit Permissions</div>
+        <div id="settingsRosterTableContainer" style="background:#050911;border:1px solid #1e293b;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+          <!-- Dynamically populated roster settings table -->
+        </div>
+      </div>
+      <div class="team-modal-footer">
+        <button type="button" id="btnSettingsExitTeam" class="btn-team-secondary" style="color:#fca5a5;border-color:rgba(239,68,68,0.5);">🚪 Exit Team</button>
+        <button type="button" id="btnSaveTeamSettings" class="btn-team-primary">💾 Save Permissions</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEAMMATE EDIT DIFFS VIEWER MODAL -->
+  <div id="modalDiffViewer" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content" style="max-width:760px;">
+      <div class="team-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.3rem;">🔍</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">Teammate Edit Diffs Page</h3>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;" id="lblDiffMeta">Review incoming teammate block / code edits before merging</p>
+          </div>
+        </div>
+        <button type="button" id="btnCloseDiffModal" class="btn-xs-clean" style="color:#94a3b8;background:none;border:none;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="team-modal-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div style="background:#090d16;border:1px solid #334155;border-radius:8px;padding:10px;">
+            <div style="font-weight:700;font-size:0.78rem;color:#f87171;margin-bottom:6px;">Current Local Version</div>
+            <pre id="diffLocalView" style="background:#020617;padding:8px;border-radius:6px;font-size:0.72rem;color:#f8fafc;max-height:240px;overflow:auto;margin:0;font-family:ui-monospace,monospace;white-space:pre-wrap;"></pre>
+          </div>
+          <div style="background:#090d16;border:1px solid #0284c7;border-radius:8px;padding:10px;">
+            <div style="font-weight:700;font-size:0.78rem;color:#38bdf8;margin-bottom:6px;">Incoming Teammate Edit</div>
+            <pre id="diffRemoteView" style="background:#020617;padding:8px;border-radius:6px;font-size:0.72rem;color:#38bdf8;max-height:240px;overflow:auto;margin:0;font-family:ui-monospace,monospace;white-space:pre-wrap;"></pre>
+          </div>
+        </div>
+      </div>
+      <div class="team-modal-footer">
+        <button type="button" id="btnRejectDiff" class="btn-team-secondary">Keep Local Version</button>
+        <button type="button" id="btnAcceptDiff" class="btn-team-primary" style="background:#16a34a;border-color:#22c55e;">✅ Accept &amp; Merge Diffs</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GOOGLE DRIVE CLOUD PROJECT SELECTOR MODAL (INCOGNITO / NEW DEVICE AUTO-RECOVERY) -->
+  <div id="modalDriveProjectSelector" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content" style="max-width:620px;">
+      <div class="team-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.4rem;">☁️</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">Google Drive &amp; Cloud Workspaces Detected</h3>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;">Restoring team projects for your Google account</p>
+          </div>
+        </div>
+        <button type="button" id="btnCloseDriveSelectorModal" class="btn-xs-clean" style="color:#94a3b8;background:none;border:none;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="team-modal-body">
+        <div style="background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.78rem;color:#e0f2fe;line-height:1.45;">
+          <strong>☁️ Incognito / New Device Session Detected:</strong><br/>
+          You do not have local data on this device, but we found existing VEX team project files saved in your Cloud / Google Drive storage! Click below to open and restore your workspace.
+        </div>
+        <div id="driveProjectsListContainer" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">
+          <!-- Dynamically populated team projects from Drive / Cloud -->
+        </div>
+      </div>
+      <div class="team-modal-footer">
+        <button type="button" id="btnCancelDriveSelector" class="btn-team-secondary">Close &amp; Register New Team</button>
       </div>
     </div>
   </div>

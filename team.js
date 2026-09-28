@@ -866,6 +866,101 @@
     otpIntervalTimer = setInterval(refreshTicker, 1000);
   }
 
+  async function checkAndShowDriveProjectSelector() {
+    const container = document.getElementById("driveProjectsListContainer");
+    const modal = document.getElementById("modalDriveProjectSelector");
+    if (!container || !modal) return false;
+
+    container.innerHTML = `<div style="padding:16px;text-align:center;color:#38bdf8;font-size:0.8rem;">⏳ Searching Google Drive &amp; Cloud for saved team workspaces...</div>`;
+
+    const cloudTeams = [];
+
+    // 1. Query Firestore for user's team
+    if (currentUser && currentUser.email) {
+      try {
+        const fsTeam = await fsCheckUserTeam(cleanEmailKey(currentUser.email));
+        if (fsTeam && fsTeam.teamId) {
+          cloudTeams.push({ source: "Firestore Cloud", team: fsTeam });
+        }
+      } catch (_) {}
+    }
+
+    // 2. Query Google Drive files
+    if (window.GoogleDriveSync) {
+      try {
+        const driveFiles = await window.GoogleDriveSync.listProjects().catch(() => []);
+        const teamFiles = (driveFiles || []).filter(f => f.name && f.name.includes("vex_team_"));
+        for (const tf of teamFiles) {
+          try {
+            const teamData = await window.GoogleDriveSync.loadProject(tf.id);
+            if (teamData && (teamData.teamId || teamData.teamCode)) {
+              if (!cloudTeams.some(ct => ct.team.teamId === teamData.teamId)) {
+                cloudTeams.push({ source: "Google Drive File", team: teamData, fileId: tf.id });
+              }
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    if (cloudTeams.length === 0) {
+      return false;
+    }
+
+    // Build Selector UI
+    container.innerHTML = "";
+    cloudTeams.forEach(ct => {
+      const t = ct.team;
+      const card = document.createElement("div");
+      card.style.cssText = "background:#090d16;border:1px solid #0284c7;border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;";
+      card.innerHTML = `
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <strong style="font-size:0.9rem;color:#f8fafc;">${escapeHtml(t.teamName || 'VEX Team')}</strong>
+            <span style="font-size:0.72rem;color:#64748b;">(${escapeHtml(t.vexTeamNumber || 'VEX')})</span>
+            <span style="font-size:0.68rem;background:rgba(56,189,248,0.15);color:#38bdf8;padding:2px 8px;border-radius:6px;font-family:monospace;font-weight:700;">Code: ${escapeHtml(t.teamCode || '---')}</span>
+          </div>
+          <div style="font-size:0.72rem;color:#94a3b8;margin-top:4px;">
+            <span>Source: <strong style="color:#4ade80;">${escapeHtml(ct.source)}</strong></span>
+            <span> · 👥 ${t.members ? t.members.length : 1} members</span>
+          </div>
+        </div>
+        <button type="button" class="btn-team-primary btn-open-cloud-proj" style="padding:8px 14px;font-size:0.78rem;white-space:nowrap;background:#0284c7;border-color:#0369a1;cursor:pointer;">
+          🚀 Open Workspace
+        </button>
+      `;
+
+      card.querySelector(".btn-open-cloud-proj").onclick = async () => {
+        currentTeam = t;
+        localStorage.setItem("lemlib_active_team", JSON.stringify(t));
+        localStorage.setItem("lemlib_user_team_id", t.teamId);
+
+        const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+        if (currentUser && currentUser.email) {
+          const cleanKeys = getCleanEmailKeys(currentUser.email);
+          cleanKeys.forEach(k => { uTeams[k] = t.teamId; });
+        }
+        localStorage.setItem("lemlib_user_teams", JSON.stringify(uTeams));
+
+        await fsSaveTeamDoc(t);
+
+        const setupView = document.getElementById("teamSetupJoinView");
+        const wsView = document.getElementById("teamWorkspaceView");
+        if (setupView) setupView.style.display = "none";
+        if (wsView) wsView.style.display = "flex";
+        if (modal) modal.style.display = "none";
+
+        onTeamLoaded();
+        showToast(`Successfully restored "${t.teamName}" from ${ct.source}!`, "🎉");
+      };
+
+      container.appendChild(card);
+    });
+
+    modal.style.display = "flex";
+    return true;
+  }
+
   async function checkUserTeam() {
     if (!currentUser || !currentUser.email) {
       const emailInput = document.getElementById("txtUserAccountEmail");
@@ -879,6 +974,7 @@
 
     const clean = cleanEmailKey(currentUser.email);
     let loadedTeam = null;
+    const hasLocalData = Boolean(localStorage.getItem("lemlib_active_team"));
 
     // 1. Try server REST API (if not on static host)
     const apiRoute = resolveApiUrl(`/api/team/my-team?email=${encodeURIComponent(currentUser.email)}`);
@@ -926,6 +1022,13 @@
     const wsView = document.getElementById("teamWorkspaceView");
     const gate = document.getElementById("modalTeamGate");
     if (gate) gate.style.display = "none";
+
+    // Auto show Google Drive project selector page if user doesn't have local data on incognito/new device
+    if (!hasLocalData && (loadedTeam || window.GoogleDriveSync)) {
+      setTimeout(() => {
+        checkAndShowDriveProjectSelector();
+      }, 300);
+    }
 
     if (loadedTeam) {
       currentTeam = loadedTeam;
@@ -2115,6 +2218,59 @@
   // --------------------------------------------------------------------------
   // ACTION BLOCKS FLOW (RIGHT PANEL TAB 1)
   // --------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // C++ GENERATOR & ACTION BLOCKS FLOW
+  // --------------------------------------------------------------------------
+  function generateLemLibCpp(paths, activeIdx = 0) {
+    const routine = (paths && paths[activeIdx]) || (paths && paths[0]) || { pose: { x: -60, y: -60, theta: 0 }, actions: [] };
+    const pose = routine.pose || { x: -60, y: -60, theta: 0 };
+    const actions = routine.actions || [];
+
+    let cpp = `// =========================================================================\n`;
+    cpp += `// VEX V5 LemLib Autonomous Routine: ${routine.name || 'Autonomous'}\n`;
+    cpp += `// Auto-generated by VEX Path Planner Team Studio\n`;
+    cpp += `// =========================================================================\n\n`;
+    cpp += `#include "main.h"\n\n`;
+    cpp += `void autonomous() {\n`;
+    cpp += `    // Set starting pose (Odometry Origin)\n`;
+    cpp += `    chassis.setPose(${(pose.x || 0).toFixed(1)}, ${(pose.y || 0).toFixed(1)}, ${(pose.theta || 0).toFixed(1)});\n\n`;
+
+    actions.forEach((act, idx) => {
+      if (act.comment) cpp += `    // Block #${idx + 1}: ${act.comment}\n`;
+      if (act.type === "moveToPoint") {
+        const timeout = act.timeout || 2000;
+        const maxSpd = act.maxSpeed !== undefined ? act.maxSpeed : 115;
+        cpp += `    chassis.moveToPoint(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${timeout}, {.forwards = ${act.forwards !== false}, .maxSpeed = ${maxSpd}});\n`;
+      } else if (act.type === "moveToPose") {
+        const timeout = act.timeout || 2500;
+        const maxSpd = act.maxSpeed !== undefined ? act.maxSpeed : 115;
+        cpp += `    chassis.moveToPose(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${(act.theta || 0).toFixed(1)}, ${timeout}, {.forwards = ${act.forwards !== false}, .maxSpeed = ${maxSpd}});\n`;
+      } else if (act.type === "turnToHeading" || act.type === "turnToPoint") {
+        const timeout = act.timeout || 1500;
+        cpp += `    chassis.turnToHeading(${(act.theta || act.heading || 0).toFixed(1)}, ${timeout});\n`;
+      } else if (act.type === "delay" || act.type === "wait") {
+        cpp += `    pros::delay(${act.timeout || act.duration || 500});\n`;
+      } else if (act.type === "customCode") {
+        cpp += `    ${act.customCode || act.code || '// Custom motor/pneumatic action'}\n`;
+      } else if (act.type === "setPose") {
+        cpp += `    chassis.setPose(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${(act.theta || 0).toFixed(1)});\n`;
+      } else {
+        cpp += `    chassis.${act.type}(${act.timeout || 2000});\n`;
+      }
+    });
+
+    cpp += `\n    chassis.waitUntilDone();\n`;
+    cpp += `}\n`;
+    return cpp;
+  }
+
+  function syncIdeAutonsFromBlocks() {
+    if (!currentTeam) return;
+    currentTeam.projectFiles = currentTeam.projectFiles || getDefaultProjectFiles(currentTeam);
+    currentTeam.projectFiles["autons.cpp"] = generateLemLibCpp(activePaths, activeRoutineIndex);
+    renderIdeFile();
+  }
+
   function renderActionBlocks() {
     const container = document.getElementById("actionsListContainer");
     const countBadge = document.getElementById("badgeActionsCount");
@@ -2132,20 +2288,40 @@
     // Start Pose Card
     const startCard = document.createElement("div");
     startCard.className = `action-block-card ${selectedActionId === 'start' ? 'selected' : ''}`;
+    startCard.style.borderLeft = "4px solid #0284c7";
     startCard.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;">
         <span class="action-num-badge" style="background:#0284c7;color:#fff;">S</span>
-        <div>
+        <div style="flex:1;">
           <strong style="font-size:0.8rem;color:#f8fafc;">Start Pose (Odometry Origin)</strong>
-          <div style="font-size:0.72rem;color:#94a3b8;">X: ${routine.pose.x.toFixed(1)}", Y: ${routine.pose.y.toFixed(1)}", θ: ${routine.pose.theta.toFixed(1)}°</div>
+          <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">
+            X: <input type="number" class="sp-x form-input" value="${routine.pose.x}" style="width:50px;padding:1px 4px;font-size:0.72rem;display:inline-block;" />"
+            Y: <input type="number" class="sp-y form-input" value="${routine.pose.y}" style="width:50px;padding:1px 4px;font-size:0.72rem;display:inline-block;" />"
+            θ: <input type="number" class="sp-t form-input" value="${routine.pose.theta}" style="width:50px;padding:1px 4px;font-size:0.72rem;display:inline-block;" />°
+          </div>
         </div>
       </div>
     `;
-    startCard.onclick = () => {
+    startCard.onclick = (e) => {
+      if (e.target.tagName === 'INPUT') return;
       selectedActionId = 'start';
       renderActionBlocks();
       drawField();
     };
+
+    const spX = startCard.querySelector('.sp-x');
+    const spY = startCard.querySelector('.sp-y');
+    const spT = startCard.querySelector('.sp-t');
+    const updateStartPose = () => {
+      routine.pose.x = parseFloat(spX.value) || 0;
+      routine.pose.y = parseFloat(spY.value) || 0;
+      routine.pose.theta = parseFloat(spT.value) || 0;
+      drawField();
+      syncIdeAutonsFromBlocks();
+      broadcastEdit(`Updated Start Pose (${routine.pose.x}", ${routine.pose.y}", ${routine.pose.theta}°)`, "start_pose", false);
+    };
+    [spX, spY, spT].forEach(input => input?.addEventListener('change', updateStartPose));
+
     container.appendChild(startCard);
 
     if (actions.length === 0) {
@@ -2154,8 +2330,9 @@
       emptyMsg.style.textAlign = "center";
       emptyMsg.style.color = "#64748b";
       emptyMsg.style.fontSize = "0.78rem";
-      emptyMsg.textContent = "No actions yet. Click '+ MovePoint' or '+ MovePose' above to add waypoints.";
+      emptyMsg.textContent = "No actions yet. Click any block in the Block Palette above to insert.";
       container.appendChild(emptyMsg);
+      syncIdeAutonsFromBlocks();
       return;
     }
 
@@ -2163,32 +2340,90 @@
       const card = document.createElement("div");
       card.className = `action-block-card ${selectedActionId === act.id ? 'selected' : ''}`;
 
-      let paramSummary = `Timeout: ${act.timeout || 2000}ms`;
-      if (act.x !== undefined && act.y !== undefined) {
-        paramSummary = `(${act.x.toFixed(1)}", ${act.y.toFixed(1)}") · ${act.timeout || 2000}ms`;
+      let blockColor = "#0284c7"; // MoveToPoint
+      if (act.type === "moveToPose") blockColor = "#0369a1";
+      if (act.type === "turnToHeading" || act.type === "turnToPoint") blockColor = "#7c3aed";
+      if (act.type === "delay" || act.type === "wait") blockColor = "#d97706";
+      if (act.type === "customCode") blockColor = "#16a34a";
+      if (act.type === "setPose") blockColor = "#475569";
+
+      card.style.borderLeft = `4px solid ${blockColor}`;
+
+      let paramsHtml = "";
+      if (act.type === "moveToPoint" || act.type === "moveToPose") {
+        paramsHtml = `
+          <div style="font-size:0.72rem;color:#cbd5e1;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <span>X: <input type="number" class="act-x form-input" value="${act.x || 0}" style="width:48px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />"</span>
+            <span>Y: <input type="number" class="act-y form-input" value="${act.y || 0}" style="width:48px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />"</span>
+            ${act.type === "moveToPose" ? `<span>θ: <input type="number" class="act-t form-input" value="${act.theta || 0}" style="width:45px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />°</span>` : ''}
+            <span>Time: <input type="number" class="act-time form-input" value="${act.timeout || 2000}" style="width:52px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />ms</span>
+          </div>
+        `;
+      } else if (act.type === "turnToHeading" || act.type === "turnToPoint") {
+        paramsHtml = `
+          <div style="font-size:0.72rem;color:#cbd5e1;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <span>Heading: <input type="number" class="act-t form-input" value="${act.theta || act.heading || 0}" style="width:52px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />°</span>
+            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 1500}" style="width:52px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />ms</span>
+          </div>
+        `;
+      } else if (act.type === "delay" || act.type === "wait") {
+        paramsHtml = `
+          <div style="font-size:0.72rem;color:#cbd5e1;margin-top:4px;display:flex;gap:6px;align-items:center;">
+            <span>Delay: <input type="number" class="act-time form-input" value="${act.timeout || act.duration || 500}" style="width:60px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />ms</span>
+          </div>
+        `;
+      } else if (act.type === "customCode") {
+        paramsHtml = `
+          <div style="font-size:0.72rem;color:#cbd5e1;margin-top:4px;">
+            <input type="text" class="act-code form-input" value="${escapeHtml(act.customCode || act.code || 'intake.move(127);')}" placeholder="e.g. intake.move(127);" style="width:100%;padding:2px 6px;font-size:0.72rem;font-family:ui-monospace,monospace;" />
+          </div>
+        `;
       }
 
       card.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;flex:1;">
-          <span class="action-num-badge">${idx + 1}</span>
-          <div style="flex:1;">
-            <div style="display:flex;align-items:center;gap:6px;">
+        <div style="display:flex;align-items:flex-start;gap:8px;flex:1;">
+          <span class="action-num-badge" style="background:${blockColor};color:#fff;">${idx + 1}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
               <strong style="font-size:0.82rem;color:#f8fafc;">chassis.${escapeHtml(act.type)}</strong>
-              ${act.comment ? `<span style="font-size:0.68rem;color:#f59e0b;">// ${escapeHtml(act.comment)}</span>` : ''}
+              <button type="button" class="btn-xs-clean btn-del-act" style="color:#ef4444;background:none;border:none;cursor:pointer;padding:2px 4px;font-size:0.8rem;" title="Delete action">🗑️</button>
             </div>
-            <div style="font-size:0.72rem;color:#94a3b8;">${paramSummary}</div>
+            ${paramsHtml}
+            <div style="margin-top:4px;">
+              <input type="text" class="act-comment form-input" value="${escapeHtml(act.comment || '')}" placeholder="// Comment note..." style="width:100%;padding:1px 4px;font-size:0.68rem;color:#f59e0b;" />
+            </div>
           </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:4px;">
-          <button type="button" class="btn-xs-clean btn-del-act" style="color:#ef4444;background:none;border:none;cursor:pointer;padding:4px;" title="Delete action">🗑️</button>
         </div>
       `;
 
-      card.onclick = () => {
+      card.onclick = (e) => {
+        if (['INPUT', 'BUTTON', 'TEXTAREA'].includes(e.target.tagName)) return;
         selectedActionId = act.id;
         renderActionBlocks();
         drawField();
       };
+
+      const inX = card.querySelector('.act-x');
+      const inY = card.querySelector('.act-y');
+      const inT = card.querySelector('.act-t');
+      const inTime = card.querySelector('.act-time');
+      const inCode = card.querySelector('.act-code');
+      const inComm = card.querySelector('.act-comment');
+
+      const handleBlockChange = () => {
+        if (inX) act.x = parseFloat(inX.value) || 0;
+        if (inY) act.y = parseFloat(inY.value) || 0;
+        if (inT) { act.theta = parseFloat(inT.value) || 0; act.heading = act.theta; }
+        if (inTime) act.timeout = parseInt(inTime.value, 10) || 1000;
+        if (inCode) act.customCode = inCode.value;
+        if (inComm) act.comment = inComm.value;
+
+        drawField();
+        syncIdeAutonsFromBlocks();
+        broadcastEdit(`Updated action #${idx + 1} (${act.type})`, "action_edit", false);
+      };
+
+      [inX, inY, inT, inTime, inCode, inComm].forEach(input => input?.addEventListener('change', handleBlockChange));
 
       card.querySelector(".btn-del-act").onclick = (e) => {
         e.stopPropagation();
@@ -2196,12 +2431,15 @@
           routine.actions.splice(idx, 1);
           renderActionBlocks();
           drawField();
+          syncIdeAutonsFromBlocks();
           broadcastEdit(`Deleted action #${idx + 1} (${act.type})`, "action_delete", true);
         }
       };
 
       container.appendChild(card);
     });
+
+    syncIdeAutonsFromBlocks();
   }
 
   function addAction(type) {
@@ -2210,8 +2448,8 @@
     if (!routine.actions) routine.actions = [];
 
     const last = routine.actions[routine.actions.length - 1] || routine.pose;
-    const newX = Math.round((last.x + 12) * 10) / 10;
-    const newY = Math.round((last.y + 12) * 10) / 10;
+    const newX = Math.round(((last.x || 0) + 12) * 10) / 10;
+    const newY = Math.round(((last.y || 0) + 12) * 10) / 10;
 
     const newAct = {
       id: "a_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 5),
@@ -2223,18 +2461,20 @@
       maxSpeed: 115,
       earlyExitRange: 2,
       forwards: true,
-      comment: ""
+      comment: "",
+      customCode: type === "customCode" ? "intake.move(127);" : ""
     };
 
     routine.actions.push(newAct);
     selectedActionId = newAct.id;
     renderActionBlocks();
     drawField();
+    syncIdeAutonsFromBlocks();
     broadcastEdit(`Added action ${type} at (${newAct.x}", ${newAct.y}")`, "action_add", true);
   }
 
   // --------------------------------------------------------------------------
-  // TEAM VERSION HISTORY (UP TO 500 ENTRIES WITH AUTHOR ATTRIBUTION)
+  // TEAM VERSION HISTORY
   // --------------------------------------------------------------------------
   function renderVersionHistory() {
     const container = document.getElementById("teamVersionsList");
@@ -2242,7 +2482,7 @@
     if (!container) return;
 
     const versions = currentTeam?.versionHistory || [];
-    if (badge) badge.textContent = `${versions.length} / 500`;
+    if (badge) badge.textContent = String(versions.length);
 
     container.innerHTML = "";
 
@@ -3083,10 +3323,177 @@
       };
     }
 
-    // 6. Action block adding
+    // 6. Block Palette & Action Block adding
+    document.getElementById("btnPaletteMovePoint")?.addEventListener("click", () => addAction("moveToPoint"));
+    document.getElementById("btnPaletteMovePose")?.addEventListener("click", () => addAction("moveToPose"));
+    document.getElementById("btnPaletteTurn")?.addEventListener("click", () => addAction("turnToHeading"));
+    document.getElementById("btnPaletteWait")?.addEventListener("click", () => addAction("delay"));
+    document.getElementById("btnPaletteCustom")?.addEventListener("click", () => addAction("customCode"));
+    document.getElementById("btnPaletteSetPose")?.addEventListener("click", () => addAction("setPose"));
+
     document.getElementById("btnAddActionMovePoint")?.addEventListener("click", () => addAction("moveToPoint"));
     document.getElementById("btnAddActionMovePose")?.addEventListener("click", () => addAction("moveToPose"));
     document.getElementById("btnAddActionTurn")?.addEventListener("click", () => addAction("turnToHeading"));
+
+    // 6b. Center Column View Mode Switcher (Field & Sim vs Integrated C++ IDE vs Suggestions)
+    const btnViewModeField = document.getElementById("btnViewModeField");
+    const btnViewModeIde = document.getElementById("btnViewModeIde");
+    const btnViewModeSuggestions = document.getElementById("btnViewModeSuggestions");
+    const viewFieldContainer = document.getElementById("teamFieldViewContainer");
+    const viewIdeContainer = document.getElementById("teamIdeContainer");
+    const viewSuggestionsContainer = document.getElementById("teamSuggestionsContainer");
+
+    function setCenterViewMode(mode) {
+      [btnViewModeField, btnViewModeIde, btnViewModeSuggestions].forEach(btn => {
+        if (btn) {
+          btn.style.background = "#1e293b";
+          btn.style.color = "#cbd5e1";
+          btn.style.borderColor = "#334155";
+        }
+      });
+
+      if (viewFieldContainer) viewFieldContainer.style.display = "none";
+      if (viewIdeContainer) viewIdeContainer.style.display = "none";
+      if (viewSuggestionsContainer) viewSuggestionsContainer.style.display = "none";
+
+      if (mode === "field") {
+        if (btnViewModeField) {
+          btnViewModeField.style.background = "#0284c7";
+          btnViewModeField.style.color = "#fff";
+          btnViewModeField.style.borderColor = "#0369a1";
+        }
+        if (viewFieldContainer) viewFieldContainer.style.display = "flex";
+        drawField();
+      } else if (mode === "ide") {
+        if (btnViewModeIde) {
+          btnViewModeIde.style.background = "#0284c7";
+          btnViewModeIde.style.color = "#fff";
+          btnViewModeIde.style.borderColor = "#0369a1";
+        }
+        if (viewIdeContainer) viewIdeContainer.style.display = "flex";
+        renderIdeFile(activeIdeFile);
+      } else if (mode === "suggestions") {
+        if (btnViewModeSuggestions) {
+          btnViewModeSuggestions.style.background = "#0284c7";
+          btnViewModeSuggestions.style.color = "#fff";
+          btnViewModeSuggestions.style.borderColor = "#0369a1";
+        }
+        if (viewSuggestionsContainer) viewSuggestionsContainer.style.display = "flex";
+        renderSuggestions();
+      }
+    }
+
+    btnViewModeField?.addEventListener("click", () => setCenterViewMode("field"));
+    btnViewModeIde?.addEventListener("click", () => setCenterViewMode("ide"));
+    btnViewModeSuggestions?.addEventListener("click", () => setCenterViewMode("suggestions"));
+
+    // 6c. Integrated IDE File Tabs & Code Actions
+    document.querySelectorAll("#ideFileTabs button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const file = btn.getAttribute("data-file");
+        if (file) renderIdeFile(file);
+      });
+    });
+
+    const txtIdeCode = document.getElementById("txtTeamIdeCode");
+    if (txtIdeCode) {
+      txtIdeCode.addEventListener("input", () => {
+        if (!currentTeam) return;
+        currentTeam.projectFiles = currentTeam.projectFiles || getDefaultProjectFiles(currentTeam);
+        currentTeam.projectFiles[activeIdeFile] = txtIdeCode.value;
+        const lineCount = txtIdeCode.value.split("\n").length;
+        const lblLines = document.getElementById("lblIdeLines");
+        if (lblLines) lblLines.textContent = `Lines: ${lineCount}`;
+      });
+    }
+
+    document.getElementById("btnSyncCppFromBlocks")?.addEventListener("click", () => {
+      syncIdeAutonsFromBlocks();
+      showToast("⚡ Regenerated autons.cpp from active action blocks!", "✨");
+    });
+
+    document.getElementById("btnSaveCppCode")?.addEventListener("click", async () => {
+      if (!currentTeam) return;
+      if (!canCurrentUserEditCode()) {
+        const note = prompt("Enter description for your C++ Code Suggestion:", `Updated ${activeIdeFile}`);
+        if (note) proposeTeamSuggestion(note.trim(), "code_suggestion", { paths: activePaths, projectFiles: currentTeam.projectFiles });
+        return;
+      }
+      currentTeam.updatedAt = Date.now();
+      await fsSaveTeamDoc(currentTeam);
+      broadcastEdit(`Updated C++ file "${activeIdeFile}"`, "code_edit", true);
+      showToast(`💾 Saved C++ code (${activeIdeFile}) to team project!`, "✅");
+    });
+
+    document.getElementById("btnProposeCodeSuggestion")?.addEventListener("click", () => {
+      const note = prompt("Enter description for proposed C++ code change:", `Suggested edit in ${activeIdeFile}`);
+      if (note) proposeTeamSuggestion(note.trim(), "code_suggestion", { paths: activePaths, projectFiles: currentTeam.projectFiles });
+    });
+
+    document.getElementById("btnNewSuggestion")?.addEventListener("click", () => {
+      const note = prompt("Enter proposal title / summary for team suggestion:", "Improved autonomous trajectory");
+      if (note) proposeTeamSuggestion(note.trim(), "code_suggestion", { paths: activePaths, projectFiles: currentTeam.projectFiles });
+    });
+
+    // 6d. Local Planner & IDE Sync Button
+    document.getElementById("btnSyncLocalPlanner")?.addEventListener("click", syncTeamProjectToLocalPlanner);
+
+    // 6e. Team Settings Modal Event Handlers
+    const modalSettings = document.getElementById("modalTeamSettings");
+    document.getElementById("btnCloseTeamSettingsModal")?.addEventListener("click", () => {
+      if (modalSettings) modalSettings.style.display = "none";
+    });
+    document.getElementById("btnSaveTeamSettings")?.addEventListener("click", async () => {
+      if (!currentTeam) return;
+      currentTeam.updatedAt = Date.now();
+      await fsSaveTeamDoc(currentTeam);
+      if (modalSettings) modalSettings.style.display = "none";
+      renderMemberList();
+      showToast("💾 Saved team roles and code edit permissions!", "✅");
+    });
+    document.getElementById("btnSettingsExitTeam")?.addEventListener("click", () => {
+      if (modalSettings) modalSettings.style.display = "none";
+      openExitTeamChallengeModal();
+    });
+
+    // 6f. Diffs Viewer Modal Event Handlers
+    const modalDiff = document.getElementById("modalDiffViewer");
+    document.getElementById("btnCloseDiffModal")?.addEventListener("click", () => {
+      if (modalDiff) modalDiff.style.display = "none";
+    });
+    document.getElementById("btnRejectDiff")?.addEventListener("click", () => {
+      if (modalDiff) modalDiff.style.display = "none";
+      const banner = document.getElementById("teamDiffBanner");
+      if (banner) banner.style.display = "none";
+      showToast("Kept current local version.", "ℹ️");
+    });
+    document.getElementById("btnAcceptDiff")?.addEventListener("click", () => {
+      if (pendingRemoteState) {
+        if (pendingRemoteState.pathPayload?.paths) activePaths = pendingRemoteState.pathPayload.paths;
+        if (pendingRemoteState.projectFiles) currentTeam.projectFiles = pendingRemoteState.projectFiles;
+        currentTeam.updatedAt = Date.now();
+        renderRoutinesSelector();
+        renderActionBlocks();
+        renderIdeFile();
+        drawField();
+        showToast("✅ Merged teammate changes into local workspace!", "🎉");
+      }
+      if (modalDiff) modalDiff.style.display = "none";
+      const banner = document.getElementById("teamDiffBanner");
+      if (banner) banner.style.display = "none";
+    });
+    document.getElementById("btnReviewDiffs")?.addEventListener("click", () => {
+      if (pendingRemoteState) openDiffModal(pendingRemoteState);
+    });
+
+    // 6g. Google Drive Cloud Project Selector Modal Handlers
+    const modalDriveSelector = document.getElementById("modalDriveProjectSelector");
+    document.getElementById("btnCloseDriveSelectorModal")?.addEventListener("click", () => {
+      if (modalDriveSelector) modalDriveSelector.style.display = "none";
+    });
+    document.getElementById("btnCancelDriveSelector")?.addEventListener("click", () => {
+      if (modalDriveSelector) modalDriveSelector.style.display = "none";
+    });
 
     // 7. Manual Checkpoint button
     document.getElementById("btnManualCheckpoint")?.addEventListener("click", () => {
