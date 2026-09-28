@@ -1410,10 +1410,14 @@
   function getDefaultProjectFiles(team) {
     const tName = team?.teamName || "VEX Team";
     return {
-      "autons.cpp": generateLemLibCpp(activePaths, activeRoutineIndex),
-      "main.cpp": `// =========================================================================\n// main.cpp - ${tName} Main Competition Logic\n// =========================================================================\n#include "main.h"\n\nvoid initialize() {\n    pros::lcd::initialize();\n    chassis.calibrate();\n}\n\nvoid disabled() {}\n\nvoid competition_initialize() {}\n\nvoid opcontrol() {\n    while (true) {\n        // Driver Control Loop\n        int left = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);\n        int right = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);\n        chassis.tank(left, right);\n        pros::delay(10);\n    }\n}\n`,
-      "config.cpp": `// =========================================================================\n// config.cpp - Motor Ports & Chassis Hardware Setup\n// =========================================================================\n#include "main.h"\n\n// Drivetrain Motor Groups\npros::MotorGroup left_motors({-1, -2, -3}, pros::v5::MotorGears::blue);\npros::MotorGroup right_motors({4, 5, 6}, pros::v5::MotorGears::blue);\n\n// Sensors\npros::Imu imu(10);\n\n// LemLib Drivetrain Setup\nlemlib::Drivetrain drivetrain(&left_motors, &right_motors, 12.5, lemlib::Omniwheel::NEW_325, 450, 2);\nlemlib::OdomSensors sensors(nullptr, nullptr, nullptr, nullptr, &imu);\nlemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sensors);\n`,
-      "driver_control.cpp": `// =========================================================================\n// driver_control.cpp - Teleop Button & Pneumatics Controls\n// =========================================================================\n#include "main.h"\n\nvoid handle_driver_subsystems() {\n    // Pneumatics Clamp\n    if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {\n        mogo_clamp.toggle();\n    }\n}\n`
+      "src/autons.cpp": generateLemLibCpp(activePaths, activeRoutineIndex),
+      "include/autons.hpp": `// =========================================================================\n// autons.hpp - Autonomous Routine Function Declarations\n// =========================================================================\n#pragma once\n#include "main.h"\n\nvoid autonomous();\n`,
+      "src/main.cpp": `// =========================================================================\n// main.cpp - ${tName} Main Competition Logic\n// =========================================================================\n#include "main.h"\n#include "autons.hpp"\n#include "robot-config.h"\n#include "subsystems.hpp"\n\nvoid initialize() {\n    pros::lcd::initialize();\n    chassis.calibrate();\n}\n\nvoid disabled() {}\n\nvoid competition_initialize() {}\n\nvoid opcontrol() {\n    while (true) {\n        // Driver Control Loop\n        int left = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);\n        int right = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);\n        chassis.tank(left, right);\n        handle_driver_subsystems();\n        pros::delay(10);\n    }\n}\n`,
+      "include/robot-config.h": `// =========================================================================\n// robot-config.h - Motor Ports & Chassis Hardware Setup\n// =========================================================================\n#pragma once\n#include "main.h"\n#include "lemlib/api.hpp"\n\n// Drivetrain Motor Groups\nextern pros::MotorGroup left_motors;\nextern pros::MotorGroup right_motors;\nextern pros::Imu imu;\nextern lemlib::Chassis chassis;\n`,
+      "include/subsystems.hpp": `// =========================================================================\n// subsystems.hpp - Pneumatics, Intakes & Mechanisms\n// =========================================================================\n#pragma once\n#include "main.h"\n\nextern pros::adi::DigitalOut mogo_clamp;\nextern pros::Motor intake;\nvoid handle_driver_subsystems();\n`,
+      "src/subsystems.cpp": `// =========================================================================\n// subsystems.cpp - Subsystem Implementations\n// =========================================================================\n#include "subsystems.hpp"\n\npros::adi::DigitalOut mogo_clamp('A', false);\npros::Motor intake(7, pros::v5::MotorGears::blue);\n\nvoid handle_driver_subsystems() {\n    if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {\n        mogo_clamp.toggle();\n    }\n    if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {\n        intake.move(127);\n    } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) {\n        intake.move(-127);\n    } else {\n        intake.move(0);\n    }\n}\n`,
+      "project.pros": `{\n  "py/object": "pros.conductor.project.Project",\n  "py/state": {\n    "project_name": "${tName.replace(/[^a-zA-Z0-9_]/g, '_')}",\n    "target": "v5",\n    "templates": {\n      "kernel": "4.1.0",\n      "lemlib": "0.5.4"\n    }\n  }\n}\n`,
+      "Makefile": `# PROS LemLib Makefile\nPROJECT_NAME := ${tName.replace(/[^a-zA-Z0-9_]/g, '_')}\nROOT_DIR := .\nSRCDIR := src\nINCDIR := include\ninclude $(ROOT_DIR)/firmware/v5.mk\n`
     };
   }
 
@@ -1429,46 +1433,114 @@
     return false;
   }
 
-  function colorizeCppCode(code) {
-    if (!code) return "";
-    let html = escapeHtml(code);
+  function renderTeamFileTree() {
+    const treeEl = document.getElementById("teamIdeFileTree");
+    const countEl = document.getElementById("lblTeamIdeFilesCount");
+    const tabsList = document.getElementById("teamIdeTabsList");
+    if (!treeEl || !currentTeam) return;
 
-    // Comments
-    html = html.replace(/(\/\/[^\n]*)/g, '<span style="color:#64748b;font-style:italic;">$1</span>');
-    // Preprocessor #include
-    html = html.replace(/(#include\s+&lt;[^&>]+&gt;|#include\s+"[^"]+")/g, '<span style="color:#f59e0b;font-weight:700;">$1</span>');
-    // Keywords
-    html = html.replace(/\b(void|int|bool|double|float|char|const|while|for|if|else|return|true|false)\b/g, '<span style="color:#c084fc;font-weight:700;">$1</span>');
-    // LemLib & PROS Methods
-    html = html.replace(/\b(chassis|setPose|moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|waitUntilDone|delay|get_analog|move|set_value|toggle)\b/g, '<span style="color:#38bdf8;font-weight:700;">$1</span>');
-    // Numbers
-    html = html.replace(/\b(\d+(\.\d+)?)\b/g, '<span style="color:#34d399;">$1</span>');
+    currentTeam.projectFiles = currentTeam.projectFiles || getDefaultProjectFiles(currentTeam);
+    const files = Object.keys(currentTeam.projectFiles);
 
-    return html;
+    if (countEl) countEl.textContent = `${files.length} file${files.length === 1 ? '' : 's'}`;
+
+    // Update File Tabs bar
+    if (tabsList) {
+      tabsList.innerHTML = "";
+      files.forEach(f => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `planner-tab-btn ${f === activeIdeFile ? 'active' : ''}`;
+        btn.setAttribute("data-file", f);
+        btn.style.cssText = `padding:4px 10px;font-size:0.74rem;display:inline-flex;align-items:center;gap:5px;${f === activeIdeFile ? 'color:#38bdf8;border-bottom:2px solid #38bdf8;' : 'color:var(--muted);'}`;
+
+        let icon = "📄";
+        if (f.endsWith(".cpp")) icon = "⚡";
+        else if (f.endsWith(".hpp") || f.endsWith(".h")) icon = "📑";
+        else if (f.endsWith(".json") || f === "project.pros") icon = "⚙️";
+        else if (f === "Makefile") icon = "📜";
+
+        const baseName = f.includes("/") ? f.split("/").pop() : f;
+        btn.innerHTML = `<span>${icon}</span> <span>${escapeHtml(baseName)}</span>`;
+        btn.onclick = () => renderIdeFile(f);
+        tabsList.appendChild(btn);
+      });
+    }
+
+    // Render tree with folder organization (src/, include/, root)
+    treeEl.innerHTML = "";
+
+    const folderMap = {};
+    files.forEach(f => {
+      const parts = f.split("/");
+      if (parts.length > 1) {
+        const folder = parts[0];
+        folderMap[folder] = folderMap[folder] || [];
+        folderMap[folder].push(f);
+      } else {
+        folderMap["root"] = folderMap["root"] || [];
+        folderMap["root"].push(f);
+      }
+    });
+
+    Object.keys(folderMap).sort().forEach(folder => {
+      const folderWrap = document.createElement("div");
+      folderWrap.style.marginBottom = "4px";
+
+      if (folder !== "root") {
+        const folderHead = document.createElement("div");
+        folderHead.style.cssText = "font-size:0.72rem;font-weight:700;color:var(--muted);padding:3px 6px;display:flex;align-items:center;gap:5px;text-transform:uppercase;letter-spacing:0.04em;";
+        folderHead.innerHTML = `<span>📁</span> <span>${escapeHtml(folder)}/</span>`;
+        folderWrap.appendChild(folderHead);
+      }
+
+      folderMap[folder].sort().forEach(f => {
+        const fileItem = document.createElement("div");
+        const isActive = f === activeIdeFile;
+        fileItem.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:4px;font-size:0.75rem;cursor:pointer;margin-bottom:2px;${isActive ? 'background:rgba(56,189,248,0.15);color:#38bdf8;font-weight:700;' : 'color:var(--text);'}`;
+
+        let icon = "📄";
+        if (f.endsWith(".cpp")) icon = "⚡";
+        else if (f.endsWith(".hpp") || f.endsWith(".h")) icon = "📑";
+        else if (f.endsWith(".json") || f === "project.pros") icon = "⚙️";
+        else if (f === "Makefile") icon = "📜";
+
+        const fileName = f.includes("/") ? f.split("/").slice(1).join("/") : f;
+        fileItem.innerHTML = `
+          <div style="display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            <span>${icon}</span>
+            <span>${escapeHtml(fileName)}</span>
+          </div>
+        `;
+
+        fileItem.onclick = () => renderIdeFile(f);
+        folderWrap.appendChild(fileItem);
+      });
+
+      treeEl.appendChild(folderWrap);
+    });
   }
 
   function renderIdeFile(fileToRender = activeIdeFile) {
     if (!currentTeam) return;
     currentTeam.projectFiles = currentTeam.projectFiles || getDefaultProjectFiles(currentTeam);
-    activeIdeFile = fileToRender;
+    
+    // Normalize file name lookup
+    const files = currentTeam.projectFiles;
+    let actualKey = fileToRender;
+    if (!files[actualKey]) {
+      if (files["src/" + actualKey]) actualKey = "src/" + actualKey;
+      else if (files["include/" + actualKey]) actualKey = "include/" + actualKey;
+      else if (Object.keys(files).length > 0) actualKey = Object.keys(files)[0];
+    }
+    activeIdeFile = actualKey;
 
     const editor = document.getElementById("txtTeamIdeCode");
     const lblStatus = document.getElementById("lblIdeStatus");
     const lblLines = document.getElementById("lblIdeLines");
+    const lblCurFile = document.getElementById("lblTeamIdeCurrentFile");
 
-    // Update File Tabs
-    const tabs = document.querySelectorAll("#ideFileTabs button");
-    tabs.forEach(tab => {
-      if (tab.getAttribute("data-file") === activeIdeFile) {
-        tab.classList.add("active");
-        tab.style.color = "#38bdf8";
-        tab.style.borderBottomColor = "#38bdf8";
-      } else {
-        tab.classList.remove("active");
-        tab.style.color = "var(--muted)";
-        tab.style.borderBottomColor = "transparent";
-      }
-    });
+    if (lblCurFile) lblCurFile.textContent = activeIdeFile;
 
     const content = currentTeam.projectFiles[activeIdeFile] || "";
     if (editor && editor.value !== content) {
@@ -1487,14 +1559,21 @@
 
     const lineCount = content.split("\n").length;
     if (lblLines) lblLines.textContent = `Lines: ${lineCount}`;
-    if (lblStatus) lblStatus.textContent = `LemLib C++ File (${activeIdeFile}) · ${canCurrentUserEditCode() ? '✏️ Editable (Syntax Highlighted)' : '💡 Read-Only (Suggest Only)'}`;
+    if (lblStatus) lblStatus.textContent = `${activeIdeFile} · ${canCurrentUserEditCode() ? '✏️ Editable' : '💡 Suggestion Only'}`;
+
+    renderTeamFileTree();
   }
 
   function syncIdeAutonsFromBlocks() {
     if (!currentTeam) return;
     currentTeam.projectFiles = currentTeam.projectFiles || getDefaultProjectFiles(currentTeam);
-    currentTeam.projectFiles["autons.cpp"] = generateLemLibCpp(activePaths, activeRoutineIndex);
-    renderIdeFile("autons.cpp");
+    const generated = generateLemLibCpp(activePaths, activeRoutineIndex);
+    if (currentTeam.projectFiles["src/autons.cpp"] !== undefined) {
+      currentTeam.projectFiles["src/autons.cpp"] = generated;
+    } else {
+      currentTeam.projectFiles["autons.cpp"] = generated;
+    }
+    renderIdeFile(activeIdeFile);
   }
 
   function syncTeamProjectToLocalPlanner() {
@@ -1735,7 +1814,15 @@
       headers["Authorization"] = `token ${token}`;
     }
 
-    if (onProgress) onProgress("Connecting to GitHub and checking repository details...");
+    const startTime = Date.now();
+    if (onProgress) {
+      onProgress({
+        pct: 5,
+        message: "Connecting to GitHub API and resolving tree...",
+        phase: 1,
+        etaStr: "Calculating..."
+      });
+    }
 
     // 1. Resolve default branch if not explicitly provided
     if (!targetBranch) {
@@ -1755,7 +1842,14 @@
       if (!targetBranch) targetBranch = "main";
     }
 
-    if (onProgress) onProgress(`Fetching file tree for branch '${targetBranch}'...`);
+    if (onProgress) {
+      onProgress({
+        pct: 12,
+        message: `Reading branch '${targetBranch}' file manifest...`,
+        phase: 1,
+        etaStr: "Calculating..."
+      });
+    }
 
     // 2. Fetch Git Trees API
     const treeUrl = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${targetBranch}?recursive=1`;
@@ -1810,8 +1904,6 @@
       throw new Error(`No C++ autonomous files found in '${owner}/${repoName}' on branch '${targetBranch}'.`);
     }
 
-    if (onProgress) onProgress(`Downloading ${relevantEntries.length} C++ files...`);
-
     const fetchedFiles = {};
     const total = relevantEntries.length;
     let completed = 0;
@@ -1856,7 +1948,22 @@
           console.warn(`[GitHub Clone] Skipped downloading ${item.path}:`, e);
         } finally {
           completed++;
-          if (onProgress) onProgress(`Downloaded ${completed}/${total} files...`);
+          const downloadPct = Math.round(15 + (completed / total) * 65); // 15% to 80%
+          const elapsed = (Date.now() - startTime) / 1000;
+          const estTotal = (elapsed / Math.max(0.01, completed / total));
+          const estRemaining = Math.max(1, Math.round(estTotal - elapsed));
+          const etaText = estRemaining < 60 ? `~${estRemaining}s remaining` : `~${Math.ceil(estRemaining / 60)}m remaining`;
+
+          if (onProgress) {
+            onProgress({
+              pct: downloadPct,
+              message: `Downloading files (${completed}/${total})... ${item.path}`,
+              phase: 2,
+              completed,
+              total,
+              etaStr: etaText
+            });
+          }
         }
       }
     }
@@ -2126,6 +2233,7 @@
   // FIRESTORE DUAL-CLOUD INTEGRATION (Supports GitHub Pages & Serverless)
   // --------------------------------------------------------------------------
   let firestoreUnsub = null;
+  let firestorePresenceUnsub = null;
 
   function getFirestoreDb() {
     if (typeof firebase !== "undefined" && firebase.firestore) {
@@ -2150,6 +2258,60 @@
       }
     }
     return null;
+  }
+
+  function startFirestorePresenceSubscription(teamId) {
+    if (firestorePresenceUnsub) {
+      try { firestorePresenceUnsub(); } catch (_) {}
+      firestorePresenceUnsub = null;
+    }
+    const db = getFirestoreDb();
+    if (!db || !teamId) return;
+
+    try {
+      firestorePresenceUnsub = db.collection("teams").doc(teamId).collection("presence")
+        .onSnapshot((snapshot) => {
+          if (!snapshot || !currentTeam) return;
+          const activeMembers = [];
+          const now = Date.now();
+          snapshot.forEach((doc) => {
+            const data = doc.data() || {};
+            // Filter presence within last 25 seconds
+            if (now - (data.lastSeen || 0) < 25000) {
+              activeMembers.push(data);
+            }
+          });
+          renderPresenceAvatars(activeMembers);
+          renderTeammateCursors(activeMembers);
+        }, (err) => {
+          console.warn("[TeamCollab] Presence onSnapshot notice:", err);
+        });
+    } catch (e) {
+      console.warn("[TeamCollab] Failed to start Firestore presence listener:", e);
+    }
+  }
+
+  function sendFirestorePresence(cursor = null) {
+    const db = getFirestoreDb();
+    if (!db || !currentTeam || !currentTeam.teamId || !currentUser || !currentUser.email) return;
+
+    const emailNorm = currentUser.email.toLowerCase().trim();
+    const docId = emailNorm.replace(/[^a-z0-9]/g, "_");
+
+    const presenceData = {
+      email: emailNorm,
+      displayName: currentUser.displayName || emailNorm.split("@")[0] || "Teammate",
+      role: currentUser.role || "Programmer",
+      color: currentUser.color || getRoleColor(currentUser.role || "Programmer"),
+      lastSeen: Date.now(),
+      cursor: cursor || null,
+      activeWaypoint: draggedWaypointIndex >= 0 ? draggedWaypointIndex : null,
+      activeRoutine: activePaths[activeRoutineIndex]?.name || null
+    };
+
+    db.collection("teams").doc(currentTeam.teamId).collection("presence").doc(docId)
+      .set(presenceData, { merge: true })
+      .catch((err) => console.warn("[TeamCollab] Firestore presence write error:", err));
   }
 
   async function fsCheckUserTeam(cleanEmail) {
@@ -3934,25 +4096,40 @@
     if (!cursorsLayer) return;
     cursorsLayer.innerHTML = "";
 
-    const userEmailNorm = (currentUser?.email || "").toLowerCase();
+    const userEmailNorm = (currentUser?.email || "").toLowerCase().trim();
     members.forEach((m) => {
-      if (m.email.toLowerCase() === userEmailNorm) return;
-      if (!m.cursor || m.cursor.canvasX === undefined) return;
+      if (!m || !m.email) return;
+      if (m.email.toLowerCase().trim() === userEmailNorm) return;
+      if (!m.cursor) return;
 
       const cursorEl = document.createElement("div");
       cursorEl.className = "teammate-cursor";
-      cursorEl.style.left = `${m.cursor.canvasX}px`;
-      cursorEl.style.top = `${m.cursor.canvasY}px`;
+      
+      let leftPct = 50;
+      let topPct = 50;
+      if (m.cursor.normX !== undefined && m.cursor.normY !== undefined) {
+        leftPct = m.cursor.normX * 100;
+        topPct = m.cursor.normY * 100;
+      } else if (m.cursor.canvasX !== undefined && m.cursor.canvasY !== undefined) {
+        leftPct = (m.cursor.canvasX / 800) * 100;
+        topPct = (m.cursor.canvasY / 800) * 100;
+      } else if (m.cursor.x !== undefined && m.cursor.y !== undefined) {
+        leftPct = ((m.cursor.x + FIELD_HALF) / FIELD_INCHES) * 100;
+        topPct = ((FIELD_HALF - m.cursor.y) / FIELD_INCHES) * 100;
+      }
+
+      cursorEl.style.left = `${leftPct.toFixed(2)}%`;
+      cursorEl.style.top = `${topPct.toFixed(2)}%`;
 
       const color = m.color || getRoleColor(m.role);
       const emoji = getRoleEmoji(m.role);
 
       cursorEl.innerHTML = `
-        <svg class="cursor-pointer-svg" viewBox="0 0 24 24" fill="${color}">
-          <path d="M5.5 3.2L18.8 12.4C19.5 12.9 19.3 14 18.4 14.2L12.5 15.3L9.2 20.8C8.7 21.6 7.5 21.5 7.2 20.6L3.3 4.8C3.1 3.9 4.1 3.1 5.5 3.2Z" />
+        <svg class="cursor-pointer-svg" viewBox="0 0 24 24" fill="${color}" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));">
+          <path d="M5.5 3.2L18.8 12.4C19.5 12.9 19.3 14 18.4 14.2L12.5 15.3L9.2 20.8C8.7 21.6 7.5 21.5 7.2 20.6L3.3 4.8C3.1 3.9 4.1 3.1 5.5 3.2Z" stroke="#ffffff" stroke-width="1.2" />
         </svg>
-        <span class="cursor-label" style="background:${color};">
-          ${emoji} ${m.displayName} (${m.role})
+        <span class="cursor-label" style="background:${color};box-shadow:0 2px 6px rgba(0,0,0,0.4);">
+          ${emoji} ${escapeHtml(m.displayName || m.email.split('@')[0])} (${escapeHtml(m.role || 'Member')})
         </span>
       `;
       cursorsLayer.appendChild(cursorEl);
@@ -3972,19 +4149,22 @@
       const cx = (e.clientX - rect.left) * scaleX;
       const cy = (e.clientY - rect.top) * scaleY;
 
+      const normX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const normY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+
       const ix = pxToInch(cx, canvas.width);
-      const iy = pxToInch(cy, canvas.height);
+      const iy = pxToInch(cy, canvas.height, true);
 
       const coordLbl = document.getElementById("lblCursorCoords");
       if (coordLbl) {
         coordLbl.textContent = `X: ${ix.toFixed(1)}" | Y: ${iy.toFixed(1)}" | θ: 0.0°`;
       }
 
-      // Throttled cursor broadcast to teammates (every 60ms)
+      // Throttled cursor broadcast to teammates (every 50ms)
       const now = Date.now();
-      if (now - lastCursorBroadcast > 60) {
+      if (now - lastCursorBroadcast > 50) {
         lastCursorBroadcast = now;
-        sendPresence({ canvasX: cx, canvasY: cy, x: ix, y: iy });
+        sendPresence({ canvasX: cx, canvasY: cy, normX, normY, x: ix, y: iy });
       }
 
       // Handle dragging active waypoint
@@ -6498,10 +6678,32 @@
             }
           }
 
+          const modalProgress = document.getElementById("modalGithubProgress");
+          const lblTitle = document.getElementById("lblGithubProgressTitle");
+          const lblSub = document.getElementById("lblGithubProgressSub");
+          const barProgress = document.getElementById("barGithubProgress");
+          const lblPct = document.getElementById("lblGithubProgressPct");
+          const lblEta = document.getElementById("lblGithubProgressEta");
+
+          const updateProgressUI = (pct, title, sub, etaStr) => {
+            if (modalProgress) modalProgress.style.display = "flex";
+            if (barProgress) barProgress.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+            if (lblPct) lblPct.textContent = `${Math.round(pct)}%`;
+            if (lblTitle && title) lblTitle.textContent = title;
+            if (lblSub && sub) lblSub.textContent = sub;
+            if (lblEta && etaStr) lblEta.textContent = `⏱️ ${etaStr}`;
+          };
+
+          updateProgressUI(5, `Cloning ${repoVal}`, "Connecting to GitHub...", "Calculating...");
+
           // Fallback for static host / GitHub Pages: fetch raw repository files directly via GitHub REST API
           if (!cloneData) {
-            cloneData = await fetchGithubRepositoryFiles(repoVal, branchVal, tokenVal, (msg) => {
-              if (githubImportStatus) githubImportStatus.textContent = "⚙️ " + msg;
+            cloneData = await fetchGithubRepositoryFiles(repoVal, branchVal, tokenVal, (p) => {
+              if (typeof p === "object") {
+                updateProgressUI(p.pct, `Cloning ${repoVal}`, p.message, p.etaStr);
+              } else if (typeof p === "string") {
+                updateProgressUI(30, `Cloning ${repoVal}`, p, "~3s remaining");
+              }
             });
           }
 
@@ -6509,11 +6711,14 @@
             throw new Error("No C++ autonomous files found in selected repository.");
           }
 
-          if (githubImportStatus) {
-            githubImportStatus.textContent = `⚙️ Extracted ${cloneData.fileCount} files. Parsing C++ LemLib autons...`;
-          }
+          // Parsing Phase: 80% to 98%
+          updateProgressUI(82, `Parsing LemLib C++ Source`, `Analyzing ${cloneData.fileCount} C++ files and extracting motion paths...`, "~1s remaining");
+          await new Promise(r => setTimeout(r, 60));
 
           const detectedPaths = parseGithubAutonFiles(cloneData.files, cloneData.repoName);
+          updateProgressUI(95, `Building Autonomous Routines`, `Constructed ${detectedPaths.length} autonomous routines. Finalizing workspace...`, "⚡ Almost done");
+          await new Promise(r => setTimeout(r, 80));
+
           const now = Date.now();
 
           let importData = null;
@@ -6567,6 +6772,10 @@
           btnExecuteGithubImport.disabled = false;
           btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
 
+          updateProgressUI(100, "Workspace Synchronized!", "All C++ files and autonomous routines ready.", "Done!");
+          await new Promise(r => setTimeout(r, 400));
+          if (modalProgress) modalProgress.style.display = "none";
+
           currentTeam = importData.team || currentTeam;
           if (currentTeam.pathPayload?.paths) {
             activePaths = currentTeam.pathPayload.paths;
@@ -6579,6 +6788,8 @@
           drawField();
           showToast(`🚀 Successfully imported ${repoVal} into team workspace!`, "🎉");
         } catch (err) {
+          const modalProgress = document.getElementById("modalGithubProgress");
+          if (modalProgress) modalProgress.style.display = "none";
           btnExecuteGithubImport.disabled = false;
           btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
           if (githubImportStatus) {

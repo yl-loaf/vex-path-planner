@@ -12863,8 +12863,10 @@ body.palette-drag-active .action-flow-empty-dropzone {
   gap: 14px;
   align-items: stretch;
   flex: 1;
-  min-height: 640px;
-  max-height: calc(100vh - 120px);
+  min-height: 0;
+  height: calc(100vh - 70px);
+  max-height: calc(100vh - 70px);
+  overflow: hidden;
 }
 
 .team-col-left {
@@ -12878,6 +12880,7 @@ body.palette-drag-active .action-flow-empty-dropzone {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
 }
 
 .team-col-center {
@@ -12890,6 +12893,8 @@ body.palette-drag-active .action-flow-empty-dropzone {
   border-radius: 12px;
   overflow: hidden;
   position: relative;
+  min-height: 0;
+  height: 100%;
 }
 
 .team-col-right {
@@ -12903,6 +12908,7 @@ body.palette-drag-active .action-flow-empty-dropzone {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
 }
 
 .team-section-card {

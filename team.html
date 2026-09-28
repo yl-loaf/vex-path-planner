@@ -222,9 +222,9 @@
         </div>
 
         <!-- VIEW 1: FIELD CANVAS & SIMULATOR -->
-        <div id="teamFieldViewContainer" style="display:flex;flex-direction:column;flex:1;min-height:0;position:relative;">
+        <div id="teamFieldViewContainer" style="display:flex;flex-direction:column;flex:1 1 0;min-height:0;height:100%;position:relative;overflow:hidden;">
           <!-- Top Canvas Status Strip & Floating HUD Tools -->
-          <div style="padding:6px 14px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:0.75rem;flex-wrap:wrap;gap:8px;">
+          <div style="padding:6px 14px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:0.75rem;flex-wrap:wrap;gap:8px;flex-shrink:0;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <span>📍 Pose: <strong id="lblCursorCoords" style="color:#38bdf8;">X: 0.0" | Y: 0.0" | θ: 0.0°</strong></span>
               <span style="color:var(--border);">|</span>
@@ -274,37 +274,39 @@
           </div>
 
           <!-- Field Canvas Container with Collaborator Cursor Overlay -->
-          <div class="canvas-wrap" id="fieldCanvasContainer">
-            <canvas id="teamFieldCanvas" width="600" height="600" style="max-width:100%;max-height:100%;background:#0f172a;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.6);cursor:crosshair;"></canvas>
-            <div id="teammateCursorsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
-              <!-- Dynamically rendered collaborator cursors -->
-            </div>
-            <div id="fieldPinsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
-              <!-- Dynamically rendered comment pins -->
+          <div class="canvas-wrap" id="fieldCanvasContainer" style="display:flex;align-items:center;justify-content:center;flex:1 1 0;min-height:0;width:100%;height:100%;position:relative;overflow:hidden;padding:6px;box-sizing:border-box;">
+            <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;max-height:100%;aspect-ratio:1/1;">
+              <canvas id="teamFieldCanvas" width="600" height="600" style="max-width:100%;max-height:100%;width:auto;height:auto;aspect-ratio:1/1;object-fit:contain;background:#0f172a;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.6);cursor:crosshair;display:block;"></canvas>
+              <div id="teammateCursorsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;overflow:hidden;">
+                <!-- Dynamically rendered collaborator cursors -->
+              </div>
+              <div id="fieldPinsLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
+                <!-- Dynamically rendered comment pins -->
+              </div>
             </div>
           </div>
 
           <!-- Real-Time Telemetry Chips Strip -->
-          <div style="background:var(--card-inner);border-top:1px solid var(--border);padding:4px 12px;display:flex;align-items:center;gap:8px;font-size:0.7rem;overflow-x:auto;white-space:nowrap;">
-            <div class="sim-hud-chip chip-score" id="simHudScore" style="color:#fbbf24;background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;" title="Live Score">
+          <div style="background:var(--card-inner);border-top:1px solid var(--border);padding:6px 14px;display:flex;align-items:center;gap:10px;font-size:0.72rem;overflow-x:auto;white-space:nowrap;flex-shrink:0;">
+            <div class="sim-hud-chip chip-score" id="simHudScore" style="color:#fbbf24;background:rgba(245,158,11,0.1);padding:3px 8px;border-radius:4px;font-weight:700;" title="Live Auton Score">
               🏆 0 pts
             </div>
-            <div class="sim-hud-chip chip-time" id="simHudTime" style="color:var(--text);background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;" title="Elapsed Time">
+            <div class="sim-hud-chip chip-time" id="simHudTime" style="color:var(--text);background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:4px;font-family:ui-monospace,monospace;font-weight:700;" title="Elapsed Auton Time">
               ⏱️ 0.00s / 15.00s
             </div>
-            <div class="sim-hud-chip chip-speed" id="simHudSpeed" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:2px 6px;border-radius:4px;" title="Simulated Velocity">
+            <div class="sim-hud-chip chip-speed" id="simHudSpeed" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:3px 8px;border-radius:4px;font-family:ui-monospace,monospace;" title="Simulated Velocity">
               🏎️ 0.0 in/s
             </div>
-            <div class="sim-hud-chip chip-collision legal" id="simHudCollision" style="color:#4ade80;background:rgba(34,197,94,0.1);padding:2px 6px;border-radius:4px;" title="Collision Status">
+            <div class="sim-hud-chip chip-collision legal" id="simHudCollision" style="color:#4ade80;background:rgba(34,197,94,0.1);padding:3px 8px;border-radius:4px;font-weight:700;" title="Collision Clearance Status">
               🛡️ Clear
             </div>
-            <div class="sim-hud-chip chip-coords" id="simHudCoords" style="color:var(--text);background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;" title="Robot Pose">
+            <div class="sim-hud-chip chip-coords" id="simHudCoords" style="color:var(--text);background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:4px;font-family:ui-monospace,monospace;" title="Robot Pose">
               📍 (-60.0", -60.0") θ=0°
             </div>
           </div>
 
           <!-- Bottom Playback & Simulation Scrubber -->
-          <div class="controls" style="background:var(--panel);border-top:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div class="controls" style="background:var(--panel);border-top:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">
             <div style="display:flex;align-items:center;gap:8px;">
               <button type="button" id="btnSimPlay" class="btn-team-primary" style="padding:6px 14px;font-size:0.78rem;">▶ Play 15s Sim</button>
               <button type="button" id="btnSimReset" class="btn-team-secondary" style="padding:6px 12px;font-size:0.78rem;">↺ Reset</button>
@@ -321,41 +323,74 @@
           </div>
         </div>
 
-        <!-- VIEW 2: INTEGRATED C++ IDE STUDIO FOR PROGRAMMERS -->
-        <div id="teamIdeContainer" style="display:none;flex:1;flex-direction:column;background:var(--code-bg);overflow:hidden;min-height:0;">
-          <!-- IDE Header File Tabs -->
-          <div class="ide-tabs-bar" id="ideFileTabs" style="background:var(--panel);border-bottom:1px solid var(--border);padding:4px 8px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-            <div style="display:flex;align-items:center;gap:4px;">
-              <button type="button" class="planner-tab-btn active" data-file="autons.cpp" style="padding:4px 10px;font-size:0.75rem;">autons.cpp ⚡</button>
-              <button type="button" class="planner-tab-btn" data-file="main.cpp" style="padding:4px 10px;font-size:0.75rem;">main.cpp</button>
-              <button type="button" class="planner-tab-btn" data-file="config.cpp" style="padding:4px 10px;font-size:0.75rem;">config.cpp</button>
-              <button type="button" class="planner-tab-btn" data-file="driver_control.cpp" style="padding:4px 10px;font-size:0.75rem;">driver_control.cpp</button>
+        <!-- VIEW 2: INTEGRATED C++ IDE STUDIO WITH PROJECT EXPLORER (Full .cpp, .hpp, .h support) -->
+        <div id="teamIdeContainer" style="display:none;flex:1 1 0;flex-direction:row;background:var(--code-bg);overflow:hidden;min-height:0;height:100%;">
+          <!-- Left IDE Project Explorer Sidebar -->
+          <aside class="ide-sidebar" id="teamIdeSidebar" style="width:230px;flex-shrink:0;border-right:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column;min-height:0;">
+            <div class="ide-sidebar-header" style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--card-inner);">
+              <h3 style="margin:0;font-size:0.72rem;font-weight:800;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;">PROJECT EXPLORER</h3>
+              <div style="display:flex;gap:4px;">
+                <button type="button" id="btnTeamIdeNewFile" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:700;cursor:pointer;" title="Add new C++ source (.cpp) or header (.hpp, .h) file">+ File</button>
+                <button type="button" id="btnTeamIdeImportFolder" class="btn-xs-clean" style="font-size:0.68rem;cursor:pointer;" title="Import folder into team project">📂</button>
+                <input type="file" id="teamIdeFolderFileInput" webkitdirectory directory mozdirectory hidden />
+              </div>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <button type="button" id="btnSyncCppFromBlocks" class="btn-nav-compact" style="color:#38bdf8;">⚡ Sync from Blocks</button>
-              <button type="button" id="btnSaveCppCode" class="btn-team-primary" style="background:#16a34a;border-color:#22c55e;padding:4px 10px;font-size:0.72rem;">💾 Save C++ Code</button>
-              <button type="button" id="btnIdePushGithub" class="btn-nav-compact" style="color:#4ade80;">🐙 Sync to GitHub</button>
-              <button type="button" id="btnProposeCodeSuggestion" class="btn-nav-compact" style="color:#f59e0b;">💡 Propose Suggestion</button>
+            <!-- File Tree listing all files (.cpp, .hpp, .h, .json, Makefile, etc.) -->
+            <div class="ide-file-tree" id="teamIdeFileTree" style="flex:1;overflow-y:auto;padding:6px 4px;">
+              <!-- Dynamically populated files -->
             </div>
-          </div>
-          <!-- Main Code Editor Area -->
-          <div class="ide-editor-wrapper" id="ideEditorWrapper" style="flex:1;position:relative;">
-            <div class="ide-line-numbers" id="ideLineNumbers"></div>
-            <div class="ide-editor-stage" id="ideEditorStage">
-              <!-- Monaco VS Code Editor Mount -->
-              <div id="monacoEditorContainer" class="monaco-editor-container"></div>
-              <pre class="ide-code-highlight" id="ideCodeHighlight" aria-hidden="true"><code id="ideCodeHighlightInner"></code></pre>
-              <textarea id="txtTeamIdeCode" class="ide-code-textarea" spellcheck="false" placeholder="// Write or edit PROS C++ code here..."></textarea>
+            <div style="padding:6px 10px;border-top:1px solid var(--border);background:var(--card);font-size:0.68rem;color:var(--muted);display:flex;align-items:center;justify-content:space-between;">
+              <span id="lblTeamIdeFilesCount">0 files</span>
+              <span style="color:#38bdf8;font-weight:700;">PROS C++</span>
             </div>
-          </div>
-          <div style="background:var(--panel);border-top:1px solid var(--border);padding:4px 12px;display:flex;align-items:center;justify-content:space-between;font-size:0.7rem;color:var(--muted);">
-            <span id="lblIdeStatus">LemLib PROS C++ Auton File · Auto-synced with Action Blocks</span>
-            <span id="lblIdeLines">Lines: 0</span>
-          </div>
+          </aside>
+
+          <!-- Right IDE Stage: Editor & Tabs -->
+          <section style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--code-bg);">
+            <!-- IDE Header File Tabs & Action Controls -->
+            <div class="ide-tabs-bar" id="ideFileTabs" style="background:var(--panel);border-bottom:1px solid var(--border);padding:4px 8px;display:flex;align-items:center;justify-content:space-between;gap:8px;overflow-x:auto;">
+              <div id="teamIdeTabsList" style="display:flex;align-items:center;gap:4px;overflow-x:auto;white-space:nowrap;">
+                <!-- Dynamically populated file tabs -->
+                <button type="button" class="planner-tab-btn active" data-file="autons.cpp" style="padding:4px 10px;font-size:0.75rem;">autons.cpp ⚡</button>
+                <button type="button" class="planner-tab-btn" data-file="include/autons.hpp" style="padding:4px 10px;font-size:0.75rem;">include/autons.hpp 📑</button>
+                <button type="button" class="planner-tab-btn" data-file="main.cpp" style="padding:4px 10px;font-size:0.75rem;">main.cpp</button>
+                <button type="button" class="planner-tab-btn" data-file="include/robot-config.h" style="padding:4px 10px;font-size:0.75rem;">robot-config.h 📑</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                <button type="button" id="btnSyncCppFromBlocks" class="btn-nav-compact" style="color:#38bdf8;font-size:0.72rem;">⚡ Sync from Blocks</button>
+                <button type="button" id="btnSaveCppCode" class="btn-team-primary" style="background:#16a34a;border-color:#22c55e;padding:4px 10px;font-size:0.72rem;">💾 Save Code</button>
+                <button type="button" id="btnIdePushGithub" class="btn-nav-compact" style="color:#4ade80;font-size:0.72rem;">🐙 Sync to GitHub</button>
+                <button type="button" id="btnProposeCodeSuggestion" class="btn-nav-compact" style="color:#f59e0b;font-size:0.72rem;">💡 Suggestion</button>
+              </div>
+            </div>
+
+            <!-- Editor Breadcrumb & File Meta -->
+            <div style="padding:4px 12px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:0.72rem;color:var(--muted);flex-shrink:0;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span>📄 <strong id="lblTeamIdeCurrentFile" style="color:var(--text-heading);">src/autons.cpp</strong></span>
+                <button type="button" id="btnTeamIdeDeleteActiveFile" class="btn-xs-clean" style="color:#f87171;font-size:0.68rem;padding:1px 6px;cursor:pointer;" title="Delete current active file">🗑️ Delete</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span id="lblIdeStatus">LemLib PROS C++ File</span>
+                <span id="lblIdeLines">Lines: 0</span>
+              </div>
+            </div>
+
+            <!-- Main Code Editor Area -->
+            <div class="ide-editor-wrapper" id="ideEditorWrapper" style="flex:1;position:relative;min-height:0;overflow:hidden;">
+              <div class="ide-line-numbers" id="ideLineNumbers"></div>
+              <div class="ide-editor-stage" id="ideEditorStage">
+                <!-- Monaco VS Code Editor Mount -->
+                <div id="monacoEditorContainer" class="monaco-editor-container"></div>
+                <pre class="ide-code-highlight" id="ideCodeHighlight" aria-hidden="true"><code id="ideCodeHighlightInner"></code></pre>
+                <textarea id="txtTeamIdeCode" class="ide-code-textarea" spellcheck="false" placeholder="// Write or edit PROS C++ source (.cpp) or header (.hpp, .h) code here..."></textarea>
+              </div>
+            </div>
+          </section>
         </div>
 
         <!-- VIEW 3: TEAM SUGGESTIONS BOARD -->
-        <div id="teamSuggestionsContainer" style="display:none;flex:1;flex-direction:column;padding:16px;background:var(--card-inner);overflow-y:auto;min-height:0;">
+        <div id="teamSuggestionsContainer" style="display:none;flex:1 1 0;flex-direction:column;padding:16px;background:var(--card-inner);overflow-y:auto;min-height:0;height:100%;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
             <div>
               <h3 style="margin:0;font-size:1.05rem;color:var(--text-heading);">💡 Team Code &amp; Path Suggestions</h3>
@@ -696,6 +731,94 @@
         <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
           <button type="button" id="btnCancelStrategy" class="btn-team-secondary">Cancel</button>
           <button type="button" id="btnSubmitStrategy" class="btn-team-primary">🗳️ Propose to Team</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE NEW FILE MODAL (C++ / Header / Config) -->
+    <div id="modalTeamNewFile" class="modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:480px;width:95%;">
+        <div class="modal-header">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.3rem;">📄</span>
+            <div>
+              <h3 style="margin:0;font-size:1.05rem;">Create New Project File</h3>
+              <p style="margin:2px 0 0;font-size:0.72rem;color:var(--muted);">Add C++ source (.cpp), header (.hpp, .h), or project config</p>
+            </div>
+          </div>
+          <button type="button" id="btnCloseTeamNewFileModal" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="txtTeamNewFileName">File Path &amp; Name</label>
+            <input type="text" id="txtTeamNewFileName" class="form-input" placeholder="e.g. include/subsystems.hpp or src/chassis_pid.cpp" />
+            <span style="font-size:0.7rem;color:var(--muted);margin-top:3px;display:block;">Common headers: <code>include/subsystems.hpp</code>, <code>include/autons.hpp</code>, <code>include/robot-config.h</code></span>
+          </div>
+          <div class="form-group">
+            <label for="selTeamNewFileType">Template Preset</label>
+            <select id="selTeamNewFileType" class="form-input">
+              <option value="hpp" selected>📑 C++ Header (.hpp / .h)</option>
+              <option value="cpp">⚡ C++ Source (.cpp)</option>
+              <option value="empty">📄 Empty File</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
+          <button type="button" id="btnCancelTeamNewFile" class="btn-team-secondary">Cancel</button>
+          <button type="button" id="btnSubmitTeamNewFile" class="btn-team-primary">✨ Create File</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GITHUB / PROJECT IMPORT PROGRESS MODAL (Real-Time % & ETA Countdown) -->
+    <div id="modalImportProgress" class="modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:520px;width:95%;">
+        <div class="modal-header">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.4rem;" id="importModalIcon">🐙</span>
+            <div>
+              <h3 style="margin:0;font-size:1.05rem;" id="importModalTitle">Importing Repository...</h3>
+              <p style="margin:2px 0 0;font-size:0.72rem;color:var(--muted);" id="importModalSubtitle">Downloading files, parsing LemLib AST, and generating routines</p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body">
+          <!-- Animated Progress Bar -->
+          <div style="margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:0.78rem;">
+              <strong id="importProgressPhaseText" style="color:#38bdf8;">Connecting &amp; Downloading files...</strong>
+              <span id="importPercentBadge" style="background:rgba(56,189,248,0.2);color:#38bdf8;padding:2px 8px;border-radius:10px;font-weight:800;font-family:ui-monospace,monospace;">0%</span>
+            </div>
+            <div style="background:var(--card-inner);border:1px solid var(--border);border-radius:8px;height:12px;overflow:hidden;padding:2px;">
+              <div id="importProgressBarFill" style="background:linear-gradient(90deg, #0284c7, #38bdf8, #22c55e);height:100%;width:0%;border-radius:6px;transition:width 0.15s ease-out;"></div>
+            </div>
+          </div>
+
+          <!-- Elapsed Time & ETA Chips -->
+          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.74rem;color:var(--text);">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span>⏱️ Elapsed: <strong id="importElapsedTime" style="color:var(--text-heading);">0.0s</strong></span>
+              <span style="color:var(--border);">|</span>
+              <span id="importEtaBadge" style="color:#4ade80;font-weight:700;">ETA: Calculating...</span>
+            </div>
+            <span id="importBytesCounter" style="color:var(--muted);font-family:ui-monospace,monospace;">0 KB</span>
+          </div>
+
+          <!-- Detailed Step Phase List -->
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;font-size:0.74rem;">
+            <div class="import-step-item" id="impStep1" style="display:flex;align-items:center;gap:8px;color:var(--muted);">
+              <span class="step-icon">⚪</span> <span>1. Connect to GitHub API &amp; check branch tree</span>
+            </div>
+            <div class="import-step-item" id="impStep2" style="display:flex;align-items:center;gap:8px;color:var(--muted);">
+              <span class="step-icon">⚪</span> <span>2. Download .cpp, .hpp, .h &amp; project files</span>
+            </div>
+            <div class="import-step-item" id="impStep3" style="display:flex;align-items:center;gap:8px;color:var(--muted);">
+              <span class="step-icon">⚪</span> <span>3. Parse LemLib AST, robot config &amp; auton routines</span>
+            </div>
+            <div class="import-step-item" id="impStep4" style="display:flex;align-items:center;gap:8px;color:var(--muted);">
+              <span class="step-icon">⚪</span> <span>4. Build visual flowcharts, kinematics &amp; sync team</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
