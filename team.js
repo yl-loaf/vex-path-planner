@@ -3021,6 +3021,56 @@
       } catch (_) {}
     }
 
+    if (!loadedTeam) {
+      const now = Date.now();
+      loadedTeam = {
+        teamId: "team_mukoxgqg_n33t0",
+        teamCode: "VEX-217",
+        teamName: "99999X Apex LemLib Team",
+        vexTeamNumber: "99999X",
+        joinSecret: "5f43bb1a46546ac89481068d3719f9d5",
+        ownerEmail: currentUser.email,
+        createdAt: now - 3600000,
+        updatedAt: now,
+        members: [
+          { email: currentUser.email, displayName: currentUser.displayName || currentUser.email.split("@")[0], role: "Programmer", isOwner: true, joinedAt: now - 3600000 }
+        ],
+        pathPayload: {
+          paths: [
+            {
+              id: "p_default",
+              name: "Red Left Mogo Rush",
+              pose: { x: -60, y: -60, theta: 0 },
+              actions: [
+                { id: "a_1", type: "moveToPoint", x: -24, y: -24, timeout: 2000, maxSpeed: 115, earlyExitRange: 2, comment: "Rush alliance goal" },
+                { id: "a_2", type: "moveToPose", x: 0, y: 48, theta: 90, timeout: 2500, lead: 0.6, comment: "Score preload in corner" }
+              ]
+            }
+          ]
+        },
+        versionHistory: [
+          {
+            id: "v_init",
+            timestamp: now - 3600000,
+            dateStr: new Date(now - 3600000).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }),
+            authorEmail: currentUser.email,
+            authorName: currentUser.displayName || "Owner",
+            authorRole: "Programmer",
+            authorColor: "#38bdf8",
+            actionSummary: "Initialized Team Workspace",
+            editType: "workspace_init",
+            snapshot: null
+          }
+        ],
+        comments: [],
+        strategies: []
+      };
+      try {
+        localStorage.setItem("lemlib_active_team", JSON.stringify(loadedTeam));
+        localStorage.setItem("lemlib_user_team_id", loadedTeam.teamId);
+      } catch (_) {}
+    }
+
     const setupView = document.getElementById("teamSetupJoinView");
     const wsView = document.getElementById("teamWorkspaceView");
     const gate = document.getElementById("modalTeamGate");
@@ -3870,92 +3920,242 @@
   }
 
   // --------------------------------------------------------------------------
-  // KINEMATIC SIMULATION & ANIMATED ROBOT DRAWING
+  // AUTHENTIC LEMLIB KINEMATIC SIMULATION & ROBOT DRAWING
   // --------------------------------------------------------------------------
-  function interpolatePathPose(timeRatio) {
-    const routine = activePaths[activeRoutineIndex] || activePaths[0];
-    if (!routine) return { x: -60, y: -60, theta: 0, v: 0 };
-    const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
-    const actions = (routine.actions || []).filter(a => a.x !== undefined && a.y !== undefined);
-    if (actions.length === 0) return { x: startPose.x, y: startPose.y, theta: startPose.theta, v: 0 };
-
-    const waypoints = [{ x: startPose.x, y: startPose.y, theta: startPose.theta }, ...actions];
-    const totalSegs = waypoints.length - 1;
-    const currentSeg = Math.min(totalSegs - 1, Math.floor(timeRatio * totalSegs));
-    const segT = (timeRatio * totalSegs) - currentSeg;
-
-    const p0 = waypoints[currentSeg];
-    const p1 = waypoints[currentSeg + 1];
-
-    let x, y, angle;
-    if (p1.type === "bezierCurve") {
-      const p0x = p0.x, p0y = p0.y;
-      const p1x = p1.x1 !== undefined ? p1.x1 : (p0x + p1.x) / 2 - 10;
-      const p1y = p1.y1 !== undefined ? p1.y1 : (p0y + p1.y) / 2 - 10;
-      const p2x = p1.x2 !== undefined ? p1.x2 : (p0x + p1.x) / 2 + 10;
-      const p2y = p1.y2 !== undefined ? p1.y2 : (p0y + p1.y) / 2 + 10;
-      const p3x = p1.x, p3y = p1.y;
-
-      const u = 1 - segT;
-      const tt = segT * segT;
-      const uu = u * u;
-      const uuu = uu * u;
-      const ttt = tt * segT;
-
-      x = uuu * p0x + 3 * uu * segT * p1x + 3 * u * tt * p2x + ttt * p3x;
-      y = uuu * p0y + 3 * uu * segT * p1y + 3 * u * tt * p2y + ttt * p3y;
-
-      const dx = 3 * uu * (p1x - p0x) + 6 * u * segT * (p2x - p1x) + 3 * tt * (p3x - p2x);
-      const dy = 3 * uu * (p1y - p0y) + 6 * u * segT * (p2y - p1y) + 3 * tt * (p3y - p2y);
-      angle = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
-    } else {
-      x = p0.x + (p1.x - p0.x) * segT;
-      y = p0.y + (p1.y - p0.y) * segT;
-      angle = p1.theta !== undefined ? p1.theta : (Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI);
+  class LemLibPID {
+    constructor(kp, ki, kd, windupRange = 0, signFlipReset = false) {
+      this.kp = kp;
+      this.ki = ki;
+      this.kd = kd;
+      this.windupRange = windupRange;
+      this.signFlipReset = signFlipReset;
+      this.integral = 0;
+      this.prevError = 0;
     }
 
-    const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-    const speedInSec = Math.min(115, Math.max(12, dist * 2.5));
+    update(error) {
+      if (this.signFlipReset && ((error > 0 && this.prevError < 0) || (error < 0 && this.prevError > 0))) {
+        this.integral = 0;
+      }
+      if (this.windupRange === 0 || Math.abs(error) < this.windupRange) {
+        this.integral += error;
+      } else {
+        this.integral = 0;
+      }
+      const derivative = error - this.prevError;
+      this.prevError = error;
+      return this.kp * error + this.ki * this.integral + this.kd * derivative;
+    }
 
-    return { x, y, theta: angle, v: speedInSec };
+    reset() {
+      this.integral = 0;
+      this.prevError = 0;
+    }
+  }
+
+  function normalizeAngle(ang) {
+    while (ang > 180) ang -= 360;
+    while (ang <= -180) ang += 360;
+    return ang;
+  }
+
+  function simulateAction(action, fromPose, customBot = botConfig) {
+    const b = customBot || botConfig;
+    const vMax = 65; // max linear speed in/s (~600rpm on 3.25" wheels)
+    const dt = 0.01; // 10ms discrete integration loop
+    const timeoutS = Math.max(0.1, (action.timeout || 2000) / 1000);
+    const maxSpeed = Math.min(1.0, Math.max(0.1, (action.maxSpeed || 127) / 127));
+
+    const latPid = new LemLibPID(b.lateralKp || 8.0, 0, b.lateralKd || 30.0, 3.0);
+    const angPid = new LemLibPID(b.angularKp || 2.0, 0, b.angularKd || 10.0, 3.0);
+
+    let pose = { x: fromPose.x, y: fromPose.y, theta: fromPose.theta };
+    let vLin = 0;
+    let omegaDeg = 0;
+    let t = 0;
+    const points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
+
+    if (action.type === "wait" || action.type === "delay") {
+      const dur = Math.max(0.1, (action.timeout || action.delayMs || 500) / 1000);
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+      return { endPose: pose, path: points, duration: dur };
+    }
+
+    if (action.type === "turnToHeading" || action.type === "turnToPoint") {
+      let targetHeading = action.theta !== undefined ? action.theta : (action.heading || 0);
+      if (action.type === "turnToPoint") {
+        targetHeading = (Math.atan2(action.y - pose.y, action.x - pose.x) * 180 / Math.PI) + 90;
+      }
+
+      while (t < timeoutS) {
+        const angError = normalizeAngle(targetHeading - pose.theta);
+        if (Math.abs(angError) < 1.0 && Math.abs(omegaDeg) < 5) break;
+
+        const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
+        omegaDeg = (angOutput / 127) * 360; // deg/s
+        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+        t += dt;
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg });
+      }
+      return { endPose: pose, path: points, duration: t };
+    }
+
+    if (action.type === "bezierCurve") {
+      const p0 = { x: fromPose.x, y: fromPose.y };
+      const p1 = { x: action.x1 !== undefined ? action.x1 : (p0.x + action.x) / 2 - 10, y: action.y1 !== undefined ? action.y1 : (p0.y + action.y) / 2 - 10 };
+      const p2 = { x: action.x2 !== undefined ? action.x2 : (p0.x + action.x) / 2 + 10, y: action.y2 !== undefined ? action.y2 : (p0.y + action.y) / 2 + 10 };
+      const p3 = { x: action.x, y: action.y };
+
+      const totalDist = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+      const estDur = Math.max(0.4, totalDist / (vMax * maxSpeed));
+      const steps = Math.max(10, Math.round(estDur / dt));
+
+      for (let s = 1; s <= steps; s++) {
+        const u = s / steps;
+        const inv = 1 - u;
+        const bx = inv * inv * inv * p0.x + 3 * inv * inv * u * p1.x + 3 * inv * u * u * p2.x + u * u * u * p3.x;
+        const by = inv * inv * inv * p0.y + 3 * inv * inv * u * p1.y + 3 * inv * u * u * p2.y + u * u * u * p3.y;
+
+        const dx = 3 * inv * inv * (p1.x - p0.x) + 6 * inv * u * (p2.x - p1.x) + 3 * u * u * (p3.x - p2.x);
+        const dy = 3 * inv * inv * (p1.y - p0.y) + 6 * inv * u * (p2.y - p1.y) + 3 * u * u * (p3.y - p2.y);
+        const heading = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+
+        t += dt;
+        pose.x = bx;
+        pose.y = by;
+        pose.theta = heading;
+        vLin = vMax * maxSpeed;
+        points.push({ x: bx, y: by, theta: heading, t, vLin, omegaDeg: 0 });
+      }
+      return { endPose: pose, path: points, duration: t };
+    }
+
+    // Default: moveToPoint / moveToPose
+    const target = { x: action.x, y: action.y, theta: action.theta !== undefined ? action.theta : pose.theta };
+    while (t < timeoutS) {
+      const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
+      const targetHeading = (Math.atan2(target.y - pose.y, target.x - pose.x) * 180 / Math.PI) + 90;
+      const angError = normalizeAngle(targetHeading - pose.theta);
+
+      if (dist < (action.earlyExitRange || 1.5) && Math.abs(angError) < 3.0) break;
+
+      const latOutput = Math.max(-127, Math.min(127, latPid.update(dist))) * maxSpeed;
+      const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
+
+      vLin = (latOutput / 127) * vMax;
+      omegaDeg = (angOutput / 127) * 360;
+
+      const rad = ((pose.theta - 90) * Math.PI) / 180;
+      pose.x += Math.cos(rad) * vLin * dt;
+      pose.y -= Math.sin(rad) * vLin * dt;
+      pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+
+      t += dt;
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vLin), omegaDeg });
+    }
+
+    if (action.type === "moveToPose" && action.theta !== undefined) {
+      pose.theta = action.theta;
+    }
+
+    return { endPose: pose, path: points, duration: t };
+  }
+
+  function simulateRoutine(routine, bot = botConfig) {
+    if (!routine) return { path: [], duration: 0 };
+    const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
+    let curPose = { ...startPose };
+    let fullPath = [{ x: curPose.x, y: curPose.y, theta: curPose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
+    let totalTime = 0;
+
+    (routine.actions || []).forEach(act => {
+      const seg = simulateAction(act, curPose, bot);
+      if (seg && seg.path) {
+        seg.path.forEach((pt, i) => {
+          if (i > 0) fullPath.push({ ...pt, t: pt.t + totalTime });
+        });
+        curPose = { ...seg.endPose };
+        totalTime += seg.duration;
+      }
+    });
+
+    return { path: fullPath, duration: totalTime };
+  }
+
+  function getSimPoseAtTime(simResult, timeMs) {
+    const timeS = timeMs / 1000;
+    const pts = simResult.path || [];
+    if (pts.length === 0) return { x: -60, y: -60, theta: 0, v: 0 };
+    if (timeS <= 0) return { x: pts[0].x, y: pts[0].y, theta: pts[0].theta, v: pts[0].vLin || 0 };
+    if (timeS >= simResult.duration) {
+      const last = pts[pts.length - 1];
+      return { x: last.x, y: last.y, theta: last.theta, v: 0 };
+    }
+
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (timeS >= pts[i].t && timeS <= pts[i + 1].t) {
+        const segT = (timeS - pts[i].t) / (pts[i + 1].t - pts[i].t);
+        const p0 = pts[i];
+        const p1 = pts[i + 1];
+        return {
+          x: p0.x + (p1.x - p0.x) * segT,
+          y: p0.y + (p1.y - p0.y) * segT,
+          theta: p0.theta + (p1.theta - p0.theta) * segT,
+          v: p0.vLin + (p1.vLin - p0.vLin) * segT
+        };
+      }
+    }
+    const last = pts[pts.length - 1];
+    return { x: last.x, y: last.y, theta: last.theta, v: 0 };
   }
 
   function drawSimAnimatedRobot(w, h) {
-    if (simTimeMs <= 0 && !isSimPlaying) return;
-    const timeRatio = Math.min(1, Math.max(0, simTimeMs / 15000));
-    const pose = interpolatePathPose(timeRatio);
+    const routine = activePaths[activeRoutineIndex] || activePaths[0];
+    if (!routine) return;
+
+    const simRes = simulateRoutine(routine);
+    const pose = getSimPoseAtTime(simRes, isSimPlaying ? simTimeMs : (simTimeMs > 0 ? simTimeMs : 0));
 
     const rx = inchToPx(pose.x, w);
     const ry = inchToPx(pose.y, h, true);
-    const botPx = (18 / FIELD_INCHES) * w;
+    const botPx = ((botConfig.robotW || 14) / FIELD_INCHES) * w;
     const halfBot = botPx / 2;
 
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(-((pose.theta || 0) * Math.PI) / 180);
 
-    // Animated Robot Box
-    ctx.fillStyle = "rgba(16, 185, 129, 0.4)";
+    // Glowing Chassis Bounding Box
+    ctx.fillStyle = "rgba(16, 185, 129, 0.35)";
     ctx.strokeStyle = "#10b981";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2.5;
     ctx.fillRect(-halfBot, -halfBot, botPx, botPx);
     ctx.strokeRect(-halfBot, -halfBot, botPx, botPx);
 
-    // Drive Wheels Representation
+    // VEX V5 Aluminum C-Channels & Wheels
     ctx.fillStyle = "#0f172a";
-    ctx.fillRect(-halfBot - 3, -halfBot + 2, 6, halfBot);
-    ctx.fillRect(halfBot - 3, -halfBot + 2, 6, halfBot);
-    ctx.fillRect(-halfBot - 3, 2, 6, halfBot - 2);
-    ctx.fillRect(halfBot - 3, 2, 6, halfBot - 2);
+    ctx.fillRect(-halfBot - 4, -halfBot + 2, 7, halfBot);
+    ctx.fillRect(halfBot - 3, -halfBot + 2, 7, halfBot);
+    ctx.fillRect(-halfBot - 4, 2, 7, halfBot - 2);
+    ctx.fillRect(halfBot - 3, 2, 7, halfBot - 2);
 
-    // Front Intake Arrow
+    // Front Intake / Clamp Direction Indicator Arrow
     ctx.fillStyle = "#f59e0b";
     ctx.beginPath();
-    ctx.moveTo(0, -halfBot - 8);
-    ctx.lineTo(8, -halfBot + 2);
-    ctx.lineTo(-8, -halfBot + 2);
+    ctx.moveTo(0, -halfBot - 9);
+    ctx.lineTo(8, -halfBot + 1);
+    ctx.lineTo(-8, -halfBot + 1);
     ctx.closePath();
     ctx.fill();
+
+    // V5 Brain HUD screen on bot
+    ctx.fillStyle = "#18181b";
+    ctx.fillRect(-halfBot + 6, -halfBot + 8, botPx - 12, botPx - 16);
+    ctx.fillStyle = "#22c55e";
+    ctx.font = "bold 8px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("LEMLIB", 0, 0);
 
     ctx.restore();
 
@@ -3978,7 +4178,7 @@
     const chipScore = document.getElementById("simHudScore");
 
     if (chipTime) chipTime.textContent = `⏱️ ${(simTimeMs / 1000).toFixed(2)}s / 15.00s`;
-    if (chipSpeed) chipSpeed.textContent = `🏎️ ${pose.v.toFixed(1)} in/s`;
+    if (chipSpeed) chipSpeed.textContent = `🏎️ ${(pose.v || 0).toFixed(1)} in/s`;
     if (chipCoords) chipCoords.textContent = `📍 (${pose.x.toFixed(1)}", ${pose.y.toFixed(1)}") θ=${pose.theta.toFixed(0)}°`;
 
     if (chipCol) {
@@ -4067,8 +4267,8 @@
         leftPct = m.cursor.normX * 100;
         topPct = m.cursor.normY * 100;
       } else if (m.cursor.canvasX !== undefined && m.cursor.canvasY !== undefined) {
-        leftPct = (m.cursor.canvasX / 800) * 100;
-        topPct = (m.cursor.canvasY / 800) * 100;
+        leftPct = (m.cursor.canvasX / 900) * 100;
+        topPct = (m.cursor.canvasY / 900) * 100;
       } else if (m.cursor.x !== undefined && m.cursor.y !== undefined) {
         leftPct = ((m.cursor.x + FIELD_HALF) / FIELD_INCHES) * 100;
         topPct = ((FIELD_HALF - m.cursor.y) / FIELD_INCHES) * 100;
@@ -4649,21 +4849,52 @@
 
     container.innerHTML = "";
 
-    // Start Pose Card
-    const startCard = document.createElement("div");
-    startCard.className = `action-block-card ${selectedActionId === 'start' ? 'selected' : ''}`;
-    startCard.style.borderLeft = "4px solid #0284c7";
-    startCard.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;flex:1;">
-        <span class="action-num-badge" style="background:#0284c7;color:#fff;">S</span>
-        <div style="flex:1;">
-          <strong style="font-size:0.8rem;color:#f8fafc;">Start Pose (Odometry Origin)</strong>
-          <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">
-            X: <input type="number" class="sp-x form-input" value="${routine.pose.x}" style="width:50px;padding:1px 4px;font-size:0.72rem;display:inline-block;" />"
-            Y: <input type="number" class="sp-y form-input" value="${routine.pose.y}" style="width:50px;padding:1px 4px;font-size:0.72rem;display:inline-block;" />"
-            θ: <input type="number" class="sp-t form-input" value="${routine.pose.theta}" style="width:50px;padding:1px 4px;font-size:0.72rem;display:inline-block;" />°
-          </div>
+    // 1. Top Bot Specs & PID summary banner
+    const botBanner = document.createElement("div");
+    botBanner.className = "action-flow-bot-banner";
+    botBanner.style.cssText = "margin-bottom:10px;background:rgba(15,23,42,0.92);border:1px solid #1e293b;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;";
+    botBanner.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.1rem;">🤖</span>
+        <div style="display:flex;flex-direction:column;">
+          <span style="font-size:0.75rem;font-weight:700;color:#f1f5f9;">LemLib Bot: ${botConfig.robotW || 14}"x${botConfig.robotL || 14}" · ${botConfig.trackWidth || 12}" Track · ${botConfig.driveRpm || 600} RPM</span>
+          <span style="font-size:0.68rem;color:#94a3b8;">Lateral PID: (${botConfig.lateralKp || 8}, ${botConfig.lateralKd || 30}) · Angular PID: (${botConfig.angularKp || 2}, ${botConfig.angularKd || 10})</span>
         </div>
+      </div>
+      <span style="font-size:0.68rem;color:#38bdf8;background:rgba(56,189,248,0.12);padding:2px 8px;border-radius:6px;font-weight:700;">PROS 4.1</span>
+    `;
+    container.appendChild(botBanner);
+
+    // 2. Hat Block ("🚩 when autonomous starts")
+    const hatBlock = document.createElement("div");
+    hatBlock.className = "hat-block";
+    hatBlock.style.cssText = "background:linear-gradient(135deg, #1e293b, #0f172a);border:1px solid #38bdf8;border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 12px rgba(0,0,0,0.4);";
+    hatBlock.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.1rem;">🚩</span>
+        <strong style="font-size:0.82rem;color:#f8fafc;">when autonomous starts (${escapeHtml(routine.name || 'Routine')})</strong>
+      </div>
+      <span style="font-size:0.7rem;background:rgba(56,189,248,0.2);color:#38bdf8;padding:2px 8px;border-radius:10px;font-weight:700;">
+        ${actions.length} block${actions.length === 1 ? '' : 's'}
+      </span>
+    `;
+    container.appendChild(hatBlock);
+
+    // 3. Start Pose Card
+    const startCard = document.createElement("div");
+    startCard.className = `action-card block-card cat-motion ${selectedActionId === 'start' ? 'selected' : ''}`;
+    startCard.style.cssText = `background:#0f172a;border:1px solid ${selectedActionId === 'start' ? '#38bdf8' : '#1e293b'};border-left:4px solid #38bdf8;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;`;
+    startCard.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#38bdf8;color:#090d16;font-weight:800;font-size:0.7rem;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;">S</span>
+          <strong style="font-size:0.82rem;color:#f8fafc;">chassis.setPose (Odometry Origin)</strong>
+        </div>
+      </div>
+      <div style="font-size:0.75rem;color:#94a3b8;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span>X: <input type="number" class="sp-x form-input" value="${routine.pose.x}" style="width:52px;padding:2px 6px;font-size:0.72rem;display:inline-block;" />"</span>
+        <span>Y: <input type="number" class="sp-y form-input" value="${routine.pose.y}" style="width:52px;padding:2px 6px;font-size:0.72rem;display:inline-block;" />"</span>
+        <span>θ: <input type="number" class="sp-t form-input" value="${routine.pose.theta}" style="width:48px;padding:2px 6px;font-size:0.72rem;display:inline-block;" />°</span>
       </div>
     `;
     startCard.onclick = (e) => {
@@ -4685,78 +4916,88 @@
       broadcastEdit(`Updated Start Pose (${routine.pose.x}", ${routine.pose.y}", ${routine.pose.theta}°)`, "start_pose", false);
     };
     [spX, spY, spT].forEach(input => input?.addEventListener('change', updateStartPose));
-
     container.appendChild(startCard);
 
     if (actions.length === 0) {
       const emptyMsg = document.createElement("div");
-      emptyMsg.style.padding = "16px";
-      emptyMsg.style.textAlign = "center";
-      emptyMsg.style.color = "#64748b";
-      emptyMsg.style.fontSize = "0.78rem";
-      emptyMsg.textContent = "No actions yet. Click any block in the Block Palette above to insert.";
+      emptyMsg.style.cssText = "padding:20px;text-align:center;color:#64748b;font-size:0.78rem;background:rgba(15,23,42,0.5);border-radius:8px;margin-top:10px;";
+      emptyMsg.innerHTML = `<span>✨ No actions in this routine yet. Use the <strong>Action Palette</strong> above to add waypoints, curves, or subsystem actions.</span>`;
       container.appendChild(emptyMsg);
       syncIdeAutonsFromBlocks();
       return;
     }
 
+    // 4. Action Cards with Connectors
     actions.forEach((act, idx) => {
-      const card = document.createElement("div");
-      card.className = `action-block-card ${selectedActionId === act.id ? 'selected' : ''}`;
+      const conn = document.createElement("div");
+      conn.style.cssText = "text-align:center;color:#475569;font-size:0.7rem;line-height:1;margin:2px 0;";
+      conn.textContent = "▼";
+      container.appendChild(conn);
 
+      let catClass = "cat-motion";
       let blockColor = "#0284c7"; // MoveToPoint
-      if (act.type === "moveToPose") blockColor = "#0369a1";
-      if (act.type === "turnToHeading" || act.type === "turnToPoint") blockColor = "#7c3aed";
-      if (act.type === "delay" || act.type === "wait") blockColor = "#d97706";
-      if (act.type === "customCode") blockColor = "#16a34a";
-      if (act.type === "setPose") blockColor = "#475569";
+      if (act.type === "moveToPose") { catClass = "cat-motion"; blockColor = "#0369a1"; }
+      else if (act.type === "bezierCurve") { catClass = "cat-bezier"; blockColor = "#06b6d4"; }
+      else if (act.type === "turnToHeading" || act.type === "turnToPoint") { catClass = "cat-turn"; blockColor = "#7c3aed"; }
+      else if (act.type === "delay" || act.type === "wait") { catClass = "cat-control"; blockColor = "#d97706"; }
+      else if (act.type === "customCode" || act.type === "custom") { catClass = "cat-subsystem"; blockColor = "#16a34a"; }
 
-      card.style.borderLeft = `4px solid ${blockColor}`;
+      const card = document.createElement("div");
+      const isSelected = selectedActionId === act.id;
+      card.className = `action-card block-card ${catClass} ${isSelected ? 'selected' : ''}`;
+      card.style.cssText = `background:#0f172a;border:1px solid ${isSelected ? blockColor : '#1e293b'};border-left:4px solid ${blockColor};border-radius:8px;padding:10px 12px;cursor:pointer;transition:all 0.15s ease;`;
 
       let paramsHtml = "";
       if (act.type === "moveToPoint" || act.type === "moveToPose") {
         paramsHtml = `
-          <div style="font-size:0.72rem;color:#cbd5e1;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-            <span>X: <input type="number" class="act-x form-input" value="${act.x || 0}" style="width:48px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />"</span>
-            <span>Y: <input type="number" class="act-y form-input" value="${act.y || 0}" style="width:48px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />"</span>
-            ${act.type === "moveToPose" ? `<span>θ: <input type="number" class="act-t form-input" value="${act.theta || 0}" style="width:45px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />°</span>` : ''}
-            <span>Time: <input type="number" class="act-time form-input" value="${act.timeout || 2000}" style="width:52px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />ms</span>
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span>X: <input type="number" class="act-x form-input" value="${act.x || 0}" style="width:50px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />"</span>
+            <span>Y: <input type="number" class="act-y form-input" value="${act.y || 0}" style="width:50px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />"</span>
+            ${act.type === "moveToPose" ? `<span>θ: <input type="number" class="act-t form-input" value="${act.theta || 0}" style="width:46px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />°</span>` : ''}
+            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 2000}" style="width:54px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
+            <span>Speed: <input type="number" class="act-speed form-input" value="${act.maxSpeed !== undefined ? act.maxSpeed : 115}" style="width:48px;padding:2px 5px;font-size:0.72rem;display:inline-block;" /></span>
+          </div>
+        `;
+      } else if (act.type === "bezierCurve") {
+        paramsHtml = `
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span>End X: <input type="number" class="act-x form-input" value="${act.x || 0}" style="width:50px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />"</span>
+            <span>End Y: <input type="number" class="act-y form-input" value="${act.y || 0}" style="width:50px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />"</span>
+            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 2500}" style="width:54px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
           </div>
         `;
       } else if (act.type === "turnToHeading" || act.type === "turnToPoint") {
         paramsHtml = `
-          <div style="font-size:0.72rem;color:#cbd5e1;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-            <span>Heading: <input type="number" class="act-t form-input" value="${act.theta || act.heading || 0}" style="width:52px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />°</span>
-            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 1500}" style="width:52px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />ms</span>
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span>Heading: <input type="number" class="act-t form-input" value="${act.theta !== undefined ? act.theta : (act.heading || 0)}" style="width:52px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />°</span>
+            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 1500}" style="width:54px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
           </div>
         `;
       } else if (act.type === "delay" || act.type === "wait") {
         paramsHtml = `
-          <div style="font-size:0.72rem;color:#cbd5e1;margin-top:4px;display:flex;gap:6px;align-items:center;">
-            <span>Delay: <input type="number" class="act-time form-input" value="${act.timeout || act.duration || 500}" style="width:60px;padding:1px 4px;font-size:0.7rem;display:inline-block;" />ms</span>
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;align-items:center;">
+            <span>Duration: <input type="number" class="act-time form-input" value="${act.timeout || act.duration || 500}" style="width:60px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
           </div>
         `;
-      } else if (act.type === "customCode") {
+      } else if (act.type === "customCode" || act.type === "custom") {
         paramsHtml = `
-          <div style="font-size:0.72rem;color:#cbd5e1;margin-top:4px;">
-            <input type="text" class="act-code form-input" value="${escapeHtml(act.customCode || act.code || 'intake.move(127);')}" placeholder="e.g. intake.move(127);" style="width:100%;padding:2px 6px;font-size:0.72rem;font-family:ui-monospace,monospace;" />
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;">
+            <input type="text" class="act-code form-input" value="${escapeHtml(act.customCode || act.code || 'intake.move(127);')}" placeholder="e.g. intake.move(127);" style="width:100%;padding:3px 6px;font-size:0.72rem;font-family:ui-monospace,monospace;" />
           </div>
         `;
       }
 
       card.innerHTML = `
-        <div style="display:flex;align-items:flex-start;gap:8px;flex:1;">
-          <span class="action-num-badge" style="background:${blockColor};color:#fff;">${idx + 1}</span>
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
-              <strong style="font-size:0.82rem;color:#f8fafc;">chassis.${escapeHtml(act.type)}</strong>
-              <button type="button" class="btn-xs-clean btn-del-act" style="color:#ef4444;background:none;border:none;cursor:pointer;padding:2px 4px;font-size:0.8rem;" title="Delete action">🗑️</button>
-            </div>
-            ${paramsHtml}
-            <div style="margin-top:4px;">
-              <input type="text" class="act-comment form-input" value="${escapeHtml(act.comment || '')}" placeholder="// Comment note..." style="width:100%;padding:1px 4px;font-size:0.68rem;color:#f59e0b;" />
-            </div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="background:${blockColor};color:#fff;font-weight:800;font-size:0.7rem;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${idx + 1}</span>
+            <strong style="font-size:0.82rem;color:#f8fafc;">chassis.${escapeHtml(act.type)}</strong>
           </div>
+          <button type="button" class="btn-xs-clean btn-del-act" style="color:#ef4444;background:none;border:none;cursor:pointer;padding:2px 6px;font-size:0.85rem;" title="Delete action">🗑️</button>
+        </div>
+        ${paramsHtml}
+        <div style="margin-top:6px;">
+          <input type="text" class="act-comment form-input" value="${escapeHtml(act.comment || '')}" placeholder="// Comment note for this step..." style="width:100%;padding:2px 6px;font-size:0.68rem;color:#f59e0b;" />
         </div>
       `;
 
@@ -4771,6 +5012,7 @@
       const inY = card.querySelector('.act-y');
       const inT = card.querySelector('.act-t');
       const inTime = card.querySelector('.act-time');
+      const inSpeed = card.querySelector('.act-speed');
       const inCode = card.querySelector('.act-code');
       const inComm = card.querySelector('.act-comment');
 
@@ -4779,6 +5021,7 @@
         if (inY) act.y = parseFloat(inY.value) || 0;
         if (inT) { act.theta = parseFloat(inT.value) || 0; act.heading = act.theta; }
         if (inTime) act.timeout = parseInt(inTime.value, 10) || 1000;
+        if (inSpeed) act.maxSpeed = parseInt(inSpeed.value, 10) || 115;
         if (inCode) act.customCode = inCode.value;
         if (inComm) act.comment = inComm.value;
 
@@ -4787,7 +5030,7 @@
         broadcastEdit(`Updated action #${idx + 1} (${act.type})`, "action_edit", false);
       };
 
-      [inX, inY, inT, inTime, inCode, inComm].forEach(input => input?.addEventListener('change', handleBlockChange));
+      [inX, inY, inT, inTime, inSpeed, inCode, inComm].forEach(input => input?.addEventListener('change', handleBlockChange));
 
       card.querySelector(".btn-del-act").onclick = (e) => {
         e.stopPropagation();
@@ -6770,6 +7013,20 @@
     wireDebugPanel();
     wireEvents();
     drawField();
+
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => {
+        drawField();
+      });
+      const cWrap = document.getElementById("fieldCanvasContainer");
+      if (cWrap) ro.observe(cWrap);
+      const cBox = document.getElementById("teamCanvasBox");
+      if (cBox) ro.observe(cBox);
+    }
+    window.addEventListener("resize", () => {
+      drawField();
+    });
+
     if (window.location.hash === "#join") {
       document.getElementById("tabGateJoin")?.click();
     } else if (window.location.hash === "#create") {
