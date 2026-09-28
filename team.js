@@ -2602,7 +2602,7 @@
         }
       } else {
         const savedEmail = (txtUserAccountEmail && txtUserAccountEmail.value.trim()) ||
-          localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+          localStorage.getItem("lemlib_saved_google_email") || "teammate@example.com";
         let savedObj = null;
         try { savedObj = JSON.parse(localStorage.getItem("lemlib_saved_google_user")); } catch (_) {}
         currentUser = {
@@ -2832,7 +2832,7 @@
   async function checkUserTeam() {
     if (!currentUser || !currentUser.email) {
       const emailInput = document.getElementById("txtUserAccountEmail");
-      const savedEmail = (emailInput && emailInput.value.trim()) || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+      const savedEmail = (emailInput && emailInput.value.trim()) || localStorage.getItem("lemlib_saved_google_email") || "teammate@example.com";
       currentUser = {
         email: savedEmail.toLowerCase(),
         displayName: savedEmail.split("@")[0],
@@ -5070,7 +5070,7 @@
       btnSubmitCreate.onclick = async () => {
         try {
           const emailInput = document.getElementById("txtUserAccountEmail");
-          const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+          const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "teammate@example.com";
           if (!emailVal || !emailVal.includes("@")) {
             showCreateAlert("Please enter a valid Gmail address above.");
             if (emailInput) {
@@ -5360,7 +5360,7 @@
       btnSubmitJoin.onclick = async () => {
         try {
           const emailInput = document.getElementById("txtUserAccountEmail");
-          const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "rainforest.cck3@gmail.com";
+          const emailVal = (emailInput && emailInput.value.trim()) || currentUser?.email || localStorage.getItem("lemlib_saved_google_email") || "teammate@example.com";
           if (!emailVal || !emailVal.includes("@")) {
             showJoinAlert("Please enter a valid Gmail address above.");
             if (emailInput) {
