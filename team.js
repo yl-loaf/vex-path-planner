@@ -1362,12 +1362,6 @@
     }
   }
 
-  // --------------------------------------------------------------------------
-  // INTEGRATED C++ IDE STUDIO & MULTI-FILE CODE MANAGER
-  // --------------------------------------------------------------------------
-  let activeIdeFile = "autons.cpp";
-  let pendingRemoteState = null;
-
   function generateLemLibCpp(paths, activeIdx = 0) {
     const routine = (paths && paths[activeIdx]) || (paths && paths[0]) || { pose: { x: -60, y: -60, theta: 0 }, actions: [] };
     const pose = routine.pose || { x: -60, y: -60, theta: 0 };
