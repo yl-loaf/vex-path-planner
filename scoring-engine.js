@@ -43,7 +43,7 @@
     { id: "loader_blue_br", name: "Blue Bottom-Right Loader", wall: "east", color: "blue", x: 65.25, y: -58.5 },
   ];
 
-  // 4 Official Perimeter Wall Toggles
+  // 4 Official Perimeter Wall Toggles (North, South, East, West wall centers)
   const DEFAULT_TOGGLES = [
     { id: "toggle_west", name: "West Wall Toggle", wall: "west", x: -70.5, y: 0.0, state: "neutral", rotation: 0, label: "West Toggle" },
     { id: "toggle_east", name: "East Wall Toggle", wall: "east", x: 70.5, y: 0.0, state: "neutral", rotation: 0, label: "East Toggle" },
@@ -219,7 +219,7 @@
   }
 
   /**
-   * Flexible detection of comment triggers in any action property
+   * Flexible detection of comment triggers in action properties
    */
   function parseOverrideTriggers(action) {
     if (!action) return {};
@@ -229,13 +229,12 @@
       action.customCode || "",
       action.subsystemCode || "",
       action.commentText || "",
-      action.name || "",
     ].join(" ").toLowerCase();
 
     const pinCollected = /\/\/\s*pin\s*collected|pin\s*collected|collect\s*pin|grab\s*pin|pickup\s*pin|intake\s*pin/i.test(text);
     const pinDeposited = /\/\/\s*pin\s*deposited|pin\s*deposited|deposit\s*pin|score\s*pin|drop\s*pin|stack\s*pin|place\s*pin/i.test(text);
-    const turnToggleCcw = /\/\/\s*turn\s*toggle\s*ccw|turn\s*toggle\s*ccw|toggle\s*ccw|toggle\s*blue/i.test(text);
-    const turnToggleCw = (/\/\/\s*turn\s*toggle\s*cw|turn\s*toggle\s*cw|toggle\s*cw|turn\s*toggle|toggle\s*red/i.test(text)) && !turnToggleCcw;
+    const turnToggleCcw = /\/\/\s*turn\s*toggle\s*ccw|\bturn\s*toggle\s*ccw\b|\btoggle\s*ccw\b|\bturn\s*toggle\s*blue\b/i.test(text);
+    const turnToggleCw = (/\/\/\s*turn\s*toggle\s*cw|\bturn\s*toggle\s*cw\b|\btoggle\s*cw\b|\bturn\s*toggle\s*red\b|\bturn\s*toggle\b/i.test(text)) && !turnToggleCcw;
 
     return {
       pinCollected,
@@ -362,37 +361,31 @@
 
   /**
    * Action: Turn Toggle (CW or CCW)
+   * The toggle that changes is strictly the closest one to the robot.
    */
   function turnToggle(robotX, robotY, direction) {
+    if (!toggles || toggles.length === 0) return null;
+
     let nearestToggle = null;
-    let nearestDist = TOGGLE_REACH;
+    let minDistance = Infinity;
 
     for (const toggle of toggles) {
       const dist = Math.hypot(toggle.x - robotX, toggle.y - robotY);
-      if (dist < nearestDist) {
-        nearestDist = dist;
+      if (dist < minDistance) {
+        minDistance = dist;
         nearestToggle = toggle;
-      }
-    }
-
-    if (!nearestToggle) {
-      let minD = 9999;
-      for (const toggle of toggles) {
-        const d = Math.hypot(toggle.x - robotX, toggle.y - robotY);
-        if (d < minD) {
-          minD = d;
-          nearestToggle = toggle;
-        }
       }
     }
 
     if (nearestToggle) {
       if (direction === "CW") {
         nearestToggle.rotationDeg = (nearestToggle.rotationDeg + 120) % 360;
-        nearestToggle.state = "red";
+        // 2x CW turns flips toggle from red to blue (CCW state); otherwise sets to red (CW state)
+        nearestToggle.state = nearestToggle.state === "red" ? "blue" : "red";
       } else {
         nearestToggle.rotationDeg = (nearestToggle.rotationDeg - 120 + 360) % 360;
-        nearestToggle.state = "blue";
+        // 2x CCW turns flips toggle from blue to red (CW state); otherwise sets to blue (CCW state)
+        nearestToggle.state = nearestToggle.state === "blue" ? "red" : "blue";
       }
       return nearestToggle;
     }
@@ -406,19 +399,24 @@
     resetFieldElements();
     if (!Array.isArray(actionsList) || actionsList.length === 0) return calculateScore();
 
+    let curX = (posesList && posesList[0] && !isNaN(posesList[0].x)) ? posesList[0].x : 0;
+    let curY = (posesList && posesList[0] && !isNaN(posesList[0].y)) ? posesList[0].y : 0;
+
     for (let i = 0; i < actionsList.length; i++) {
       const a = actionsList[i];
-      // Target position of this action (end of move waypoint)
-      let px = 0, py = 0;
-      if (a.x != null && a.y != null && !isNaN(Number(a.x)) && !isNaN(Number(a.y))) {
-        px = Number(a.x);
-        py = Number(a.y);
-      } else if (posesList && posesList[i + 1]) {
+      let px = curX;
+      let py = curY;
+
+      if (posesList && posesList[i + 1] && !isNaN(posesList[i + 1].x) && !isNaN(posesList[i + 1].y)) {
         px = posesList[i + 1].x;
         py = posesList[i + 1].y;
-      } else if (posesList && posesList[i]) {
-        px = posesList[i].x;
-        py = posesList[i].y;
+        curX = px;
+        curY = py;
+      } else if (a.x != null && a.y != null && !isNaN(Number(a.x)) && !isNaN(Number(a.y)) && a.type !== "turnToPoint") {
+        px = Number(a.x);
+        py = Number(a.y);
+        curX = px;
+        curY = py;
       }
 
       const triggers = parseOverrideTriggers(a);
@@ -455,24 +453,24 @@
       const actKey = action.id || `act_${action.x}_${action.y}_${action.label || ''}`;
       if (!executedActionTriggers.has(actKey)) {
         const triggers = parseOverrideTriggers(action);
-        const targetX = (action.x != null && !isNaN(Number(action.x))) ? Number(action.x) : robotPose.x;
-        const targetY = (action.y != null && !isNaN(Number(action.y))) ? Number(action.y) : robotPose.y;
+        const rx = (robotPose && !isNaN(robotPose.x)) ? robotPose.x : (action.x || 0);
+        const ry = (robotPose && !isNaN(robotPose.y)) ? robotPose.y : (action.y || 0);
 
         if (triggers.pinCollected) {
           executedActionTriggers.add(actKey);
-          collectNearestPin(targetX, targetY);
+          collectNearestPin(rx, ry);
         }
         if (triggers.pinDeposited) {
           executedActionTriggers.add(actKey);
-          depositCarriedPin(targetX, targetY);
+          depositCarriedPin(rx, ry);
         }
         if (triggers.turnToggleCw) {
           executedActionTriggers.add(actKey);
-          turnToggle(targetX, targetY, "CW");
+          turnToggle(rx, ry, "CW");
         }
         if (triggers.turnToggleCcw) {
           executedActionTriggers.add(actKey);
-          turnToggle(targetX, targetY, "CCW");
+          turnToggle(rx, ry, "CCW");
         }
       }
     }

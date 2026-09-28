@@ -4751,6 +4751,7 @@
 
     const upAct = isIfElse ? "ifelse-child-up" : "loop-child-up";
     const downAct = isIfElse ? "ifelse-child-down" : "loop-child-down";
+    const dupAct = isIfElse ? "ifelse-child-dup" : "loop-child-dup";
     const delAct = isIfElse ? "ifelse-child-del" : "loop-child-del";
     const cardAttrs = isIfElse
       ? `data-nested-child-id="${child.id}" data-context="ifelse" data-if-id="${parentAct.id}" data-branch="${branch}"`
@@ -4764,6 +4765,7 @@
           ${childSummary ? `<span class="collapsed-summary-badge" style="font-size:0.68rem;">${escapeHtml(childSummary)}</span>` : ""}
           ${child.forwards === false ? '<span class="badge reverse" style="font-size:0.65rem;padding:1px 4px;">REV</span>' : ""}
           <div style="margin-left:auto;display:flex;align-items:center;gap:3px">
+            <button type="button" class="icon" data-act="${dupAct}" ${parentAttrs} title="Duplicate nested block"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;pointer-events:none;"><path d="M8 3.5h9.5a3 3 0 0 1 3 3v9.5"/><rect x="3.5" y="7.5" width="13" height="13" rx="3"/><line x1="6.5" y1="14" x2="13.5" y2="14"/><line x1="10" y1="10.5" x2="10" y2="17.5"/></svg></button>
             <button type="button" class="icon" data-act="${upAct}" ${parentAttrs} title="Move up">↑</button>
             <button type="button" class="icon" data-act="${downAct}" ${parentAttrs} title="Move down">↓</button>
             <button type="button" class="icon" data-act="${delAct}" ${parentAttrs} title="Delete nested block">×</button>
@@ -5650,6 +5652,7 @@
           ${a.forwards === false && a.type !== "custom" && a.type !== "ifElse" ? '<span class="badge reverse">REV</span>' : ""}
           <span class="hint-inline ${cleanLbl ? "has-comment" : ""}">${cleanLbl ? `// ${escapeHtml(cleanLbl)}` : ""}</span>
           <div style="margin-left:auto;display:flex;align-items:center;gap:4px">
+            <button class="icon" data-act="dup" title="Duplicate block (Ctrl+D)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;pointer-events:none;"><path d="M8 3.5h9.5a3 3 0 0 1 3 3v9.5"/><rect x="3.5" y="7.5" width="13" height="13" rx="3"/><line x1="6.5" y1="14" x2="13.5" y2="14"/><line x1="10" y1="10.5" x2="10" y2="17.5"/></svg></button>
             <button class="icon" data-act="up" title="Move up">↑</button>
             <button class="icon" data-act="down" title="Move down">↓</button>
             <button class="icon" data-act="del" title="Delete">×</button>
@@ -6175,7 +6178,10 @@
             return;
           }
           const i = actions.findIndex((x) => x.id === a.id);
-          if (act === "del") {
+          if (act === "dup") {
+            duplicateActionById(a.id);
+            return;
+          } else if (act === "del") {
             if (sessionStorage.getItem("disableDeleteWarning") === "true") {
               actions.splice(i, 1);
               if (selectedId === a.id) selectedId = null;
@@ -6390,7 +6396,10 @@
           cBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             const cAct = cBtn.dataset.act;
-            if (cAct === "ifelse-child-up" && childIdx > 0) {
+            if (cAct === "ifelse-child-dup") {
+              duplicateActionById(child.id);
+              return;
+            } else if (cAct === "ifelse-child-up" && childIdx > 0) {
               [list[childIdx - 1], list[childIdx]] = [list[childIdx], list[childIdx - 1]];
             } else if (cAct === "ifelse-child-down" && childIdx < list.length - 1) {
               [list[childIdx], list[childIdx + 1]] = [list[childIdx + 1], list[childIdx]];
@@ -6517,7 +6526,10 @@
           cBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             const cAct = cBtn.dataset.act;
-            if (cAct === "loop-child-up" && childIdx > 0) {
+            if (cAct === "loop-child-dup") {
+              duplicateActionById(child.id);
+              return;
+            } else if (cAct === "loop-child-up" && childIdx > 0) {
               [a.children[childIdx - 1], a.children[childIdx]] = [a.children[childIdx], a.children[childIdx - 1]];
             } else if (cAct === "loop-child-down" && childIdx < a.children.length - 1) {
               [a.children[childIdx], a.children[childIdx + 1]] = [a.children[childIdx + 1], a.children[childIdx]];
@@ -7286,7 +7298,7 @@
 
       // Update dynamic scoring engine & subsystem attachment
       if (typeof ScoringEngine !== "undefined" && ScoringEngine.getIsEnabled()) {
-        const activeAction = actions[pt.actionIdx != null ? pt.actionIdx : 0];
+        const activeAction = (pt.actionIdx != null && actions[pt.actionIdx]) ? actions[pt.actionIdx] : null;
         const liveScoreRes = ScoringEngine.updateStep(pt, bot, activeAction, true);
         updateScoringHUD(liveScoreRes);
       }
@@ -13825,7 +13837,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       btnTestCW.addEventListener("click", () => {
         const p = (simRunning && simPath.length && simPath[simIdx]) ? simPath[simIdx] : pose;
         const tog = ScoringEngine.turnToggle(p.x, p.y, "CW");
-        if (tog) showToast(`🔄 Turned ${tog.name} CW (RED)!`);
+        if (tog) showToast(`🔄 Turned ${tog.name} CW (${tog.state.toUpperCase()})!`);
         updateScoringHUD();
         draw();
       });
@@ -13835,7 +13847,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       btnTestCCW.addEventListener("click", () => {
         const p = (simRunning && simPath.length && simPath[simIdx]) ? simPath[simIdx] : pose;
         const tog = ScoringEngine.turnToggle(p.x, p.y, "CCW");
-        if (tog) showToast(`🔁 Turned ${tog.name} CCW (BLUE)!`);
+        if (tog) showToast(`🔁 Turned ${tog.name} CCW (${tog.state.toUpperCase()})!`);
         updateScoringHUD();
         draw();
       });
