@@ -734,8 +734,8 @@
       for (const loader of FIELD_OBSTACLES.loaders) {
         if (collisionConfig.disabledObstacleIds[loader.id]) continue;
         const isHit = activeCollidingObstacleIds.has(loader.id);
-        const tl = { cx: inchToPx(loader.minX, canvas.width), cy: inchToPx(loader.maxY, canvas.height) };
-        const br = { cx: inchToPx(loader.maxX, canvas.width), cy: inchToPx(loader.minY, canvas.height) };
+        const tl = { cx: inchToPx(loader.minX, canvas.width), cy: inchToPx(loader.maxY, canvas.height, true) };
+        const br = { cx: inchToPx(loader.maxX, canvas.width), cy: inchToPx(loader.minY, canvas.height, true) };
         const w = br.cx - tl.cx;
         const h = br.cy - tl.cy;
 
@@ -781,7 +781,7 @@
         ctx.font = "bold 8.5px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        const centerC = { cx: inchToPx(loader.center.x, canvas.width), cy: inchToPx(loader.center.y, canvas.height) };
+        const centerC = { cx: inchToPx(loader.center.x, canvas.width), cy: inchToPx(loader.center.y, canvas.height, true) };
         ctx.fillText(loader.color === "red" ? "RED LOADER" : "BLUE LOADER", centerC.cx, centerC.cy);
         ctx.restore();
       }
@@ -793,7 +793,7 @@
         const isClamped = !!collisionConfig.clampedObstacleIds[goal.id];
         const isHit = activeCollidingObstacleIds.has(goal.id);
         const cx = inchToPx(goal.x, canvas.width);
-        const cy = inchToPx(goal.y, canvas.height);
+        const cy = inchToPx(goal.y, canvas.height, true);
         const r = goal.radius * scale;
 
         ctx.save();
@@ -1030,6 +1030,8 @@
           });
           renderTeammateCursors(membersPresence);
         }
+      }, (error) => {
+        console.warn("[TeamCollab] Presence onSnapshot notice:", error);
       });
     } catch (_) {}
   }
@@ -1471,6 +1473,16 @@
     const content = currentTeam.projectFiles[activeIdeFile] || "";
     if (editor && editor.value !== content) {
       editor.value = content;
+    }
+
+    // Sync to Monaco or Fallback highlighter
+    if (isMonacoReady && monacoEditor) {
+      if (monacoEditor.getValue() !== content) {
+        monacoEditor.setValue(content);
+      }
+    } else {
+      updateLineNumbers();
+      renderSyntaxHighlight();
     }
 
     const lineCount = content.split("\n").length;
@@ -2552,6 +2564,7 @@
               activePaths = remote.pathPayload.paths;
               renderRoutinesSelector(false);
               renderActionBlocks();
+              syncIdeAutonsFromBlocks();
               drawField();
             }
             renderStrategies();
@@ -2560,6 +2573,8 @@
             renderMemberList();
           }
         }
+      }, (error) => {
+        console.warn("[TeamCollab] Main team doc onSnapshot notice:", error);
       });
     } catch (e) {
       console.warn("[TeamCollab] Firestore live listener notice:", e);
@@ -2595,12 +2610,16 @@
           badgeAuthStatus.style.color = "#4ade80";
         }
       } else {
-        const savedEmail = (txtUserAccountEmail && txtUserAccountEmail.value.trim()) ||
-          localStorage.getItem("lemlib_saved_google_email") || "teammate@example.com";
+        let rawSaved = (txtUserAccountEmail && txtUserAccountEmail.value.trim()) ||
+          localStorage.getItem("lemlib_saved_google_email");
+        if (!rawSaved || rawSaved === "null" || rawSaved === "undefined" || !rawSaved.includes("@")) {
+          rawSaved = "teammate@example.com";
+        }
+        const savedEmail = rawSaved.trim().toLowerCase();
         let savedObj = null;
         try { savedObj = JSON.parse(localStorage.getItem("lemlib_saved_google_user")); } catch (_) {}
         currentUser = {
-          email: savedEmail.toLowerCase(),
+          email: savedEmail,
           displayName: (savedObj && savedObj.displayName) || savedEmail.split("@")[0],
           uid: (savedObj && savedObj.uid) || "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
         };
@@ -2627,7 +2646,7 @@
     if (txtUserAccountEmail) {
       txtUserAccountEmail.addEventListener("change", () => {
         const val = txtUserAccountEmail.value.trim();
-        if (val && val.includes("@")) {
+        if (val && val.includes("@") && val !== "null" && val !== "undefined") {
           currentUser = {
             email: val.toLowerCase(),
             displayName: val.split("@")[0],
@@ -2646,7 +2665,7 @@
 
     if (typeof firebase !== "undefined" && firebase.auth) {
       firebase.auth().onAuthStateChanged((user) => {
-        if (user) {
+        if (user && user.email) {
           try {
             localStorage.setItem("lemlib_saved_google_email", user.email);
             localStorage.setItem("lemlib_saved_google_user", JSON.stringify({
@@ -2824,11 +2843,15 @@
   }
 
   async function checkUserTeam() {
-    if (!currentUser || !currentUser.email) {
+    if (!currentUser || !currentUser.email || currentUser.email === "null" || currentUser.email === "undefined" || !currentUser.email.includes("@")) {
       const emailInput = document.getElementById("txtUserAccountEmail");
-      const savedEmail = (emailInput && emailInput.value.trim()) || localStorage.getItem("lemlib_saved_google_email") || "teammate@example.com";
+      let rawSaved = (emailInput && emailInput.value.trim()) || localStorage.getItem("lemlib_saved_google_email");
+      if (!rawSaved || rawSaved === "null" || rawSaved === "undefined" || !rawSaved.includes("@")) {
+        rawSaved = "teammate@example.com";
+      }
+      const savedEmail = rawSaved.trim().toLowerCase();
       currentUser = {
-        email: savedEmail.toLowerCase(),
+        email: savedEmail,
         displayName: savedEmail.split("@")[0],
         uid: "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
       };
@@ -3193,6 +3216,7 @@
     renderStrategies();
     renderPinComments();
     renderActionBlocks();
+    syncIdeAutonsFromBlocks();
     renderVersionHistory();
     renderPresenceAvatars();
     drawField();
@@ -3405,13 +3429,17 @@
   // --------------------------------------------------------------------------
   // FIELD CANVAS RENDERING & COLLABORATOR CURSORS
   // --------------------------------------------------------------------------
-  function inchToPx(inchCoord, canvasDim) {
-    // Coordinates: [-72, 72] -> [0, canvasDim]
+  function inchToPx(inchCoord, canvasDim, isY = false) {
+    if (isY) {
+      return ((FIELD_HALF - inchCoord) / FIELD_INCHES) * canvasDim;
+    }
     return ((inchCoord + FIELD_HALF) / FIELD_INCHES) * canvasDim;
   }
 
-  function pxToInch(pxCoord, canvasDim) {
-    // [0, canvasDim] -> [-72, 72]
+  function pxToInch(pxCoord, canvasDim, isY = false) {
+    if (isY) {
+      return FIELD_HALF - ((pxCoord / canvasDim) * FIELD_INCHES);
+    }
     return ((pxCoord / canvasDim) * FIELD_INCHES) - FIELD_HALF;
   }
 
@@ -3489,7 +3517,7 @@
     const inchTicks = [-60, -36, -12, 12, 36, 60];
     inchTicks.forEach(inch => {
       const px = inchToPx(inch, w);
-      const py = inchToPx(inch, h);
+      const py = inchToPx(inch, h, true);
       ctx.fillText(`${inch}"`, px, h - 3);
       ctx.fillText(`${-inch}"`, 14, py + 3);
     });
@@ -3525,16 +3553,16 @@
         const p1 = waypoints[i + 1];
 
         const x0 = inchToPx(p0.x, w);
-        const y0 = inchToPx(p0.y, h);
+        const y0 = inchToPx(p0.y, h, true);
         const x1 = inchToPx(p1.x, w);
-        const y1 = inchToPx(p1.y, h);
+        const y1 = inchToPx(p1.y, h, true);
 
         if (p1.type === "bezierCurve") {
           // Default Control Points CP1 and CP2 if missing
           const cp1x = inchToPx(p1.x1 !== undefined ? p1.x1 : (p0.x + p1.x) / 2 - 10, w);
-          const cp1y = inchToPx(p1.y1 !== undefined ? p1.y1 : (p0.y + p1.y) / 2 - 10, h);
+          const cp1y = inchToPx(p1.y1 !== undefined ? p1.y1 : (p0.y + p1.y) / 2 - 10, h, true);
           const cp2x = inchToPx(p1.x2 !== undefined ? p1.x2 : (p0.x + p1.x) / 2 + 10, w);
-          const cp2y = inchToPx(p1.y2 !== undefined ? p1.y2 : (p0.y + p1.y) / 2 + 10, h);
+          const cp2y = inchToPx(p1.y2 !== undefined ? p1.y2 : (p0.y + p1.y) / 2 + 10, h, true);
 
           // Glow background line
           ctx.strokeStyle = "rgba(6, 182, 212, 0.3)";
@@ -3608,7 +3636,7 @@
     // 5. Draw Waypoint Nodes & Robot Chassis
     waypoints.forEach((wp, idx) => {
       const wx = inchToPx(wp.x, w);
-      const wy = inchToPx(wp.y, h);
+      const wy = inchToPx(wp.y, h, true);
 
       if (idx === 0) {
         // Start Pose Robot Box (Scaled 18" V5 Bot Chassis)
@@ -3617,7 +3645,7 @@
 
         ctx.save();
         ctx.translate(wx, wy);
-        ctx.rotate(((wp.theta || 0) * Math.PI) / 180);
+        ctx.rotate(-((wp.theta || 0) * Math.PI) / 180);
 
         // Robot Shadow & Fill
         ctx.fillStyle = "rgba(56, 189, 248, 0.3)";
@@ -3775,13 +3803,13 @@
     const pose = interpolatePathPose(timeRatio);
 
     const rx = inchToPx(pose.x, w);
-    const ry = inchToPx(pose.y, h);
+    const ry = inchToPx(pose.y, h, true);
     const botPx = (18 / FIELD_INCHES) * w;
     const halfBot = botPx / 2;
 
     ctx.save();
     ctx.translate(rx, ry);
-    ctx.rotate(((pose.theta || 0) * Math.PI) / 180);
+    ctx.rotate(-((pose.theta || 0) * Math.PI) / 180);
 
     // Animated Robot Box
     ctx.fillStyle = "rgba(16, 185, 129, 0.4)";
@@ -3873,7 +3901,7 @@
 
     currentTeam.comments.forEach((cmt, idx) => {
       const px = inchToPx(cmt.x, w);
-      const py = inchToPx(cmt.y, h);
+      const py = inchToPx(cmt.y, h, true);
 
       const marker = document.createElement("div");
       marker.className = "field-pin-marker";
@@ -3999,7 +4027,7 @@
       const waypoints = [{ x: routine.pose.x, y: routine.pose.y, id: "start" }, ...(routine.actions || [])];
       for (let i = 0; i < waypoints.length; i++) {
         const wx = inchToPx(waypoints[i].x, canvas.width);
-        const wy = inchToPx(waypoints[i].y, canvas.height);
+        const wy = inchToPx(waypoints[i].y, canvas.height, true);
         const dist = Math.hypot(cx - wx, cy - wy);
         if (dist <= 14) {
           isDraggingWaypoint = true;
@@ -4309,7 +4337,7 @@
       `;
       item.onclick = () => {
         const wx = inchToPx(cmt.x, canvas.width);
-        const wy = inchToPx(cmt.y, canvas.height);
+        const wy = inchToPx(cmt.y, canvas.height, true);
         openCommentPopover(cmt, wx, wy);
       };
       list.appendChild(item);
@@ -4771,40 +4799,88 @@
     modal.style.display = "flex";
   }
 
-  function restoreVersionPrompt(ver) {
+  async function restoreVersionPrompt(ver) {
     if (!ver || !ver.snapshot) {
       showToast("Cannot restore: snapshot payload not found", "⚠️");
       return;
     }
 
     if (confirm(`Restore version from ${ver.dateStr}?\n\nEdited by: ${ver.authorName} (${ver.authorRole})\nAction: ${ver.actionSummary}\n\nYour current state will be auto-backed up before restoring.`)) {
-      fetch("/api/team/version/restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teamId: currentTeam.teamId,
-          versionId: ver.id,
-          email: currentUser.email,
-          authorName: currentUser.displayName || currentUser.email.split("@")[0],
-          authorRole: currentUser.role || "Programmer"
-        })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.team) {
-          currentTeam = data.team;
-          if (currentTeam.pathPayload && currentTeam.pathPayload.paths) {
-            activePaths = currentTeam.pathPayload.paths;
-            renderRoutinesSelector(false);
-            renderActionBlocks();
-            drawField();
+      let restoredTeam = null;
+      const apiRoute = resolveApiUrl("/api/team/version/restore");
+      if (apiRoute) {
+        try {
+          const r = await fetch(apiRoute, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              teamId: currentTeam.teamId,
+              versionId: ver.id,
+              email: currentUser.email,
+              authorName: currentUser.displayName || currentUser.email.split("@")[0],
+              authorRole: currentUser.role || "Programmer"
+            })
+          });
+          const data = await r.json();
+          if (data.success && data.team) {
+            restoredTeam = data.team;
           }
-          renderVersionHistory();
-          showToast(`⏮️ Successfully restored version from ${ver.dateStr}!`, "✅");
-          const inspectModal = document.getElementById("modalVersionInspect");
-          if (inspectModal) inspectModal.style.display = "none";
-        }
-      });
+        } catch (_) {}
+      }
+
+      // Fallback for static host / GitHub Pages / offline / non-JSON responses
+      if (!restoredTeam) {
+        const now = Date.now();
+        // Create backup of current state
+        const backupSnapshot = {
+          id: "v_" + now + "_backup_pre_restore",
+          timestamp: now,
+          dateStr: new Date(now).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          authorEmail: currentUser.email,
+          authorName: currentUser.displayName || currentUser.email.split("@")[0],
+          authorRole: currentUser.role || "Programmer",
+          authorColor: getRoleColor(currentUser.role || "Programmer"),
+          actionSummary: `Auto-backup before restoring ${ver.dateStr}`,
+          editType: "auto_backup",
+          snapshot: currentTeam.pathPayload || null
+        };
+
+        currentTeam.pathPayload = ver.snapshot;
+        currentTeam.versionHistory = currentTeam.versionHistory || [];
+        currentTeam.versionHistory.unshift(backupSnapshot);
+        currentTeam.versionHistory.unshift({
+          id: "v_" + (now + 1) + "_restore",
+          timestamp: now + 1,
+          dateStr: new Date(now + 1).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date(now + 1).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          authorEmail: currentUser.email,
+          authorName: currentUser.displayName || currentUser.email.split("@")[0],
+          authorRole: currentUser.role || "Programmer",
+          authorColor: getRoleColor(currentUser.role || "Programmer"),
+          actionSummary: `Restored version from ${ver.dateStr}`,
+          editType: "version_restore",
+          snapshot: ver.snapshot
+        });
+        if (currentTeam.versionHistory.length > 500) currentTeam.versionHistory.length = 500;
+        currentTeam.updatedAt = now + 1;
+
+        await fsSaveTeamDoc(currentTeam);
+        try {
+          localStorage.setItem("lemlib_active_team", JSON.stringify(currentTeam));
+        } catch (_) {}
+        restoredTeam = currentTeam;
+      }
+
+      currentTeam = restoredTeam;
+      if (currentTeam.pathPayload && currentTeam.pathPayload.paths) {
+        activePaths = currentTeam.pathPayload.paths;
+        renderRoutinesSelector(false);
+        renderActionBlocks();
+        drawField();
+      }
+      renderVersionHistory();
+      showToast(`⏮️ Successfully restored version from ${ver.dateStr}!`, "✅");
+      const inspectModal = document.getElementById("modalVersionInspect");
+      if (inspectModal) inspectModal.style.display = "none";
     }
   }
 

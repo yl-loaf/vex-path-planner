@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny rule
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Rules for teams and team presence
+    match /teams/{teamId} {
+      allow read, write: if request.auth != null;
+      
+      match /presence/{memberId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // Rules for rosters
+    match /team_rosters/{rosterId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Rules for user session management
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      match /data/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
