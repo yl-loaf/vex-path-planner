@@ -1746,32 +1746,63 @@
     }
   }
 
-  function promptAddPinComment(x, y) {
+  async function promptAddPinComment(x, y) {
     const text = prompt(`Drop Strategy Comment at (${x.toFixed(1)}", ${y.toFixed(1)}"):\ne.g. "Watch for center mogo rush collision; delay intake 300ms"`);
     if (!text || text.trim() === "") return;
 
-    fetch("/api/team/comment/add", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        teamId: currentTeam.teamId,
-        email: currentUser.email,
-        authorName: currentUser.displayName || currentUser.email.split("@")[0],
-        authorRole: currentUser.role || "Coach",
-        x: Math.round(x * 10) / 10,
-        y: Math.round(y * 10) / 10,
-        text: text.trim()
-      })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.success) {
-        currentTeam.comments = data.comments;
-        renderPinComments();
-        drawField();
-        showToast("📍 Field pin comment added", "💬");
+    const normEmail = (currentUser?.email || "").toLowerCase();
+    const authorName = currentUser?.displayName || normEmail.split("@")[0] || "Member";
+    const authorRole = currentUser?.role || "Coach";
+    const authorColor = getRoleColor(authorRole);
+    const now = Date.now();
+
+    const newComment = {
+      id: "cmt_" + now.toString(36) + "_" + Math.random().toString(36).substring(2, 6),
+      x: Math.round(x * 10) / 10,
+      y: Math.round(y * 10) / 10,
+      text: text.trim(),
+      authorEmail: normEmail,
+      authorName,
+      authorRole,
+      authorColor,
+      timestamp: now,
+      resolved: false,
+      replies: []
+    };
+
+    let updatedComments = null;
+    const apiRoute = resolveApiUrl("/api/team/comment/add");
+    if (apiRoute) {
+      const srvRes = await safeFetchJson(apiRoute, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamId: currentTeam.teamId,
+          email: normEmail,
+          authorName,
+          authorRole,
+          x: newComment.x,
+          y: newComment.y,
+          text: newComment.text
+        })
+      });
+      if (srvRes.ok && srvRes.data?.success && srvRes.data?.comments) {
+        updatedComments = srvRes.data.comments;
       }
-    });
+    }
+
+    if (!updatedComments) {
+      currentTeam.comments = currentTeam.comments || [];
+      currentTeam.comments.unshift(newComment);
+      currentTeam.updatedAt = now;
+      await fsSaveTeamDoc(currentTeam);
+      updatedComments = currentTeam.comments;
+    }
+
+    currentTeam.comments = updatedComments;
+    renderPinComments();
+    drawField();
+    showToast("📍 Field pin comment added", "💬");
   }
 
   function openCommentPopover(cmt, px, py) {
@@ -1827,72 +1858,127 @@
 
     pop.querySelector("#btnCloseCommentPop").onclick = () => pop.remove();
 
-    pop.querySelector("#btnSendReply").onclick = () => {
+    pop.querySelector("#btnSendReply").onclick = async () => {
       const repInput = pop.querySelector("#inputCommentReply");
       const text = repInput ? repInput.value.trim() : "";
       if (!text) return;
-      fetch("/api/team/comment/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teamId: currentTeam.teamId,
-          commentId: cmt.id,
-          email: currentUser.email,
-          authorName: currentUser.displayName || currentUser.email.split("@")[0],
-          authorRole: currentUser.role || "Programmer",
-          text
-        })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          currentTeam.comments = data.comments;
-          pop.remove();
-          renderPinComments();
-        }
-      });
-    };
 
-    pop.querySelector("#chkResolveComment").onchange = (e) => {
-      fetch("/api/team/comment/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teamId: currentTeam.teamId,
-          commentId: cmt.id,
-          resolved: e.target.checked
-        })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          currentTeam.comments = data.comments;
-          pop.remove();
-          renderPinComments();
-          drawField();
-        }
-      });
-    };
+      const normEmail = (currentUser?.email || "").toLowerCase();
+      const authorName = currentUser?.displayName || normEmail.split("@")[0] || "Member";
+      const authorRole = currentUser?.role || "Programmer";
+      const now = Date.now();
 
-    pop.querySelector("#btnDeleteComment").onclick = () => {
-      if (confirm("Delete this field pin comment?")) {
-        fetch("/api/team/comment/delete", {
+      const newReply = {
+        id: "rep_" + now.toString(36),
+        authorEmail: normEmail,
+        authorName,
+        authorRole,
+        text,
+        timestamp: now
+      };
+
+      let updatedComments = null;
+      const apiRoute = resolveApiUrl("/api/team/comment/reply");
+      if (apiRoute) {
+        const srvRes = await safeFetchJson(apiRoute, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             teamId: currentTeam.teamId,
-            commentId: cmt.id
+            commentId: cmt.id,
+            email: normEmail,
+            authorName,
+            authorRole,
+            text
           })
-        })
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) {
-            currentTeam.comments = data.comments;
-            pop.remove();
-            renderPinComments();
-            drawField();
-          }
         });
+        if (srvRes.ok && srvRes.data?.success && srvRes.data?.comments) {
+          updatedComments = srvRes.data.comments;
+        }
+      }
+
+      if (!updatedComments) {
+        currentTeam.comments = currentTeam.comments || [];
+        const targetCmt = currentTeam.comments.find(c => c.id === cmt.id);
+        if (targetCmt) {
+          targetCmt.replies = targetCmt.replies || [];
+          targetCmt.replies.push(newReply);
+          currentTeam.updatedAt = now;
+          await fsSaveTeamDoc(currentTeam);
+        }
+        updatedComments = currentTeam.comments;
+      }
+
+      currentTeam.comments = updatedComments;
+      pop.remove();
+      renderPinComments();
+    };
+
+    pop.querySelector("#chkResolveComment").onchange = async (e) => {
+      const isResolved = e.target.checked;
+      let updatedComments = null;
+      const apiRoute = resolveApiUrl("/api/team/comment/resolve");
+      if (apiRoute) {
+        const srvRes = await safeFetchJson(apiRoute, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teamId: currentTeam.teamId,
+            commentId: cmt.id,
+            resolved: isResolved
+          })
+        });
+        if (srvRes.ok && srvRes.data?.success && srvRes.data?.comments) {
+          updatedComments = srvRes.data.comments;
+        }
+      }
+
+      if (!updatedComments) {
+        currentTeam.comments = currentTeam.comments || [];
+        const targetCmt = currentTeam.comments.find(c => c.id === cmt.id);
+        if (targetCmt) {
+          targetCmt.resolved = isResolved;
+          currentTeam.updatedAt = Date.now();
+          await fsSaveTeamDoc(currentTeam);
+        }
+        updatedComments = currentTeam.comments;
+      }
+
+      currentTeam.comments = updatedComments;
+      pop.remove();
+      renderPinComments();
+      drawField();
+    };
+
+    pop.querySelector("#btnDeleteComment").onclick = async () => {
+      if (confirm("Delete this field pin comment?")) {
+        let updatedComments = null;
+        const apiRoute = resolveApiUrl("/api/team/comment/delete");
+        if (apiRoute) {
+          const srvRes = await safeFetchJson(apiRoute, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              teamId: currentTeam.teamId,
+              commentId: cmt.id
+            })
+          });
+          if (srvRes.ok && srvRes.data?.success && srvRes.data?.comments) {
+            updatedComments = srvRes.data.comments;
+          }
+        }
+
+        if (!updatedComments) {
+          currentTeam.comments = (currentTeam.comments || []).filter(c => c.id !== cmt.id);
+          currentTeam.updatedAt = Date.now();
+          await fsSaveTeamDoc(currentTeam);
+          updatedComments = currentTeam.comments;
+        }
+
+        currentTeam.comments = updatedComments;
+        pop.remove();
+        renderPinComments();
+        drawField();
       }
     };
   }
@@ -1984,25 +2070,46 @@
     });
   }
 
-  function castStrategyVote(strategyId, vote) {
+  async function castStrategyVote(strategyId, vote) {
     if (!currentTeam || !currentUser) return;
-    fetch("/api/team/strategy/vote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        teamId: currentTeam.teamId,
-        strategyId,
-        email: currentUser.email,
-        vote
-      })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.success) {
-        currentTeam.strategies = data.strategies;
-        renderStrategies();
+    const normEmail = (currentUser.email || "").toLowerCase();
+
+    let updatedStrategies = null;
+    const apiRoute = resolveApiUrl("/api/team/strategy/vote");
+    if (apiRoute) {
+      const srvRes = await safeFetchJson(apiRoute, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamId: currentTeam.teamId,
+          strategyId,
+          email: normEmail,
+          vote
+        })
+      });
+      if (srvRes.ok && srvRes.data?.success && srvRes.data?.strategies) {
+        updatedStrategies = srvRes.data.strategies;
       }
-    });
+    }
+
+    if (!updatedStrategies) {
+      currentTeam.strategies = currentTeam.strategies || [];
+      const strat = currentTeam.strategies.find(s => s.id === strategyId);
+      if (strat) {
+        strat.votes = strat.votes || {};
+        if (strat.votes[normEmail] === vote) {
+          delete strat.votes[normEmail];
+        } else {
+          strat.votes[normEmail] = vote;
+        }
+        currentTeam.updatedAt = Date.now();
+        await fsSaveTeamDoc(currentTeam);
+      }
+      updatedStrategies = currentTeam.strategies;
+    }
+
+    currentTeam.strategies = updatedStrategies;
+    renderStrategies();
   }
 
   // --------------------------------------------------------------------------
@@ -3008,7 +3115,7 @@
     document.getElementById("btnCancelStrategy")?.addEventListener("click", () => {
       if (modalStrat) modalStrat.style.display = "none";
     });
-    document.getElementById("btnSubmitStrategy")?.addEventListener("click", () => {
+    document.getElementById("btnSubmitStrategy")?.addEventListener("click", async () => {
       const title = document.getElementById("txtStratTitle")?.value.trim();
       const desc = document.getElementById("txtStratDesc")?.value.trim();
       const routine = document.getElementById("selStratRoutine")?.value || "";
@@ -3018,27 +3125,54 @@
         return;
       }
 
-      fetch("/api/team/strategy/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teamId: currentTeam.teamId,
-          email: currentUser.email,
-          authorName: currentUser.displayName || currentUser.email.split("@")[0],
+      const normEmail = (currentUser?.email || "").toLowerCase();
+      const authorName = currentUser?.displayName || normEmail.split("@")[0] || "Member";
+      const now = Date.now();
+
+      let updatedStrategies = null;
+      const apiRoute = resolveApiUrl("/api/team/strategy/add");
+      if (apiRoute) {
+        const srvRes = await safeFetchJson(apiRoute, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teamId: currentTeam.teamId,
+            email: normEmail,
+            authorName,
+            title,
+            description: desc,
+            targetRoutine: routine
+          })
+        });
+        if (srvRes.ok && srvRes.data?.success && srvRes.data?.strategies) {
+          updatedStrategies = srvRes.data.strategies;
+        }
+      }
+
+      if (!updatedStrategies) {
+        currentTeam.strategies = currentTeam.strategies || [];
+        const newStrat = {
+          id: "strat_" + now.toString(36),
           title,
           description: desc,
-          targetRoutine: routine
-        })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          currentTeam.strategies = data.strategies;
-          if (modalStrat) modalStrat.style.display = "none";
-          renderStrategies();
-          showToast("🗳️ Match strategy proposed to team", "✨");
-        }
-      });
+          targetRoutine: routine,
+          authorEmail: normEmail,
+          authorName,
+          createdAt: now,
+          status: "active",
+          votes: { [normEmail]: "rocket" }
+        };
+        currentTeam.strategies.unshift(newStrat);
+        currentTeam.updatedAt = now;
+        await fsSaveTeamDoc(currentTeam);
+        updatedStrategies = currentTeam.strategies;
+      }
+
+      currentTeam.strategies = updatedStrategies;
+      const modalStrat = document.getElementById("modalProposeStrategy");
+      if (modalStrat) modalStrat.style.display = "none";
+      renderStrategies();
+      showToast("🗳️ Match strategy proposed to team", "✨");
     });
 
     // 10. Version Inspect Modal Close & Confirm Restore
@@ -3394,47 +3528,74 @@
         }
 
         try {
-          const res = await fetch("/api/team/import-project", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              teamId: currentTeam.teamId,
-              email: currentUser.email,
-              authorName: currentUser.displayName,
-              authorRole: currentUser.role,
-              source: "planner",
-              pathPayload: { paths: local.paths },
-              projectData: local.project
-            })
-          });
-          const data = await res.json();
+          let updatedTeam = null;
+          const apiRoute = resolveApiUrl("/api/team/import-project");
+          if (apiRoute) {
+            const srvRes = await safeFetchJson(apiRoute, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                teamId: currentTeam.teamId,
+                email: currentUser.email,
+                authorName: currentUser.displayName,
+                authorRole: currentUser.role,
+                source: "planner",
+                pathPayload: { paths: local.paths },
+                projectData: local.project
+              })
+            });
+            if (srvRes.ok && srvRes.data?.success && srvRes.data?.team) {
+              updatedTeam = srvRes.data.team;
+            }
+          }
+
+          // Fallback for static host / GitHub Pages / offline / non-JSON responses
+          if (!updatedTeam) {
+            const now = Date.now();
+            currentTeam.pathPayload = { paths: local.paths };
+            currentTeam.project = local.project || currentTeam.project;
+
+            currentTeam.versionHistory = currentTeam.versionHistory || [];
+            currentTeam.versionHistory.unshift({
+              id: "v_" + now + "_import_planner",
+              timestamp: now,
+              dateStr: new Date(now).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+              authorEmail: currentUser.email,
+              authorName: currentUser.displayName || currentUser.email.split("@")[0],
+              authorRole: currentUser.role || "Programmer",
+              authorColor: getRoleColor(currentUser.role || "Programmer"),
+              actionSummary: `Imported project "${local.project?.name || 'Visual Planner'}" into team workspace`,
+              editType: "project_import",
+              snapshot: { paths: local.paths }
+            });
+            if (currentTeam.versionHistory.length > 500) currentTeam.versionHistory.length = 500;
+            currentTeam.updatedAt = now;
+
+            await fsSaveTeamDoc(currentTeam);
+            try {
+              localStorage.setItem("lemlib_active_team", JSON.stringify(currentTeam));
+            } catch (_) {}
+            updatedTeam = currentTeam;
+          }
+
           btnExecutePlannerImport.disabled = false;
           btnExecutePlannerImport.textContent = "🗺️ Confirm & Import to Team";
 
-          if (data.error) {
-            alert(data.error);
-            if (plannerImportStatus) {
-              plannerImportStatus.style.background = "rgba(239, 68, 68, 0.1)";
-              plannerImportStatus.style.color = "#f87171";
-              plannerImportStatus.textContent = `❌ ${data.error}`;
-            }
-          } else if (data.success && data.team) {
-            currentTeam = data.team;
-            if (currentTeam.pathPayload?.paths) {
-              activePaths = currentTeam.pathPayload.paths;
-              activeRoutineIndex = 0;
-            }
-            if (modalPlannerImport) modalPlannerImport.style.display = "none";
-            renderRoutinesSelector();
-            renderActionBlocks();
-            renderVersionHistory();
-            drawField();
-            showToast("🚀 Successfully imported project from Visual Planner!", "🎉");
+          currentTeam = updatedTeam;
+          if (currentTeam.pathPayload?.paths) {
+            activePaths = currentTeam.pathPayload.paths;
+            activeRoutineIndex = 0;
           }
+          if (modalPlannerImport) modalPlannerImport.style.display = "none";
+          renderRoutinesSelector();
+          renderActionBlocks();
+          renderVersionHistory();
+          drawField();
+          showToast("🚀 Successfully imported project from Visual Planner!", "🎉");
         } catch (err) {
           btnExecutePlannerImport.disabled = false;
           btnExecutePlannerImport.textContent = "🗺️ Confirm & Import to Team";
-          alert("Import failed: " + err.message);
+          alert("Import failed: " + (err.message || err));
         }
       });
     }
@@ -3476,7 +3637,7 @@
       btnExecuteGithubImport.addEventListener("click", async () => {
         if (!currentTeam || !currentUser) return;
         const repoVal = txtImportGithubRepo?.value.trim();
-        const branchVal = txtImportGithubBranch?.value.trim();
+        const branchVal = txtImportGithubBranch?.value.trim() || "main";
         const tokenVal = txtImportGithubToken?.value.trim();
 
         if (!repoVal) {
@@ -3496,14 +3657,55 @@
         }
 
         try {
-          const cloneRes = await fetch("/api/github/clone", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
-          });
-          const cloneData = await cloneRes.json();
-          if (!cloneData.success || !cloneData.files) {
-            throw new Error(cloneData.error || "Failed to clone repository from GitHub");
+          let cloneData = null;
+          const apiRoute = resolveApiUrl("/api/github/clone");
+          if (apiRoute) {
+            const srvRes = await safeFetchJson(apiRoute, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
+            });
+            if (srvRes.ok && srvRes.data?.success && srvRes.data?.files) {
+              cloneData = srvRes.data;
+            }
+          }
+
+          // Fallback for static host / GitHub Pages: fetch raw repository files directly via GitHub REST API
+          if (!cloneData) {
+            const cleanRepo = repoVal.replace(/https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
+            const headers = { "Accept": "application/vnd.github.v3+json" };
+            if (tokenVal) headers["Authorization"] = `token ${tokenVal}`;
+
+            if (githubImportStatus) {
+              githubImportStatus.textContent = `⚙️ Fetching repository tree directly from GitHub API (${cleanRepo})...`;
+            }
+
+            const treeRes = await fetch(`https://api.github.com/repos/${cleanRepo}/git/trees/${branchVal}?recursive=1`, { headers });
+            if (!treeRes.ok) {
+              throw new Error(`GitHub API returned ${treeRes.status}: check repository name, branch, or PAT token.`);
+            }
+            const treeData = await treeRes.json();
+            const cppFiles = (treeData.tree || []).filter(f => f.type === "blob" && (f.path.endsWith(".cpp") || f.path.endsWith(".hpp") || f.path.endsWith(".h")));
+
+            const fetchedFiles = {};
+            for (const f of cppFiles.slice(0, 30)) {
+              const rawRes = await fetch(`https://raw.githubusercontent.com/${cleanRepo}/${branchVal}/${f.path}`, tokenVal ? { headers: { "Authorization": `token ${tokenVal}` } } : {});
+              if (rawRes.ok) {
+                fetchedFiles[f.path] = await rawRes.text();
+              }
+            }
+
+            cloneData = {
+              success: true,
+              repoName: cleanRepo.split("/").pop() || cleanRepo,
+              branch: branchVal,
+              fileCount: Object.keys(fetchedFiles).length,
+              files: fetchedFiles
+            };
+          }
+
+          if (!cloneData || !cloneData.files || Object.keys(cloneData.files).length === 0) {
+            throw new Error("No C++ autonomous files found in selected repository.");
           }
 
           if (githubImportStatus) {
@@ -3511,46 +3713,70 @@
           }
 
           const detectedPaths = parseGithubAutonFiles(cloneData.files, cloneData.repoName);
+          const now = Date.now();
 
-          const importRes = await fetch("/api/team/import-project", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              teamId: currentTeam.teamId,
-              email: currentUser.email,
-              authorName: currentUser.displayName,
-              authorRole: currentUser.role,
-              source: "github",
-              pathPayload: { paths: detectedPaths },
-              projectData: { name: cloneData.repoName || repoVal, files: cloneData.files },
-              repoInfo: { repo: repoVal, branch: cloneData.branch, fileCount: cloneData.fileCount }
-            })
-          });
-          const importData = await importRes.json();
+          let importData = null;
+          const importRoute = resolveApiUrl("/api/team/import-project");
+          if (importRoute) {
+            const srvImport = await safeFetchJson(importRoute, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                teamId: currentTeam.teamId,
+                email: currentUser.email,
+                authorName: currentUser.displayName,
+                authorRole: currentUser.role,
+                source: "github",
+                pathPayload: { paths: detectedPaths },
+                projectData: { name: cloneData.repoName || repoVal, files: cloneData.files },
+                repoInfo: { repo: repoVal, branch: cloneData.branch, fileCount: cloneData.fileCount }
+              })
+            });
+            if (srvImport.ok && srvImport.data?.success) {
+              importData = srvImport.data;
+            }
+          }
+
+          if (!importData) {
+            currentTeam.pathPayload = { paths: detectedPaths };
+            currentTeam.project = { name: cloneData.repoName || repoVal, files: cloneData.files };
+            currentTeam.versionHistory = currentTeam.versionHistory || [];
+            currentTeam.versionHistory.unshift({
+              id: "v_" + now + "_import_github",
+              timestamp: now,
+              dateStr: new Date(now).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+              authorEmail: currentUser.email,
+              authorName: currentUser.displayName || currentUser.email.split("@")[0],
+              authorRole: currentUser.role || "Programmer",
+              authorColor: getRoleColor(currentUser.role || "Programmer"),
+              actionSummary: `Cloned & imported GitHub repository "${repoVal}"`,
+              editType: "github_import",
+              snapshot: { paths: detectedPaths }
+            });
+            if (currentTeam.versionHistory.length > 500) currentTeam.versionHistory.length = 500;
+            currentTeam.updatedAt = now;
+
+            await fsSaveTeamDoc(currentTeam);
+            try {
+              localStorage.setItem("lemlib_active_team", JSON.stringify(currentTeam));
+            } catch (_) {}
+            importData = { success: true, team: currentTeam };
+          }
 
           btnExecuteGithubImport.disabled = false;
           btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
 
-          if (importData.error) {
-            alert(importData.error);
-            if (githubImportStatus) {
-              githubImportStatus.style.background = "rgba(239, 68, 68, 0.1)";
-              githubImportStatus.style.color = "#f87171";
-              githubImportStatus.textContent = `❌ ${importData.error}`;
-            }
-          } else if (importData.success && importData.team) {
-            currentTeam = importData.team;
-            if (currentTeam.pathPayload?.paths) {
-              activePaths = currentTeam.pathPayload.paths;
-              activeRoutineIndex = 0;
-            }
-            if (modalGithubImport) modalGithubImport.style.display = "none";
-            renderRoutinesSelector();
-            renderActionBlocks();
-            renderVersionHistory();
-            drawField();
-            showToast(`🚀 Successfully cloned & imported ${repoVal} into team!`, "🎉");
+          currentTeam = importData.team || currentTeam;
+          if (currentTeam.pathPayload?.paths) {
+            activePaths = currentTeam.pathPayload.paths;
+            activeRoutineIndex = 0;
           }
+          if (modalGithubImport) modalGithubImport.style.display = "none";
+          renderRoutinesSelector();
+          renderActionBlocks();
+          renderVersionHistory();
+          drawField();
+          showToast(`🚀 Successfully imported ${repoVal} into team workspace!`, "🎉");
         } catch (err) {
           btnExecuteGithubImport.disabled = false;
           btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
@@ -3559,7 +3785,7 @@
             githubImportStatus.style.color = "#f87171";
             githubImportStatus.textContent = `❌ Error: ${err.message}`;
           }
-          alert("GitHub import failed: " + err.message);
+          alert("GitHub import failed: " + (err.message || err));
         }
       });
     }
