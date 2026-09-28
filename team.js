@@ -21,6 +21,12 @@
   const FIELD_INCHES = 144; // VEX Field is 144" x 144"
   const FIELD_HALF = 72;
 
+  const fieldImg = new Image();
+  fieldImg.src = "field.jpg";
+  let fieldImgLoaded = false;
+  fieldImg.onload = () => { fieldImgLoaded = true; if (typeof drawField === "function") drawField(); };
+  fieldImg.onerror = () => { fieldImgLoaded = false; if (typeof drawField === "function") drawField(); };
+
   // DOM Elements
   const canvas = document.getElementById("teamFieldCanvas");
   const ctx = canvas ? canvas.getContext("2d") : null;
@@ -440,6 +446,177 @@
     }
 
     modal.style.display = "flex";
+  }
+
+  async function fetchGithubRepositoryFiles(repoInput, branchInput, tokenInput, onProgress) {
+    let cleanRepo = String(repoInput || "").trim();
+    cleanRepo = cleanRepo.replace(/^https?:\/\/(www\.)?github\.com\//i, "").replace(/\.git$/i, "").replace(/\/+$/, "");
+
+    let urlBranch = null;
+    if (cleanRepo.includes('/tree/')) {
+      const parts = cleanRepo.split('/tree/');
+      cleanRepo = parts[0];
+      urlBranch = parts[1] ? parts[1].trim() : null;
+    }
+
+    const parts = cleanRepo.split('/').filter(Boolean);
+    if (parts.length < 2) {
+      throw new Error("Invalid repository format. Please specify 'owner/repo' or full GitHub URL.");
+    }
+    const owner = parts[0];
+    const repoName = parts[1];
+
+    let rawBranch = (branchInput || "").trim();
+    if (rawBranch.includes("autodetect") || rawBranch === "main (or autodetect)") {
+      rawBranch = "";
+    }
+    let targetBranch = rawBranch || urlBranch || null;
+
+    const token = (tokenInput || "").trim();
+    const headers = { "Accept": "application/vnd.github.v3+json" };
+    if (token) {
+      headers["Authorization"] = `token ${token}`;
+    }
+
+    if (onProgress) onProgress("Connecting to GitHub and checking repository details...");
+
+    // 1. Resolve default branch if not explicitly provided
+    if (!targetBranch) {
+      const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, { headers }).catch(() => null);
+      if (metaRes) {
+        if (metaRes.status === 404) {
+          throw new Error(token ? `Repository '${owner}/${repoName}' not found or PAT lacks 'repo' scope.` : `Repository '${owner}/${repoName}' not found or is private. Please enter a valid Personal Access Token (PAT).`);
+        }
+        if (metaRes.status === 401 || metaRes.status === 403) {
+          throw new Error("GitHub API authentication error. Please verify your Personal Access Token.");
+        }
+        if (metaRes.ok) {
+          const metaData = await metaRes.json().catch(() => ({}));
+          targetBranch = metaData.default_branch || "main";
+        }
+      }
+      if (!targetBranch) targetBranch = "main";
+    }
+
+    if (onProgress) onProgress(`Fetching file tree for branch '${targetBranch}'...`);
+
+    // 2. Fetch Git Trees API
+    const treeUrl = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${targetBranch}?recursive=1`;
+    let treeRes = await fetch(treeUrl, { headers }).catch(() => null);
+
+    // Fallback if targetBranch failed and branch was not user-specified
+    if ((!treeRes || !treeRes.ok) && !rawBranch) {
+      const altBranch = targetBranch === "main" ? "master" : "main";
+      const altUrl = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${altBranch}?recursive=1`;
+      const altRes = await fetch(altUrl, { headers }).catch(() => null);
+      if (altRes && altRes.ok) {
+        treeRes = altRes;
+        targetBranch = altBranch;
+      }
+    }
+
+    if (!treeRes || !treeRes.ok) {
+      const st = treeRes ? treeRes.status : 0;
+      if (st === 404) {
+        throw new Error(`Branch '${targetBranch}' or repository '${owner}/${repoName}' not found. Check repository name and branch.`);
+      }
+      throw new Error(`GitHub API returned error ${st || 'Network failure'}. Check PAT permissions.`);
+    }
+
+    const treeData = await treeRes.json().catch(() => ({}));
+    if (!treeData || !Array.isArray(treeData.tree)) {
+      throw new Error("Invalid response structure from GitHub API.");
+    }
+
+    // Filter relevant C++ source and project files
+    const relevantEntries = treeData.tree.filter(item => {
+      if (item.type !== 'blob') return false;
+      const p = item.path;
+      return (
+        p.startsWith('src/') ||
+        p.startsWith('include/') ||
+        p.endsWith('.cpp') ||
+        p.endsWith('.hpp') ||
+        p.endsWith('.h') ||
+        p.endsWith('.c') ||
+        p.endsWith('.cc') ||
+        p.endsWith('.mk') ||
+        p.endsWith('.txt') ||
+        p.endsWith('.md') ||
+        p.endsWith('.json') ||
+        p === 'Makefile' ||
+        p === 'project.pros'
+      );
+    });
+
+    if (relevantEntries.length === 0) {
+      throw new Error(`No C++ autonomous files found in '${owner}/${repoName}' on branch '${targetBranch}'.`);
+    }
+
+    if (onProgress) onProgress(`Downloading ${relevantEntries.length} C++ files...`);
+
+    const fetchedFiles = {};
+    const total = relevantEntries.length;
+    let completed = 0;
+    const CONCURRENCY = 15;
+    let curIdx = 0;
+
+    async function worker() {
+      while (curIdx < relevantEntries.length) {
+        const idx = curIdx++;
+        const item = relevantEntries[idx];
+        try {
+          let fileText = null;
+          // ALWAYS use GitHub API endpoint for authenticated requests to eliminate raw.githubusercontent CORS preflight failures
+          if (token) {
+            const contentUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/${item.path}?ref=${targetBranch}`;
+            const cRes = await fetch(contentUrl, {
+              headers: { ...headers, 'Accept': 'application/vnd.github.v3.raw' }
+            }).catch(() => null);
+            if (cRes && cRes.ok) {
+              fileText = await cRes.text();
+            }
+          } else {
+            const rawUrl = `https://raw.githubusercontent.com/${owner}/${repoName}/${targetBranch}/${item.path}`;
+            const rRes = await fetch(rawUrl).catch(() => null);
+            if (rRes && rRes.ok) {
+              fileText = await rRes.text();
+            } else {
+              const cRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${item.path}?ref=${targetBranch}`, { headers }).catch(() => null);
+              if (cRes && cRes.ok) {
+                const cJson = await cRes.json().catch(() => ({}));
+                if (cJson.content) {
+                  fileText = atob(cJson.content.replace(/\s/g, ''));
+                }
+              }
+            }
+          }
+
+          if (fileText !== null && !fileText.trim().startsWith('<!DOCTYPE html>')) {
+            fetchedFiles[item.path] = fileText;
+          }
+        } catch (e) {
+          console.warn(`[GitHub Clone] Skipped downloading ${item.path}:`, e);
+        } finally {
+          completed++;
+          if (onProgress) onProgress(`Downloaded ${completed}/${total} files...`);
+        }
+      }
+    }
+
+    const workers = [];
+    for (let w = 0; w < Math.min(CONCURRENCY, relevantEntries.length); w++) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+
+    return {
+      success: true,
+      repoName: repoName,
+      branch: targetBranch,
+      fileCount: Object.keys(fetchedFiles).length,
+      files: fetchedFiles
+    };
   }
 
   function openGithubPushModal() {
@@ -1991,53 +2168,108 @@
 
     ctx.clearRect(0, 0, w, h);
 
-    // 1. Draw Field Foam Tiles (6x6 Grid = 36 tiles)
-    const tileSize = w / 6;
-    for (let r = 0; r < 6; r++) {
-      for (let c = 0; c < 6; c++) {
-        ctx.fillStyle = (r + c) % 2 === 0 ? "#111827" : "#0f172a";
-        ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
-        ctx.strokeStyle = "#1e293b";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(c * tileSize, r * tileSize, tileSize, tileSize);
+    // 1. Draw Field Background Image or High-Contrast Foam Tiles
+    if (fieldImgLoaded && fieldImg.complete && fieldImg.naturalWidth > 0) {
+      ctx.drawImage(fieldImg, 0, 0, w, h);
+    } else {
+      // 6x6 Grid = 36 Foam Tiles
+      const tileSize = w / 6;
+      for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 6; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? "#111827" : "#0f172a";
+          ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(c * tileSize, r * tileSize, tileSize, tileSize);
+        }
       }
+
+      // Alliance Starting Zones
+      ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
+      ctx.fillRect(0, 0, tileSize * 2, tileSize * 2);
+      ctx.fillStyle = "rgba(59, 130, 246, 0.15)";
+      ctx.fillRect(w - tileSize * 2, h - tileSize * 2, tileSize * 2, tileSize * 2);
     }
 
-    // 2. Draw Field Center & Tape Lines
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
+    // 2. Draw Tile Grid Overlay & Scale Ticks
+    const tileSize = w / 6;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 6; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * tileSize, 0);
+      ctx.lineTo(i * tileSize, h);
+      ctx.moveTo(0, i * tileSize);
+      ctx.lineTo(w, i * tileSize);
+      ctx.stroke();
+    }
+
+    // 3. Draw Odometry Coordinate Axes (X: Blue/Cyan, Y: Red/Amber)
     ctx.lineWidth = 2;
+    // X Axis Line (Horizontal, Y=0)
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
     ctx.beginPath();
-    // Horizontal center
     ctx.moveTo(0, h / 2);
     ctx.lineTo(w, h / 2);
-    // Vertical center
+    ctx.stroke();
+
+    // Y Axis Line (Vertical, X=0)
+    ctx.strokeStyle = "rgba(239, 68, 68, 0.4)";
+    ctx.beginPath();
     ctx.moveTo(w / 2, 0);
     ctx.lineTo(w / 2, h);
     ctx.stroke();
 
-    // 3. Draw Alliance Starting Zones (Override 2026-27 field)
-    ctx.fillStyle = "rgba(239, 68, 68, 0.12)";
-    ctx.fillRect(0, 0, tileSize * 2, tileSize * 2);
-    ctx.fillStyle = "rgba(59, 130, 246, 0.12)";
-    ctx.fillRect(w - tileSize * 2, h - tileSize * 2, tileSize * 2, tileSize * 2);
+    // Center Origin Badge
+    ctx.fillStyle = "#38bdf8";
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Field Coordinate Axis Labels (-60", -36", -12", 0", +12", +36", +60")
+    ctx.fillStyle = "rgba(248, 250, 252, 0.6)";
+    ctx.font = "9px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+
+    const inchTicks = [-60, -36, -12, 12, 36, 60];
+    inchTicks.forEach(inch => {
+      const px = inchToPx(inch, w);
+      const py = inchToPx(inch, h);
+      ctx.fillText(`${inch}"`, px, h - 3);
+      ctx.fillText(`${-inch}"`, 14, py + 3);
+    });
+
+    // Outer Perimeter Border Frame
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1, 1, w - 2, h - 2);
 
     // Current Routine
     const routine = activePaths[activeRoutineIndex] || activePaths[0];
     if (!routine) return;
 
     const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
-    const sx = inchToPx(startPose.x, w);
-    const sy = inchToPx(startPose.y, h);
-
-    // Draw Trajectory Spline Path
-    const waypoints = [{ x: startPose.x, y: startPose.y, theta: startPose.theta, type: "start" }];
+    const waypoints = [{ x: startPose.x, y: startPose.y, theta: startPose.theta, type: "start", id: "start_pose" }];
     (routine.actions || []).forEach((act) => {
       if (act.x !== undefined && act.y !== undefined) {
         waypoints.push({ ...act });
       }
     });
 
+    // 4. Draw Trajectory Spline Line with Directional Arrows
     if (waypoints.length > 1) {
+      // Glow background line
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(inchToPx(waypoints[0].x, w), inchToPx(waypoints[0].y, h));
+      for (let i = 1; i < waypoints.length; i++) {
+        ctx.lineTo(inchToPx(waypoints[i].x, w), inchToPx(waypoints[i].y, h));
+      }
+      ctx.stroke();
+
+      // Sharp foreground trajectory path
       ctx.strokeStyle = "#38bdf8";
       ctx.lineWidth = 3;
       ctx.setLineDash([]);
@@ -2047,60 +2279,135 @@
         ctx.lineTo(inchToPx(waypoints[i].x, w), inchToPx(waypoints[i].y, h));
       }
       ctx.stroke();
+
+      // Direction Arrows along segments
+      for (let i = 0; i < waypoints.length - 1; i++) {
+        const x1 = inchToPx(waypoints[i].x, w);
+        const y1 = inchToPx(waypoints[i].y, h);
+        const x2 = inchToPx(waypoints[i + 1].x, w);
+        const y2 = inchToPx(waypoints[i + 1].y, h);
+
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+
+        ctx.save();
+        ctx.translate(midX, midY);
+        ctx.rotate(angle);
+        ctx.fillStyle = "#38bdf8";
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(-5, -4);
+        ctx.lineTo(-5, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
-    // Draw Waypoint Points & Actions
+    // 5. Draw Waypoint Nodes & Robot Chassis
     waypoints.forEach((wp, idx) => {
       const wx = inchToPx(wp.x, w);
       const wy = inchToPx(wp.y, h);
 
       if (idx === 0) {
-        // Start Pose Robot Box
+        // Start Pose Robot Box (Scaled 18" V5 Bot Chassis)
+        const botPx = (18 / FIELD_INCHES) * w;
+        const halfBot = botPx / 2;
+
         ctx.save();
         ctx.translate(wx, wy);
         ctx.rotate(((wp.theta || 0) * Math.PI) / 180);
-        ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
+
+        // Robot Shadow & Fill
+        ctx.fillStyle = "rgba(56, 189, 248, 0.3)";
         ctx.strokeStyle = "#38bdf8";
         ctx.lineWidth = 2;
-        ctx.fillRect(-14, -14, 28, 28);
-        ctx.strokeRect(-14, -14, 28, 28);
-        // Heading pointer
+        ctx.fillRect(-halfBot, -halfBot, botPx, botPx);
+        ctx.strokeRect(-halfBot, -halfBot, botPx, botPx);
+
+        // Drive Wheels Representation
+        ctx.fillStyle = "#0f172a";
+        ctx.fillRect(-halfBot - 2, -halfBot + 2, 4, halfBot);
+        ctx.fillRect(halfBot - 2, -halfBot + 2, 4, halfBot);
+        ctx.fillRect(-halfBot - 2, 2, 4, halfBot - 2);
+        ctx.fillRect(halfBot - 2, 2, 4, halfBot - 2);
+
+        // Front Intake / Heading Pointer
         ctx.fillStyle = "#f59e0b";
         ctx.beginPath();
-        ctx.moveTo(0, -18);
-        ctx.lineTo(6, -12);
-        ctx.lineTo(-6, -12);
+        ctx.moveTo(0, -halfBot - 6);
+        ctx.lineTo(6, -halfBot + 2);
+        ctx.lineTo(-6, -halfBot + 2);
         ctx.closePath();
         ctx.fill();
+
         ctx.restore();
 
-        // Label
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 10px sans-serif";
-        ctx.fillText("START", wx + 16, wy + 4);
-      } else {
-        // Waypoint Circle
-        const isSelected = selectedActionId === wp.id;
-        ctx.fillStyle = isSelected ? "#f59e0b" : "#0284c7";
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = isSelected ? 3 : 2;
+        // Start Label Badge
+        ctx.fillStyle = "#0284c7";
         ctx.beginPath();
-        ctx.arc(wx, wy, 8, 0, Math.PI * 2);
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(wx + 12, wy - 18, 62, 18, 4);
+        } else {
+          ctx.fillRect(wx + 12, wy - 18, 62, 18);
+        }
         ctx.fill();
-        ctx.stroke();
-
-        // Action Number inside circle
         ctx.fillStyle = "#ffffff";
         ctx.font = "bold 9px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
+        ctx.fillText(`START (${wp.x.toFixed(0)}, ${wp.y.toFixed(0)})`, wx + 43, wy - 9);
+      } else {
+        // Waypoint Node Circle
+        const isSelected = selectedActionId === wp.id;
+
+        // Pulse / Glow ring for selected
+        if (isSelected) {
+          ctx.strokeStyle = "rgba(245, 158, 11, 0.4)";
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.arc(wx, wy, 12, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = isSelected ? "#f59e0b" : "#0284c7";
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Action Index inside node
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
         ctx.fillText(String(idx), wx, wy);
 
-        // Action Type Label
-        ctx.fillStyle = "#cbd5e1";
-        ctx.font = "10px sans-serif";
+        // Action Label Badge
+        const typeStr = wp.type || "Move";
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.strokeStyle = isSelected ? "#f59e0b" : "#334155";
+        ctx.lineWidth = 1;
+        const labelText = `#${idx} ${typeStr} (${wp.x.toFixed(0)}, ${wp.y.toFixed(0)})`;
+        const textWidth = ctx.measureText(labelText).width;
+
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(wx + 12, wy - 10, textWidth + 10, 18, 4);
+        } else {
+          ctx.fillRect(wx + 12, wy - 10, textWidth + 10, 18);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "9px sans-serif";
         ctx.textAlign = "left";
-        ctx.fillText(wp.type || "Move", wx + 12, wy - 4);
+        ctx.textBaseline = "middle";
+        ctx.fillText(labelText, wx + 17, wy);
       }
     });
 
@@ -3357,15 +3664,29 @@
 
             btnSubmitCreate.textContent = "Cloning GitHub Repository...";
             try {
-              const cloneRes = await fetch(resolveApiUrl("/api/github/clone") || "/api/github/clone", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
-              });
-              const cloneData = await cloneRes.json();
-              if (!cloneData.success || !cloneData.files) {
-                throw new Error(cloneData.error || "Failed to clone GitHub repository");
+              let cloneData = null;
+              const apiRoute = resolveApiUrl("/api/github/clone");
+              if (apiRoute) {
+                const srvRes = await safeFetchJson(apiRoute, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ repo: repoVal, branch: branchVal, token: tokenVal })
+                });
+                if (srvRes.ok && srvRes.data?.success && srvRes.data?.files) {
+                  cloneData = srvRes.data;
+                }
               }
+
+              if (!cloneData) {
+                cloneData = await fetchGithubRepositoryFiles(repoVal, branchVal, tokenVal, (msg) => {
+                  btnSubmitCreate.textContent = "⚙️ " + msg;
+                });
+              }
+
+              if (!cloneData || !cloneData.files || Object.keys(cloneData.files).length === 0) {
+                throw new Error("No C++ autonomous files found in selected repository.");
+              }
+
               const detectedPaths = parseGithubAutonFiles(cloneData.files, cloneData.repoName);
               pathsData = { paths: detectedPaths };
               projectData = { name: cloneData.repoName || repoVal, files: cloneData.files };
@@ -4533,36 +4854,9 @@
 
           // Fallback for static host / GitHub Pages: fetch raw repository files directly via GitHub REST API
           if (!cloneData) {
-            const cleanRepo = repoVal.replace(/https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
-            const headers = { "Accept": "application/vnd.github.v3+json" };
-            if (tokenVal) headers["Authorization"] = `token ${tokenVal}`;
-
-            if (githubImportStatus) {
-              githubImportStatus.textContent = `⚙️ Fetching repository tree directly from GitHub API (${cleanRepo})...`;
-            }
-
-            const treeRes = await fetch(`https://api.github.com/repos/${cleanRepo}/git/trees/${branchVal}?recursive=1`, { headers });
-            if (!treeRes.ok) {
-              throw new Error(`GitHub API returned ${treeRes.status}: check repository name, branch, or PAT token.`);
-            }
-            const treeData = await treeRes.json();
-            const cppFiles = (treeData.tree || []).filter(f => f.type === "blob" && (f.path.endsWith(".cpp") || f.path.endsWith(".hpp") || f.path.endsWith(".h")));
-
-            const fetchedFiles = {};
-            for (const f of cppFiles.slice(0, 30)) {
-              const rawRes = await fetch(`https://raw.githubusercontent.com/${cleanRepo}/${branchVal}/${f.path}`, tokenVal ? { headers: { "Authorization": `token ${tokenVal}` } } : {});
-              if (rawRes.ok) {
-                fetchedFiles[f.path] = await rawRes.text();
-              }
-            }
-
-            cloneData = {
-              success: true,
-              repoName: cleanRepo.split("/").pop() || cleanRepo,
-              branch: branchVal,
-              fileCount: Object.keys(fetchedFiles).length,
-              files: fetchedFiles
-            };
+            cloneData = await fetchGithubRepositoryFiles(repoVal, branchVal, tokenVal, (msg) => {
+              if (githubImportStatus) githubImportStatus.textContent = "⚙️ " + msg;
+            });
           }
 
           if (!cloneData || !cloneData.files || Object.keys(cloneData.files).length === 0) {
