@@ -2,8 +2,33 @@
 (function (global) {
   "use strict";
 
-  if (typeof window !== "undefined" && window.KeyboardEvent && !window.KeyboardEvent.prototype.getModifierState) {
-    window.KeyboardEvent.prototype.getModifierState = function() { return false; };
+  if (typeof window !== "undefined") {
+    const safeGetModifierState = function(key) {
+      if (key === "Control") return Boolean(this && this.ctrlKey);
+      if (key === "Shift") return Boolean(this && this.shiftKey);
+      if (key === "Alt") return Boolean(this && this.altKey);
+      if (key === "Meta") return Boolean(this && this.metaKey);
+      return false;
+    };
+    [
+      typeof Event !== "undefined" ? Event.prototype : null,
+      typeof UIEvent !== "undefined" ? UIEvent.prototype : null,
+      typeof KeyboardEvent !== "undefined" ? KeyboardEvent.prototype : null,
+      typeof MouseEvent !== "undefined" ? MouseEvent.prototype : null,
+      typeof CustomEvent !== "undefined" ? CustomEvent.prototype : null
+    ].forEach(proto => {
+      if (proto && typeof proto.getModifierState !== "function") {
+        try {
+          Object.defineProperty(proto, "getModifierState", {
+            value: safeGetModifierState,
+            writable: true,
+            configurable: true
+          });
+        } catch (_) {
+          proto.getModifierState = safeGetModifierState;
+        }
+      }
+    });
   }
 
   // State
@@ -6147,6 +6172,7 @@
     function setCenterViewMode(mode) {
       [btnViewModeField, btnViewModeIde, btnViewModeSuggestions].forEach(btn => {
         if (btn) {
+          btn.classList.remove("active");
           btn.style.background = "#1e293b";
           btn.style.color = "#cbd5e1";
           btn.style.borderColor = "#334155";
@@ -6159,6 +6185,7 @@
 
       if (mode === "field") {
         if (btnViewModeField) {
+          btnViewModeField.classList.add("active");
           btnViewModeField.style.background = "#0284c7";
           btnViewModeField.style.color = "#fff";
           btnViewModeField.style.borderColor = "#0369a1";
@@ -6167,14 +6194,21 @@
         drawField();
       } else if (mode === "ide") {
         if (btnViewModeIde) {
+          btnViewModeIde.classList.add("active");
           btnViewModeIde.style.background = "#0284c7";
           btnViewModeIde.style.color = "#fff";
           btnViewModeIde.style.borderColor = "#0369a1";
         }
         if (viewIdeContainer) viewIdeContainer.style.display = "flex";
-        renderIdeFile(activeIdeFile);
+        renderIdeFile(activeIdeFile || "src/autons.cpp");
+        if (monacoEditor) {
+          setTimeout(() => {
+            try { monacoEditor.layout(); } catch(_) {}
+          }, 60);
+        }
       } else if (mode === "suggestions") {
         if (btnViewModeSuggestions) {
+          btnViewModeSuggestions.classList.add("active");
           btnViewModeSuggestions.style.background = "#0284c7";
           btnViewModeSuggestions.style.color = "#fff";
           btnViewModeSuggestions.style.borderColor = "#0369a1";

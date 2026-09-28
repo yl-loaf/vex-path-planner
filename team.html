@@ -19,13 +19,45 @@
   <meta property="og:title" content="Real-Time Team Collaboration (ALPHA) · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Multi-user real-time path planning, live cursors, strategy voting, and 500-entry version history for VEX robotics teams." />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20260928.k75" />
+  <link rel="stylesheet" href="style.css?v=20260928.k77" />
   <script>
     (function () {
       try {
         var t = localStorage.getItem('vex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
         document.documentElement.setAttribute('data-theme', t);
       } catch (e) {}
+
+      // Monaco & browser event compatibility: Ensure getModifierState is always a valid function
+      try {
+        var safeGetModifierState = function(key) {
+          if (key === 'Control') return Boolean(this && this.ctrlKey);
+          if (key === 'Shift') return Boolean(this && this.shiftKey);
+          if (key === 'Alt') return Boolean(this && this.altKey);
+          if (key === 'Meta') return Boolean(this && this.metaKey);
+          return false;
+        };
+        var protos = [
+          typeof Event !== 'undefined' ? Event.prototype : null,
+          typeof UIEvent !== 'undefined' ? UIEvent.prototype : null,
+          typeof KeyboardEvent !== 'undefined' ? KeyboardEvent.prototype : null,
+          typeof MouseEvent !== 'undefined' ? MouseEvent.prototype : null,
+          typeof CustomEvent !== 'undefined' ? CustomEvent.prototype : null
+        ];
+        for (var i = 0; i < protos.length; i++) {
+          var p = protos[i];
+          if (p && typeof p.getModifierState !== 'function') {
+            try {
+              Object.defineProperty(p, 'getModifierState', {
+                value: safeGetModifierState,
+                writable: true,
+                configurable: true
+              });
+            } catch (_) {
+              p.getModifierState = safeGetModifierState;
+            }
+          }
+        }
+      } catch (_) {}
     })();
   </script>
 </head>
@@ -1424,18 +1456,18 @@
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260928.k75"></script>
+  <script src="version.js?v=20260928.k77"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260928.k75"></script>
-  <script src="theme.js?v=20260928.k75"></script>
-  <script src="cpp-parser.js?v=20260928.k75"></script>
-  <script src="project-manager.js?v=20260928.k75"></script>
-  <script src="v5-brain-serial.js?v=20260928.k75"></script>
-  <script src="scoring-engine.js?v=20260928.k75"></script>
-  <script src="google-drive-sync.js?v=20260928.k75"></script>
+  <script src="firebase-config.js?v=20260928.k77"></script>
+  <script src="theme.js?v=20260928.k77"></script>
+  <script src="cpp-parser.js?v=20260928.k77"></script>
+  <script src="project-manager.js?v=20260928.k77"></script>
+  <script src="v5-brain-serial.js?v=20260928.k77"></script>
+  <script src="scoring-engine.js?v=20260928.k77"></script>
+  <script src="google-drive-sync.js?v=20260928.k77"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="team.js?v=20260928.k75"></script>
+  <script src="team.js?v=20260928.k77"></script>
 </body>
 </html>
