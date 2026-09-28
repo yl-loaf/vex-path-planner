@@ -2072,6 +2072,91 @@
   }
 
   /**
+   * Dynamically calculates the recommended LemLib execution timeout (in ms)
+   * based on movement distance/arc length, heading angle change, robot physical top speed,
+   * acceleration ramps, and PID settling tolerances.
+   */
+  function computeDynamicTimeout(action, fromPose) {
+    if (!action) return 2000;
+    const type = action.type;
+
+    // Subsystem actions or conditions/loops without chassis motion:
+    if (type === "wait" || type === "clampPiston" || type === "intakeMotor" || type === "togglePiston" || type === "ifElse" || type === "loop" || type === "custom") {
+      return action.timeout || (type === "wait" ? 1000 : 2000);
+    }
+
+    const p0 = fromPose || pose;
+    const maxSpeedFrac = Math.max(0.2, (action.maxSpeed != null ? action.maxSpeed : (bot.defaultMaxSpeed || 127)) / 127);
+    
+    // Top theoretical linear velocity in inches/sec based on drive motor and wheel diameter
+    const wheelDiam = bot.wheelDiam || 3.25;
+    const rpm = bot.driveRpm || 600;
+    const vMaxTheory = (Math.PI * wheelDiam * rpm) / 60; // e.g. ~102 in/s
+    // Effective cruise speed factoring in acceleration ramp and traction
+    const vEffective = Math.max(15, Math.min(85, vMaxTheory * maxSpeedFrac * 0.55)); // ~35 - 55 in/s
+
+    let distanceInches = 0;
+    let angularChangeDeg = 0;
+    let baseSettlingMs = 550;
+
+    if (type === "moveToPoint") {
+      distanceInches = Math.hypot(action.x - p0.x, action.y - p0.y);
+      baseSettlingMs = 500;
+    } else if (type === "moveToPose") {
+      distanceInches = Math.hypot(action.x - p0.x, action.y - p0.y);
+      const tgtTheta = action.theta != null ? action.theta : p0.theta;
+      angularChangeDeg = Math.abs(angleError(p0.theta, tgtTheta));
+      baseSettlingMs = 650;
+    } else if (type === "bezierCurve") {
+      try {
+        const metrics = computeBezierMetrics(action, p0);
+        distanceInches = metrics.arcLength || Math.hypot(action.x - p0.x, action.y - p0.y);
+      } catch (_) {
+        distanceInches = Math.hypot(action.x - p0.x, action.y - p0.y);
+      }
+      const tgtTheta = action.theta != null ? action.theta : p0.theta;
+      angularChangeDeg = Math.abs(angleError(p0.theta, tgtTheta));
+      baseSettlingMs = 700;
+    } else if (type === "turnToHeading") {
+      const tgtTheta = action.theta != null ? action.theta : p0.theta;
+      angularChangeDeg = Math.abs(angleError(p0.theta, tgtTheta));
+      baseSettlingMs = 500;
+    } else if (type === "turnToPoint") {
+      const faceAngle = angleToPoint(p0.x, p0.y, action.x, action.y);
+      angularChangeDeg = Math.abs(angleError(p0.theta, faceAngle));
+      baseSettlingMs = 500;
+    } else if (type === "swingToHeading" || type === "swingToPoint") {
+      const tgtTheta = action.theta != null ? action.theta : p0.theta;
+      angularChangeDeg = Math.abs(angleError(p0.theta, tgtTheta));
+      distanceInches = (bot.trackWidth || 12.0) * (angularChangeDeg * Math.PI / 180);
+      baseSettlingMs = 700;
+    }
+
+    // Motion time estimation (ms)
+    const linearMs = (distanceInches / vEffective) * 1000 * 1.35; // 35% margin for acceleration/deceleration
+    const angularMs = (angularChangeDeg / 180) * 800; // ~800ms for 180 deg turn
+
+    // Large error timeout settings from bot PID (if configured)
+    const extraPidSettling = Math.min(500, (bot.lateralLargeTime || 500) * 0.4);
+
+    const rawMs = baseSettlingMs + linearMs + angularMs + extraPidSettling;
+
+    // Round to clean 50ms intervals (e.g., 1450ms, 2100ms) and clamp between 500ms and 15000ms
+    const cleanTimeout = Math.min(15000, Math.max(500, Math.round(rawMs / 50) * 50));
+    return cleanTimeout;
+  }
+
+  function updateAllDynamicTimeouts() {
+    const poses = computePoses();
+    actions.forEach((a, i) => {
+      const fromP = i === 0 ? pose : (simSegments[i - 1]?.endPose || poses[i]) || pose;
+      if (isMove(a.type) || a.type === "turnToHeading" || a.type === "turnToPoint" || a.type === "swingToHeading" || a.type === "swingToPoint" || a.type === "bezierCurve") {
+        a.timeout = computeDynamicTimeout(a, fromP);
+      }
+    });
+  }
+
+  /**
    * Simulates a single action using authentic LemLib motion control math
    * and differential-drive kinematics with a 10ms discrete integration loop.
    *
@@ -5792,6 +5877,12 @@
                 const ro = card.querySelector(`[data-readout="${f}"]`);
                 if (ro) ro.textContent = `${el.value}"`;
               }
+              const fromP = idx === 0 ? pose : (simSegments[idx - 1]?.endPose || poses[idx]) || pose;
+              if (isMove(a.type) || a.type === "turnToHeading" || a.type === "turnToPoint" || a.type === "swingToHeading" || a.type === "swingToPoint") {
+                a.timeout = computeDynamicTimeout(a, fromP);
+                const toInput = card.querySelector('input[data-f="timeout"]');
+                if (toInput) toInput.value = a.timeout;
+              }
               draw();
               generateCode();
             }
@@ -8189,6 +8280,10 @@
     a.cp1Y = null;
     a.cp2X = null;
     a.cp2Y = null;
+    const idx = actions.findIndex((x) => x.id === actionId);
+    const poses = computePoses();
+    const fromPt = (idx === 0 ? pose : (simSegments[idx - 1]?.endPose || poses[idx])) || pose;
+    a.timeout = computeDynamicTimeout(a, fromPt);
     markDirty();
     renderFlow();
     draw();
@@ -8200,6 +8295,9 @@
     const a = actions.find((x) => x.id === actionId);
     if (!a) return;
     const curBulge = a.bulge != null ? Number(a.bulge) : 0;
+    const idx = actions.findIndex((x) => x.id === actionId);
+    const poses = computePoses();
+    const fromPt = (idx === 0 ? pose : (simSegments[idx - 1]?.endPose || poses[idx])) || pose;
 
     if (act === "bend-left") {
       const nextBulge = curBulge <= -40 ? -40 : (curBulge > 0 ? -10 : curBulge - 10);
@@ -8218,6 +8316,7 @@
       a.cp1Y = null;
       a.cp2X = null;
       a.cp2Y = null;
+      a.timeout = computeDynamicTimeout(a, fromPt);
       markDirty();
       renderFlow();
       draw();
@@ -8236,6 +8335,7 @@
       a.cp1Y = null;
       a.cp2X = null;
       a.cp2Y = null;
+      a.timeout = computeDynamicTimeout(a, fromPt);
       markDirty();
       renderFlow();
       draw();
@@ -8250,13 +8350,11 @@
       a.cp1Y = null;
       a.cp2X = null;
       a.cp2Y = null;
-      const idx = actions.findIndex((x) => x.id === actionId);
-      const poses = computePoses();
-      const fromPt = (idx === 0 ? pose : (simSegments[idx - 1]?.endPose || poses[idx])) || pose;
       const dist = Math.hypot(a.x - fromPt.x, a.y - fromPt.y);
       const optLead = Math.max(10, Math.min(36, Math.round(dist * 0.45)));
       a.lead1 = optLead;
       a.lead2 = optLead;
+      a.timeout = computeDynamicTimeout(a, fromPt);
       markDirty();
       renderFlow();
       draw();
@@ -8537,6 +8635,7 @@
       pose.y = roundToPrecision(snapped.y, activeStep);
       syncStartInputs();
       updateCoordsDisplay(pose.x, pose.y, activeStep);
+      updateAllDynamicTimeouts();
       markDirty();
       draw();
     } else if (drag.kind === "action") {
@@ -8565,6 +8664,9 @@
           a.cp1Y = null;
           updateCoordsDisplay(fromPt.x + rayX * a.lead1, fromPt.y + rayY * a.lead1, activeStep);
         }
+        if (isMove(a.type)) {
+          a.timeout = computeDynamicTimeout(a, fromPt);
+        }
         markDirty();
         renderFlow();
         draw();
@@ -8589,6 +8691,11 @@
           a.cp2X = null;
           a.cp2Y = null;
           updateCoordsDisplay(a.x + rayX * a.lead2, a.y + rayY * a.lead2, activeStep);
+        }
+        if (isMove(a.type)) {
+          const poses = computePoses();
+          const fromPt = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+          a.timeout = computeDynamicTimeout(a, fromPt);
         }
         markDirty();
         renderFlow();
@@ -8633,8 +8740,9 @@
 
         const metrics = computeBezierMetrics(a, fromPt);
         const bendDir = a.bulge > 0 ? "Right ↷" : a.bulge < 0 ? "Left ↶" : "Straight 📏";
+        a.timeout = computeDynamicTimeout(a, fromPt);
         if (coordsEl) {
-          coordsEl.textContent = `🌊 Arc Bend: ${a.bulge > 0 ? '+' : ''}${a.bulge}" (${bendDir}) | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'} | Arc: ${metrics.arcLength.toFixed(1)}"`;
+          coordsEl.textContent = `🌊 Arc Bend: ${a.bulge > 0 ? '+' : ''}${a.bulge}" (${bendDir}) | Timeout: ${a.timeout}ms | Arc: ${metrics.arcLength.toFixed(1)}"`;
         }
 
         const quickSlider = document.getElementById("bzbSlider");
@@ -8678,12 +8786,19 @@
 
         a.x = roundToPrecision(endC.x + fwdX * dist, activeStep);
         a.y = roundToPrecision(endC.y + fwdY * dist, activeStep);
+        a.timeout = computeDynamicTimeout(a, fromPose);
 
         updateCoordsDisplay(a.x, a.y, activeStep);
         if (collisionConfig.enabled) {
           const dragCol = checkRobotCollisionAtPose(a.x, a.y, snappedTheta, collisionConfig.safetyBuffer);
           if (dragCol.hit && coordsEl) {
             coordsEl.textContent += ` | ⚠️ COLLISION: ${dragCol.obstacles.map((o) => o.name).join(", ")}`;
+          }
+        }
+        if (si < actions.length - 1) {
+          const nextA = actions[si + 1];
+          if (isMove(nextA.type) || nextA.type === "turnToPoint" || nextA.type === "swingToPoint") {
+            nextA.timeout = computeDynamicTimeout(nextA, a);
           }
         }
         markDirty();
@@ -8696,9 +8811,21 @@
         a.y = roundToPrecision(y, activeStep);
         if (a.cp2X != null) a.cp2X = roundToPrecision(a.cp2X + dPtX, activeStep);
         if (a.cp2Y != null) a.cp2Y = roundToPrecision(a.cp2Y + dPtY, activeStep);
+
+        const poses = computePoses();
+        const fromPt = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+        if (isMove(a.type) || a.type === "turnToHeading" || a.type === "turnToPoint" || a.type === "swingToHeading" || a.type === "swingToPoint") {
+          a.timeout = computeDynamicTimeout(a, fromPt);
+        }
+        if (si < actions.length - 1) {
+          const nextA = actions[si + 1];
+          if (isMove(nextA.type) || nextA.type === "turnToPoint" || nextA.type === "swingToPoint") {
+            nextA.timeout = computeDynamicTimeout(nextA, a);
+          }
+        }
+
         updateCoordsDisplay(a.x, a.y, activeStep);
         if (collisionConfig.enabled) {
-          const poses = computePoses();
           const theta = a.theta != null ? a.theta : (poses[si] ? poses[si].theta : 0);
           const dragCol = checkRobotCollisionAtPose(a.x, a.y, theta, collisionConfig.safetyBuffer);
           if (dragCol.hit && coordsEl) {
@@ -8850,6 +8977,7 @@
       pose.x = snapped.x;
       pose.y = snapped.y;
       syncStartInputs();
+      updateAllDynamicTimeouts();
       markDirty();
       draw();
     } else if (drag.kind === "action") {
@@ -8877,6 +9005,9 @@
           a.cp1Y = null;
           coordsEl.textContent = `CP1 (Departure Tangent): Lead: ${a.lead1}" | 🔒 Tangent Locked`;
         }
+        if (isMove(a.type)) {
+          a.timeout = computeDynamicTimeout(a, fromPt);
+        }
         markDirty();
         renderFlow();
         draw();
@@ -8901,6 +9032,11 @@
           a.cp2X = null;
           a.cp2Y = null;
           coordsEl.textContent = `CP2 (Arrival Tangent): Lead: ${a.lead2}" | 🔒 Tangent Locked`;
+        }
+        if (isMove(a.type)) {
+          const poses = computePoses();
+          const fromPt = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+          a.timeout = computeDynamicTimeout(a, fromPt);
         }
         markDirty();
         renderFlow();
@@ -8946,7 +9082,8 @@
 
         const metrics = computeBezierMetrics(a, fromPt);
         const bendDir = a.bulge > 0 ? "Right ↷" : a.bulge < 0 ? "Left ↶" : "Straight 📏";
-        coordsEl.textContent = `🌊 Arc Bend: ${a.bulge > 0 ? '+' : ''}${a.bulge}" (${bendDir}) | R_min: ${metrics.minRadius < 200 ? metrics.minRadius.toFixed(1) + '"' : '∞'} | Arc: ${metrics.arcLength.toFixed(1)}"`;
+        a.timeout = computeDynamicTimeout(a, fromPt);
+        coordsEl.textContent = `🌊 Arc Bend: ${a.bulge > 0 ? '+' : ''}${a.bulge}" (${bendDir}) | Timeout: ${a.timeout}ms | Arc: ${metrics.arcLength.toFixed(1)}"`;
 
         const quickSlider = document.getElementById("bzbSlider");
         const quickVal = document.getElementById("bzbVal");
@@ -8965,6 +9102,19 @@
       a.y = Number(y.toFixed(1));
       if (a.cp2X != null) a.cp2X = Number((a.cp2X + dPtX).toFixed(1));
       if (a.cp2Y != null) a.cp2Y = Number((a.cp2Y + dPtY).toFixed(1));
+
+      const poses = computePoses();
+      const fromPt = (si === 0 ? pose : (simSegments[si - 1]?.endPose || poses[si])) || pose;
+      if (isMove(a.type) || a.type === "turnToHeading" || a.type === "turnToPoint" || a.type === "swingToHeading" || a.type === "swingToPoint") {
+        a.timeout = computeDynamicTimeout(a, fromPt);
+      }
+      if (si < actions.length - 1) {
+        const nextA = actions[si + 1];
+        if (isMove(nextA.type) || nextA.type === "turnToPoint" || nextA.type === "swingToPoint") {
+          nextA.timeout = computeDynamicTimeout(nextA, a);
+        }
+      }
+
       markDirty();
       renderFlow();
       draw();
