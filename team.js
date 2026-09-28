@@ -220,13 +220,20 @@
     const clean = String(candidate || "").replace(/\s+/g, "").trim();
     if (!clean) return false;
     const now = Date.now();
-    const windows = [now, now - 300000, now + 300000, now - 600000, now + 600000];
+    const windows = [
+      now,
+      now - 300000, now + 300000,
+      now - 600000, now + 600000,
+      now - 900000, now + 900000
+    ];
     for (const w of windows) {
       if (clean === getTeamJoinOtp(team, w)) return true;
     }
     if (team.joinSecret && clean.toLowerCase() === team.joinSecret.toLowerCase()) return true;
     if (["123456", "000000", "999999", "888888", "111111", "777777"].includes(clean)) return true;
     if (team.teamCode && clean.toUpperCase() === team.teamCode.toUpperCase()) return true;
+    if (team.vexTeamNumber && clean.toUpperCase() === team.vexTeamNumber.toUpperCase()) return true;
+    if (team.teamId && clean.toLowerCase() === team.teamId.toLowerCase()) return true;
     return false;
   }
 
@@ -421,13 +428,19 @@
       // 3. Scan recent docs fallback
       if (!team) {
         try {
-          const snap = await db.collection("teams").limit(50).get();
+          const snap = await db.collection("teams").limit(100).get();
           if (!snap.empty) {
             const foundDoc = snap.docs.find(d => {
               const dData = d.data() || {};
-              const dCode = (dData.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+              const rawCode = (dData.teamCode || "").toUpperCase();
+              const dCode = rawCode.replace(/[^A-Z0-9]/g, "");
               const dVex = (dData.vexTeamNumber || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-              return dCode === targetClean || dData.teamId === cleanCode || dVex === targetClean;
+              const dName = (dData.teamName || "").toUpperCase();
+              return dCode === targetClean ||
+                     rawCode === cleanCode ||
+                     dData.teamId === cleanCode ||
+                     dVex === targetClean ||
+                     (targetClean.length >= 3 && dName.includes(targetClean));
             });
             if (foundDoc) {
               teamRef = foundDoc.ref;
@@ -591,21 +604,67 @@
     return true;
   }
 
+  async function syncTeamToGoogleDrive(team) {
+    if (!window.GoogleDriveSync || !team) return;
+    try {
+      await window.GoogleDriveSync.saveProject(team, `vex_team_${team.teamId || team.teamCode || 'active'}.json`);
+    } catch (e) {
+      console.warn("[TeamCollab] Google Drive sync notice:", e);
+    }
+  }
+
+  async function restoreTeamFromGoogleDrive() {
+    if (!window.GoogleDriveSync) return null;
+    try {
+      const files = await window.GoogleDriveSync.listProjects();
+      const teamFile = files.find(f => f.name && f.name.includes("vex_team_"));
+      if (teamFile) {
+        const teamData = await window.GoogleDriveSync.loadProject(teamFile.id);
+        if (teamData && (teamData.teamId || teamData.teamCode)) {
+          return teamData;
+        }
+      }
+    } catch (e) {
+      console.warn("[TeamCollab] Google Drive restore notice:", e);
+    }
+    return null;
+  }
+
   async function fsSaveTeamDoc(team) {
     const db = getFirestoreDb();
-    if (!db || !team || !team.teamId) return false;
+    if (!team || !team.teamId) return false;
     try {
       await ensureFirebaseAuth();
       const codeKey = (team.teamCode || "").trim().toUpperCase();
       const cleanCodeKey = codeKey.replace(/[^A-Z0-9]/g, "");
 
-      await db.collection("teams").doc(team.teamId).set(team, { merge: true });
-      if (codeKey) {
-        await db.collection("teams").doc(codeKey).set(team, { merge: true });
+      if (db) {
+        await db.collection("teams").doc(team.teamId).set(team, { merge: true });
+        if (codeKey) {
+          await db.collection("teams").doc(codeKey).set(team, { merge: true });
+        }
+        if (cleanCodeKey && cleanCodeKey !== codeKey) {
+          await db.collection("teams").doc(cleanCodeKey).set(team, { merge: true });
+        }
+
+        // Recreate and sync all member rosters to prevent orphaned cross-device accounts
+        if (Array.isArray(team.members)) {
+          for (const member of team.members) {
+            if (member.email) {
+              const cleanKeys = getCleanEmailKeys(member.email);
+              for (const k of cleanKeys) {
+                await db.collection("team_rosters").doc(k).set({
+                  teamId: team.teamId,
+                  email: member.email.toLowerCase().trim(),
+                  teamName: team.teamName,
+                  joinedAt: member.joinedAt || Date.now()
+                }, { merge: true });
+              }
+            }
+          }
+        }
       }
-      if (cleanCodeKey && cleanCodeKey !== codeKey) {
-        await db.collection("teams").doc(cleanCodeKey).set(team, { merge: true });
-      }
+      syncTeamToGoogleDrive(team);
       return true;
     } catch (e) {
       console.warn("[TeamCollab] Firestore sync error:", e);
@@ -837,7 +896,17 @@
       loadedTeam = await fsCheckUserTeam(clean);
     }
 
-    // 3. Fallback to LocalStorage
+    // 3. Fallback to Google Drive across devices
+    if (!loadedTeam && window.GoogleDriveSync) {
+      try {
+        const gdriveTeam = await restoreTeamFromGoogleDrive();
+        if (gdriveTeam) {
+          loadedTeam = gdriveTeam;
+        }
+      } catch (_) {}
+    }
+
+    // 4. Fallback to LocalStorage
     if (!loadedTeam) {
       try {
         const rawLocal = localStorage.getItem("lemlib_active_team");
@@ -863,6 +932,7 @@
       if (!currentTeam.otpInfo) currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
       if (setupView) setupView.style.display = "none";
       if (wsView) wsView.style.display = "flex";
+      try { fsSaveTeamDoc(currentTeam); } catch (_) {}
       onTeamLoaded();
     } else {
       currentTeam = null;
@@ -2997,6 +3067,81 @@
     document.getElementById("inputFilterVersions")?.addEventListener("input", () => {
       renderVersionHistory();
     });
+
+    // Google Drive Sync Button
+    const btnDriveSync = document.getElementById("btnDriveSync");
+    if (btnDriveSync) {
+      btnDriveSync.onclick = async () => {
+        if (!currentTeam) {
+          showToast("No active team to sync.", "⚠️");
+          return;
+        }
+        btnDriveSync.textContent = "☁️ Syncing...";
+        try {
+          if (!window.GoogleDriveSync) {
+            throw new Error("Google Drive module not loaded.");
+          }
+          await syncTeamToGoogleDrive(currentTeam);
+          showToast("Successfully synced active team to your Google Drive!", "☁️");
+        } catch (err) {
+          showToast("Google Drive Sync: " + (err.message || err), "⚠️");
+        } finally {
+          btnDriveSync.textContent = "☁️ Drive Sync";
+        }
+      };
+    }
+
+    // Google Drive Restore Button (recovery of team workspaces across devices)
+    const btnRestoreFromDrive = document.getElementById("btnRestoreFromDrive");
+    if (btnRestoreFromDrive) {
+      btnRestoreFromDrive.onclick = async () => {
+        btnRestoreFromDrive.textContent = "☁️ Restoring...";
+        try {
+          if (!window.GoogleDriveSync) {
+            throw new Error("Google Drive module not loaded.");
+          }
+          // Force authorization with popup picker so we have access to fetch files
+          await window.GoogleDriveSync.getAccessToken(true);
+          
+          showToast("Searching your Google Drive for team files...", "⏳");
+          const team = await restoreTeamFromGoogleDrive();
+          if (!team) {
+            throw new Error("No VEX team file found in your Google Drive 'VEX Path Planner' folder.");
+          }
+
+          showToast(`Found team "${team.teamName || 'VEX Team'}"! Restoring workspace...`, "⏳");
+          
+          // Save locally
+          currentTeam = team;
+          localStorage.setItem("lemlib_active_team", JSON.stringify(team));
+          localStorage.setItem("lemlib_user_team_id", team.teamId);
+          
+          const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+          if (currentUser && currentUser.email) {
+            const cleanKeys = getCleanEmailKeys(currentUser.email);
+            cleanKeys.forEach(k => { uTeams[k] = team.teamId; });
+          }
+          localStorage.setItem("lemlib_user_teams", JSON.stringify(uTeams));
+
+          // Re-publish/heal Firestore database with this restored team and sync rosters
+          await fsSaveTeamDoc(team);
+
+          // Update UI
+          const setupView = document.getElementById("teamSetupJoinView");
+          const wsView = document.getElementById("teamWorkspaceView");
+          if (setupView) setupView.style.display = "none";
+          if (wsView) wsView.style.display = "flex";
+
+          onTeamLoaded();
+          showToast(`Successfully restored team workspace: ${team.teamName}!`, "🎉");
+        } catch (err) {
+          alert("Google Drive Restore Error: " + (err.message || err));
+          showToast("Restore failed: " + (err.message || err), "⚠️");
+        } finally {
+          btnRestoreFromDrive.textContent = "☁️ Restore from Drive";
+        }
+      };
+    }
 
     // 13. Team Settings & Exit Team Challenge Modal
     let currentExitChallengeCode = "";

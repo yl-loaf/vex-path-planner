@@ -12,6 +12,11 @@
       return driveAccessToken;
     }
 
+    if (!forcePrompt) {
+      // Avoid triggering automatic popups on page load (prevents browser popup blockers)
+      throw new Error("No cached Google Drive token available. Please authenticate via the Drive Sync/Restore button.");
+    }
+
     if (typeof firebase === "undefined" || !firebase.auth) {
       throw new Error("Firebase Auth SDK not loaded.");
     }

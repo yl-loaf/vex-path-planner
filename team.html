@@ -854,6 +854,9 @@
           </div>
         </div>
 
+        <button type="button" class="btn-xs-clean" id="btnDriveSync" style="background:#1e293b;border:1px solid #334155;color:#38bdf8;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;display:inline-flex;align-items:center;gap:4px;" title="Sync active team state to your personal Google Drive">
+          ☁️ Drive Sync
+        </button>
         <button type="button" class="btn-xs-clean" id="btnManageTeam" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;">
           ⚙️ Team Settings
         </button>
@@ -1071,6 +1074,22 @@
             </button>
           </div>
           <span style="font-size:0.68rem;color:#64748b;margin-top:4px;display:block;">Saved securely on your device across sessions. Enter your Gmail address or click Google Sign-In.</span>
+        </div>
+
+        <!-- Google Drive Backup & Recovery -->
+        <div style="background:#090e17;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:0.82rem;color:#f8fafc;display:flex;align-items:center;gap:6px;">
+              <span>☁️ Google Drive Workspace Recovery</span>
+              <span style="font-size:0.62rem;background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 6px;border-radius:6px;font-weight:700;">Multi-Device Sync</span>
+            </div>
+            <div style="font-size:0.68rem;color:#94a3b8;margin-top:3px;line-height:1.35;">
+              Want to restore an existing team from your Google Drive on this device? Authenticate and retrieve your team workspaces immediately.
+            </div>
+          </div>
+          <button type="button" id="btnRestoreFromDrive" class="btn-team-secondary" style="font-size:0.75rem;padding:6px 12px;white-space:nowrap;border-color:#38bdf8;color:#38bdf8;" title="Restore team file from your personal Google Drive">
+            ☁️ Restore from Drive
+          </button>
         </div>
 
         <div id="gateOptions" style="display:block;">
@@ -1397,14 +1416,15 @@
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260928.k38"></script>
+  <script src="version.js?v=20260928.k40"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260928.k38"></script>
-  <script src="theme.js?v=20260928.k38"></script>
-  <script src="cpp-parser.js?v=20260928.k38"></script>
-  <script src="project-manager.js?v=20260928.k38"></script>
-  <script src="team.js?v=20260928.k38"></script>
+  <script src="firebase-config.js?v=20260928.k40"></script>
+  <script src="theme.js?v=20260928.k40"></script>
+  <script src="cpp-parser.js?v=20260928.k40"></script>
+  <script src="project-manager.js?v=20260928.k41"></script>
+  <script src="google-drive-sync.js?v=20260928.k41"></script>
+  <script src="team.js?v=20260928.k41"></script>
 </body>
 </html>
