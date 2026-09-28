@@ -857,6 +857,9 @@
         <button type="button" class="btn-xs-clean" id="btnSyncLocalPlanner" style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;font-weight:700;display:inline-flex;align-items:center;gap:4px;" title="Sync team project & routines into your local browser planner & IDE">
           📲 Sync to Local
         </button>
+        <button type="button" class="btn-xs-clean" id="btnSyncGithub" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.35);color:#4ade80;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;font-weight:700;display:inline-flex;align-items:center;gap:4px;" title="Push / Sync team C++ code directly to GitHub repository">
+          🐙 Sync to GitHub
+        </button>
         <button type="button" class="btn-xs-clean" id="btnDriveSync" style="background:#1e293b;border:1px solid #334155;color:#38bdf8;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;display:inline-flex;align-items:center;gap:4px;" title="Sync active team state to your personal Google Drive">
           ☁️ Drive Sync
         </button>
@@ -1010,6 +1013,7 @@
           <div style="display:flex;align-items:center;gap:6px;">
             <button type="button" id="btnSyncCppFromBlocks" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#38bdf8;padding:4px 8px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">⚡ Sync from Blocks</button>
             <button type="button" id="btnSaveCppCode" class="btn-xs-clean" style="background:#16a34a;border:1px solid #22c55e;color:#ffffff;padding:4px 10px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">💾 Save C++ Code</button>
+            <button type="button" id="btnIdePushGithub" class="btn-xs-clean" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.35);color:#4ade80;padding:4px 8px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">🐙 Sync to GitHub</button>
             <button type="button" id="btnProposeCodeSuggestion" class="btn-xs-clean" style="background:#f59e0b;border:1px solid #d97706;color:#0b0f14;padding:4px 10px;border-radius:6px;font-size:0.72rem;font-weight:800;cursor:pointer;">💡 Propose Suggestion</button>
           </div>
         </div>
@@ -1536,6 +1540,49 @@
       </div>
       <div class="team-modal-footer">
         <button type="button" id="btnCancelDriveSelector" class="btn-team-secondary">Close &amp; Register New Team</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GITHUB PUSH / SYNC MODAL -->
+  <div id="modalGithubPush" class="team-modal-backdrop" style="display:none;">
+    <div class="team-modal-content" style="max-width:540px;">
+      <div class="team-modal-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.4rem;">🐙</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;">Sync Team Project to GitHub</h3>
+            <p style="margin:2px 0 0;font-size:0.72rem;color:#94a3b8;">Push C++ autons &amp; robot files directly to a Git repository</p>
+          </div>
+        </div>
+        <button type="button" id="btnCloseGithubPushModal" class="btn-xs-clean" style="color:#94a3b8;background:none;border:none;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="team-modal-body">
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.76rem;color:#cbd5e1;line-height:1.4;">
+          <strong style="color:#4ade80;">🐙 GitHub Direct Sync:</strong> This will commit and sync your team's active C++ files (<code>autons.cpp</code>, <code>main.cpp</code>, <code>config.cpp</code>, <code>driver_control.cpp</code>) directly to your GitHub repository.
+        </div>
+        <div class="form-group">
+          <label for="txtGithubPushRepo">GitHub Repository</label>
+          <input type="text" id="txtGithubPushRepo" class="form-input" placeholder="e.g. myorg/v5-robot-code or LemLib/LemLib" />
+          <span style="font-size:0.7rem;color:#94a3b8;display:block;margin-top:3px;">Format: "owner/repo" or full GitHub URL.</span>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:12px;">
+          <div style="flex:1;">
+            <label for="txtGithubPushBranch">Branch</label>
+            <input type="text" id="txtGithubPushBranch" class="form-input" value="main" placeholder="main" />
+          </div>
+          <div style="flex:1;">
+            <label for="txtGithubPushToken">GitHub Token (PAT)</label>
+            <input type="password" id="txtGithubPushToken" class="form-input" placeholder="ghp_xxxx (Required to commit)" />
+          </div>
+        </div>
+        <div id="githubPushStatus" style="font-size:0.75rem;padding:8px 12px;border-radius:6px;display:none;margin-bottom:8px;"></div>
+      </div>
+      <div class="team-modal-footer">
+        <button type="button" id="btnCancelGithubPush" class="btn-team-secondary">Cancel</button>
+        <button type="button" id="btnExecuteGithubPush" class="btn-team-primary" style="background:#16a34a;border-color:#22c55e;">
+          🐙 Push &amp; Sync to GitHub
+        </button>
       </div>
     </div>
   </div>
