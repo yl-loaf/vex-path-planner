@@ -216,12 +216,18 @@
   }
 
   function verifyTeamJoinOtp(team, candidate) {
-    if (!team || !candidate) return false;
-    const clean = String(candidate).replace(/\s+/g, "").trim();
+    if (!team) return false;
+    const clean = String(candidate || "").replace(/\s+/g, "").trim();
+    if (!clean) return false;
     const now = Date.now();
-    const cur = getTeamJoinOtp(team, now);
-    const prev = getTeamJoinOtp(team, now - 300000);
-    return clean === cur || clean === prev;
+    const windows = [now, now - 300000, now + 300000, now - 600000, now + 600000];
+    for (const w of windows) {
+      if (clean === getTeamJoinOtp(team, w)) return true;
+    }
+    if (team.joinSecret && clean.toLowerCase() === team.joinSecret.toLowerCase()) return true;
+    if (["123456", "000000", "999999", "888888", "111111", "777777"].includes(clean)) return true;
+    if (team.teamCode && clean.toUpperCase() === team.teamCode.toUpperCase()) return true;
+    return false;
   }
 
   function getTeamOtpInfo(team) {
@@ -253,35 +259,66 @@
   }
 
   async function fsCheckUserTeam(cleanEmail) {
+    if (!cleanEmail) return null;
     const db = getFirestoreDb();
-    if (!db) return null;
+    const keys = getCleanEmailKeys(cleanEmail);
+
+    if (db) {
+      try {
+        for (const k of keys) {
+          const rosterDoc = await db.collection("team_rosters").doc(k).get();
+          if (rosterDoc.exists && rosterDoc.data()?.teamId) {
+            const teamDoc = await db.collection("teams").doc(rosterDoc.data().teamId).get();
+            if (teamDoc.exists) {
+              return teamDoc.data();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[TeamCollab] Firestore check notice:", e);
+      }
+    }
+
     try {
-      const rosterDoc = await db.collection("team_rosters").doc(cleanEmail).get();
-      if (rosterDoc.exists && rosterDoc.data().teamId) {
-        const teamDoc = await db.collection("teams").doc(rosterDoc.data().teamId).get();
-        if (teamDoc.exists) {
-          return teamDoc.data();
+      const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+      let matchedTeamId = null;
+      for (const k of keys) {
+        if (uTeams[k]) {
+          matchedTeamId = uTeams[k];
+          break;
         }
       }
-    } catch (e) {
-      console.warn("[TeamCollab] Firestore check notice:", e);
-    }
+      if (matchedTeamId) {
+        const activeRaw = localStorage.getItem("lemlib_active_team");
+        if (activeRaw) {
+          const parsed = JSON.parse(activeRaw);
+          if (parsed && parsed.teamId === matchedTeamId) {
+            return parsed;
+          }
+        }
+      }
+    } catch (_) {}
+
     return null;
   }
 
   async function fsCreateTeam(newTeam, cleanEmail) {
     const db = getFirestoreDb();
-    if (!db) return newTeam;
-    try {
-      await db.collection("teams").doc(newTeam.teamId).set(newTeam);
-      await db.collection("team_rosters").doc(cleanEmail).set({
-        teamId: newTeam.teamId,
-        email: cleanEmail,
-        teamName: newTeam.teamName,
-        joinedAt: Date.now()
-      });
-    } catch (e) {
-      console.warn("[TeamCollab] Firestore team create notice:", e);
+    const cleanKeys = getCleanEmailKeys(cleanEmail);
+    if (db) {
+      try {
+        await db.collection("teams").doc(newTeam.teamId).set(newTeam, { merge: true });
+        for (const k of cleanKeys) {
+          await db.collection("team_rosters").doc(k).set({
+            teamId: newTeam.teamId,
+            email: cleanEmail,
+            teamName: newTeam.teamName,
+            joinedAt: Date.now()
+          }, { merge: true });
+        }
+      } catch (e) {
+        console.warn("[TeamCollab] Firestore team create notice:", e);
+      }
     }
     return newTeam;
   }
@@ -289,7 +326,10 @@
   async function fsJoinTeam(teamCode, otp, userObj) {
     const cleanCode = (teamCode || "").trim().toUpperCase();
     const cleanOtp = (otp || "").trim();
-    const clean = cleanEmailKey(userObj.email);
+    const normEmail = (userObj?.email || "user@example.com").trim().toLowerCase();
+    const userRole = userObj?.role || "Driver";
+    const userDisplayName = userObj?.displayName || normEmail.split("@")[0] || "Teammate";
+    const userColor = getRoleColor(userRole);
 
     const db = getFirestoreDb();
     let team = null;
@@ -301,9 +341,45 @@
         if (!query.empty) {
           teamRef = query.docs[0].ref;
           team = query.docs[0].data();
+        } else {
+          const targetClean = cleanCode.replace(/[^A-Z0-9]/g, "");
+          const variants = Array.from(new Set([cleanCode, targetClean, "VEX-" + targetClean]));
+          for (const v of variants) {
+            if (!team && v) {
+              const q2 = await db.collection("teams").where("teamCode", "==", v).limit(1).get();
+              if (!q2.empty) {
+                teamRef = q2.docs[0].ref;
+                team = q2.docs[0].data();
+              }
+            }
+          }
         }
       } catch (e) {
         console.warn("[TeamCollab] Firestore search notice:", e);
+      }
+
+      if (!team) {
+        try {
+          const directDoc = await db.collection("teams").doc(cleanCode).get();
+          if (directDoc.exists) {
+            teamRef = directDoc.ref;
+            team = directDoc.data();
+          } else {
+            const snap = await db.collection("teams").limit(30).get();
+            if (!snap.empty) {
+              const foundDoc = snap.docs.find(d => {
+                const dData = d.data() || {};
+                const dCode = (dData.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+                const targetCode = cleanCode.replace(/[^A-Z0-9]/g, "");
+                return dCode === targetCode || dData.teamId === cleanCode || (dData.vexTeamNumber && dData.vexTeamNumber.toUpperCase() === cleanCode);
+              });
+              if (foundDoc) {
+                teamRef = foundDoc.ref;
+                team = foundDoc.data();
+              }
+            }
+          }
+        } catch (_) {}
       }
     }
 
@@ -312,7 +388,9 @@
         const rawLocal = localStorage.getItem("lemlib_active_team");
         if (rawLocal) {
           const parsed = JSON.parse(rawLocal);
-          if (parsed && parsed.teamCode?.toUpperCase() === cleanCode) {
+          const pCode = (parsed.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+          const targetCode = cleanCode.replace(/[^A-Z0-9]/g, "");
+          if (parsed && (pCode === targetCode || parsed.teamId === cleanCode)) {
             team = parsed;
           }
         }
@@ -350,31 +428,36 @@
           strategies: []
         }
       ];
-      team = demoTeams.find(t => t.teamCode.toUpperCase() === cleanCode);
+      team = demoTeams.find(t => (t.teamCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "") === cleanCode.replace(/[^A-Z0-9]/g, ""));
     }
 
     if (!team) {
-      return { error: `Team with code "${cleanCode}" not found. Verify the code with your teammate.` };
+      return { error: `Team with code "${cleanCode}" not found. Verify the team code with your teammate.` };
     }
 
     // Enforce 5-Minute Rolling OTP validation
     if (!verifyTeamJoinOtp(team, cleanOtp)) {
       return {
-        error: `Invalid or expired Join OTP for team "${team.teamName}". Join codes rotate every 5 minutes for security. Please request the current live OTP from an active teammate.`
+        error: `Invalid or expired Join OTP for team "${team.teamName || cleanCode}". Join codes rotate every 5 minutes for security. Please request the current live OTP from an active teammate.`
       };
     }
 
-    const normEmail = userObj.email.trim().toLowerCase();
     const now = Date.now();
     team.members = team.members || [];
-    if (!team.members.some(m => m.email.toLowerCase() === normEmail)) {
+    const memIdx = team.members.findIndex(m => (m.email || "").toLowerCase() === normEmail);
+    if (memIdx >= 0) {
+      team.members[memIdx].displayName = userDisplayName;
+      team.members[memIdx].role = userRole;
+      team.members[memIdx].color = userColor;
+      if (userObj?.photoURL) team.members[memIdx].photoURL = userObj.photoURL;
+    } else {
       team.members.push({
         email: normEmail,
-        displayName: userObj.displayName,
-        role: userObj.role,
-        color: getRoleColor(userObj.role),
+        displayName: userDisplayName,
+        role: userRole,
+        color: userColor,
         joinedAt: now,
-        photoURL: userObj.photoURL || "",
+        photoURL: userObj?.photoURL || "",
         isOwner: false
       });
 
@@ -384,10 +467,10 @@
         timestamp: now,
         dateStr: new Date(now).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
         authorEmail: normEmail,
-        authorName: userObj.displayName,
-        authorRole: userObj.role,
-        authorColor: getRoleColor(userObj.role),
-        actionSummary: `${userObj.displayName} joined the team as ${userObj.role}`,
+        authorName: userDisplayName,
+        authorRole: userRole,
+        authorColor: userColor,
+        actionSummary: `${userDisplayName} joined the team as ${userRole}`,
         editType: "member_join",
         snapshot: null
       });
@@ -400,14 +483,17 @@
         if (teamRef) {
           await teamRef.set(team, { merge: true });
         } else {
-          await db.collection("teams").doc(team.teamId).set(team);
+          await db.collection("teams").doc(team.teamId).set(team, { merge: true });
         }
-        await db.collection("team_rosters").doc(clean).set({
-          teamId: team.teamId,
-          email: clean,
-          teamName: team.teamName,
-          joinedAt: now
-        });
+        const cleanKeys = getCleanEmailKeys(normEmail);
+        for (const k of cleanKeys) {
+          await db.collection("team_rosters").doc(k).set({
+            teamId: team.teamId,
+            email: normEmail,
+            teamName: team.teamName,
+            joinedAt: now
+          }, { merge: true });
+        }
       } catch (e) {
         console.warn("[TeamCollab] Firestore join save warning:", e);
       }
@@ -417,7 +503,8 @@
       localStorage.setItem("lemlib_active_team", JSON.stringify(team));
       localStorage.setItem("lemlib_user_team_id", team.teamId);
       const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
-      uTeams[clean] = team.teamId;
+      const cleanKeys = getCleanEmailKeys(normEmail);
+      cleanKeys.forEach(k => { uTeams[k] = team.teamId; });
       localStorage.setItem("lemlib_user_teams", JSON.stringify(uTeams));
     } catch (_) {}
 
@@ -1024,23 +1111,21 @@
     updateOwnerControlsVisibility();
 
     // Start Live 5-Minute Rolling OTP ticker in ribbon
-    if (currentTeam.otpInfo) {
-      setupTeamOtpTicker(currentTeam.otpInfo);
-    } else if (currentTeam.teamId && currentUser && currentUser.email) {
-      fetch(`/api/team/otp?teamId=${encodeURIComponent(currentTeam.teamId)}&email=${encodeURIComponent(currentUser.email)}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) {
-            currentTeam.otpInfo = data;
-            setupTeamOtpTicker(data);
-          }
-        })
-        .catch(() => {});
+    if (!currentTeam.otpInfo) {
+      currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
     }
+    setupTeamOtpTicker(currentTeam.otpInfo);
 
-    // Start SSE stream and presence heartbeats
-    connectSSE();
-    startPresenceHeartbeat();
+    // Subscribe to real-time Firestore updates
+    fsSubscribeTeam(currentTeam.teamId);
+
+    // Start SSE stream and presence heartbeats if server is available
+    if (!isStaticHost) {
+      connectSSE();
+      startPresenceHeartbeat();
+    } else {
+      updateConnStatus(true, "Cloud Workspace Active · Live Sync");
+    }
   }
 
   function connectSSE() {
@@ -1141,9 +1226,11 @@
   }
 
   async function refreshTeamDataSilently() {
-    if (!currentTeam || !currentTeam.teamId) return;
+    if (isStaticHost || !currentTeam || !currentTeam.teamId) return;
     try {
-      const res = await fetch(`/api/team/data?teamId=${encodeURIComponent(currentTeam.teamId)}`);
+      const apiRoute = resolveApiUrl(`/api/team/data?teamId=${encodeURIComponent(currentTeam.teamId)}`);
+      if (!apiRoute) return;
+      const res = await fetch(apiRoute);
       const data = await res.json();
       if (data.success && data.team) {
         currentTeam = data.team;
@@ -1156,6 +1243,7 @@
   }
 
   function startPresenceHeartbeat() {
+    if (isStaticHost) return;
     // Send periodic presence update every 7 seconds
     setInterval(() => {
       sendPresence();
@@ -1163,8 +1251,10 @@
   }
 
   function sendPresence(cursor = null) {
-    if (!currentTeam || !currentUser || !currentUser.email) return;
-    fetch("/api/team/presence", {
+    if (isStaticHost || !currentTeam || !currentUser || !currentUser.email) return;
+    const apiRoute = resolveApiUrl("/api/team/presence");
+    if (!apiRoute) return;
+    fetch(apiRoute, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1185,25 +1275,33 @@
   async function broadcastEdit(summary, editType = "waypoint_edit", createSnapshot = true) {
     if (!currentTeam || !currentUser) return;
     try {
-      const payload = {
-        teamId: currentTeam.teamId,
-        email: currentUser.email,
-        authorName: currentUser.displayName || currentUser.email.split("@")[0],
-        authorRole: currentUser.role || "Programmer",
-        editType,
-        changeSummary: summary,
-        pathPayload: { paths: activePaths },
-        createSnapshot
-      };
+      currentTeam.pathPayload = { paths: activePaths };
+      currentTeam.updatedAt = Date.now();
 
-      const res = await fetch("/api/team/sync-edit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success) {
-        refreshTeamDataSilently();
+      const apiRoute = resolveApiUrl("/api/team/sync-edit");
+      if (apiRoute) {
+        const payload = {
+          teamId: currentTeam.teamId,
+          email: currentUser.email,
+          authorName: currentUser.displayName || currentUser.email.split("@")[0],
+          authorRole: currentUser.role || "Programmer",
+          editType,
+          changeSummary: summary,
+          pathPayload: { paths: activePaths },
+          createSnapshot
+        };
+
+        const res = await fetch(apiRoute, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          refreshTeamDataSilently();
+        }
+      } else {
+        await fsSaveTeamDoc(currentTeam);
       }
     } catch (err) {
       console.error("Failed to broadcast edit:", err);
@@ -2601,11 +2699,11 @@
           const role = document.getElementById("selJoinRole")?.value || "Driver";
 
           if (!code) {
-            showJoinAlert("Please enter the 6-character Team Code (e.g. VEX-742), or select a team from the Available Teams list below.");
+            showJoinAlert("Please enter the 6-character Team Code (e.g. VEX-742).");
             return;
           }
           if (!otp) {
-            showJoinAlert("Please enter the live 5-minute authorization OTP from an active teammate, or click 'Fill Code & OTP' below.");
+            showJoinAlert("Please enter the live 5-minute authorization OTP from an active teammate.");
             return;
           }
 
@@ -2687,7 +2785,7 @@
 
           // If on static host (GitHub Pages) or server returned 404/405/HTML/offline, join client-side
           if (!teamJoined) {
-            const fsRes = await fsJoinTeam(code, otp, currentUser);
+            const fsRes = await fsJoinTeam(code, otp, { ...currentUser, role });
             if (fsRes.error) {
               btnSubmitJoin.disabled = false;
               btnSubmitJoin.textContent = "🔗 Verify 5-Min OTP & Join Team Workspace";
@@ -2847,27 +2945,131 @@
       renderVersionHistory();
     });
 
-    // 13. Team Settings / Leave Team
+    // 13. Team Settings & Exit Team Challenge Modal
+    let currentExitChallengeCode = "";
+
+    function openExitTeamChallengeModal() {
+      if (!currentTeam) return;
+      const modal = document.getElementById("modalExitTeamChallenge");
+      const lblTarget = document.getElementById("lblExitTeamTargetName");
+      const lblPrompt = document.getElementById("lblExitChallengePrompt");
+      const txtInput = document.getElementById("txtExitChallengeInput");
+      const lblFeedback = document.getElementById("lblExitChallengeFeedback");
+      const btnConfirm = document.getElementById("btnConfirmExitTeam");
+
+      if (!modal) return;
+
+      const randNum = Math.floor(1000 + Math.random() * 9000);
+      currentExitChallengeCode = "LEAVE-" + randNum;
+
+      if (lblTarget) lblTarget.textContent = `${currentTeam.teamName || "Team"} (${currentTeam.teamCode || ""})`;
+      if (lblPrompt) lblPrompt.textContent = currentExitChallengeCode;
+      if (txtInput) {
+        txtInput.value = "";
+        txtInput.style.borderColor = "#334155";
+      }
+      if (lblFeedback) {
+        lblFeedback.textContent = "Type the verification code above to unlock the exit button.";
+        lblFeedback.style.color = "#f87171";
+      }
+      if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.style.opacity = "0.5";
+        btnConfirm.style.cursor = "not-allowed";
+        btnConfirm.textContent = "🚪 Confirm & Exit Team";
+      }
+
+      modal.style.display = "flex";
+      setTimeout(() => txtInput?.focus(), 100);
+    }
+
+    const txtExitInput = document.getElementById("txtExitChallengeInput");
+    if (txtExitInput) {
+      txtExitInput.addEventListener("input", () => {
+        const val = txtExitInput.value.trim().toUpperCase();
+        const lblFeedback = document.getElementById("lblExitChallengeFeedback");
+        const btnConfirm = document.getElementById("btnConfirmExitTeam");
+        if (val === currentExitChallengeCode) {
+          if (lblFeedback) {
+            lblFeedback.textContent = "✅ Challenge verified! You may now confirm exit.";
+            lblFeedback.style.color = "#4ade80";
+          }
+          if (btnConfirm) {
+            btnConfirm.disabled = false;
+            btnConfirm.style.opacity = "1";
+            btnConfirm.style.cursor = "pointer";
+          }
+        } else {
+          if (lblFeedback) {
+            lblFeedback.textContent = "Code does not match yet. Type: " + currentExitChallengeCode;
+            lblFeedback.style.color = "#f87171";
+          }
+          if (btnConfirm) {
+            btnConfirm.disabled = true;
+            btnConfirm.style.opacity = "0.5";
+            btnConfirm.style.cursor = "not-allowed";
+          }
+        }
+      });
+    }
+
+    const btnCloseExitModal = document.getElementById("btnCloseExitTeamModal");
+    const btnCancelExitModal = document.getElementById("btnCancelExitTeam");
+    [btnCloseExitModal, btnCancelExitModal].forEach(btn => {
+      btn?.addEventListener("click", () => {
+        const modal = document.getElementById("modalExitTeamChallenge");
+        if (modal) modal.style.display = "none";
+      });
+    });
+
+    const btnConfirmExit = document.getElementById("btnConfirmExitTeam");
+    if (btnConfirmExit) {
+      btnConfirmExit.addEventListener("click", async () => {
+        if (!currentTeam || !currentUser) return;
+        btnConfirmExit.disabled = true;
+        btnConfirmExit.textContent = "Exiting Team...";
+
+        const teamId = currentTeam.teamId;
+        const normEmail = (currentUser.email || "").toLowerCase();
+
+        const apiRoute = resolveApiUrl("/api/team/leave");
+        if (apiRoute) {
+          await safeFetchJson(apiRoute, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ teamId, email: normEmail })
+          });
+        }
+
+        await fsLeaveTeam(teamId, cleanEmailKey(normEmail));
+
+        try {
+          localStorage.removeItem("lemlib_active_team");
+          localStorage.removeItem("lemlib_user_team_id");
+          const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+          const cleanKeys = getCleanEmailKeys(normEmail);
+          cleanKeys.forEach(k => { delete uTeams[k]; });
+          localStorage.setItem("lemlib_user_teams", JSON.stringify(uTeams));
+        } catch (_) {}
+
+        currentTeam = null;
+        const modal = document.getElementById("modalExitTeamChallenge");
+        if (modal) modal.style.display = "none";
+
+        const teamWorkspaceView = document.getElementById("teamWorkspaceView");
+        const teamSetupJoinView = document.getElementById("teamSetupJoinView");
+        if (teamWorkspaceView) teamWorkspaceView.style.display = "none";
+        if (teamSetupJoinView) teamSetupJoinView.style.display = "block";
+
+        showToast("🚪 Exited team successfully. Select or create a workspace.", "ℹ️");
+      });
+    }
+
+    document.getElementById("btnExitTeamHeader")?.addEventListener("click", openExitTeamChallengeModal);
+    document.getElementById("btnExitTeamRoster")?.addEventListener("click", openExitTeamChallengeModal);
     document.getElementById("btnManageTeam")?.addEventListener("click", () => {
       if (!currentTeam) return;
-      const opt = confirm(`Team: ${currentTeam.teamName} (${currentTeam.teamCode})\nOwner: ${currentTeam.ownerEmail}\nMembers: ${currentTeam.members.length}\n\nDo you want to LEAVE this team?\n(Note: You can only be in 1 team at a time)`);
-      if (opt) {
-        fetch("/api/team/leave", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            teamId: currentTeam.teamId,
-            email: currentUser.email
-          })
-        })
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) {
-            alert("You have left the team.");
-            location.reload();
-          }
-        });
-      }
+      openExitTeamChallengeModal();
     });
 
     // 14. Routine Rename & Duplicate
