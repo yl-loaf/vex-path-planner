@@ -991,50 +991,6 @@
     return poses;
   }
 
-  // Dual presence sync states
-  let firestorePresenceUnsub = null;
-
-  function sendFirestorePresence(cursor = null) {
-    const db = getFirestoreDb();
-    if (!db || !currentTeam || !currentUser || !currentUser.email) return;
-    const emailKey = cleanEmailKey(currentUser.email);
-    const now = Date.now();
-    db.collection("teams").doc(currentTeam.teamId).collection("presence").doc(emailKey).set({
-      email: currentUser.email,
-      displayName: currentUser.displayName || currentUser.email.split("@")[0],
-      role: currentUser.role || "Programmer",
-      color: currentUser.color || getRoleColor(currentUser.role || "Programmer"),
-      cursor,
-      updatedAt: now,
-      activeWaypoint: draggedWaypointIndex >= 0 ? draggedWaypointIndex : null,
-      activeRoutine: activePaths[activeRoutineIndex]?.name || null
-    }, { merge: true }).catch(() => {});
-  }
-
-  function startFirestorePresenceSubscription(teamId) {
-    const db = getFirestoreDb();
-    if (!db || !teamId) return;
-    if (firestorePresenceUnsub) {
-      try { firestorePresenceUnsub(); } catch (_) {}
-      firestorePresenceUnsub = null;
-    }
-    try {
-      firestorePresenceUnsub = db.collection("teams").doc(teamId).collection("presence").onSnapshot((snap) => {
-        if (snap) {
-          const membersPresence = [];
-          snap.forEach(doc => {
-            const p = doc.data();
-            if (p && Date.now() - p.updatedAt < 20000) {
-              membersPresence.push(p);
-            }
-          });
-          renderTeammateCursors(membersPresence);
-        }
-      }, (error) => {
-        console.warn("[TeamCollab] Presence onSnapshot notice:", error);
-      });
-    } catch (_) {}
-  }
 
   // --------------------------------------------------------------------------
   // MODAL WIRE HANDLERS
