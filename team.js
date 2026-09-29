@@ -2663,6 +2663,12 @@
     document.getElementById("lblSettingsMemCount").textContent = String((currentTeam.members || []).length);
     document.getElementById("lblSettingsTeamHeader").textContent = `Team Details: ${currentTeam.teamName || 'VEX Team'}`;
 
+    const canManage = isCurrentUserAdmin();
+    const btnSave = document.getElementById("btnSaveTeamSettings");
+    if (btnSave) {
+      btnSave.style.display = canManage ? "inline-block" : "none";
+    }
+
     renderSettingsRosterTable();
     modal.style.display = "flex";
   }
@@ -2672,7 +2678,19 @@
     if (!container || !currentTeam) return;
 
     const members = currentTeam.members || [];
-    let html = `
+    const canManage = isCurrentUserAdmin();
+    const myEmail = (currentUser?.email || "").toLowerCase().trim();
+
+    let html = "";
+    if (!canManage) {
+      html += `
+        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:6px;padding:8px 12px;margin:8px;font-size:0.75rem;color:#94a3b8;line-height:1.4;">
+          🔒 <strong>Permissions View Only:</strong> Only team administrators and the team owner can modify roles, change editing permissions, or kick teammates.
+        </div>
+      `;
+    }
+
+    html += `
       <table style="width:100%;border-collapse:collapse;font-size:0.78rem;text-align:left;">
         <thead>
           <tr style="background:#090d16;color:#94a3b8;border-bottom:1px solid #1e293b;">
@@ -2680,16 +2698,46 @@
             <th style="padding:8px 12px;">Role</th>
             <th style="padding:8px 12px;">Admin</th>
             <th style="padding:8px 12px;">Edit Code</th>
+            <th style="padding:8px 12px;text-align:center;">Action</th>
           </tr>
         </thead>
         <tbody>
     `;
 
+    const ROLES = ["Programmer", "Builder", "Driver", "Strategist", "Scout", "Coach", "Member"];
+
     members.forEach((m, idx) => {
       const email = m.email || "member@team";
-      const isOwner = m.isOwner || false;
+      const isOwner = m.isOwner || (currentTeam.ownerEmail && currentTeam.ownerEmail.toLowerCase().trim() === email.toLowerCase().trim());
       const isAdmin = m.isAdmin || isOwner;
       const canEdit = m.canEditCode !== undefined ? m.canEditCode : (isAdmin || m.role === 'Programmer');
+      const isMe = (email.toLowerCase().trim() === myEmail);
+
+      let roleSelectOrTag = "";
+      if (canManage && !isOwner) {
+        roleSelectOrTag = `
+          <select class="sel-setting-role form-input" data-idx="${idx}" style="padding:2px 6px;font-size:0.72rem;width:auto;">
+            ${ROLES.map(r => `<option value="${r}" ${m.role === r ? 'selected' : ''}>${r}</option>`).join("")}
+          </select>
+        `;
+      } else {
+        roleSelectOrTag = `<span class="member-role-tag ${m.role ? m.role.toLowerCase() : 'programmer'}">${escapeHtml(m.role || 'Programmer')}</span>`;
+      }
+
+      let actionHtml = "";
+      if (isOwner) {
+        actionHtml = `<span style="font-size:0.72rem;color:#fbbf24;font-weight:700;">👑 Owner</span>`;
+      } else if (isMe) {
+        actionHtml = `<span style="font-size:0.72rem;color:#94a3b8;">(You)</span>`;
+      } else if (canManage) {
+        actionHtml = `
+          <button type="button" class="btn-team-kick" data-idx="${idx}" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;padding:3px 8px;border-radius:4px;font-size:0.72rem;cursor:pointer;font-weight:700;" title="Kick member from team">
+            👢 Kick
+          </button>
+        `;
+      } else {
+        actionHtml = `<span style="color:#64748b;font-size:0.7rem;">—</span>`;
+      }
 
       html += `
         <tr style="border-bottom:1px solid #1e293b;">
@@ -2698,19 +2746,22 @@
             <div style="font-size:0.68rem;color:#64748b;">${escapeHtml(email)}</div>
           </td>
           <td style="padding:8px 12px;">
-            <span class="member-role-tag ${m.role ? m.role.toLowerCase() : 'programmer'}">${escapeHtml(m.role || 'Programmer')}</span>
+            ${roleSelectOrTag}
           </td>
           <td style="padding:8px 12px;">
-            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
-              <input type="checkbox" class="chk-setting-admin" data-idx="${idx}" ${isAdmin ? 'checked' : ''} ${isOwner ? 'disabled' : ''} />
+            <label style="${canManage && !isOwner ? 'cursor:pointer;' : 'cursor:not-allowed;'}display:inline-flex;align-items:center;gap:4px;">
+              <input type="checkbox" class="chk-setting-admin" data-idx="${idx}" ${isAdmin ? 'checked' : ''} ${!canManage || isOwner ? 'disabled' : ''} />
               <span style="font-size:0.72rem;color:${isAdmin ? '#f59e0b' : '#94a3b8'};">${isAdmin ? '👑 Admin' : 'Member'}</span>
             </label>
           </td>
           <td style="padding:8px 12px;">
-            <select class="sel-setting-edit form-input" data-idx="${idx}" style="padding:2px 6px;font-size:0.72rem;width:auto;">
+            <select class="sel-setting-edit form-input" data-idx="${idx}" ${!canManage ? 'disabled' : ''} style="padding:2px 6px;font-size:0.72rem;width:auto;">
               <option value="true" ${canEdit ? 'selected' : ''}>✏️ Can Edit Code</option>
               <option value="false" ${!canEdit ? 'selected' : ''}>💡 Suggestion Only</option>
             </select>
+          </td>
+          <td style="padding:8px 12px;text-align:center;">
+            ${actionHtml}
           </td>
         </tr>
       `;
@@ -2719,19 +2770,94 @@
     html += `</tbody></table>`;
     container.innerHTML = html;
 
-    container.querySelectorAll(".chk-setting-admin").forEach(chk => {
-      chk.addEventListener("change", (e) => {
-        const i = parseInt(e.target.getAttribute("data-idx"), 10);
-        if (members[i]) members[i].isAdmin = e.target.checked;
+    if (canManage) {
+      container.querySelectorAll(".sel-setting-role").forEach(sel => {
+        sel.addEventListener("change", (e) => {
+          const i = parseInt(e.target.getAttribute("data-idx"), 10);
+          if (members[i]) {
+            members[i].role = e.target.value;
+            members[i].color = getRoleColor(e.target.value);
+          }
+        });
       });
-    });
 
-    container.querySelectorAll(".sel-setting-edit").forEach(sel => {
-      sel.addEventListener("change", (e) => {
-        const i = parseInt(e.target.getAttribute("data-idx"), 10);
-        if (members[i]) members[i].canEditCode = (e.target.value === "true");
+      container.querySelectorAll(".chk-setting-admin").forEach(chk => {
+        chk.addEventListener("change", (e) => {
+          const i = parseInt(e.target.getAttribute("data-idx"), 10);
+          if (members[i]) {
+            members[i].isAdmin = e.target.checked;
+            if (e.target.checked && members[i].canEditCode === undefined) {
+              members[i].canEditCode = true;
+            }
+          }
+        });
       });
-    });
+
+      container.querySelectorAll(".sel-setting-edit").forEach(sel => {
+        sel.addEventListener("change", (e) => {
+          const i = parseInt(e.target.getAttribute("data-idx"), 10);
+          if (members[i]) members[i].canEditCode = (e.target.value === "true");
+        });
+      });
+
+      container.querySelectorAll(".btn-team-kick").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          if (!isCurrentUserAdmin()) {
+            alert("Only team admins can kick members.");
+            return;
+          }
+          const i = parseInt(e.currentTarget.getAttribute("data-idx"), 10);
+          const targetMem = members[i];
+          if (!targetMem) return;
+
+          const isTargetOwner = targetMem.isOwner || (currentTeam.ownerEmail && currentTeam.ownerEmail.toLowerCase().trim() === (targetMem.email || "").toLowerCase().trim());
+          if (isTargetOwner) {
+            alert("Cannot kick the team owner.");
+            return;
+          }
+
+          const memName = targetMem.displayName || targetMem.email || "this member";
+          if (!confirm(`Are you sure you want to kick "${memName}" from the team?\nThey will immediately be removed from the team workspace.`)) {
+            return;
+          }
+
+          const kicked = members.splice(i, 1)[0];
+          recordVersionHistoryEntry(`Kicked ${kicked.displayName || kicked.email} from the team`, "member_kick");
+          currentTeam.updatedAt = Date.now();
+
+          // Server-side kick
+          const apiRoute = resolveApiUrl("/api/team/kick-member");
+          if (apiRoute) {
+            safeFetchJson(apiRoute, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                teamId: currentTeam.teamId,
+                email: currentUser.email,
+                targetEmail: kicked.email
+              })
+            }).catch(() => {});
+          }
+
+          // Remove from team_rosters collection in Firestore
+          try {
+            const db = getFirestoreDb();
+            if (db && kicked.email) {
+              const cleanKeys = getCleanEmailKeys(kicked.email);
+              for (const k of cleanKeys) {
+                db.collection("team_rosters").doc(k).delete().catch(() => {});
+              }
+            }
+          } catch (_) {}
+
+          await fsSaveTeamDoc(currentTeam);
+          renderSettingsRosterTable();
+          renderMemberList();
+          renderVersionHistory();
+          showToast(`👢 Kicked ${kicked.displayName || kicked.email} from the team.`, "⚠️");
+        });
+      });
+    }
   }
 
   function proposeTeamSuggestion(summary, editType = "code_suggestion", codePayload = null) {
@@ -3928,6 +4054,20 @@
         if (doc && doc.exists) {
           const remote = doc.data();
           if (remote) {
+            const myEmail = (currentUser?.email || "").toLowerCase().trim();
+            if (myEmail && Array.isArray(remote.members) && remote.members.length > 0) {
+              const stillMember = remote.members.some(m => (m.email || "").toLowerCase().trim() === myEmail);
+              if (!stillMember && currentTeam && !isCurrentUserOwner()) {
+                try { firestoreUnsub(); } catch (_) {}
+                firestoreUnsub = null;
+                currentTeam = null;
+                localStorage.removeItem("lemlib_active_team");
+                alert("⚠️ You have been removed from this team workspace by an administrator.");
+                window.location.reload();
+                return;
+              }
+            }
+
             if (remote.syncLock) {
               currentTeam.syncLock = remote.syncLock;
               handleRemoteSyncLock(remote.syncLock);
@@ -4476,6 +4616,14 @@
     return Boolean(myMember && myMember.isOwner);
   }
 
+  function isCurrentUserAdmin() {
+    if (!currentTeam || !currentUser || !currentUser.email) return false;
+    if (isCurrentUserOwner()) return true;
+    const myEmail = currentUser.email.toLowerCase().trim();
+    const myMember = (currentTeam.members || []).find(m => (m.email || "").toLowerCase().trim() === myEmail);
+    return Boolean(myMember && (myMember.isAdmin || myMember.role === "Admin" || myMember.isOwner));
+  }
+
   function updateOwnerControlsVisibility() {
     const ownerWrap = document.getElementById("ownerImportWrap");
     if (ownerWrap) {
@@ -4818,8 +4966,45 @@
   }
 
   // --------------------------------------------------------------------------
-  // REAL-TIME SYNC BROADCASTING FOR EDITS
+  // REAL-TIME SYNC BROADCASTING & AUTOMATIC VERSION HISTORY FOR EDITS
   // --------------------------------------------------------------------------
+  function recordVersionHistoryEntry(summary, editType = "workspace_edit", customSnapshot = null) {
+    if (!currentTeam || !currentUser) return null;
+    const now = Date.now();
+    const myEmail = (currentUser.email || "").toLowerCase().trim();
+    const member = (currentTeam.members || []).find(m => (m.email || "").toLowerCase().trim() === myEmail);
+    const authorName = currentUser.displayName || member?.displayName || (myEmail ? myEmail.split("@")[0] : "Teammate");
+    const authorRole = currentUser.role || member?.role || "Programmer";
+    const authorColor = member?.color || getRoleColor(authorRole);
+
+    const snapshot = customSnapshot || { paths: JSON.parse(JSON.stringify(activePaths || [])) };
+    const linesCount = (snapshot.paths && Array.isArray(snapshot.paths))
+      ? snapshot.paths.reduce((acc, p) => acc + (p.actions ? p.actions.length : 0), 0)
+      : 0;
+
+    const entry = {
+      id: "v_" + now + "_" + Math.random().toString(36).substring(2, 6),
+      timestamp: now,
+      dateStr: new Date(now).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) + " · " + new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      authorEmail: myEmail,
+      authorName,
+      authorRole,
+      authorColor,
+      actionSummary: summary || "Modified workspace",
+      editType: editType || "workspace_edit",
+      snapshot,
+      linesCount
+    };
+
+    currentTeam.versionHistory = currentTeam.versionHistory || [];
+    currentTeam.versionHistory.unshift(entry);
+    if (currentTeam.versionHistory.length > 500) {
+      currentTeam.versionHistory.length = 500;
+    }
+    renderVersionHistory();
+    return entry;
+  }
+
   async function broadcastEdit(summary, editType = "waypoint_edit", createSnapshot = true) {
     if (!currentTeam || !currentUser) return;
     if (isTeamSyncLocked()) {
@@ -4831,6 +5016,9 @@
       currentTeam.pathPayload = { paths: activePaths };
       currentTeam.updatedAt = Date.now();
 
+      // Automatically save every edit to version history across all teammates
+      recordVersionHistoryEntry(summary, editType);
+
       const apiRoute = resolveApiUrl("/api/team/sync-edit");
       if (apiRoute) {
         const payload = {
@@ -4841,7 +5029,8 @@
           editType,
           changeSummary: summary,
           pathPayload: { paths: activePaths },
-          createSnapshot
+          versionHistory: currentTeam.versionHistory,
+          createSnapshot: true
         };
 
         const res = await fetch(apiRoute, {
@@ -4849,13 +5038,17 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
-        if (data.success) {
-          refreshTeamDataSilently();
+        const data = await res.json().catch(() => null);
+        if (data && data.success && data.team) {
+          if (data.team.versionHistory && data.team.versionHistory.length > 0) {
+            currentTeam.versionHistory = data.team.versionHistory;
+          }
         }
-      } else {
-        await fsSaveTeamDoc(currentTeam);
       }
+
+      // Always save directly to Firestore so teammates receive the new version history live via onSnapshot
+      await fsSaveTeamDoc(currentTeam);
+      renderVersionHistory();
     } catch (err) {
       console.error("Failed to broadcast edit:", err);
     }
@@ -7920,10 +8113,31 @@
     });
     document.getElementById("btnSaveTeamSettings")?.addEventListener("click", async () => {
       if (!currentTeam) return;
+      if (!isCurrentUserAdmin()) {
+        alert("Only team administrators and the team owner can modify permissions and roles.");
+        return;
+      }
       currentTeam.updatedAt = Date.now();
+      recordVersionHistoryEntry("Updated team member roles and permissions", "permissions_update");
+
+      const apiRoute = resolveApiUrl("/api/team/settings");
+      if (apiRoute) {
+        safeFetchJson(apiRoute, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teamId: currentTeam.teamId,
+            email: currentUser.email,
+            members: currentTeam.members,
+            teamName: currentTeam.teamName
+          })
+        }).catch(() => {});
+      }
+
       await fsSaveTeamDoc(currentTeam);
       if (modalSettings) modalSettings.style.display = "none";
       renderMemberList();
+      renderVersionHistory();
       showToast("💾 Saved team roles and code edit permissions!", "✅");
     });
     document.getElementById("btnSettingsExitTeam")?.addEventListener("click", () => {
@@ -8330,6 +8544,33 @@
       renderActionBlocks();
       drawField();
       broadcastEdit(`Duplicated routine "${cloned.name}"`, "routine_dup", true);
+    });
+
+    document.getElementById("btnDeleteRoutine")?.addEventListener("click", () => {
+      if (!currentTeam || !currentUser) return;
+      if (isTeamSyncLocked()) {
+        const lk = currentTeam.syncLock;
+        showToast(`🔒 Cannot delete routine: ${lk.authorName || 'Teammate'} is importing from GitHub (${lk.progress || 0}%).`, "⚠️");
+        return;
+      }
+      if (activePaths.length <= 1) {
+        alert("Cannot delete the only routine in the workspace. Please create another routine before deleting this one.");
+        return;
+      }
+      const cur = activePaths[activeRoutineIndex];
+      if (!cur) return;
+      if (!confirm(`Delete autonomous routine "${cur.name}"? This action will be recorded in version history.`)) {
+        return;
+      }
+      const deletedName = cur.name;
+      activePaths.splice(activeRoutineIndex, 1);
+      activeRoutineIndex = Math.max(0, activeRoutineIndex - 1);
+      renderRoutinesSelector();
+      renderActionBlocks();
+      drawField();
+      syncIdeAutonsFromBlocks();
+      broadcastEdit(`Deleted routine "${deletedName}"`, "routine_delete", true);
+      showToast(`🗑️ Deleted routine "${deletedName}"`, "ℹ️");
     });
 
     // Auto-smooth path button

@@ -968,6 +968,140 @@ app.post(['/api/team/sync-progress', '/vex-path-planner/api/team/sync-progress']
   res.json({ success: true, syncLock: team.syncLock });
 });
 
+// Update team settings and permissions (Admins / Owner only)
+app.post(['/api/team/settings', '/vex-path-planner/api/team/settings'], (req, res) => {
+  const { teamId, email, members, teamName } = req.body || {};
+  if (!teamId || !email) {
+    return res.status(400).json({ error: 'Missing teamId or email parameter' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) {
+    return res.status(404).json({ error: 'Team not found' });
+  }
+
+  const normEmail = email.toLowerCase().trim();
+  const isOwner = (team.ownerEmail && team.ownerEmail.toLowerCase().trim() === normEmail);
+  const requester = team.members.find(m => m.email.toLowerCase().trim() === normEmail);
+  const isAdmin = isOwner || Boolean(requester && (requester.isAdmin || requester.role === 'Admin' || requester.isOwner));
+
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Forbidden: Only team admins and the team owner can modify permissions and roles.' });
+  }
+
+  if (teamName && typeof teamName === 'string') {
+    team.teamName = teamName.trim();
+  }
+
+  if (Array.isArray(members)) {
+    // Preserve owner status
+    team.members = members.map(m => {
+      const isThisOwner = (team.ownerEmail && team.ownerEmail.toLowerCase().trim() === (m.email || '').toLowerCase().trim()) || m.isOwner;
+      return {
+        ...m,
+        isOwner: isThisOwner,
+        isAdmin: isThisOwner ? true : Boolean(m.isAdmin)
+      };
+    });
+  }
+
+  const now = Date.now();
+  team.updatedAt = now;
+
+  const snapshotItem = {
+    id: 'v_' + now + '_' + Math.random().toString(36).substring(2, 6),
+    timestamp: now,
+    dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    authorEmail: normEmail,
+    authorName: requester?.displayName || requester?.email?.split('@')[0] || 'Admin',
+    authorRole: requester?.role || 'Admin',
+    authorColor: requester?.color || getRoleColor('Admin'),
+    actionSummary: 'Updated team member roles and permissions',
+    editType: 'permissions_update',
+    snapshot: team.pathPayload || null
+  };
+
+  if (!team.versionHistory) team.versionHistory = [];
+  team.versionHistory.unshift(snapshotItem);
+  if (team.versionHistory.length > 500) team.versionHistory.length = 500;
+
+  saveTeam(team);
+  broadcastToTeam(teamId, 'sync', {
+    team,
+    changeSummary: 'Updated team member roles and permissions',
+    editType: 'permissions_update'
+  });
+  res.json({ success: true, team });
+});
+
+// Kick member from team (Admins / Owner only)
+app.post(['/api/team/kick-member', '/vex-path-planner/api/team/kick-member'], (req, res) => {
+  const { teamId, email, targetEmail } = req.body || {};
+  if (!teamId || !email || !targetEmail) {
+    return res.status(400).json({ error: 'Missing parameters' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) {
+    return res.status(404).json({ error: 'Team not found' });
+  }
+
+  const normEmail = email.toLowerCase().trim();
+  const normTarget = targetEmail.toLowerCase().trim();
+
+  const isOwner = (team.ownerEmail && team.ownerEmail.toLowerCase().trim() === normEmail);
+  const requester = team.members.find(m => m.email.toLowerCase().trim() === normEmail);
+  const isAdmin = isOwner || Boolean(requester && (requester.isAdmin || requester.role === 'Admin' || requester.isOwner));
+
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Forbidden: Only team admins and the team owner can kick members.' });
+  }
+
+  // Cannot kick the owner
+  if (team.ownerEmail && team.ownerEmail.toLowerCase().trim() === normTarget) {
+    return res.status(400).json({ error: 'Cannot kick the team owner.' });
+  }
+
+  // Cannot kick self
+  if (normEmail === normTarget) {
+    return res.status(400).json({ error: 'Cannot kick yourself from the team. Use Exit Team instead.' });
+  }
+
+  const kickedIdx = team.members.findIndex(m => m.email.toLowerCase().trim() === normTarget);
+  if (kickedIdx === -1) {
+    return res.status(404).json({ error: 'Target member not found in team.' });
+  }
+
+  const kicked = team.members.splice(kickedIdx, 1)[0];
+  const now = Date.now();
+  team.updatedAt = now;
+
+  const snapshotItem = {
+    id: 'v_' + now + '_' + Math.random().toString(36).substring(2, 6),
+    timestamp: now,
+    dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    authorEmail: normEmail,
+    authorName: requester?.displayName || requester?.email?.split('@')[0] || 'Admin',
+    authorRole: requester?.role || 'Admin',
+    authorColor: requester?.color || getRoleColor('Admin'),
+    actionSummary: `Kicked ${kicked.displayName || kicked.email} from the team`,
+    editType: 'member_kick',
+    snapshot: team.pathPayload || null
+  };
+
+  if (!team.versionHistory) team.versionHistory = [];
+  team.versionHistory.unshift(snapshotItem);
+  if (team.versionHistory.length > 500) team.versionHistory.length = 500;
+
+  saveTeam(team);
+  broadcastToTeam(teamId, 'sync', {
+    team,
+    changeSummary: `Kicked ${kicked.displayName || kicked.email} from the team`,
+    editType: 'member_kick'
+  });
+  res.json({ success: true, team, kicked });
+});
+
 // 6. Real-time path & action sync edit (Stores up to 500 version history entries with author attribution)
 app.post(['/api/team/sync-edit', '/vex-path-planner/api/team/sync-edit'], (req, res) => {
   const { teamId, email, authorName, authorRole, editType, changeSummary, pathPayload, projectPayload, createSnapshot } = req.body || {};
