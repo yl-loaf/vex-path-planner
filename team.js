@@ -1002,7 +1002,7 @@
   }
 
   function simulateRoutine(routine, botObj = botConfig) {
-    if (!routine) return { path: [], duration: 0 };
+    if (!routine) return { path: [], segments: [], duration: 0 };
     const key = getRoutineSimKey(routine, botObj);
     if (cachedTeamSimResult && cachedRoutineKey === key) {
       return cachedTeamSimResult;
@@ -1012,20 +1012,30 @@
     const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
     let curPose = { x: startPose.x, y: startPose.y, theta: normalizeAngle(startPose.theta || 0) };
     let fullPath = [{ x: curPose.x, y: curPose.y, theta: curPose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
+    let segments = [];
     let totalTime = 0;
 
-    (routine.actions || []).forEach(act => {
+    (routine.actions || []).forEach((act, aIdx) => {
       const seg = simulateAction(act, curPose, b);
       if (seg && seg.path) {
+        segments.push({
+          action: act,
+          actionIdx: aIdx,
+          points: seg.path,
+          endPose: seg.endPose,
+          duration: seg.duration,
+          carrot: seg.carrot,
+          bezierCPs: seg.bezierCPs,
+        });
         seg.path.forEach((pt, i) => {
-          if (i > 0) fullPath.push({ ...pt, t: pt.t + totalTime });
+          if (i > 0) fullPath.push({ ...pt, t: pt.t + totalTime, actionIdx: aIdx });
         });
         curPose = { ...seg.endPose };
         totalTime += seg.duration;
       }
     });
 
-    const res = { path: fullPath, duration: Math.max(totalTime, 0.1) };
+    const res = { path: fullPath, segments, duration: Math.max(totalTime, 0.1) };
     cachedTeamSimResult = res;
     cachedRoutineKey = key;
     return res;
@@ -4823,93 +4833,111 @@
       };
     }
 
+    const simRes = simulateRoutine(routine, botConfig);
+
     const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
-    const waypoints = [{ x: startPose.x, y: startPose.y, theta: startPose.theta, type: "start", id: "start_pose" }];
-    let lastWp = startPose;
-    (routine.actions || []).forEach((act) => {
-      const actX = act.x !== undefined ? act.x : lastWp.x;
-      const actY = act.y !== undefined ? act.y : lastWp.y;
-      const wpItem = { ...act, x: actX, y: actY };
-      waypoints.push(wpItem);
-      lastWp = wpItem;
+    const waypoints = [{ x: startPose.x, y: startPose.y, theta: normalizeAngle(startPose.theta || 0), type: "start", id: "start_pose" }];
+    (routine.actions || []).forEach((act, idx) => {
+      const seg = simRes.segments && simRes.segments[idx];
+      const endPose = seg ? seg.endPose : null;
+      const actX = act.x !== undefined ? act.x : (endPose ? endPose.x : (waypoints[idx] ? waypoints[idx].x : 0));
+      const actY = act.y !== undefined ? act.y : (endPose ? endPose.y : (waypoints[idx] ? waypoints[idx].y : 0));
+      const actTheta = act.theta !== undefined ? act.theta : (endPose ? endPose.theta : (waypoints[idx] ? waypoints[idx].theta : 0));
+      waypoints.push({ ...act, x: actX, y: actY, theta: actTheta });
     });
 
-    // 4. Draw Trajectory Spline Line with Bezier Curves & Directional Arrows
-    if (waypoints.length > 1) {
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        const p0 = waypoints[i];
-        const p1 = waypoints[i + 1];
+    // 4. Draw Trajectory Line & Curves (Directly from authentic LemLib simulation path)
+    if (simRes.path && simRes.path.length > 1) {
+      // Glow underlay
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
+      ctx.lineWidth = 7;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      let glowPen = false;
+      for (const pt of simRes.path) {
+        const c = fieldToCanvas(pt.x, pt.y, w, h);
+        if (!glowPen) { ctx.moveTo(c.cx, c.cy); glowPen = true; }
+        else ctx.lineTo(c.cx, c.cy);
+      }
+      ctx.stroke();
 
-        const x0 = inchToPx(p0.x, w);
-        const y0 = inchToPx(p0.y, h, true);
-        const x1 = inchToPx(p1.x, w);
-        const y1 = inchToPx(p1.y, h, true);
+      // Draw each action segment with authentic trajectory points
+      for (const seg of (simRes.segments || [])) {
+        if (!seg.action || seg.action.type === "custom" || seg.action.type === "customCode") continue;
+        if (!seg.points || seg.points.length < 2) continue;
 
-        if (p1.type === "bezierCurve") {
-          // Default Control Points CP1 and CP2 if missing
-          const cp1x = inchToPx(p1.x1 !== undefined ? p1.x1 : (p0.x + p1.x) / 2 - 10, w);
-          const cp1y = inchToPx(p1.y1 !== undefined ? p1.y1 : (p0.y + p1.y) / 2 - 10, h, true);
-          const cp2x = inchToPx(p1.x2 !== undefined ? p1.x2 : (p0.x + p1.x) / 2 + 10, w);
-          const cp2y = inchToPx(p1.y2 !== undefined ? p1.y2 : (p0.y + p1.y) / 2 + 10, h, true);
+        const isBezier = seg.action.type === "bezierCurve";
+        const isSwing = seg.action.type === "swingToHeading" || seg.action.type === "swingToPoint";
+        const isTurn = seg.action.type === "turnToHeading" || seg.action.type === "turnToPoint";
+        const isSelected = selectedActionId === seg.action.id;
 
-          // Glow background line
-          ctx.strokeStyle = "rgba(6, 182, 212, 0.3)";
-          ctx.lineWidth = 8;
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x1, y1);
-          ctx.stroke();
+        // In-place turns do not translate on the field; draw aim ray & crosshair if turnToPoint
+        if (isTurn) {
+          if (seg.action.type === "turnToPoint" && seg.action.x !== undefined) {
+            const pFrom = seg.points[0];
+            const cFrom = fieldToCanvas(pFrom.x, pFrom.y, w, h);
+            const cTgt = fieldToCanvas(seg.action.x, seg.action.y, w, h);
 
-          // Cyan Bezier foreground path
-          ctx.strokeStyle = "#06b6d4";
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x1, y1);
-          ctx.stroke();
+            ctx.save();
+            ctx.strokeStyle = isSelected ? "#38bdf8" : "rgba(56, 189, 248, 0.45)";
+            ctx.lineWidth = isSelected ? 1.8 : 1.2;
+            ctx.setLineDash([3, 4]);
+            ctx.beginPath();
+            ctx.moveTo(cFrom.cx, cFrom.cy);
+            ctx.lineTo(cTgt.cx, cTgt.cy);
+            ctx.stroke();
+            ctx.setLineDash([]);
 
-          // Render CP1 & CP2 Handle Rays
-          ctx.strokeStyle = "rgba(245, 158, 11, 0.6)";
-          ctx.lineWidth = 1.5;
-          if (ctx.setLineDash) ctx.setLineDash([4, 4]);
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.lineTo(cp1x, cp1y);
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(cp2x, cp2y);
-          ctx.stroke();
-          if (ctx.setLineDash) ctx.setLineDash([]);
+            // Crosshair
+            ctx.strokeStyle = isSelected ? "#38bdf8" : "rgba(56, 189, 248, 0.65)";
+            ctx.beginPath();
+            ctx.arc(cTgt.cx, cTgt.cy, 6, 0, Math.PI * 2);
+            ctx.moveTo(cTgt.cx - 8, cTgt.cy); ctx.lineTo(cTgt.cx + 8, cTgt.cy);
+            ctx.moveTo(cTgt.cx, cTgt.cy - 8); ctx.lineTo(cTgt.cx, cTgt.cy + 8);
+            ctx.stroke();
+            ctx.restore();
+          }
+          continue;
+        }
 
-          // Handle Dots
-          ctx.fillStyle = "#f59e0b";
-          ctx.beginPath(); ctx.arc(cp1x, cp1y, 5, 0, Math.PI * 2); ctx.fill();
-          ctx.beginPath(); ctx.arc(cp2x, cp2y, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.save();
+        if (isBezier) {
+          ctx.strokeStyle = isSelected ? "#38bdf8" : "#06b6d4";
+          ctx.lineWidth = isSelected ? 4 : 3;
+        } else if (isSwing) {
+          ctx.strokeStyle = isSelected ? "#f59e0b" : "#eab308";
+          ctx.lineWidth = isSelected ? 3.5 : 2.5;
         } else {
-          // Straight segment
-          ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
-          ctx.lineWidth = 8;
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.lineTo(x1, y1);
-          ctx.stroke();
+          ctx.strokeStyle = isSelected ? "#60a5fa" : "#38bdf8";
+          ctx.lineWidth = isSelected ? 3.5 : 2.5;
+        }
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
 
-          ctx.strokeStyle = "#38bdf8";
-          ctx.lineWidth = 3;
-          if (ctx.setLineDash) ctx.setLineDash([]);
-          ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.lineTo(x1, y1);
-          ctx.stroke();
+        ctx.beginPath();
+        let segPen = false;
+        for (const pt of seg.points) {
+          const c = fieldToCanvas(pt.x, pt.y, w, h);
+          if (!segPen) { ctx.moveTo(c.cx, c.cy); segPen = true; }
+          else ctx.lineTo(c.cx, c.cy);
+        }
+        ctx.stroke();
 
-          // Direction Arrow
-          const midX = (x0 + x1) / 2;
-          const midY = (y0 + y1) / 2;
-          const angle = Math.atan2(y1 - y0, x1 - x0);
+        // Direction Arrow at the middle of the segment
+        if (seg.points.length >= 4) {
+          const midIdx = Math.floor(seg.points.length / 2);
+          const pPrev = seg.points[midIdx - 1];
+          const pNext = seg.points[midIdx + 1];
+          const cMid = fieldToCanvas(seg.points[midIdx].x, seg.points[midIdx].y, w, h);
+          const cPrev = fieldToCanvas(pPrev.x, pPrev.y, w, h);
+          const cNext = fieldToCanvas(pNext.x, pNext.y, w, h);
+          const screenAngle = Math.atan2(cNext.cy - cPrev.cy, cNext.cx - cPrev.cx);
 
           ctx.save();
-          ctx.translate(midX, midY);
-          ctx.rotate(angle);
-          ctx.fillStyle = "#38bdf8";
+          ctx.translate(cMid.cx, cMid.cy);
+          ctx.rotate(screenAngle);
+          ctx.fillStyle = isBezier ? "#06b6d4" : (isSwing ? "#eab308" : "#38bdf8");
           ctx.beginPath();
           ctx.moveTo(6, 0);
           ctx.lineTo(-5, -4);
@@ -4918,6 +4946,77 @@
           ctx.fill();
           ctx.restore();
         }
+
+        // If Bezier curve, render authentic CP1 & CP2 control tangent arms & handles
+        if (isBezier) {
+          const pStart = seg.points[0];
+          const fromPt = { x: pStart.x, y: pStart.y, theta: pStart.theta };
+          const { cp1, cp2, lead1, lead2 } = getBezierControlPoints(seg.action, fromPt);
+          const cStart = fieldToCanvas(pStart.x, pStart.y, w, h);
+          const cEnd = fieldToCanvas(seg.action.x, seg.action.y, w, h);
+          const cCp1 = fieldToCanvas(cp1.x, cp1.y, w, h);
+          const cCp2 = fieldToCanvas(cp2.x, cp2.y, w, h);
+
+          // Departure Tangent: cStart -> cCp1
+          ctx.strokeStyle = "rgba(6, 182, 212, 0.75)";
+          ctx.lineWidth = 1.6;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(cStart.cx, cStart.cy);
+          ctx.lineTo(cCp1.cx, cCp1.cy);
+          ctx.stroke();
+
+          // Arrival Tangent: cEnd -> cCp2
+          ctx.strokeStyle = "rgba(245, 158, 11, 0.75)";
+          ctx.beginPath();
+          ctx.moveTo(cEnd.cx, cEnd.cy);
+          ctx.lineTo(cCp2.cx, cCp2.cy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Handle Dots & Badges
+          ctx.fillStyle = "#06b6d4";
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(cCp1.cx, cCp1.cy, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = "#a5f3fc";
+          ctx.font = "bold 9px ui-monospace, monospace";
+          ctx.fillText(`CP1 (${Math.round(lead1)}")`, cCp1.cx + 9, cCp1.cy + 3);
+
+          ctx.fillStyle = "#f59e0b";
+          ctx.beginPath(); ctx.arc(cCp2.cx, cCp2.cy, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = "#fde68a";
+          ctx.fillText(`CP2 (${Math.round(lead2)}")`, cCp2.cx + 9, cCp2.cy + 3);
+        }
+
+        // If moveToPose and selected, render Boomerang carrot point & ray
+        if (seg.action.type === "moveToPose" && seg.carrot && isSelected) {
+          const cCarrot = fieldToCanvas(seg.carrot.x, seg.carrot.y, w, h);
+          const cTgt = fieldToCanvas(seg.action.x, seg.action.y, w, h);
+
+          ctx.strokeStyle = "rgba(249, 115, 22, 0.75)";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(cTgt.cx, cTgt.cy);
+          ctx.lineTo(cCarrot.cx, cCarrot.cy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = "#f97316";
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(cCarrot.cx, cCarrot.cy, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = "#fdba74";
+          ctx.font = "bold 9px sans-serif";
+          ctx.fillText("Carrot", cCarrot.cx + 8, cCarrot.cy + 3);
+        }
+
+        ctx.restore();
       }
     }
 
