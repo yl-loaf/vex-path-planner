@@ -2878,10 +2878,11 @@
     const startTime = Date.now();
     if (onProgress) {
       onProgress({
-        pct: 5,
+        pct: 6,
+        stage: "Connecting to GitHub API",
         message: "Connecting to GitHub API and resolving tree...",
         phase: 1,
-        etaStr: "Calculating..."
+        etaStr: "~10s remaining"
       });
     }
 
@@ -2905,10 +2906,11 @@
 
     if (onProgress) {
       onProgress({
-        pct: 12,
+        pct: 15,
+        stage: "Reading Branch Manifest",
         message: `Reading branch '${targetBranch}' file manifest...`,
         phase: 1,
-        etaStr: "Calculating..."
+        etaStr: "~8s remaining"
       });
     }
 
@@ -3009,7 +3011,7 @@
           console.warn(`[GitHub Clone] Skipped downloading ${item.path}:`, e);
         } finally {
           completed++;
-          const downloadPct = Math.round(15 + (completed / total) * 65); // 15% to 80%
+          const downloadPct = Math.round(18 + (completed / total) * 62); // 18% to 80%
           const elapsed = (Date.now() - startTime) / 1000;
           const estTotal = (elapsed / Math.max(0.01, completed / total));
           const estRemaining = Math.max(1, Math.round(estTotal - elapsed));
@@ -3018,7 +3020,8 @@
           if (onProgress) {
             onProgress({
               pct: downloadPct,
-              message: `Downloading files (${completed}/${total})... ${item.path}`,
+              stage: `Downloading Files (${completed}/${total})`,
+              message: item.path,
               phase: 2,
               completed,
               total,
@@ -8328,7 +8331,27 @@
         if (txtImportGithubToken && savedToken) {
           txtImportGithubToken.value = savedToken;
         }
-        if (githubImportStatus) githubImportStatus.style.display = "none";
+        if (githubImportStatus) {
+          githubImportStatus.style.display = "none";
+          githubImportStatus.style.background = "rgba(15, 23, 42, 0.75)";
+          githubImportStatus.style.border = "1px solid rgba(56, 189, 248, 0.3)";
+        }
+        const elSpinner = document.getElementById("githubImportSpinner");
+        if (elSpinner) elSpinner.style.display = "inline-block";
+        const elStage = document.getElementById("githubImportStageText");
+        if (elStage) { elStage.textContent = "Connecting to GitHub..."; elStage.style.color = "#38bdf8"; }
+        const elPct = document.getElementById("githubImportPct");
+        if (elPct) { elPct.textContent = "0%"; elPct.style.color = "#4ade80"; }
+        const elBar = document.getElementById("githubImportBar");
+        if (elBar) { elBar.style.width = "0%"; elBar.style.background = "linear-gradient(90deg, #38bdf8, #22c55e)"; }
+        const elDetail = document.getElementById("githubImportDetail");
+        if (elDetail) elDetail.textContent = "Downloading repository and extracting C++ sources...";
+        const elEta = document.getElementById("githubImportEta");
+        if (elEta) elEta.textContent = "⏱️ Calculating...";
+        if (btnExecuteGithubImport) {
+          btnExecuteGithubImport.disabled = false;
+          btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
+        }
         if (modalGithubImport) modalGithubImport.style.display = "flex";
       });
     }
@@ -8355,12 +8378,84 @@
 
         btnExecuteGithubImport.disabled = true;
         btnExecuteGithubImport.textContent = "Cloning...";
-        if (githubImportStatus) {
-          githubImportStatus.style.display = "block";
-          githubImportStatus.style.background = "rgba(56, 189, 248, 0.1)";
-          githubImportStatus.style.color = "#38bdf8";
-          githubImportStatus.textContent = `⏳ Connecting to GitHub and downloading "${repoVal}"...`;
-        }
+
+        let cloneProgressTimer = null;
+        const cloneStartTime = Date.now();
+        let currentProgressPct = 6;
+        let currentStage = "Connecting to GitHub";
+        let currentDetail = `Authenticating & resolving repository "${repoVal}"...`;
+        let currentEta = "~10s remaining";
+
+        const updateProgressUI = (pct, stage, detail, etaStr) => {
+          if (githubImportStatus) {
+            githubImportStatus.style.display = "block";
+            githubImportStatus.style.background = "rgba(15, 23, 42, 0.75)";
+            githubImportStatus.style.border = "1px solid rgba(56, 189, 248, 0.3)";
+          }
+
+          if (pct !== undefined && pct !== null && !isNaN(pct)) {
+            currentProgressPct = Math.max(currentProgressPct, Math.min(100, Math.round(pct)));
+          }
+          if (stage) currentStage = stage;
+          if (detail) currentDetail = detail;
+          if (etaStr) currentEta = etaStr;
+
+          const elStage = document.getElementById("githubImportStageText");
+          const elSpinner = document.getElementById("githubImportSpinner");
+          const elPct = document.getElementById("githubImportPct");
+          const elBar = document.getElementById("githubImportBar");
+          const elDetail = document.getElementById("githubImportDetail");
+          const elEta = document.getElementById("githubImportEta");
+
+          if (elSpinner) elSpinner.style.display = currentProgressPct >= 100 ? "none" : "inline-block";
+          if (elStage) {
+            elStage.textContent = currentStage;
+            elStage.style.color = currentProgressPct >= 100 ? "#4ade80" : "#38bdf8";
+          }
+          if (elPct) {
+            elPct.textContent = `${currentProgressPct}%`;
+            elPct.style.color = currentProgressPct >= 100 ? "#4ade80" : (currentProgressPct >= 80 ? "#38bdf8" : "#fbbf24");
+          }
+          if (elBar) {
+            elBar.style.width = `${currentProgressPct}%`;
+            elBar.style.background = currentProgressPct >= 100
+              ? "#22c55e"
+              : "linear-gradient(90deg, #38bdf8, #22c55e)";
+          }
+          if (elDetail) elDetail.textContent = currentDetail;
+          if (elEta) {
+            const formatted = currentEta.startsWith("⏱️") ? currentEta : `⏱️ ${currentEta}`;
+            elEta.textContent = currentProgressPct >= 100 ? "✅ Done!" : formatted;
+          }
+        };
+
+        // Initialize progress UI immediately
+        updateProgressUI(6, "Connecting to GitHub", `Authenticating & resolving repository "${repoVal}"...`, "~10s remaining");
+
+        // Live ticker providing continuous percentage progression and live time-left countdown
+        cloneProgressTimer = setInterval(() => {
+          const elapsed = (Date.now() - cloneStartTime) / 1000;
+          const expectedTotal = Math.max(12, elapsed + 4);
+          const remaining = Math.max(1, Math.round(expectedTotal - elapsed));
+          const etaText = remaining < 60 ? `~${remaining}s remaining` : `~${Math.ceil(remaining / 60)}m remaining`;
+
+          if (currentProgressPct < 78) {
+            if (elapsed < 1.5) {
+              currentProgressPct = Math.min(18, Math.round(6 + elapsed * 8));
+              currentStage = "Resolving Repository Manifest";
+              currentDetail = `Connecting to GitHub API for ${repoVal}... (${elapsed.toFixed(1)}s elapsed)`;
+            } else if (elapsed < 4.0) {
+              currentProgressPct = Math.min(48, Math.round(18 + (elapsed - 1.5) * 12));
+              currentStage = "Downloading C++ Source Archive";
+              currentDetail = `Downloading files & project manifest... (${elapsed.toFixed(1)}s elapsed)`;
+            } else {
+              currentProgressPct = Math.min(78, Math.round(48 + (elapsed - 4.0) * 4));
+              currentStage = "Unpacking Project Files";
+              currentDetail = `Extracting LemLib autonomous source files... (${elapsed.toFixed(1)}s elapsed)`;
+            }
+          }
+          updateProgressUI(currentProgressPct, currentStage, currentDetail, etaText);
+        }, 200);
 
         try {
           let cloneData = null;
@@ -8376,46 +8471,34 @@
             }
           }
 
-          const modalProgress = document.getElementById("modalGithubProgress");
-          const lblTitle = document.getElementById("lblGithubProgressTitle");
-          const lblSub = document.getElementById("lblGithubProgressSub");
-          const barProgress = document.getElementById("barGithubProgress");
-          const lblPct = document.getElementById("lblGithubProgressPct");
-          const lblEta = document.getElementById("lblGithubProgressEta");
-
-          const updateProgressUI = (pct, title, sub, etaStr) => {
-            if (modalProgress) modalProgress.style.display = "flex";
-            if (barProgress) barProgress.style.width = `${Math.min(100, Math.max(0, pct))}%`;
-            if (lblPct) lblPct.textContent = `${Math.round(pct)}%`;
-            if (lblTitle && title) lblTitle.textContent = title;
-            if (lblSub && sub) lblSub.textContent = sub;
-            if (lblEta && etaStr) lblEta.textContent = `⏱️ ${etaStr}`;
-          };
-
-          updateProgressUI(5, `Cloning ${repoVal}`, "Connecting to GitHub...", "Calculating...");
-
           // Fallback for static host / GitHub Pages: fetch raw repository files directly via GitHub REST API
           if (!cloneData) {
             cloneData = await fetchGithubRepositoryFiles(repoVal, branchVal, tokenVal, (p) => {
               if (typeof p === "object") {
-                updateProgressUI(p.pct, `Cloning ${repoVal}`, p.message, p.etaStr);
+                updateProgressUI(p.pct, p.stage || "Downloading Files", p.message, p.etaStr);
               } else if (typeof p === "string") {
-                updateProgressUI(30, `Cloning ${repoVal}`, p, "~3s remaining");
+                updateProgressUI(null, "Downloading Files", p, null);
               }
             });
+          }
+
+          if (cloneProgressTimer) {
+            clearInterval(cloneProgressTimer);
+            cloneProgressTimer = null;
           }
 
           if (!cloneData || !cloneData.files || Object.keys(cloneData.files).length === 0) {
             throw new Error("No C++ autonomous files found in selected repository.");
           }
 
-          // Parsing Phase: 80% to 98%
-          updateProgressUI(82, `Parsing LemLib C++ Source`, `Analyzing ${cloneData.fileCount} C++ files and extracting motion paths...`, "~1s remaining");
-          await new Promise(r => setTimeout(r, 60));
+          // Parsing Phase: 85% to 98%
+          const fileCount = cloneData.fileCount || Object.keys(cloneData.files).length;
+          updateProgressUI(85, "Parsing LemLib C++ Source", `Analyzing ${fileCount} C++ files and extracting motion paths...`, "~2s remaining");
+          await new Promise(r => setTimeout(r, 120));
 
           const detectedPaths = parseGithubAutonFiles(cloneData.files, cloneData.repoName);
-          updateProgressUI(95, `Building Autonomous Routines`, `Constructed ${detectedPaths.length} autonomous routines. Finalizing workspace...`, "⚡ Almost done");
-          await new Promise(r => setTimeout(r, 80));
+          updateProgressUI(95, "Building Autonomous Routines", `Constructed ${detectedPaths.length} autonomous routines. Finalizing workspace...`, "⚡ Almost done");
+          await new Promise(r => setTimeout(r, 150));
 
           const now = Date.now();
 
@@ -8470,9 +8553,8 @@
           btnExecuteGithubImport.disabled = false;
           btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
 
-          updateProgressUI(100, "Workspace Synchronized!", "All C++ files and autonomous routines ready.", "Done!");
-          await new Promise(r => setTimeout(r, 400));
-          if (modalProgress) modalProgress.style.display = "none";
+          updateProgressUI(100, "Workspace Synchronized!", "All C++ files and autonomous routines ready.", "Complete!");
+          await new Promise(r => setTimeout(r, 450));
 
           currentTeam = importData.team || currentTeam;
           if (currentTeam.pathPayload?.paths) {
@@ -8486,15 +8568,29 @@
           drawField();
           showToast(`🚀 Successfully imported ${repoVal} into team workspace!`, "🎉");
         } catch (err) {
-          const modalProgress = document.getElementById("modalGithubProgress");
-          if (modalProgress) modalProgress.style.display = "none";
+          if (cloneProgressTimer) {
+            clearInterval(cloneProgressTimer);
+            cloneProgressTimer = null;
+          }
           btnExecuteGithubImport.disabled = false;
           btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
           if (githubImportStatus) {
-            githubImportStatus.style.background = "rgba(239, 68, 68, 0.1)";
-            githubImportStatus.style.color = "#f87171";
-            githubImportStatus.textContent = `❌ Error: ${err.message}`;
+            githubImportStatus.style.display = "block";
+            githubImportStatus.style.background = "rgba(239, 68, 68, 0.15)";
+            githubImportStatus.style.border = "1px solid rgba(239, 68, 68, 0.35)";
           }
+          const elStage = document.getElementById("githubImportStageText");
+          const elSpinner = document.getElementById("githubImportSpinner");
+          const elPct = document.getElementById("githubImportPct");
+          const elBar = document.getElementById("githubImportBar");
+          const elDetail = document.getElementById("githubImportDetail");
+          const elEta = document.getElementById("githubImportEta");
+          if (elSpinner) elSpinner.style.display = "none";
+          if (elStage) { elStage.textContent = "Import Failed"; elStage.style.color = "#f87171"; }
+          if (elPct) { elPct.textContent = "Error"; elPct.style.color = "#f87171"; }
+          if (elBar) { elBar.style.width = "100%"; elBar.style.background = "#ef4444"; }
+          if (elDetail) elDetail.textContent = err.message || "Failed to clone repository.";
+          if (elEta) elEta.textContent = "Failed";
           alert("GitHub import failed: " + (err.message || err));
         }
       });
