@@ -2860,6 +2860,652 @@
     }
   }
 
+  // --------------------------------------------------------------------------
+  // ADMIN DASHBOARD & 6-DIGIT HEX INVITATION SYSTEM
+  // --------------------------------------------------------------------------
+  function generate6DigitHex() {
+    const chars = "0123456789ABCDEF";
+    let code = "";
+    for (let i = 0; i < 6; i++) {
+      code += chars[Math.floor(Math.random() * 16)];
+    }
+    return code;
+  }
+
+  function renderTeamAdminView(filterQuery = "") {
+    if (!currentTeam) return;
+    const countEl = document.getElementById("lblAdminMemberCount");
+    if (countEl) countEl.textContent = String((currentTeam.members || []).length);
+
+    const txtSearch = document.getElementById("txtAdminSearchMembers");
+    const query = filterQuery || (txtSearch ? txtSearch.value : "");
+    renderAdminRosterTable(query);
+    renderAdminPendingInvites();
+  }
+
+  function renderAdminRosterTable(filterQuery = "") {
+    const wrap = document.getElementById("adminMembersTableWrap");
+    if (!wrap || !currentTeam) return;
+
+    const canManage = isCurrentUserAdmin();
+    const myEmail = (currentUser?.email || "").toLowerCase().trim();
+    const query = (filterQuery || "").toLowerCase().trim();
+
+    let members = currentTeam.members || [];
+    if (query) {
+      members = members.filter(m => {
+        const name = (m.displayName || "").toLowerCase();
+        const email = (m.email || "").toLowerCase();
+        const role = (m.role || "").toLowerCase();
+        return name.includes(query) || email.includes(query) || role.includes(query);
+      });
+    }
+
+    let html = "";
+    if (!canManage) {
+      html += `
+        <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:12px 16px;margin:12px;font-size:0.78rem;color:#f87171;line-height:1.45;">
+          🔒 <strong>Read-Only Mode:</strong> You are viewing this dashboard as a normal team member. Only team administrators and the workspace owner can modify member roles, change editing permissions, generate hex invitations, or kick members.
+        </div>
+      `;
+    }
+
+    html += `
+      <table style="width:100%;border-collapse:collapse;font-size:0.8rem;text-align:left;">
+        <thead>
+          <tr style="background:#090d16;color:#94a3b8;border-bottom:1px solid #1e293b;">
+            <th style="padding:10px 14px;">Member</th>
+            <th style="padding:10px 14px;">Role</th>
+            <th style="padding:10px 14px;">Admin Access</th>
+            <th style="padding:10px 14px;">Code Edit Permissions</th>
+            <th style="padding:10px 14px;text-align:center;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    const ROLES = ["Programmer", "Builder", "Driver", "Strategist", "Scout", "Coach", "Admin", "Member"];
+
+    if (members.length === 0) {
+      html += `
+        <tr>
+          <td colspan="5" style="padding:24px;text-align:center;color:var(--muted);font-size:0.82rem;">
+            No team members found matching "${escapeHtml(query)}".
+          </td>
+        </tr>
+      `;
+    } else {
+      members.forEach((m) => {
+        const email = m.email || "member@team";
+        const isOwner = m.isOwner || (currentTeam.ownerEmail && currentTeam.ownerEmail.toLowerCase().trim() === email.toLowerCase().trim());
+        const isAdmin = m.isAdmin || isOwner;
+        const canEdit = m.canEditCode !== undefined ? m.canEditCode : (isAdmin || m.role === "Programmer");
+        const isMe = (email.toLowerCase().trim() === myEmail);
+        const roleColor = getRoleColor(m.role);
+
+        let roleSelectOrTag = "";
+        if (canManage && !isOwner) {
+          roleSelectOrTag = `
+            <select class="sel-admin-role form-input" data-email="${escapeHtml(email)}" style="padding:4px 8px;font-size:0.75rem;width:auto;">
+              ${ROLES.map(r => `<option value="${r}" ${m.role === r ? 'selected' : ''}>${r}</option>`).join("")}
+            </select>
+          `;
+        } else {
+          roleSelectOrTag = `<span class="member-role-tag ${m.role ? m.role.toLowerCase() : 'programmer'}" style="background:${roleColor}22;color:${roleColor};border-color:${roleColor}55;">${escapeHtml(m.role || 'Programmer')}</span>`;
+        }
+
+        let actionHtml = "";
+        if (isOwner) {
+          actionHtml = `<span style="font-size:0.75rem;color:#fbbf24;font-weight:800;">👑 Owner</span>`;
+        } else if (isMe) {
+          actionHtml = `<span style="font-size:0.75rem;color:#94a3b8;font-weight:600;">(You)</span>`;
+        } else if (canManage) {
+          actionHtml = `
+            <button type="button" class="btn-admin-kick" data-email="${escapeHtml(email)}" data-name="${escapeHtml(m.displayName || email)}" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;padding:4px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;transition:all 0.15s ease;" title="Kick member from team workspace">
+              👢 Kick
+            </button>
+          `;
+        } else {
+          actionHtml = `<span style="color:#64748b;font-size:0.72rem;">—</span>`;
+        }
+
+        html += `
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:10px 14px;color:#f8fafc;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:32px;height:32px;border-radius:50%;background:${roleColor}25;border:1px solid ${roleColor}66;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.8rem;color:${roleColor};">
+                  ${escapeHtml((m.displayName || email)[0].toUpperCase())}
+                </div>
+                <div>
+                  <div style="font-weight:700;display:flex;align-items:center;gap:6px;">
+                    ${escapeHtml(m.displayName || email.split("@")[0])}
+                    ${isOwner ? '<span style="font-size:0.65rem;background:#fbbf24;color:#0b0f14;padding:1px 5px;border-radius:4px;font-weight:800;">OWNER</span>' : ''}
+                  </div>
+                  <div style="font-size:0.7rem;color:#64748b;">${escapeHtml(email)}</div>
+                </div>
+              </div>
+            </td>
+            <td style="padding:10px 14px;">
+              ${roleSelectOrTag}
+            </td>
+            <td style="padding:10px 14px;">
+              <label style="${canManage && !isOwner ? 'cursor:pointer;' : 'cursor:not-allowed;'}display:inline-flex;align-items:center;gap:6px;">
+                <input type="checkbox" class="chk-admin-privilege" data-email="${escapeHtml(email)}" ${isAdmin ? 'checked' : ''} ${!canManage || isOwner ? 'disabled' : ''} />
+                <span style="font-size:0.75rem;font-weight:600;color:${isAdmin ? '#f59e0b' : '#94a3b8'};">${isAdmin ? '🛡️ Admin' : 'Teammate'}</span>
+              </label>
+            </td>
+            <td style="padding:10px 14px;">
+              <select class="sel-admin-code-perm form-input" data-email="${escapeHtml(email)}" ${!canManage ? 'disabled' : ''} style="padding:4px 8px;font-size:0.75rem;width:auto;${!canManage ? 'opacity:0.7;cursor:not-allowed;' : ''}">
+                <option value="true" ${canEdit ? 'selected' : ''}>✏️ Can Edit Code</option>
+                <option value="false" ${!canEdit ? 'selected' : ''}>💡 Suggestion Only</option>
+              </select>
+            </td>
+            <td style="padding:10px 14px;text-align:center;">
+              ${actionHtml}
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    html += `</tbody></table>`;
+    wrap.innerHTML = html;
+
+    if (canManage) {
+      wrap.querySelectorAll(".sel-admin-role").forEach(sel => {
+        sel.addEventListener("change", (e) => {
+          const em = e.target.getAttribute("data-email");
+          const mem = (currentTeam.members || []).find(m => (m.email || "").toLowerCase().trim() === em.toLowerCase().trim());
+          if (mem) {
+            mem.role = e.target.value;
+            mem.color = getRoleColor(e.target.value);
+          }
+        });
+      });
+
+      wrap.querySelectorAll(".chk-admin-privilege").forEach(chk => {
+        chk.addEventListener("change", (e) => {
+          const em = e.target.getAttribute("data-email");
+          const mem = (currentTeam.members || []).find(m => (m.email || "").toLowerCase().trim() === em.toLowerCase().trim());
+          if (mem) {
+            mem.isAdmin = e.target.checked;
+            if (e.target.checked && mem.canEditCode === undefined) {
+              mem.canEditCode = true;
+            }
+          }
+        });
+      });
+
+      wrap.querySelectorAll(".sel-admin-code-perm").forEach(sel => {
+        sel.addEventListener("change", (e) => {
+          const em = e.target.getAttribute("data-email");
+          const mem = (currentTeam.members || []).find(m => (m.email || "").toLowerCase().trim() === em.toLowerCase().trim());
+          if (mem) {
+            mem.canEditCode = (e.target.value === "true");
+          }
+        });
+      });
+
+      wrap.querySelectorAll(".btn-admin-kick").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          if (!isCurrentUserAdmin()) {
+            alert("Only team administrators can kick members.");
+            return;
+          }
+          const targetEmail = e.currentTarget.getAttribute("data-email");
+          const targetName = e.currentTarget.getAttribute("data-name") || targetEmail;
+          if (!targetEmail) return;
+
+          const myEm = (currentUser?.email || "").toLowerCase().trim();
+          if (targetEmail.toLowerCase().trim() === myEm) {
+            alert("You cannot kick yourself from the workspace.");
+            return;
+          }
+
+          const mem = (currentTeam.members || []).find(m => (m.email || "").toLowerCase().trim() === targetEmail.toLowerCase().trim());
+          const isTargetOwner = mem?.isOwner || (currentTeam.ownerEmail && currentTeam.ownerEmail.toLowerCase().trim() === targetEmail.toLowerCase().trim());
+          if (isTargetOwner) {
+            alert("The team owner cannot be kicked.");
+            return;
+          }
+
+          if (!confirm(`Are you sure you want to kick "${targetName}" (${targetEmail}) from the workspace?\nThey will immediately lose access and be removed from all active sessions.`)) {
+            return;
+          }
+
+          const idx = (currentTeam.members || []).findIndex(m => (m.email || "").toLowerCase().trim() === targetEmail.toLowerCase().trim());
+          if (idx !== -1) {
+            const kicked = currentTeam.members.splice(idx, 1)[0];
+            recordVersionHistoryEntry(`Kicked ${kicked.displayName || kicked.email} from the workspace`, "member_kick");
+            currentTeam.updatedAt = Date.now();
+
+            const apiRoute = resolveApiUrl("/api/team/kick-member");
+            if (apiRoute) {
+              safeFetchJson(apiRoute, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  teamId: currentTeam.teamId,
+                  email: currentUser.email,
+                  targetEmail: kicked.email
+                })
+              }).catch(() => {});
+            }
+
+            try {
+              const db = getFirestoreDb();
+              if (db && kicked.email) {
+                const cleanKeys = getCleanEmailKeys(kicked.email);
+                for (const k of cleanKeys) {
+                  db.collection("team_rosters").doc(k).delete().catch(() => {});
+                }
+              }
+            } catch (_) {}
+
+            await fsSaveTeamDoc(currentTeam);
+            renderTeamAdminView(document.getElementById("txtAdminSearchMembers")?.value || "");
+            renderMemberList();
+            renderSettingsRosterTable();
+            renderVersionHistory();
+            showToast(`👢 Kicked ${targetName} from the workspace.`, "⚠️");
+          }
+        });
+      });
+    }
+  }
+
+  function renderAdminPendingInvites() {
+    const container = document.getElementById("adminActiveInvitesContainer");
+    if (!container || !currentTeam) return;
+
+    const invites = (currentTeam.invites || []).filter(inv => inv.status === "pending");
+    if (invites.length === 0) {
+      container.innerHTML = `<div style="font-size:0.75rem;color:var(--muted);">No pending invites. Enter a Gmail above to generate a 6-digit hex verification invite.</div>`;
+      return;
+    }
+
+    let html = `
+      <div style="font-weight:700;font-size:0.78rem;color:var(--text);margin-bottom:4px;">Active Pending Invites (${invites.length}):</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+    `;
+
+    invites.forEach((inv) => {
+      html += `
+        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:8px 12px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:0.9rem;">🔐</span>
+            <div>
+              <div style="font-weight:700;font-size:0.78rem;color:#f8fafc;">${escapeHtml(inv.targetEmail)}</div>
+              <div style="font-size:0.68rem;color:var(--muted);">Invited by ${escapeHtml(inv.invitedBy || 'Admin')} · ${new Date(inv.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:0.72rem;color:var(--text);">Share Code:</span>
+            <code style="font-family:ui-monospace, monospace;font-size:1.05rem;font-weight:900;letter-spacing:2px;color:#4ade80;background:#091220;border:1px solid rgba(34,197,94,0.4);padding:2px 8px;border-radius:6px;">${escapeHtml(inv.correctHex)}</code>
+            <button type="button" class="btn-copy-admin-hex btn-team-secondary" data-code="${escapeHtml(inv.correctHex)}" style="font-size:0.72rem;padding:3px 8px;">📋 Copy</button>
+            ${isCurrentUserAdmin() ? `
+              <button type="button" class="btn-revoke-admin-hex btn-team-secondary" data-id="${escapeHtml(inv.id)}" style="font-size:0.72rem;padding:3px 8px;color:#f87171;border-color:rgba(239,68,68,0.3);">Revoke</button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    });
+
+    html += `</div>`;
+    container.innerHTML = html;
+
+    container.querySelectorAll(".btn-copy-admin-hex").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const code = btn.getAttribute("data-code");
+        if (code) {
+          navigator.clipboard.writeText(code).then(() => {
+            showToast(`📋 Copied 6-digit hex code: ${code}! Share with your teammate.`, "✅");
+          }).catch(() => {
+            prompt("Copy code:", code);
+          });
+        }
+      });
+    });
+
+    container.querySelectorAll(".btn-revoke-admin-hex").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-id");
+        if (!confirm("Revoke this invitation?")) return;
+        currentTeam.invites = (currentTeam.invites || []).filter(inv => inv.id !== id);
+        await fsSaveTeamDoc(currentTeam);
+        renderAdminPendingInvites();
+        showToast("Invitation revoked.", "ℹ️");
+      });
+    });
+  }
+
+  function initAdminDashboardEvents() {
+    const txtSearch = document.getElementById("txtAdminSearchMembers");
+    if (txtSearch) {
+      txtSearch.addEventListener("input", (e) => {
+        renderAdminRosterTable(e.target.value);
+      });
+    }
+
+    const btnGenerateHex = document.getElementById("btnAdminGenerateHexInvite");
+    if (btnGenerateHex) {
+      btnGenerateHex.addEventListener("click", async () => {
+        if (!isCurrentUserAdmin()) {
+          alert("Only team administrators can generate invites.");
+          return;
+        }
+        const txtEmail = document.getElementById("txtAdminInviteEmail");
+        const targetEmail = (txtEmail?.value || "").trim().toLowerCase();
+        if (!targetEmail || !targetEmail.includes("@")) {
+          alert("Please enter a valid Gmail address for the invited teammate.");
+          return;
+        }
+
+        const correctHex = generate6DigitHex();
+        let fake1 = generate6DigitHex();
+        while (fake1 === correctHex) fake1 = generate6DigitHex();
+        let fake2 = generate6DigitHex();
+        while (fake2 === correctHex || fake2 === fake1) fake2 = generate6DigitHex();
+
+        const options = [correctHex, fake1, fake2].sort(() => Math.random() - 0.5);
+
+        const invite = {
+          id: "inv_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 6),
+          teamId: currentTeam.teamId,
+          teamName: currentTeam.teamName,
+          teamCode: currentTeam.teamCode,
+          correctHex,
+          options,
+          targetEmail,
+          invitedBy: currentUser?.displayName || currentUser?.email.split("@")[0],
+          invitedByEmail: currentUser?.email,
+          status: "pending",
+          createdAt: Date.now()
+        };
+
+        if (!currentTeam.invites) currentTeam.invites = [];
+        currentTeam.invites = currentTeam.invites.filter(i => i.targetEmail !== targetEmail || i.status !== "pending");
+        currentTeam.invites.unshift(invite);
+
+        await fsSaveTeamDoc(currentTeam);
+        try {
+          const db = getFirestoreDb();
+          if (db) {
+            const cleanKey = getCleanEmailKeys(targetEmail)[0];
+            await db.collection("team_invites").doc(cleanKey).set(invite, { merge: true });
+          }
+        } catch (_) {}
+
+        const apiRoute = resolveApiUrl("/api/team/invite/create");
+        if (apiRoute) {
+          fetch(apiRoute, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              teamId: currentTeam.teamId,
+              email: currentUser.email,
+              targetEmail
+            })
+          }).catch(() => {});
+        }
+
+        if (txtEmail) txtEmail.value = "";
+        renderAdminPendingInvites();
+        showToast(`⚡ 6-Digit Hex Invite Code generated: ${correctHex}! Share with ${targetEmail}`, "🎉");
+      });
+    }
+
+    const btnSavePermissions = document.getElementById("btnAdminSavePermissions");
+    if (btnSavePermissions) {
+      btnSavePermissions.addEventListener("click", async () => {
+        if (!isCurrentUserAdmin()) {
+          alert("Only team administrators can save permissions.");
+          return;
+        }
+
+        recordVersionHistoryEntry("Updated team member permissions and roles", "permissions_update");
+        currentTeam.updatedAt = Date.now();
+
+        await fsSaveTeamDoc(currentTeam);
+
+        const apiRoute = resolveApiUrl("/api/team/permissions/update");
+        if (apiRoute) {
+          fetch(apiRoute, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              teamId: currentTeam.teamId,
+              email: currentUser.email,
+              members: currentTeam.members
+            })
+          }).catch(() => {});
+        }
+
+        renderMemberList();
+        renderSettingsRosterTable();
+        renderVersionHistory();
+        showToast("💾 Team permissions and roles saved & synced across all teammates!", "✅");
+      });
+    }
+  }
+
+  // Full-screen 6-digit hex invite verification system
+  let pendingInviteListenerUnsub = null;
+  function listenForPendingInvites(userEmail) {
+    if (!userEmail) return;
+    if (pendingInviteListenerUnsub) {
+      try { pendingInviteListenerUnsub(); } catch (_) {}
+      pendingInviteListenerUnsub = null;
+    }
+
+    const db = getFirestoreDb();
+    const cleanKeys = getCleanEmailKeys(userEmail);
+
+    if (db) {
+      try {
+        const docRef = db.collection("team_invites").doc(cleanKeys[0]);
+        pendingInviteListenerUnsub = docRef.onSnapshot((doc) => {
+          if (doc && doc.exists) {
+            const data = doc.data();
+            if (data && data.status === "pending") {
+              showFullScreenInviteModal(data);
+            }
+          }
+        });
+      } catch (e) {
+        console.warn("[TeamCollab] Invite listener notice:", e);
+      }
+    }
+
+    const apiRoute = resolveApiUrl(`/api/team/invite/pending?email=${encodeURIComponent(userEmail)}`);
+    if (apiRoute) {
+      fetch(apiRoute).then(r => r.json()).then(data => {
+        if (data && Array.isArray(data.pending) && data.pending.length > 0) {
+          showFullScreenInviteModal(data.pending[0]);
+        }
+      }).catch(() => {});
+    }
+  }
+
+  function showFullScreenInviteModal(invite) {
+    const modal = document.getElementById("fullScreenInviteModal");
+    if (!modal) return;
+
+    const lblTeam = document.getElementById("lblInvitedTeamName");
+    const lblBy = document.getElementById("lblInvitedBy");
+    const lblEmail = document.getElementById("lblInvitedUserEmail");
+    const grid = document.getElementById("hexOptionsGrid");
+    const feedback = document.getElementById("hexVerifyFeedback");
+
+    if (lblTeam) lblTeam.textContent = invite.teamName || "VEX Team";
+    if (lblBy) lblBy.textContent = invite.invitedBy || "Team Admin";
+    if (lblEmail) lblEmail.textContent = invite.targetEmail || currentUser?.email || "";
+    if (feedback) { feedback.textContent = ""; feedback.style.color = ""; }
+
+    const options = Array.isArray(invite.options) && invite.options.length === 3
+      ? invite.options
+      : [invite.correctHex || "A4B1C2", "8D39FE", "5E04BA"];
+
+    if (grid) {
+      grid.innerHTML = "";
+      options.forEach(hex => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "hex-option-card";
+        btn.innerHTML = `
+          <span style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;">Code Option</span>
+          <span class="hex-code-val">${escapeHtml(hex)}</span>
+        `;
+
+        btn.addEventListener("click", () => handleHexCodeSelection(btn, hex, invite));
+        grid.appendChild(btn);
+      });
+    }
+
+    const btnDecline = document.getElementById("btnDeclineTeamInvite");
+    if (btnDecline) {
+      btnDecline.onclick = () => {
+        if (confirm("Are you sure you want to decline this team invitation?")) {
+          declineTeamInvite(invite);
+        }
+      };
+    }
+
+    modal.style.display = "flex";
+  }
+
+  async function handleHexCodeSelection(selectedBtn, chosenHex, invite) {
+    const feedback = document.getElementById("hexVerifyFeedback");
+    const grid = document.getElementById("hexOptionsGrid");
+    const allBtns = grid ? grid.querySelectorAll(".hex-option-card") : [];
+    allBtns.forEach(b => { b.disabled = true; });
+
+    let isCorrect = false;
+
+    const apiRoute = resolveApiUrl("/api/team/invite/verify");
+    if (apiRoute) {
+      try {
+        const res = await fetch(apiRoute, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teamId: invite.teamId,
+            inviteId: invite.id,
+            email: currentUser?.email,
+            selectedHex: chosenHex,
+            displayName: currentUser?.displayName,
+            role: "Programmer"
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          isCorrect = true;
+          if (data.team) {
+            localStorage.setItem("lemlib_active_team", JSON.stringify(data.team));
+            localStorage.setItem("lemlib_user_team_id", data.team.teamId);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!isCorrect && invite.correctHex) {
+      isCorrect = (chosenHex.toUpperCase().trim() === invite.correctHex.toUpperCase().trim());
+    }
+
+    if (isCorrect) {
+      selectedBtn.classList.add("correct");
+      if (feedback) {
+        feedback.textContent = "✅ Correct authorization code! Joining team workspace...";
+        feedback.style.color = "#4ade80";
+      }
+
+      try {
+        const db = getFirestoreDb();
+        if (db && invite.targetEmail) {
+          const cleanKey = getCleanEmailKeys(invite.targetEmail)[0];
+          await db.collection("team_invites").doc(cleanKey).update({ status: "accepted", acceptedAt: Date.now() }).catch(() => {});
+
+          await db.collection("team_rosters").doc(cleanKey).set({
+            teamId: invite.teamId,
+            email: invite.targetEmail.toLowerCase().trim(),
+            teamName: invite.teamName,
+            joinedAt: Date.now()
+          }, { merge: true }).catch(() => {});
+        }
+      } catch (_) {}
+
+      setTimeout(async () => {
+        const modal = document.getElementById("fullScreenInviteModal");
+        if (modal) modal.style.display = "none";
+
+        const db = getFirestoreDb();
+        let loadedTeam = null;
+        if (db && invite.teamId) {
+          try {
+            const doc = await db.collection("teams").doc(invite.teamId).get();
+            if (doc.exists) loadedTeam = doc.data();
+          } catch (_) {}
+        }
+        if (!loadedTeam) {
+          const tRaw = localStorage.getItem("lemlib_active_team");
+          if (tRaw) {
+            try { loadedTeam = JSON.parse(tRaw); } catch (_) {}
+          }
+        }
+
+        if (loadedTeam) {
+          finalizeTeamLoaded(loadedTeam, `🎉 Joined "${loadedTeam.teamName}" successfully!`);
+        } else {
+          window.location.reload();
+        }
+      }, 1200);
+    } else {
+      selectedBtn.classList.add("incorrect");
+      if (feedback) {
+        feedback.textContent = "❌ Incorrect verification code! Invitation declined.";
+        feedback.style.color = "#f87171";
+      }
+
+      try {
+        const db = getFirestoreDb();
+        if (db && invite.targetEmail) {
+          const cleanKey = getCleanEmailKeys(invite.targetEmail)[0];
+          await db.collection("team_invites").doc(cleanKey).update({ status: "rejected", rejectedAt: Date.now() }).catch(() => {});
+        }
+      } catch (_) {}
+
+      setTimeout(() => {
+        const modal = document.getElementById("fullScreenInviteModal");
+        if (modal) modal.style.display = "none";
+        showToast("❌ Incorrect verification code. Invitation was declined.", "⚠️");
+      }, 1500);
+    }
+  }
+
+  async function declineTeamInvite(invite) {
+    const modal = document.getElementById("fullScreenInviteModal");
+    if (modal) modal.style.display = "none";
+
+    const apiRoute = resolveApiUrl("/api/team/invite/decline");
+    if (apiRoute) {
+      fetch(apiRoute, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId: invite.teamId, email: currentUser?.email, inviteId: invite.id })
+      }).catch(() => {});
+    }
+
+    try {
+      const db = getFirestoreDb();
+      if (db && invite.targetEmail) {
+        const cleanKey = getCleanEmailKeys(invite.targetEmail)[0];
+        await db.collection("team_invites").doc(cleanKey).update({ status: "declined", declinedAt: Date.now() }).catch(() => {});
+      }
+    } catch (_) {}
+
+    showToast("Team invitation declined.", "ℹ️");
+  }
+
   function proposeTeamSuggestion(summary, editType = "code_suggestion", codePayload = null) {
     if (!currentTeam || !currentUser) return;
     currentTeam.suggestions = currentTeam.suggestions || [];
@@ -4160,6 +4806,9 @@
       const gateOpts = document.getElementById("gateOptions");
       if (gateOpts) gateOpts.style.display = "block";
       checkUserTeam();
+      if (currentUser && currentUser.email) {
+        listenForPendingInvites(currentUser.email);
+      }
     }
 
     if (txtUserAccountEmail) {
@@ -4178,6 +4827,7 @@
             authUser.textContent = currentUser.email;
           }
           checkUserTeam();
+          listenForPendingInvites(currentUser.email);
         }
       });
     }
@@ -4344,10 +4994,7 @@
 
         await fsSaveTeamDoc(t);
 
-        const setupView = document.getElementById("teamSetupJoinView");
-        const wsView = document.getElementById("teamWorkspaceView");
-        if (setupView) setupView.style.display = "none";
-        if (wsView) wsView.style.display = "flex";
+        setSetupViewVisible(false);
         if (modal) modal.style.display = "none";
 
         onTeamLoaded();
@@ -4359,6 +5006,37 @@
 
     modal.style.display = "flex";
     return true;
+  }
+
+  function setSetupViewVisible(show) {
+    const setupView = document.getElementById("teamSetupJoinView");
+    const wsView = document.getElementById("teamWorkspaceView");
+    const appEl = document.getElementById("app");
+    if (show) {
+      if (setupView) setupView.style.display = "block";
+      if (wsView) wsView.style.display = "none";
+      document.body.classList.add("setup-mode");
+      document.body.style.overflowY = "auto";
+      document.body.style.height = "auto";
+      if (appEl) {
+        appEl.classList.add("setup-active");
+        appEl.style.height = "auto";
+        appEl.style.minHeight = "100vh";
+        appEl.style.overflowY = "auto";
+      }
+    } else {
+      if (setupView) setupView.style.display = "none";
+      if (wsView) wsView.style.display = "flex";
+      document.body.classList.remove("setup-mode");
+      document.body.style.overflowY = "";
+      document.body.style.height = "";
+      if (appEl) {
+        appEl.classList.remove("setup-active");
+        appEl.style.height = "100vh";
+        appEl.style.minHeight = "100vh";
+        appEl.style.overflow = "hidden";
+      }
+    }
   }
 
   async function checkUserTeam() {
@@ -4472,16 +5150,13 @@
       } catch (_) {}
     }
 
-    const setupView = document.getElementById("teamSetupJoinView");
-    const wsView = document.getElementById("teamWorkspaceView");
     const gate = document.getElementById("modalTeamGate");
     if (gate) gate.style.display = "none";
 
     if (loadedTeam) {
       currentTeam = loadedTeam;
       if (!currentTeam.otpInfo) currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
-      if (setupView) setupView.style.display = "none";
-      if (wsView) wsView.style.display = "flex";
+      setSetupViewVisible(false);
       try { fsSaveTeamDoc(currentTeam); } catch (_) {}
       onTeamLoaded();
       requestAnimationFrame(() => {
@@ -4489,8 +5164,7 @@
       });
     } else {
       currentTeam = null;
-      if (wsView) wsView.style.display = "none";
-      if (setupView) setupView.style.display = "block";
+      setSetupViewVisible(true);
       loadAvailableTeams();
     }
   }
@@ -4791,6 +5465,7 @@
 
     renderRoutinesSelector();
     renderMemberList();
+    renderTeamAdminView();
     renderStrategies();
     renderPinComments();
     renderActionBlocks();
@@ -7091,10 +7766,7 @@
       currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
       const gate = document.getElementById("modalTeamGate");
       if (gate) gate.style.display = "none";
-      const setupView = document.getElementById("teamSetupJoinView");
-      if (setupView) setupView.style.display = "none";
-      const wsView = document.getElementById("teamWorkspaceView");
-      if (wsView) wsView.style.display = "flex";
+      setSetupViewVisible(false);
       showToast(toastMsg || `Team "${teamObj.teamName}" loaded!`, "🎉");
       onTeamLoaded();
     }
@@ -7684,18 +8356,23 @@
       showToast("🚀 Compiling C++ auton code and flashing to V5 Brain...", "⚡");
     });
 
-    // 6b. Center Column View Mode Switcher (Field & Sim vs Integrated C++ IDE vs Suggestions vs Match Replay)
+    // 6b. Center Column View Mode Switcher (Field & Sim vs Integrated C++ IDE vs Suggestions vs Match Replay vs Admin Dashboard)
     const btnViewModeField = document.getElementById("btnViewModeField");
     const btnViewModeIde = document.getElementById("btnViewModeIde");
     const btnViewModeSuggestions = document.getElementById("btnViewModeSuggestions");
     const btnViewModeReplay = document.getElementById("btnViewModeReplay");
+    const btnViewModeAdmin = document.getElementById("btnViewModeAdmin");
     const viewFieldContainer = document.getElementById("teamFieldViewContainer");
     const viewIdeContainer = document.getElementById("teamIdeContainer");
     const viewSuggestionsContainer = document.getElementById("teamSuggestionsContainer");
     const viewReplayContainer = document.getElementById("teamReplayContainer");
+    const viewAdminContainer = document.getElementById("teamAdminViewContainer");
+
+    let activeCenterViewMode = "field";
 
     function setCenterViewMode(mode) {
-      [btnViewModeField, btnViewModeIde, btnViewModeSuggestions, btnViewModeReplay].forEach(btn => {
+      activeCenterViewMode = mode;
+      [btnViewModeField, btnViewModeIde, btnViewModeSuggestions, btnViewModeReplay, btnViewModeAdmin].forEach(btn => {
         if (btn) {
           btn.classList.remove("active");
           btn.style.background = "#1e293b";
@@ -7708,6 +8385,7 @@
       if (viewIdeContainer) viewIdeContainer.style.display = "none";
       if (viewSuggestionsContainer) viewSuggestionsContainer.style.display = "none";
       if (viewReplayContainer) viewReplayContainer.style.display = "none";
+      if (viewAdminContainer) viewAdminContainer.style.display = "none";
 
       if (mode === "field") {
         if (btnViewModeField) {
@@ -7761,6 +8439,15 @@
         }
         if (viewReplayContainer) viewReplayContainer.style.display = "flex";
         renderTeamReplayStudio();
+      } else if (mode === "admin") {
+        if (btnViewModeAdmin) {
+          btnViewModeAdmin.classList.add("active");
+          btnViewModeAdmin.style.background = "#0284c7";
+          btnViewModeAdmin.style.color = "#fff";
+          btnViewModeAdmin.style.borderColor = "#0369a1";
+        }
+        if (viewAdminContainer) viewAdminContainer.style.display = "flex";
+        renderTeamAdminView();
       }
     }
 
@@ -7768,6 +8455,7 @@
     btnViewModeIde?.addEventListener("click", () => setCenterViewMode("ide"));
     btnViewModeSuggestions?.addEventListener("click", () => setCenterViewMode("suggestions"));
     btnViewModeReplay?.addEventListener("click", () => setCenterViewMode("replay"));
+    btnViewModeAdmin?.addEventListener("click", () => setCenterViewMode("admin"));
     document.getElementById("btnMenuMatchReplay")?.addEventListener("click", () => setCenterViewMode("replay"));
 
     // ------------------------------------------------------------------------
@@ -8345,10 +9033,7 @@
           await fsSaveTeamDoc(team);
 
           // Update UI
-          const setupView = document.getElementById("teamSetupJoinView");
-          const wsView = document.getElementById("teamWorkspaceView");
-          if (setupView) setupView.style.display = "none";
-          if (wsView) wsView.style.display = "flex";
+          setSetupViewVisible(false);
 
           onTeamLoaded();
           showToast(`Successfully restored team workspace: ${team.teamName}!`, "🎉");
@@ -8472,10 +9157,7 @@
         const modal = document.getElementById("modalExitTeamChallenge");
         if (modal) modal.style.display = "none";
 
-        const teamWorkspaceView = document.getElementById("teamWorkspaceView");
-        const teamSetupJoinView = document.getElementById("teamSetupJoinView");
-        if (teamWorkspaceView) teamWorkspaceView.style.display = "none";
-        if (teamSetupJoinView) teamSetupJoinView.style.display = "block";
+        setSetupViewVisible(true);
 
         showToast("🚪 Exited team successfully. Select or create a workspace.", "ℹ️");
       });
@@ -9167,6 +9849,7 @@
   window.addEventListener("DOMContentLoaded", () => {
     initAuth();
     initTeamEditor();
+    initAdminDashboardEvents();
     initResizableWindows();
     wireScoringModal();
     wireCollisionModal();

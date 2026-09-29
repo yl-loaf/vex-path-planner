@@ -67,8 +67,8 @@
     }
   </style>
 </head>
-<body class="team-page-body">
-  <div id="app" class="team-app-container">
+<body class="team-page-body setup-mode" style="min-height:100vh;height:auto;overflow-y:auto;">
+  <div id="app" class="team-app-container setup-active" style="min-height:100vh;height:auto;overflow-y:auto;">
     <!-- Top Unified Navigation Bar -->
     <header class="neat-planner-header">
       <!-- Left: Hub / Back & Header Titles -->
@@ -90,6 +90,7 @@
           <a href="index.html" class="mode-nav-btn" title="2D Simulation &amp; Visual Path Planner">🗺️ Planner &amp; Sim</a>
           <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
           <a href="team.html" class="mode-nav-btn active" title="Real-Time Team Collaboration &amp; Cloud Sync (ALPHA)">👥 Team Collab <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.6rem;padding:1px 4px;margin-left:2px;">ALPHA</span></a>
+          <a href="admin.html" class="mode-nav-btn" title="Team Administration &amp; Member Permissions">🛡️ Admin Dashboard</a>
           <a href="tools.html" class="mode-nav-btn" title="Full Engineering Tools Suite">🛠️ Tools Suite</a>
           <a href="translator.html" class="mode-nav-btn" title="Raw C++ Auton to Visual Blocks Translator">🔄 C++ Translator</a>
           <a href="stats.html" class="mode-nav-btn" title="Site &amp; User Visitor Analytics">📊 Stats</a>
@@ -173,7 +174,7 @@
         <button type="button" class="btn-nav-compact" id="btnSyncLocalPlanner" title="Sync team project &amp; routines into your local browser planner &amp; IDE">📲 Sync Local</button>
         <button type="button" class="btn-nav-compact" id="btnSyncGithub" title="Push / Sync team C++ code directly to GitHub repository">🐙 GitHub</button>
         <button type="button" class="btn-nav-compact" id="btnDriveSync" title="Sync active team state to your personal Google Drive">☁️ Drive</button>
-        <button type="button" class="btn-nav-compact" id="btnManageTeam">⚙️ Settings</button>
+        <button type="button" class="btn-nav-compact" id="btnManageTeam" title="Team Settings &amp; Member Administration">⚙️ Team Settings</button>
         <button type="button" class="btn-nav-compact danger-item" id="btnExitTeamHeader" style="color:#f87171;border-color:rgba(239,68,68,0.4);">🚪 Exit</button>
       </div>
     </div>
@@ -221,7 +222,7 @@
             <span>👥 Team Members (<span id="memberCountBadge">0</span>)</span>
             <div style="display:flex;gap:6px;align-items:center;">
               <button type="button" class="btn-xs-clean" id="btnExitTeamRoster" style="color:#f87171;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);padding:2px 8px;border-radius:6px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Exit current team">🚪 Leave</button>
-              <button type="button" class="btn-xs-clean" id="btnInviteMember" style="color:#38bdf8;background:none;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;">+ Invite</button>
+              <button type="button" class="btn-xs-clean" id="btnInviteMember" style="color:#38bdf8;background:none;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;">⚙️ Team Settings</button>
             </div>
           </div>
           <div id="teamMemberList">
@@ -283,6 +284,7 @@
             <button type="button" id="btnViewModeIde" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">💻 Integrated C++ IDE</button>
             <button type="button" id="btnViewModeSuggestions" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">💡 Suggestions <span id="badgeSuggestionsCount" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 5px;border-radius:8px;font-size:0.65rem;">0</span></button>
             <button type="button" id="btnViewModeReplay" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">📊 Match Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 4px;border-radius:4px;font-weight:800;">ALPHA</span></button>
+            <button type="button" id="btnViewModeAdmin" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;color:#f59e0b;font-weight:700;">🛡️ Admin Dashboard</button>
           </div>
           <div id="lblRolePermissionStatus" style="font-size:0.72rem;color:#38bdf8;font-weight:600;display:flex;align-items:center;gap:6px;">
             <span>💻 Programmer View</span>
@@ -581,6 +583,65 @@
             </div>
           </div>
         </div>
+
+        <!-- VIEW 5: ADMIN DASHBOARD VIEW TAB -->
+        <div id="teamAdminViewContainer" style="display:none;flex-direction:column;flex:1 1 0;min-height:0;height:100%;overflow-y:auto;padding:16px;box-sizing:border-box;background:var(--card-inner);gap:16px;">
+          <!-- Admin Header Bar -->
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span style="font-size:1.8rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;">🛡️</span>
+              <div>
+                <h2 style="margin:0;font-size:1.15rem;color:var(--text-heading);font-weight:800;">Team Admin Dashboard</h2>
+                <p style="margin:2px 0 0;font-size:0.75rem;color:var(--muted);">Manage workspace member permissions, generate 6-digit hex verification invites &amp; kick members</p>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <a href="admin.html" target="_blank" class="btn-team-secondary" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:0.75rem;padding:6px 12px;font-weight:700;" title="Open standalone full-page Admin view">
+                ⛶ Fullscreen Admin Page
+              </a>
+              <button type="button" id="btnAdminSavePermissions" class="btn-team-primary" style="padding:6px 14px;font-size:0.78rem;">
+                💾 Save Permissions
+              </button>
+            </div>
+          </div>
+
+          <!-- 6-Digit Hex Invite Generator Card -->
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.1rem;">🔐</span>
+                <strong style="font-size:0.88rem;color:var(--text-heading);">Generate 6-Digit Hex Team Invite</strong>
+              </div>
+              <span style="font-size:0.72rem;color:var(--muted);">Recipient must solve the 3-code challenge to join</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+              <input type="email" id="txtAdminInviteEmail" class="form-input" placeholder="teammate@gmail.com (recipient Gmail)..." style="flex:1;min-width:240px;padding:8px 12px;font-size:0.8rem;" />
+              <button type="button" id="btnAdminGenerateHexInvite" class="btn-team-primary" style="padding:8px 16px;font-size:0.8rem;white-space:nowrap;background:linear-gradient(90deg,#0284c7,#2563eb);">
+                ⚡ Create Hex Invite Code
+              </button>
+            </div>
+            <!-- Live Active Invites Strip -->
+            <div id="adminActiveInvitesContainer" style="margin-top:12px;display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+
+          <!-- Teammate Roster & Permissions Table with Search -->
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <strong style="font-size:0.88rem;color:var(--text-heading);">👥 Workspace Members (<span id="lblAdminMemberCount">0</span>)</strong>
+              </div>
+              <!-- Search existing users / teammates -->
+              <div style="position:relative;width:280px;max-width:100%;">
+                <input type="text" id="txtAdminSearchMembers" class="form-input" placeholder="🔍 Search members by name or email..." style="width:100%;padding:6px 10px;font-size:0.75rem;" />
+              </div>
+            </div>
+
+            <!-- Interactive Members Table -->
+            <div id="adminMembersTableWrap" style="background:var(--card-inner);border:1px solid var(--border);border-radius:8px;overflow-x:auto;">
+              <!-- Dynamically populated admin roster table -->
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- RESIZER 2: CENTER / RIGHT -->
@@ -671,7 +732,7 @@
     <!-- =========================================================================
          TEAM SETUP & JOIN PAGE (Shown when user is NOT in a team)
          ========================================================================= -->
-    <div id="teamSetupJoinView" class="team-setup-container">
+    <div id="teamSetupJoinView" class="team-setup-container" style="overflow-y:visible;height:auto;max-height:none;margin-bottom:60px;">
       <div class="team-setup-card">
         <div class="team-setup-header">
           <div style="display:flex;align-items:center;gap:12px;">
@@ -1616,6 +1677,39 @@
             💡 Tip: You can drag any waypoint or start pose directly on the field canvas to see real-time collision feedback.
           </span>
           <button type="button" id="collisionModalDoneBtn" class="primary">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FULL-SCREEN 6-DIGIT HEX INVITATION NOTIFICATION OVERLAY -->
+    <div id="fullScreenInviteModal" class="fullscreen-invite-overlay" style="display:none;">
+      <div class="fullscreen-invite-card">
+        <div class="invite-header-badge">👥 Team Workspace Invitation</div>
+        <h2 style="margin:0 0 10px;font-size:1.4rem;color:#f8fafc;font-weight:800;">
+          Join <span id="lblInvitedTeamName" style="color:#38bdf8;">Team</span>
+        </h2>
+        <p style="font-size:0.85rem;color:var(--muted);line-height:1.5;margin:0 0 16px;">
+          <strong id="lblInvitedBy" style="color:#f8fafc;">Team Admin</strong> has invited your account (<code id="lblInvitedUserEmail" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:1px 6px;border-radius:4px;">user@example.com</code>) to collaborate in their VEX V5 workspace.
+        </p>
+
+        <div class="invite-verify-box">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;padding:3px 10px;border-radius:999px;font-size:0.75rem;font-weight:700;">
+            🔐 6-Digit Hex Authorization Challenge
+          </div>
+          <p style="font-size:0.82rem;color:var(--text);margin:10px 0 14px;line-height:1.4;">
+            Your administrator provided a <strong>6-digit hexadecimal invite code</strong>. Select the matching code below to verify your access:
+          </p>
+
+          <div class="hex-options-grid" id="hexOptionsGrid">
+            <!-- 3 choices dynamically populated -->
+          </div>
+          <div id="hexVerifyFeedback" style="font-size:0.78rem;font-weight:700;margin-top:12px;min-height:20px;"></div>
+        </div>
+
+        <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;">
+          <button type="button" id="btnDeclineTeamInvite" class="btn-decline-invite">
+            ❌ Decline Invitation
+          </button>
         </div>
       </div>
     </div>

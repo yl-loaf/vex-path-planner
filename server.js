@@ -1102,6 +1102,183 @@ app.post(['/api/team/kick-member', '/vex-path-planner/api/team/kick-member'], (r
   res.json({ success: true, team, kicked });
 });
 
+// Helper for generating 6-digit hexadecimal invite code
+function generate6DigitHex() {
+  const hex = '0123456789ABCDEF';
+  let out = '';
+  for (let i = 0; i < 6; i++) {
+    out += hex[Math.floor(Math.random() * 16)];
+  }
+  return out;
+}
+
+// Create 6-digit hex invitation (Admins / Owner only)
+app.post(['/api/team/invite/create', '/vex-path-planner/api/team/invite/create'], (req, res) => {
+  const { teamId, email, targetEmail } = req.body || {};
+  if (!teamId || !email || !targetEmail) {
+    return res.status(400).json({ error: 'Missing parameters' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const normEmail = email.toLowerCase().trim();
+  const isOwner = (team.ownerEmail && team.ownerEmail.toLowerCase().trim() === normEmail);
+  const requester = team.members.find(m => m.email.toLowerCase().trim() === normEmail);
+  const isAdmin = isOwner || Boolean(requester && (requester.isAdmin || requester.role === 'Admin' || requester.isOwner));
+
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Only team admins can create invitations.' });
+  }
+
+  const normTarget = targetEmail.toLowerCase().trim();
+  const correctHex = generate6DigitHex();
+  let fake1 = generate6DigitHex();
+  while (fake1 === correctHex) fake1 = generate6DigitHex();
+  let fake2 = generate6DigitHex();
+  while (fake2 === correctHex || fake2 === fake1) fake2 = generate6DigitHex();
+
+  // Shuffle 3 options
+  const options = [correctHex, fake1, fake2].sort(() => Math.random() - 0.5);
+
+  const invite = {
+    id: 'inv_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6),
+    teamId: team.teamId,
+    teamName: team.teamName,
+    teamCode: team.teamCode,
+    correctHex,
+    options,
+    targetEmail: normTarget,
+    invitedBy: requester?.displayName || normEmail.split('@')[0],
+    invitedByEmail: normEmail,
+    status: 'pending',
+    createdAt: Date.now()
+  };
+
+  if (!team.invites) team.invites = [];
+  team.invites = team.invites.filter(inv => inv.targetEmail !== normTarget || inv.status !== 'pending');
+  team.invites.unshift(invite);
+  saveTeam(team);
+
+  res.json({ success: true, invite });
+});
+
+// Verify 6-digit hex code challenge and join team
+app.post(['/api/team/invite/verify', '/vex-path-planner/api/team/invite/verify'], (req, res) => {
+  const { teamId, inviteId, email, selectedHex, displayName, role } = req.body || {};
+  if (!teamId || !email || !selectedHex) {
+    return res.status(400).json({ error: 'Missing parameters' });
+  }
+
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const normEmail = email.toLowerCase().trim();
+  const invite = (team.invites || []).find(inv => (inv.id === inviteId || inv.targetEmail === normEmail) && inv.status === 'pending');
+  if (!invite) {
+    return res.status(404).json({ error: 'No active invitation found for this user.' });
+  }
+
+  if (String(selectedHex).toUpperCase().trim() !== invite.correctHex.toUpperCase()) {
+    invite.status = 'rejected';
+    invite.rejectedAt = Date.now();
+    saveTeam(team);
+    return res.status(400).json({
+      success: false,
+      error: 'Incorrect verification code. Invitation has been declined.',
+      declined: true
+    });
+  }
+
+  // Code verified! Add member to team
+  invite.status = 'accepted';
+  invite.acceptedAt = Date.now();
+
+  const existingIdx = team.members.findIndex(m => m.email.toLowerCase().trim() === normEmail);
+  const finalRole = role || 'Programmer';
+  const finalName = displayName || normEmail.split('@')[0];
+
+  if (existingIdx === -1) {
+    team.members.push({
+      email: normEmail,
+      displayName: finalName,
+      role: finalRole,
+      color: getRoleColor(finalRole),
+      joinedAt: Date.now(),
+      isAdmin: false,
+      canEditCode: true,
+      isOwner: false
+    });
+  }
+
+  const now = Date.now();
+  team.updatedAt = now;
+
+  const snapshotItem = {
+    id: 'v_' + now + '_invite_join',
+    timestamp: now,
+    dateStr: new Date(now).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    authorEmail: normEmail,
+    authorName: finalName,
+    authorRole: finalRole,
+    authorColor: getRoleColor(finalRole),
+    actionSummary: `${finalName} joined the team via 6-digit hex verification`,
+    editType: 'member_join',
+    snapshot: team.pathPayload || null
+  };
+
+  if (!team.versionHistory) team.versionHistory = [];
+  team.versionHistory.unshift(snapshotItem);
+  saveTeam(team);
+
+  broadcastToTeam(teamId, 'sync', { team, changeSummary: `${finalName} joined the team`, editType: 'member_join' });
+  res.json({ success: true, team });
+});
+
+// Decline invitation
+app.post(['/api/team/invite/decline', '/vex-path-planner/api/team/invite/decline'], (req, res) => {
+  const { teamId, email, inviteId } = req.body || {};
+  const team = teamId ? getTeam(teamId) : null;
+  if (team && team.invites) {
+    const normEmail = (email || '').toLowerCase().trim();
+    const inv = team.invites.find(i => (i.id === inviteId || i.targetEmail === normEmail) && i.status === 'pending');
+    if (inv) {
+      inv.status = 'declined';
+      inv.declinedAt = Date.now();
+      saveTeam(team);
+    }
+  }
+  res.json({ success: true });
+});
+
+// Get pending invitations for email
+app.get(['/api/team/invite/pending', '/vex-path-planner/api/team/invite/pending'], (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.json({ pending: [] });
+  const normEmail = email.toLowerCase().trim();
+  const found = [];
+  for (const team of teamsStore.values()) {
+    if (team.invites && Array.isArray(team.invites)) {
+      for (const inv of team.invites) {
+        if (inv.targetEmail === normEmail && inv.status === 'pending') {
+          // Do not send correctHex to client! Only send the 3 options
+          found.push({
+            id: inv.id,
+            teamId: inv.teamId,
+            teamName: inv.teamName,
+            teamCode: inv.teamCode,
+            options: inv.options,
+            targetEmail: inv.targetEmail,
+            invitedBy: inv.invitedBy,
+            createdAt: inv.createdAt
+          });
+        }
+      }
+    }
+  }
+  res.json({ pending: found });
+});
+
 // 6. Real-time path & action sync edit (Stores up to 500 version history entries with author attribution)
 app.post(['/api/team/sync-edit', '/vex-path-planner/api/team/sync-edit'], (req, res) => {
   const { teamId, email, authorName, authorRole, editType, changeSummary, pathPayload, projectPayload, createSnapshot } = req.body || {};

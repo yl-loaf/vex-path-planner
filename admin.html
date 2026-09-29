@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VEX Team Admin &amp; Permissions Dashboard | LemLib Suite</title>
+  <meta name="description" content="Manage VEX team member permissions, roles, 6-digit hex verification invitations, and member administration." />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    @keyframes team-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="team-page-body" style="overflow-y:auto;height:auto;min-height:100vh;">
+  <div id="app" class="team-app-container setup-active" style="height:auto;min-height:100vh;overflow-y:visible;">
+    <!-- Top Unified Navigation Bar -->
+    <header class="neat-planner-header">
+      <div class="header-left">
+        <a href="index.html" class="btn-nav-home" title="View Competition Dashboard Hub">
+          🏠 Hub
+        </a>
+        <div class="header-titles">
+          <h1>VEX V5 LemLib Suite</h1>
+          <span class="header-project-pill" id="lblAdminHeaderBadge">
+            🛡️ <span id="lblAdminTeamName">Admin Dashboard</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Center: Navigation Modes -->
+      <div class="header-center-modes">
+        <nav class="header-mode-nav">
+          <a href="index.html" class="mode-nav-btn" title="2D Simulation &amp; Visual Path Planner">🗺️ Planner &amp; Sim</a>
+          <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
+          <a href="team.html" class="mode-nav-btn" title="Real-Time Team Collaboration &amp; Cloud Sync">👥 Team Collab</a>
+          <a href="admin.html" class="mode-nav-btn active" title="Team Administration &amp; Member Permissions">🛡️ Admin Dashboard</a>
+          <a href="tools.html" class="mode-nav-btn" title="Full Engineering Tools Suite">🛠️ Tools Suite</a>
+          <a href="stats.html" class="mode-nav-btn" title="Site &amp; User Visitor Analytics">📊 Stats</a>
+        </nav>
+      </div>
+
+      <!-- Right: Actions & Auth -->
+      <div class="header-actions">
+        <a href="team.html" class="btn-nav-compact" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);text-decoration:none;font-weight:700;">
+          👥 Open Workspace
+        </a>
+        <button type="button" id="btnAdminThemeToggle" class="btn-theme-toggle" data-theme-toggle aria-label="Toggle theme">
+          <span class="theme-toggle-icon">☀️</span>
+          <span class="theme-toggle-text">Theme</span>
+        </button>
+        <div id="authArea" class="auth-area">
+          <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
+          <span id="authUser" class="auth-user" hidden></span>
+          <button id="btnSignOut" type="button" hidden title="Sign out of Google account">Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Admin Container -->
+    <main style="max-width:1100px;width:100%;margin:20px auto 40px;padding:0 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;">
+      
+      <!-- Team Status Banner -->
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;box-shadow:0 8px 30px var(--shadow-color);">
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="width:54px;height:54px;border-radius:14px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);display:flex;align-items:center;justify-content:center;font-size:2rem;">
+            🛡️
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <h2 id="lblBannerTeamName" style="margin:0;font-size:1.35rem;color:var(--text-heading);font-weight:800;">Loading Team...</h2>
+              <span id="badgeAdminRole" class="badge" style="background:#f59e0b;color:#0b0f14;font-size:0.7rem;padding:2px 8px;font-weight:800;">ADMIN</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;margin-top:6px;font-size:0.78rem;color:var(--muted);flex-wrap:wrap;">
+              <span>Team Code: <code id="lblBannerTeamCode" style="color:#38bdf8;font-weight:700;background:rgba(56,189,248,0.1);padding:2px 6px;border-radius:4px;">---</code></span>
+              <span>Rolling OTP: <strong id="lblBannerTeamOtp" style="color:var(--amber);">------</strong></span>
+              <span>Total Members: <strong id="lblBannerMemberCount" style="color:#4ade80;">0</strong></span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button type="button" id="btnAdminSaveAll" class="btn-team-primary" style="padding:10px 20px;font-size:0.85rem;font-weight:700;">
+            💾 Save Roles &amp; Permissions
+          </button>
+        </div>
+      </div>
+
+      <!-- Access Guard Notice (if not admin) -->
+      <div id="adminAccessNotice" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px 18px;font-size:0.85rem;color:#f87171;">
+        🔒 <strong>Read-Only Mode:</strong> You are viewing this page as a normal team member. Only team administrators and the team owner can modify member roles, change permissions, create invites, or kick members.
+      </div>
+
+      <!-- 6-Digit Hexadecimal Invite Generator -->
+      <section class="team-section-card" style="padding:20px 24px;border-radius:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:var(--text-heading);display:flex;align-items:center;gap:8px;">
+              <span>🔐</span> Generate 6-Digit Hexadecimal Verification Invite
+            </h3>
+            <p style="margin:3px 0 0;font-size:0.75rem;color:var(--muted);">
+              Invited teammates receive an instant full-screen challenge and must choose this exact code out of 3 options to authorize and join.
+            </p>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px;">
+          <input type="email" id="txtNewInviteEmail" class="form-input" placeholder="teammate@gmail.com (recipient's Gmail address)..." style="flex:1;min-width:280px;padding:10px 14px;font-size:0.85rem;" />
+          <button type="button" id="btnGenerateHexInvite" class="btn-team-primary" style="padding:10px 22px;font-size:0.85rem;background:linear-gradient(90deg,#0284c7,#2563eb);white-space:nowrap;">
+            ⚡ Generate 6-Digit Hex Invite
+          </button>
+        </div>
+
+        <!-- Latest Generated Invite Card -->
+        <div id="latestInviteCard" style="display:none;margin-top:16px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:10px;padding:16px 20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div>
+              <span style="font-size:0.72rem;color:#38bdf8;text-transform:uppercase;font-weight:700;">Invite Generated for <span id="lblLatestInviteEmail">user@email</span></span>
+              <div style="margin-top:4px;display:flex;align-items:center;gap:12px;">
+                <span style="font-size:0.8rem;color:var(--text);">Correct Code to Share:</span>
+                <span id="lblLatestHexCode" style="font-family:ui-monospace, monospace;font-size:1.6rem;font-weight:900;letter-spacing:3px;color:#4ade80;background:#091220;border:1px solid rgba(34,197,94,0.4);padding:2px 14px;border-radius:8px;">------</span>
+                <button type="button" id="btnCopyLatestHex" class="btn-team-secondary" style="font-size:0.75rem;padding:5px 12px;">📋 Copy Code</button>
+              </div>
+            </div>
+            <div style="font-size:0.75rem;color:var(--muted);max-width:320px;">
+              ℹ️ Share this 6-digit code with your teammate. When they open the planner with their Gmail, they must pick this code to verify entry!
+            </div>
+          </div>
+        </div>
+
+        <!-- Pending Invites List -->
+        <div style="margin-top:20px;">
+          <div style="font-weight:700;font-size:0.8rem;color:var(--text);margin-bottom:8px;">Active Pending Invites</div>
+          <div id="pendingInvitesList" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:0.78rem;color:var(--muted);">No pending invites. Enter a Gmail above to invite a new teammate.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Teammate Roster & Permissions Table with Search -->
+      <section class="team-section-card" style="padding:20px 24px;border-radius:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:var(--text-heading);display:flex;align-items:center;gap:8px;">
+              <span>👥</span> Member Permissions &amp; Roles Matrix
+            </h3>
+            <p style="margin:3px 0 0;font-size:0.75rem;color:var(--muted);">
+              Control administrative privileges, PROS C++ IDE edit access, and remove inactive members.
+            </p>
+          </div>
+
+          <!-- Instant Search Input -->
+          <div style="width:320px;max-width:100%;">
+            <input type="text" id="txtSearchMembers" class="form-input" placeholder="🔍 Search existing users by name, email, or role..." style="width:100%;padding:8px 12px;font-size:0.8rem;" />
+          </div>
+        </div>
+
+        <!-- Members Table -->
+        <div style="background:var(--card-inner);border:1px solid var(--border);border-radius:10px;overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;text-align:left;">
+            <thead>
+              <tr style="background:#090d16;color:#94a3b8;border-bottom:1px solid #1e293b;">
+                <th style="padding:10px 14px;">Member</th>
+                <th style="padding:10px 14px;">Role</th>
+                <th style="padding:10px 14px;">Admin Access</th>
+                <th style="padding:10px 14px;">Code Edit Permissions</th>
+                <th style="padding:10px 14px;text-align:center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="adminMembersTableBody">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- FULL-SCREEN 6-DIGIT HEX INVITATION NOTIFICATION OVERLAY -->
+    <div id="fullScreenInviteModal" class="fullscreen-invite-overlay" style="display:none;">
+      <div class="fullscreen-invite-card">
+        <div class="invite-header-badge">👥 Team Workspace Invitation</div>
+        <h2 style="margin:0 0 10px;font-size:1.4rem;color:#f8fafc;font-weight:800;">
+          Join <span id="lblInvitedTeamName" style="color:#38bdf8;">Team</span>
+        </h2>
+        <p style="font-size:0.85rem;color:var(--muted);line-height:1.5;margin:0 0 16px;">
+          <strong id="lblInvitedBy" style="color:#f8fafc;">Team Admin</strong> has invited your account (<code id="lblInvitedUserEmail" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:1px 6px;border-radius:4px;">user@example.com</code>) to collaborate in their VEX V5 workspace.
+        </p>
+
+        <div class="invite-verify-box">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;padding:3px 10px;border-radius:999px;font-size:0.75rem;font-weight:700;">
+            🔐 6-Digit Hex Authorization Challenge
+          </div>
+          <p style="font-size:0.82rem;color:var(--text);margin:10px 0 14px;line-height:1.4;">
+            Your administrator provided a <strong>6-digit hexadecimal invite code</strong>. Select the matching code below to verify your access:
+          </p>
+
+          <div class="hex-options-grid" id="hexOptionsGrid">
+            <!-- 3 choices dynamically populated -->
+          </div>
+          <div id="hexVerifyFeedback" style="font-size:0.78rem;font-weight:700;margin-top:12px;min-height:20px;"></div>
+        </div>
+
+        <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;">
+          <button type="button" id="btnDeclineTeamInvite" class="btn-decline-invite">
+            ❌ Decline Invitation
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="teamToast" class="team-toast">
+      <span id="teamToastIcon">✅</span>
+      <span id="teamToastMsg">Action completed</span>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="version.js?v=20260928.k81"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=20260928.k81"></script>
+  <script src="theme.js?v=20260928.k81"></script>
+  <script src="admin.js?v=20260929.k15"></script>
+</body>
+</html>
