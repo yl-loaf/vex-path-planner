@@ -46,6 +46,8 @@
   let simTimer = null;
   let simTimeMs = 0;
   let isSimPlaying = false;
+  let simAnimId = null;
+  let simStartTime = 0;
 
   const FIELD_INCHES = 144; // VEX Field is 144" x 144"
   const FIELD_HALF = 72;
@@ -6423,11 +6425,6 @@
   // --------------------------------------------------------------------------
   // SIMULATION PLAYBACK
   // --------------------------------------------------------------------------
-  let isSimPlaying = false;
-  let simTimeMs = 0;
-  let simAnimId = null;
-  let simStartTime = 0;
-
   function toggleSimPlay() {
     const btn = document.getElementById("btnSimPlay");
     const routine = activePaths[activeRoutineIndex] || activePaths[0];
