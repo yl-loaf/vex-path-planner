@@ -250,16 +250,30 @@
     let t = 0;
     const points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
 
-    if (action.type === "wait" || action.type === "delay") {
-      const dur = Math.max(0.1, (action.timeout || action.delayMs || 500) / 1000);
+    if (action.type === "wait" || action.type === "delay" || action.type === "customCode" || action.type === "custom") {
+      const dur = Math.max(0.1, (action.timeout || action.delayMs || 300) / 1000);
       points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
       return { endPose: pose, path: points, duration: dur };
     }
 
-    if (action.type === "turnToHeading" || action.type === "turnToPoint") {
+    if (action.type === "ifElse" || action.type === "if_else") {
+      const dur = 0.2; // 200ms evaluation step
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+      return { endPose: pose, path: points, duration: dur };
+    }
+
+    if (action.type === "loop") {
+      const cnt = action.loopType === "for" ? (action.count || 3) : 3;
+      const dur = Math.max(0.1, (cnt * (action.delayMs || 100)) / 1000);
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
+      return { endPose: pose, path: points, duration: dur };
+    }
+
+    if (action.type === "turnToHeading" || action.type === "turnToPoint" || action.type === "swingToHeading") {
       let targetHeading = action.theta !== undefined ? action.theta : (action.heading || 0);
       if (action.type === "turnToPoint") {
         targetHeading = (Math.atan2(action.y - pose.y, action.x - pose.x) * 180 / Math.PI) + 90;
+        if (action.forwards === false) targetHeading += 180;
       }
 
       while (t < timeoutS) {
@@ -267,8 +281,19 @@
         if (Math.abs(angError) < 1.0 && Math.abs(omegaDeg) < 5) break;
 
         const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
-        omegaDeg = (angOutput / 127) * 360; // deg/s
+        omegaDeg = (angOutput / 127) * (action.type === "swingToHeading" ? 220 : 360); // deg/s
         pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+
+        // For swing turns, the chassis center translates slightly in an arc
+        if (action.type === "swingToHeading") {
+          const trackWidth = b.trackWidth || 12;
+          const arcR = trackWidth / 2;
+          const rad = ((pose.theta - 90) * Math.PI) / 180;
+          const sideSign = action.driveSide === "RIGHT" ? -1 : 1;
+          pose.x += Math.cos(rad) * (omegaDeg * Math.PI / 180) * arcR * dt * 0.3 * sideSign;
+          pose.y -= Math.sin(rad) * (omegaDeg * Math.PI / 180) * arcR * dt * 0.3 * sideSign;
+        }
+
         t += dt;
         points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg });
       }
@@ -1607,10 +1632,50 @@
       } else if (act.type === "moveToPose") {
         const timeout = act.timeout || 2500;
         const maxSpd = act.maxSpeed !== undefined ? act.maxSpeed : 115;
-        cpp += `    chassis.moveToPose(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${(act.theta || 0).toFixed(1)}, ${timeout}, {.forwards = ${act.forwards !== false}, .maxSpeed = ${maxSpd}});\n`;
-      } else if (act.type === "turnToHeading" || act.type === "turnToPoint") {
+        cpp += `    chassis.moveToPose(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${(act.theta || 0).toFixed(1)}, {.forwards = ${act.forwards !== false}, .maxSpeed = ${maxSpd}});\n`;
+      } else if (act.type === "turnToPoint") {
+        const timeout = act.timeout || 1500;
+        const maxSpd = act.maxSpeed !== undefined ? act.maxSpeed : 115;
+        cpp += `    chassis.turnToPoint(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${timeout}, {.forwards = ${act.forwards !== false}, .maxSpeed = ${maxSpd}});\n`;
+      } else if (act.type === "turnToHeading") {
         const timeout = act.timeout || 1500;
         cpp += `    chassis.turnToHeading(${(act.theta || act.heading || 0).toFixed(1)}, ${timeout});\n`;
+      } else if (act.type === "swingToHeading") {
+        const timeout = act.timeout || 1500;
+        const maxSpd = act.maxSpeed !== undefined ? act.maxSpeed : 115;
+        const side = act.driveSide === "RIGHT" ? "lemlib::DriveSide::RIGHT" : "lemlib::DriveSide::LEFT";
+        cpp += `    chassis.swingToHeading(${(act.theta || act.heading || 0).toFixed(1)}, ${side}, ${timeout}, {.maxSpeed = ${maxSpd}});\n`;
+      } else if (act.type === "ifElse" || act.type === "if_else") {
+        const cond = act.conditionExpr || "distance_sensor.get() < 100";
+        const thenC = act.thenCode || "// custom then action\n    intake.move(127);";
+        cpp += `    if (${cond}) {\n`;
+        thenC.split("\n").forEach(line => {
+          if (line.trim()) cpp += `        ${line.trim()}\n`;
+        });
+        if (act.hasElse) {
+          const elseC = act.elseCode || "// custom else action\n    intake.move(0);";
+          cpp += `    } else {\n`;
+          elseC.split("\n").forEach(line => {
+            if (line.trim()) cpp += `        ${line.trim()}\n`;
+          });
+        }
+        cpp += `    }\n`;
+      } else if (act.type === "loop") {
+        const loopT = act.loopType || "for";
+        const delayVal = act.delayMs !== undefined ? act.delayMs : 10;
+        const code = act.loopCode || "intake.move(127);";
+        if (loopT === "for") {
+          cpp += `    for (int i = 0; i < ${act.count || 3}; i++) {\n`;
+        } else if (loopT === "until") {
+          cpp += `    while (!(${act.conditionExpr || "distance_sensor.get() < 50"})) {\n`;
+        } else { // forever
+          cpp += `    while (true) {\n`;
+        }
+        code.split("\n").forEach(line => {
+          if (line.trim()) cpp += `        ${line.trim()}\n`;
+        });
+        cpp += `        pros::delay(${delayVal});\n`;
+        cpp += `    }\n`;
       } else if (act.type === "delay" || act.type === "wait") {
         cpp += `    pros::delay(${act.timeout || act.duration || 500});\n`;
       } else if (act.type === "customCode") {
@@ -3994,10 +4059,13 @@
 
     const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
     const waypoints = [{ x: startPose.x, y: startPose.y, theta: startPose.theta, type: "start", id: "start_pose" }];
+    let lastWp = startPose;
     (routine.actions || []).forEach((act) => {
-      if (act.x !== undefined && act.y !== undefined) {
-        waypoints.push({ ...act });
-      }
+      const actX = act.x !== undefined ? act.x : lastWp.x;
+      const actY = act.y !== undefined ? act.y : lastWp.y;
+      const wpItem = { ...act, x: actX, y: actY };
+      waypoints.push(wpItem);
+      lastWp = wpItem;
     });
 
     // 4. Draw Trajectory Spline Line with Bezier Curves & Directional Arrows
@@ -4902,10 +4970,50 @@
       } else if (act.type === "moveToPose") {
         const timeout = act.timeout || 2500;
         const maxSpd = act.maxSpeed !== undefined ? act.maxSpeed : 115;
-        cpp += `    chassis.moveToPose(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${(act.theta || 0).toFixed(1)}, ${timeout}, {.forwards = ${act.forwards !== false}, .maxSpeed = ${maxSpd}});\n`;
-      } else if (act.type === "turnToHeading" || act.type === "turnToPoint") {
+        cpp += `    chassis.moveToPose(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${(act.theta || 0).toFixed(1)}, {.forwards = ${act.forwards !== false}, .maxSpeed = ${maxSpd}});\n`;
+      } else if (act.type === "turnToPoint") {
+        const timeout = act.timeout || 1500;
+        const maxSpd = act.maxSpeed !== undefined ? act.maxSpeed : 115;
+        cpp += `    chassis.turnToPoint(${(act.x || 0).toFixed(1)}, ${(act.y || 0).toFixed(1)}, ${timeout}, {.forwards = ${act.forwards !== false}, .maxSpeed = ${maxSpd}});\n`;
+      } else if (act.type === "turnToHeading") {
         const timeout = act.timeout || 1500;
         cpp += `    chassis.turnToHeading(${(act.theta || act.heading || 0).toFixed(1)}, ${timeout});\n`;
+      } else if (act.type === "swingToHeading") {
+        const timeout = act.timeout || 1500;
+        const maxSpd = act.maxSpeed !== undefined ? act.maxSpeed : 115;
+        const side = act.driveSide === "RIGHT" ? "lemlib::DriveSide::RIGHT" : "lemlib::DriveSide::LEFT";
+        cpp += `    chassis.swingToHeading(${(act.theta || act.heading || 0).toFixed(1)}, ${side}, ${timeout}, {.maxSpeed = ${maxSpd}});\n`;
+      } else if (act.type === "ifElse" || act.type === "if_else") {
+        const cond = act.conditionExpr || "distance_sensor.get() < 100";
+        const thenC = act.thenCode || "// custom then action\n    intake.move(127);";
+        cpp += `    if (${cond}) {\n`;
+        thenC.split("\n").forEach(line => {
+          if (line.trim()) cpp += `        ${line.trim()}\n`;
+        });
+        if (act.hasElse) {
+          const elseC = act.elseCode || "// custom else action\n    intake.move(0);";
+          cpp += `    } else {\n`;
+          elseC.split("\n").forEach(line => {
+            if (line.trim()) cpp += `        ${line.trim()}\n`;
+          });
+        }
+        cpp += `    }\n`;
+      } else if (act.type === "loop") {
+        const loopT = act.loopType || "for";
+        const delayVal = act.delayMs !== undefined ? act.delayMs : 10;
+        const code = act.loopCode || "intake.move(127);";
+        if (loopT === "for") {
+          cpp += `    for (int i = 0; i < ${act.count || 3}; i++) {\n`;
+        } else if (loopT === "until") {
+          cpp += `    while (!(${act.conditionExpr || "distance_sensor.get() < 50"})) {\n`;
+        } else { // forever
+          cpp += `    while (true) {\n`;
+        }
+        code.split("\n").forEach(line => {
+          if (line.trim()) cpp += `        ${line.trim()}\n`;
+        });
+        cpp += `        pros::delay(${delayVal});\n`;
+        cpp += `    }\n`;
       } else if (act.type === "delay" || act.type === "wait") {
         cpp += `    pros::delay(${act.timeout || act.duration || 500});\n`;
       } else if (act.type === "customCode") {
@@ -5031,8 +5139,12 @@
       let catClass = "cat-motion";
       let blockColor = "#0284c7"; // MoveToPoint
       if (act.type === "moveToPose") { catClass = "cat-motion"; blockColor = "#0369a1"; }
+      else if (act.type === "turnToPoint") { catClass = "cat-turn"; blockColor = "#6366f1"; }
+      else if (act.type === "turnToHeading") { catClass = "cat-turn"; blockColor = "#7c3aed"; }
+      else if (act.type === "swingToHeading") { catClass = "cat-turn"; blockColor = "#a855f7"; }
       else if (act.type === "bezierCurve") { catClass = "cat-bezier"; blockColor = "#06b6d4"; }
-      else if (act.type === "turnToHeading" || act.type === "turnToPoint") { catClass = "cat-turn"; blockColor = "#7c3aed"; }
+      else if (act.type === "ifElse" || act.type === "if_else") { catClass = "cat-control"; blockColor = "#ea580c"; }
+      else if (act.type === "loop") { catClass = "cat-control"; blockColor = "#10b981"; }
       else if (act.type === "delay" || act.type === "wait") { catClass = "cat-control"; blockColor = "#d97706"; }
       else if (act.type === "customCode" || act.type === "custom") { catClass = "cat-subsystem"; blockColor = "#16a34a"; }
 
@@ -5052,6 +5164,37 @@
             <span>Speed: <input type="number" class="act-speed form-input" value="${act.maxSpeed !== undefined ? act.maxSpeed : 115}" style="width:48px;padding:2px 5px;font-size:0.72rem;display:inline-block;" /></span>
           </div>
         `;
+      } else if (act.type === "turnToPoint") {
+        paramsHtml = `
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span>Target X: <input type="number" class="act-x form-input" value="${act.x || 0}" style="width:50px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />"</span>
+            <span>Target Y: <input type="number" class="act-y form-input" value="${act.y || 0}" style="width:50px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />"</span>
+            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 1500}" style="width:54px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
+            <span>Speed: <input type="number" class="act-speed form-input" value="${act.maxSpeed !== undefined ? act.maxSpeed : 115}" style="width:48px;padding:2px 5px;font-size:0.72rem;display:inline-block;" /></span>
+            <label style="display:inline-flex;align-items:center;gap:3px;font-size:0.7rem;cursor:pointer;"><input type="checkbox" class="act-forwards" ${act.forwards !== false ? 'checked' : ''} /> Front Facing</label>
+          </div>
+        `;
+      } else if (act.type === "turnToHeading") {
+        paramsHtml = `
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span>Heading: <input type="number" class="act-t form-input" value="${act.theta !== undefined ? act.theta : (act.heading || 0)}" style="width:52px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />°</span>
+            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 1500}" style="width:54px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
+          </div>
+        `;
+      } else if (act.type === "swingToHeading") {
+        paramsHtml = `
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span>Heading: <input type="number" class="act-t form-input" value="${act.theta !== undefined ? act.theta : (act.heading || 0)}" style="width:52px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />°</span>
+            <span>Pivot Side:
+              <select class="act-side form-input" style="padding:2px 4px;font-size:0.72rem;background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:4px;">
+                <option value="LEFT" ${(act.driveSide || 'LEFT') === 'LEFT' ? 'selected' : ''}>Left Side</option>
+                <option value="RIGHT" ${act.driveSide === 'RIGHT' ? 'selected' : ''}>Right Side</option>
+              </select>
+            </span>
+            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 1500}" style="width:54px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
+            <span>Speed: <input type="number" class="act-speed form-input" value="${act.maxSpeed !== undefined ? act.maxSpeed : 115}" style="width:48px;padding:2px 5px;font-size:0.72rem;display:inline-block;" /></span>
+          </div>
+        `;
       } else if (act.type === "bezierCurve") {
         paramsHtml = `
           <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -5060,11 +5203,68 @@
             <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 2500}" style="width:54px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
           </div>
         `;
-      } else if (act.type === "turnToHeading" || act.type === "turnToPoint") {
+      } else if (act.type === "ifElse" || act.type === "if_else") {
         paramsHtml = `
-          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <span>Heading: <input type="number" class="act-t form-input" value="${act.theta !== undefined ? act.theta : (act.heading || 0)}" style="width:52px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />°</span>
-            <span>Timeout: <input type="number" class="act-time form-input" value="${act.timeout || 1500}" style="width:54px;padding:2px 5px;font-size:0.72rem;display:inline-block;" />ms</span>
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <span style="font-weight:700;color:#ea580c;">IF</span>
+              <select class="act-cond-preset form-input" style="padding:2px 4px;font-size:0.7rem;background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:4px;">
+                <option value="distance" ${(act.conditionType || 'distance') === 'distance' ? 'selected' : ''}>Distance Sensor < 100mm</option>
+                <option value="optical_ring" ${act.conditionType === 'optical_ring' ? 'selected' : ''}>Optical Ring Color Match</option>
+                <option value="bumper" ${act.conditionType === 'bumper' ? 'selected' : ''}>Bumper / Limit Switch Pressed</option>
+                <option value="timer" ${act.conditionType === 'timer' ? 'selected' : ''}>Match Timer < 12s</option>
+                <option value="custom" ${act.conditionType === 'custom' ? 'selected' : ''}>Custom Expression</option>
+              </select>
+            </div>
+            <div>
+              <input type="text" class="act-cond-expr form-input" value="${escapeHtml(act.conditionExpr || 'distance_sensor.get() < 100')}" placeholder="e.g. distance_sensor.get() < 100" style="width:100%;padding:2px 6px;font-size:0.72rem;font-family:monospace;" />
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span style="font-size:0.68rem;color:#38bdf8;font-weight:700;">THEN ACTION (C++):</span>
+              <textarea class="act-then-code form-input" rows="2" style="width:100%;padding:3px 6px;font-size:0.7rem;font-family:monospace;background:#0f172a;" placeholder="intake.move(127);">${escapeHtml(act.thenCode || 'intake.move(127);')}</textarea>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <label style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;cursor:pointer;color:#f1f5f9;"><input type="checkbox" class="act-has-else" ${act.hasElse ? 'checked' : ''} /> Enable ELSE Branch</label>
+            </div>
+            ${act.hasElse ? `
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <span style="font-size:0.68rem;color:#f97316;font-weight:700;">ELSE ACTION (C++):</span>
+                <textarea class="act-else-code form-input" rows="2" style="width:100%;padding:3px 6px;font-size:0.7rem;font-family:monospace;background:#0f172a;" placeholder="intake.move(0);">${escapeHtml(act.elseCode || 'intake.move(0);')}</textarea>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      } else if (act.type === "loop") {
+        paramsHtml = `
+          <div style="font-size:0.74rem;color:#cbd5e1;margin-top:6px;display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <span style="font-weight:700;color:#10b981;">LOOP MODE</span>
+              <select class="act-loop-type form-input" style="padding:2px 4px;font-size:0.7rem;background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:4px;">
+                <option value="for" ${(act.loopType || 'for') === 'for' ? 'selected' : ''}>🔁 Repeat N Times (for)</option>
+                <option value="until" ${act.loopType === 'until' ? 'selected' : ''}>⏳ Until Condition (while !)</option>
+                <option value="forever" ${act.loopType === 'forever' ? 'selected' : ''}>♾️ Forever (while true)</option>
+              </select>
+            </div>
+            ${(act.loopType || 'for') === 'for' ? `
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span>Repeat Count:</span>
+                <input type="number" class="act-loop-count form-input" value="${act.count || 3}" style="width:54px;padding:2px 5px;font-size:0.72rem;" />
+              </div>
+            ` : ''}
+            ${act.loopType === 'until' ? `
+              <div>
+                <span>Stop Condition:</span>
+                <input type="text" class="act-loop-cond form-input" value="${escapeHtml(act.conditionExpr || 'distance_sensor.get() < 50')}" placeholder="e.g. distance_sensor.get() < 50" style="width:100%;padding:2px 6px;font-size:0.72rem;font-family:monospace;" />
+              </div>
+            ` : ''}
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span style="font-size:0.68rem;color:#34d399;font-weight:700;">LOOP BODY (C++):</span>
+              <textarea class="act-loop-code form-input" rows="2" style="width:100%;padding:3px 6px;font-size:0.7rem;font-family:monospace;background:#0f172a;" placeholder="intake.move(127);">${escapeHtml(act.loopCode || 'intake.move(127);')}</textarea>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span>Tick Delay:</span>
+              <input type="number" class="act-delay-ms form-input" value="${act.delayMs !== undefined ? act.delayMs : 10}" style="width:54px;padding:2px 5px;font-size:0.72rem;" /> ms
+            </div>
           </div>
         `;
       } else if (act.type === "delay" || act.type === "wait") {
@@ -5081,11 +5281,13 @@
         `;
       }
 
+      const displayType = act.type === "ifElse" ? "control.ifElse" : (act.type === "loop" ? "control.loop" : `chassis.${act.type}`);
+
       card.innerHTML = `
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
           <div style="display:flex;align-items:center;gap:8px;">
             <span style="background:${blockColor};color:#fff;font-weight:800;font-size:0.7rem;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${idx + 1}</span>
-            <strong style="font-size:0.82rem;color:#f8fafc;">chassis.${escapeHtml(act.type)}</strong>
+            <strong style="font-size:0.82rem;color:#f8fafc;">${escapeHtml(displayType)}</strong>
           </div>
           <button type="button" class="btn-xs-clean btn-del-act" style="color:#ef4444;background:none;border:none;cursor:pointer;padding:2px 6px;font-size:0.85rem;" title="Delete action">🗑️</button>
         </div>
@@ -5096,7 +5298,7 @@
       `;
 
       card.onclick = (e) => {
-        if (['INPUT', 'BUTTON', 'TEXTAREA'].includes(e.target.tagName)) return;
+        if (['INPUT', 'BUTTON', 'TEXTAREA', 'SELECT', 'OPTION', 'LABEL'].includes(e.target.tagName)) return;
         selectedActionId = act.id;
         renderActionBlocks();
         drawField();
@@ -5107,8 +5309,22 @@
       const inT = card.querySelector('.act-t');
       const inTime = card.querySelector('.act-time');
       const inSpeed = card.querySelector('.act-speed');
+      const inForwards = card.querySelector('.act-forwards');
+      const inSide = card.querySelector('.act-side');
       const inCode = card.querySelector('.act-code');
       const inComm = card.querySelector('.act-comment');
+
+      const inCondPreset = card.querySelector('.act-cond-preset');
+      const inCondExpr = card.querySelector('.act-cond-expr');
+      const inThenCode = card.querySelector('.act-then-code');
+      const inHasElse = card.querySelector('.act-has-else');
+      const inElseCode = card.querySelector('.act-else-code');
+
+      const inLoopType = card.querySelector('.act-loop-type');
+      const inLoopCount = card.querySelector('.act-loop-count');
+      const inLoopCond = card.querySelector('.act-loop-cond');
+      const inLoopCode = card.querySelector('.act-loop-code');
+      const inDelayMs = card.querySelector('.act-delay-ms');
 
       const handleBlockChange = () => {
         if (inX) act.x = parseFloat(inX.value) || 0;
@@ -5116,15 +5332,39 @@
         if (inT) { act.theta = parseFloat(inT.value) || 0; act.heading = act.theta; }
         if (inTime) act.timeout = parseInt(inTime.value, 10) || 1000;
         if (inSpeed) act.maxSpeed = parseInt(inSpeed.value, 10) || 115;
+        if (inForwards) act.forwards = inForwards.checked;
+        if (inSide) act.driveSide = inSide.value;
         if (inCode) act.customCode = inCode.value;
         if (inComm) act.comment = inComm.value;
 
+        if (inCondPreset) {
+          act.conditionType = inCondPreset.value;
+          if (inCondPreset.value === "distance") act.conditionExpr = "distance_sensor.get() < 100";
+          else if (inCondPreset.value === "optical_ring") act.conditionExpr = "optical_sensor.get_hue() < 30";
+          else if (inCondPreset.value === "bumper") act.conditionExpr = "bumper_switch.get_value() == 1";
+          else if (inCondPreset.value === "timer") act.conditionExpr = "pros::millis() < 12000";
+        }
+        if (inCondExpr) act.conditionExpr = inCondExpr.value;
+        if (inThenCode) act.thenCode = inThenCode.value;
+        if (inHasElse) act.hasElse = inHasElse.checked;
+        if (inElseCode) act.elseCode = inElseCode.value;
+
+        if (inLoopType) act.loopType = inLoopType.value;
+        if (inLoopCount) act.count = parseInt(inLoopCount.value, 10) || 1;
+        if (inLoopCond) act.conditionExpr = inLoopCond.value;
+        if (inLoopCode) act.loopCode = inLoopCode.value;
+        if (inDelayMs) act.delayMs = parseInt(inDelayMs.value, 10) || 10;
+
+        renderActionBlocks();
         drawField();
         syncIdeAutonsFromBlocks();
         broadcastEdit(`Updated action #${idx + 1} (${act.type})`, "action_edit", false);
       };
 
-      [inX, inY, inT, inTime, inSpeed, inCode, inComm].forEach(input => input?.addEventListener('change', handleBlockChange));
+      [inX, inY, inT, inTime, inSpeed, inForwards, inSide, inCode, inComm,
+       inCondPreset, inCondExpr, inThenCode, inHasElse, inElseCode,
+       inLoopType, inLoopCount, inLoopCond, inLoopCode, inDelayMs
+      ].forEach(input => input?.addEventListener('change', handleBlockChange));
 
       card.querySelector(".btn-del-act").onclick = (e) => {
         e.stopPropagation();
@@ -5158,10 +5398,21 @@
       x: Math.min(65, Math.max(-65, newX)),
       y: Math.min(65, Math.max(-65, newY)),
       theta: 90,
-      timeout: type === "moveToPose" ? 2500 : 2000,
+      heading: 90,
+      timeout: type === "moveToPose" ? 2500 : 1500,
       maxSpeed: 115,
       earlyExitRange: 2,
       forwards: true,
+      driveSide: "LEFT",
+      conditionType: "distance",
+      conditionExpr: "distance_sensor.get() < 100",
+      thenCode: "intake.move(127);",
+      hasElse: true,
+      elseCode: "intake.move(0);",
+      loopType: "for",
+      count: 3,
+      loopCode: "intake.move(127);",
+      delayMs: 10,
       comment: "",
       customCode: type === "customCode" ? "intake.move(127);" : ""
     };
@@ -5171,7 +5422,7 @@
     renderActionBlocks();
     drawField();
     syncIdeAutonsFromBlocks();
-    broadcastEdit(`Added action ${type} at (${newAct.x}", ${newAct.y}")`, "action_add", true);
+    broadcastEdit(`Added action ${type}`, "action_add", true);
   }
 
   // --------------------------------------------------------------------------
@@ -6131,8 +6382,12 @@
     // 6. Block Palette & Action Block adding
     document.getElementById("btnPaletteMovePoint")?.addEventListener("click", () => addAction("moveToPoint"));
     document.getElementById("btnPaletteMovePose")?.addEventListener("click", () => addAction("moveToPose"));
-    document.getElementById("btnPaletteBezier")?.addEventListener("click", () => addAction("bezierCurve"));
+    document.getElementById("btnPaletteTurnPoint")?.addEventListener("click", () => addAction("turnToPoint"));
     document.getElementById("btnPaletteTurn")?.addEventListener("click", () => addAction("turnToHeading"));
+    document.getElementById("btnPaletteSwing")?.addEventListener("click", () => addAction("swingToHeading"));
+    document.getElementById("btnPaletteBezier")?.addEventListener("click", () => addAction("bezierCurve"));
+    document.getElementById("btnPaletteIfElse")?.addEventListener("click", () => addAction("ifElse"));
+    document.getElementById("btnPaletteLoop")?.addEventListener("click", () => addAction("loop"));
     document.getElementById("btnPaletteWait")?.addEventListener("click", () => addAction("delay"));
     document.getElementById("btnPaletteCustom")?.addEventListener("click", () => addAction("customCode"));
     document.getElementById("btnPaletteSetPose")?.addEventListener("click", () => addAction("setPose"));
