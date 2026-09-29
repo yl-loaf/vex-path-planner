@@ -190,182 +190,825 @@
     robotWeightLbs: 15.0,
     wheelTraction: 0.85,
     batteryVolts: 12.8,
+    lateralKp: 8.0,
+    lateralKi: 0.0,
+    lateralKd: 30.0,
+    lateralWindup: 3.0,
+    lateralSlew: 0,
+    lateralSmallErr: 1.0,
+    lateralSmallTime: 100,
+    lateralLargeErr: 3.0,
+    lateralLargeTime: 500,
+    angularKp: 2.0,
+    angularKi: 0.0,
+    angularKd: 10.0,
+    angularWindup: 3.0,
+    angularSlew: 0,
+    angularSmallErr: 1.0,
+    angularSmallTime: 100,
+    angularLargeErr: 3.0,
+    angularLargeTime: 500,
     matchPeriod: "15s"
   };
   let botConfig = bot;
 
   // --------------------------------------------------------------------------
-  // AUTHENTIC LEMLIB KINEMATIC SIMULATION & MOTION CONTROL MATH
+  // AUTHENTIC LEMLIB KINEMATIC SIMULATION & MOTION CONTROL MATH (From app.js)
   // --------------------------------------------------------------------------
-  class LemLibPID {
-    constructor(kp, ki, kd, windupRange = 0, signFlipReset = false) {
-      this.kp = kp;
-      this.ki = ki;
-      this.kd = kd;
-      this.windupRange = windupRange;
-      this.signFlipReset = signFlipReset;
-      this.integral = 0;
-      this.prevError = 0;
-    }
+  function headingRad(deg) {
+    // Convert LemLib heading (0°=+Y, CW+) to canvas math angle for drawing
+    return ((90 - deg) * Math.PI) / 180;
+  }
 
-    update(error) {
-      if (this.signFlipReset && ((error > 0 && this.prevError < 0) || (error < 0 && this.prevError > 0))) {
-        this.integral = 0;
-      }
-      if (this.windupRange === 0 || Math.abs(error) < this.windupRange) {
-        this.integral += error;
-      } else {
-        this.integral = 0;
-      }
-      const derivative = error - this.prevError;
-      this.prevError = error;
-      return this.kp * error + this.ki * this.integral + this.kd * derivative;
-    }
+  function screenHeadingRad(deg) {
+    // Canvas context rotation: 0° heading (North) aligns local +X to point UP (screen -Y)
+    return ((deg - 90) * Math.PI) / 180;
+  }
 
-    reset() {
-      this.integral = 0;
-      this.prevError = 0;
+  function normalizeAngle(deg) {
+    deg = deg % 360;
+    if (deg < 0) deg += 360;
+    return deg;
+  }
+
+  function angleToPoint(fromX, fromY, toX, toY) {
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    return normalizeAngle((Math.atan2(dx, dy) * 180) / Math.PI);
+  }
+
+  function angleError(current, target) {
+    let e = target - current;
+    while (e > 180) e -= 360;
+    while (e <= -180) e += 360;
+    return e;
+  }
+
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+
+  function drawRoundedRect(c, x, y, w, h, r) {
+    if (typeof c.roundRect === "function") {
+      c.roundRect(x, y, w, h, r);
+    } else {
+      const rad = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      c.moveTo(x + rad, y);
+      c.arcTo(x + w, y, x + w, y + h, rad);
+      c.arcTo(x + w, y + h, x, y + h, rad);
+      c.arcTo(x, y + h, x, y, rad);
+      c.arcTo(x, y, x + w, y, rad);
+      c.closePath();
     }
   }
 
-  function normalizeAngle(ang) {
-    while (ang > 180) ang -= 360;
-    while (ang <= -180) ang += 360;
-    return ang;
+  function fieldToCanvas(x, y, canvasW = 900, canvasH = 900) {
+    return {
+      cx: inchToPx(x, canvasW, false),
+      cy: inchToPx(y, canvasH, true),
+    };
+  }
+
+  function canvasToField(cx, cy, canvasW = 900, canvasH = 900) {
+    return {
+      x: pxToInch(cx, canvasW, false),
+      y: pxToInch(cy, canvasH, true),
+    };
+  }
+
+  function getMaxLinearSpeed(customBot) {
+    const b = customBot || botConfig || bot;
+    const theoretical = (Math.max(b.wheelDiam || 3.25, 0.5) * Math.PI * Math.max(b.driveRpm || 600, 1)) / 60;
+    return theoretical * 0.95;
+  }
+
+  function getMaxTurnRateDps(customBot) {
+    const b = customBot || botConfig || bot;
+    const vMax = getMaxLinearSpeed(b);
+    const w = Math.max(b.trackWidth || 12, 1);
+    return (2 * vMax / w) * (180 / Math.PI);
+  }
+
+  function lemlibDesaturate(lateral, angular, maxSpeed = 1.0) {
+    let left = lateral + angular;
+    let right = lateral - angular;
+    const maxVal = Math.max(Math.abs(left), Math.abs(right));
+    if (maxVal > maxSpeed) {
+      left = (left / maxVal) * maxSpeed;
+      right = (right / maxVal) * maxSpeed;
+    }
+    return { left, right };
+  }
+
+  function lemlibSlew(target, current, maxRate, dt) {
+    if (maxRate <= 0) return target;
+    const step = Math.abs(maxRate * dt);
+    const diff = target - current;
+    if (Math.abs(diff) > step) {
+      return current + step * Math.sign(diff);
+    }
+    return target;
+  }
+
+  function getRobotPhysicsProps(customBot) {
+    const b = customBot || botConfig || bot;
+    const motorCount = Number(b.motorCount) || 6;
+    const baseWeight = Math.max(Number(b.robotWeightLbs) || 15.0, 1.0);
+    const weightLbs = baseWeight;
+    const tractionMu = Math.max(Number(b.wheelTraction) || 0.85, 0.1);
+    const battVolts = Number(b.batteryVolts) || 12.8;
+    const rpm = Math.max(Number(b.driveRpm) || 600, 1);
+    const wheelDiam = Math.max(Number(b.wheelDiam) || 3.25, 0.5);
+    const trackWidth = Math.max(Number(b.trackWidth) || 12.0, 1.0);
+    const robotW = Math.max(Number(b.robotW) || 14.0, 1.0);
+    const robotL = Math.max(Number(b.robotL) || 14.0, 1.0);
+
+    const gInSec2 = 386.09;
+    const massSlugs = weightLbs / gInSec2;
+    const singleMotorStallTorque = 210 / rpm;
+    const totalDriveStallTorque = motorCount * singleMotorStallTorque;
+    const wheelRadius = wheelDiam / 2;
+    const maxDriveForceLbf = totalDriveStallTorque / wheelRadius;
+    const maxMotorAccelInSec2 = (maxDriveForceLbf / massSlugs);
+    const maxTractionAccelInSec2 = tractionMu * gInSec2;
+    const maxLinearAccelInSec2 = Math.min(maxMotorAccelInSec2, maxTractionAccelInSec2);
+
+    const inertiaJ = (1 / 12) * massSlugs * (robotW * robotW + robotL * robotL);
+    const turnTorque = maxDriveForceLbf * (trackWidth / 2);
+    const maxAngularAccelDegSec2 = (turnTorque / inertiaJ) * (180 / Math.PI);
+    const vMaxInSec = getMaxLinearSpeed(b);
+
+    return {
+      motorCount,
+      weightLbs,
+      tractionMu,
+      battVolts,
+      rpm,
+      wheelDiam,
+      trackWidth,
+      massSlugs,
+      maxDriveForceLbf,
+      maxLinearAccelInSec2,
+      maxAngularAccelDegSec2,
+      vMaxInSec,
+    };
+  }
+
+  function calculateStepPhysics(prevVLin, newVLin, newOmegaDeg, dt, phys, b) {
+    const aLin = (newVLin - prevVLin) / Math.max(dt, 0.001);
+    const gLin = aLin / 386.09;
+    const omegaRad = (newOmegaDeg * Math.PI) / 180;
+    const aLateral = Math.abs(newVLin * omegaRad);
+    const gLateral = aLateral / 386.09;
+    const gTotal = Math.hypot(gLin, gLateral);
+    const isSlipping = gTotal > (phys.tractionMu + 0.05);
+    const gripMargin = Math.max(0, Math.min(100, Math.round((1 - (gTotal / phys.tractionMu)) * 100)));
+    return { aLin, gLin, gLateral, gTotal, isSlipping, gripMargin };
+  }
+
+  class LemLibPID {
+    constructor(kP, kI, kD, windup = 0, slew = 0) {
+      this.kP = kP || 0;
+      this.kI = kI || 0;
+      this.kD = kD || 0;
+      this.windup = windup || 0;
+      this.slew = slew || 0;
+      this.prevError = 0;
+      this.totalError = 0;
+      this.prevOutput = 0;
+      this.initialized = false;
+    }
+
+    reset() {
+      this.prevError = 0;
+      this.totalError = 0;
+      this.prevOutput = 0;
+      this.initialized = false;
+    }
+
+    update(error, dt = 0.01) {
+      if (!this.initialized) {
+        this.prevError = error;
+        this.initialized = true;
+      }
+      if (this.windup > 0) {
+        if (Math.abs(error) < this.windup) {
+          this.totalError += error;
+        } else {
+          this.totalError = 0;
+        }
+      } else {
+        this.totalError += error;
+      }
+      if ((error > 0 && this.prevError < 0) || (error < 0 && this.prevError > 0)) {
+        this.totalError = 0;
+      }
+      const deriv = error - this.prevError;
+      let output = (this.kP * error) + (this.kI * this.totalError) + (this.kD * deriv);
+      if (this.slew > 0) {
+        output = lemlibSlew(output, this.prevOutput, this.slew, dt);
+      }
+      this.prevOutput = output;
+      this.prevError = error;
+      return output;
+    }
+  }
+
+  function getBezierControlPoints(action, fromPose) {
+    const p0 = { x: fromPose.x, y: fromPose.y };
+    const p3 = { x: action.x, y: action.y };
+    const dx = p3.x - p0.x;
+    const dy = p3.y - p0.y;
+    const dist = Math.hypot(dx, dy) || 1e-4;
+    const defaultLead = Math.max(8, Math.min(36, dist * 0.45));
+    const lead1 = action.lead1 != null && !isNaN(Number(action.lead1)) ? Number(action.lead1) : defaultLead;
+    const lead2 = action.lead2 != null && !isNaN(Number(action.lead2)) ? Number(action.lead2) : defaultLead;
+
+    const rad0 = (fromPose.theta * Math.PI) / 180;
+    const dir0 = action.forwards === false ? -1 : 1;
+    const targetHeading = action.theta != null && !isNaN(Number(action.theta)) ? Number(action.theta) : fromPose.theta;
+    const rad1 = (targetHeading * Math.PI) / 180;
+
+    const baseCp1 = {
+      x: p0.x + Math.sin(rad0) * lead1 * dir0,
+      y: p0.y + Math.cos(rad0) * lead1 * dir0,
+    };
+    const baseCp2 = {
+      x: p3.x - Math.sin(rad1) * lead2 * dir0,
+      y: p3.y - Math.cos(rad1) * lead2 * dir0,
+    };
+
+    const nx = dy / dist;
+    const ny = -dx / dist;
+
+    const commonBulge = action.bulge != null && !isNaN(Number(action.bulge)) ? Number(action.bulge) : 0;
+    const b1 = action.bulge1 != null && !isNaN(Number(action.bulge1)) ? Number(action.bulge1) : commonBulge;
+    const b2 = action.bulge2 != null && !isNaN(Number(action.bulge2)) ? Number(action.bulge2) : commonBulge;
+
+    let cp1 = {
+      x: baseCp1.x + nx * b1,
+      y: baseCp1.y + ny * b1,
+    };
+    let cp2 = {
+      x: baseCp2.x + nx * b2,
+      y: baseCp2.y + ny * b2,
+    };
+
+    if (action.freeHandles === true) {
+      if (action.cp1X != null && !isNaN(Number(action.cp1X))) cp1.x = Number(action.cp1X);
+      if (action.cp1Y != null && !isNaN(Number(action.cp1Y))) cp1.y = Number(action.cp1Y);
+      if (action.cp2X != null && !isNaN(Number(action.cp2X))) cp2.x = Number(action.cp2X);
+      if (action.cp2Y != null && !isNaN(Number(action.cp2Y))) cp2.y = Number(action.cp2Y);
+    }
+
+    return { cp1, cp2, lead1, lead2, targetHeading, bulge: commonBulge, b1, b2, dist, nx, ny };
+  }
+
+  function evalCubicBezier(p0, cp1, cp2, p3, u, forwards = true) {
+    const inv = 1 - u;
+    const inv2 = inv * inv;
+    const inv3 = inv2 * inv;
+    const u2 = u * u;
+    const u3 = u2 * u;
+
+    const x = inv3 * p0.x + 3 * inv2 * u * cp1.x + 3 * inv * u2 * cp2.x + u3 * p3.x;
+    const y = inv3 * p0.y + 3 * inv2 * u * cp1.y + 3 * inv * u2 * cp2.y + u3 * p3.y;
+
+    const dx = 3 * inv2 * (cp1.x - p0.x) + 6 * inv * u * (cp2.x - cp1.x) + 3 * u2 * (p3.x - cp2.x);
+    const dy = 3 * inv2 * (cp1.y - p0.y) + 6 * inv * u * (cp2.y - cp1.y) + 3 * u2 * (p3.y - cp2.y);
+
+    const d2x = 6 * inv * (cp2.x - 2 * cp1.x + p0.x) + 6 * u * (p3.x - 2 * cp2.x + cp1.x);
+    const d2y = 6 * inv * (cp2.y - 2 * cp1.y + p0.y) + 6 * u * (p3.y - 2 * cp2.y + cp1.y);
+
+    const speed = Math.hypot(dx, dy);
+    const curvature = speed > 1e-4 ? (dx * d2y - dy * d2x) / Math.pow(speed, 3) : 0;
+    let thetaDeg = (Math.atan2(dx, dy) * 180) / Math.PI;
+    if (!forwards) thetaDeg = (thetaDeg + 180) % 360;
+
+    return { u, x, y, dx, dy, speed, curvature, thetaDeg };
   }
 
   function simulateAction(action, fromPose, customBot = botConfig) {
     const b = customBot || botConfig || bot;
-    const vMax = 65; // max linear speed in/s (~600rpm on 3.25" wheels)
-    const dt = 0.01; // 10ms discrete integration loop
+    const vMax = getMaxLinearSpeed(b);
+    const trackWidth = Math.max(b.trackWidth || 12, 1);
+    const dt = 0.01; // 10ms discrete loop
+    const tau = 0.07; // motor response time constant (70ms)
+
+    const defMax = b.defaultMaxSpeed != null ? b.defaultMaxSpeed : 127;
+    const defMin = b.defaultMinSpeed != null ? b.defaultMinSpeed : 0;
+    const maxSpeed = clamp((action.maxSpeed != null ? action.maxSpeed : defMax) / 127, 0.1, 1.0);
+    const minSpeed = clamp((action.minSpeed != null ? action.minSpeed : defMin) / 127, 0, 1.0);
     const timeoutS = Math.max(0.1, (action.timeout || 2000) / 1000);
-    const maxSpeed = Math.min(1.0, Math.max(0.1, (action.maxSpeed || 127) / 127));
+    const earlyExitRange = Math.max(0, action.earlyExitRange || 0);
 
-    const latPid = new LemLibPID(b.lateralKp || 8.0, 0, b.lateralKd || 30.0, 3.0);
-    const angPid = new LemLibPID(b.angularKp || 2.0, 0, b.angularKd || 10.0, 3.0);
+    const latKp = b.lateralKp != null ? b.lateralKp : 8.0;
+    const latKi = b.lateralKi != null ? b.lateralKi : 0.0;
+    const latKd = b.lateralKd != null ? b.lateralKd : 30.0;
+    const latWindup = b.lateralWindup != null ? b.lateralWindup : 3.0;
+    const latSlew = b.lateralSlew != null ? b.lateralSlew : 0;
+    const latSmallErr = b.lateralSmallErr != null ? b.lateralSmallErr : 1.0;
+    const latSmallTime = (b.lateralSmallTime != null ? b.lateralSmallTime : 100) / 1000;
+    const latLargeErr = b.lateralLargeErr != null ? b.lateralLargeErr : 3.0;
+    const latLargeTime = (b.lateralLargeTime != null ? b.lateralLargeTime : 500) / 1000;
 
-    let pose = { x: fromPose.x, y: fromPose.y, theta: fromPose.theta };
+    const angKp = b.angularKp != null ? b.angularKp : 2.0;
+    const angKi = b.angularKi != null ? b.angularKi : 0.0;
+    const angKd = b.angularKd != null ? b.angularKd : 10.0;
+    const angWindup = b.angularWindup != null ? b.angularWindup : 3.0;
+    const angSlew = b.angularSlew != null ? b.angularSlew : 0;
+    const angSmallErr = b.angularSmallErr != null ? b.angularSmallErr : 1.0;
+    const angSmallTime = (b.angularSmallTime != null ? b.angularSmallTime : 100) / 1000;
+    const angLargeErr = b.angularLargeErr != null ? b.angularLargeErr : 3.0;
+    const angLargeTime = (b.angularLargeTime != null ? b.angularLargeTime : 500) / 1000;
+
+    const latPid = new LemLibPID(latKp, latKi, latKd, latWindup, latSlew);
+    const angPid = new LemLibPID(angKp, angKi, angKd, angWindup, angSlew);
+
+    const phys = getRobotPhysicsProps(b);
+    const maxStepV = phys.maxLinearAccelInSec2 * dt;
+    const maxStepW = phys.maxAngularAccelDegSec2 * dt;
+
+    let pose = { x: fromPose.x, y: fromPose.y, theta: normalizeAngle(fromPose.theta || 0) };
     let vLin = 0;
     let omegaDeg = 0;
     let t = 0;
-    const points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
+    const initPhys = calculateStepPhysics(0, 0, 0, dt, phys, b);
+    let points = [{ x: pose.x, y: pose.y, theta: pose.theta, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys }];
+    let carrotPoint = null;
 
-    if (action.type === "wait" || action.type === "delay" || action.type === "customCode" || action.type === "custom") {
-      const dur = Math.max(0.1, (action.timeout || action.delayMs || 300) / 1000);
-      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
-      return { endPose: pose, path: points, duration: dur };
+    if (action.type === "custom" || action.type === "customCode") {
+      const dur = action.customDuration != null ? Math.max(0, Number(action.customDuration)) : (action.delayMs ? action.delayMs / 1000 : 0.25);
+      if (dur > 0) {
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
+      }
+      return { endPose: pose, path: points, duration: dur, carrot: null };
+    }
+
+    if (action.type === "wait" || action.type === "delay") {
+      const dur = Math.max(0.05, (action.delayMs != null ? action.delayMs : (action.timeout != null ? action.timeout : 250)) / 1000);
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
+      return { endPose: pose, path: points, duration: dur, carrot: null };
     }
 
     if (action.type === "ifElse" || action.type === "if_else") {
-      const dur = 0.2; // 200ms evaluation step
-      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
-      return { endPose: pose, path: points, duration: dur };
+      const dur = 0.2;
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
+      return { endPose: pose, path: points, duration: dur, carrot: null };
     }
 
     if (action.type === "loop") {
       const cnt = action.loopType === "for" ? (action.count || 3) : 3;
       const dur = Math.max(0.1, (cnt * (action.delayMs || 100)) / 1000);
-      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0 });
-      return { endPose: pose, path: points, duration: dur };
+      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
+      return { endPose: pose, path: points, duration: dur, carrot: null };
     }
 
-    if (action.type === "turnToHeading" || action.type === "turnToPoint" || action.type === "swingToHeading") {
-      let targetHeading = action.theta !== undefined ? action.theta : (action.heading || 0);
-      if (action.type === "turnToPoint") {
-        targetHeading = (Math.atan2(action.y - pose.y, action.x - pose.x) * 180 / Math.PI) + 90;
-        if (action.forwards === false) targetHeading += 180;
-      }
+    if (action.type === "moveToPose") {
+      const lead = action.lead != null ? clamp(action.lead, 0, 1.0) : (b.defaultLead != null ? b.defaultLead : 0.6);
+      const drift = (action.driftScaler != null ? action.driftScaler : (b.lateralDrift != null ? b.lateralDrift : 1.0));
+      const reversed = action.forwards === false;
+      const targetTheta = action.theta !== undefined ? action.theta : (action.heading !== undefined ? action.heading : pose.theta);
+      const target = { x: action.x, y: action.y, theta: targetTheta };
+      const approachTheta = reversed ? normalizeAngle(target.theta + 180) : target.theta;
+      const approachRad = (approachTheta * Math.PI) / 180;
+      let close = false;
+      let settleSmallTimer = 0;
+      let settleLargeTimer = 0;
+      let isSettled = false;
 
       while (t < timeoutS) {
-        const angError = normalizeAngle(targetHeading - pose.theta);
-        if (Math.abs(angError) < 1.0 && Math.abs(omegaDeg) < 5) break;
+        const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
+        if (dist < 7.5 && !close) close = true;
 
-        const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
-        omegaDeg = (angOutput / 127) * (action.type === "swingToHeading" ? 220 : 360); // deg/s
-        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+        let carrot;
+        if (close) {
+          carrot = { x: target.x, y: target.y };
+        } else {
+          const leadDist = lead * dist;
+          carrot = {
+            x: target.x - Math.sin(approachRad) * leadDist,
+            y: target.y - Math.cos(approachRad) * leadDist,
+          };
+        }
+        if (!carrotPoint) carrotPoint = { ...carrot };
 
-        // For swing turns, the chassis center translates slightly in an arc
-        if (action.type === "swingToHeading") {
-          const trackWidth = b.trackWidth || 12;
-          const arcR = trackWidth / 2;
-          const rad = ((pose.theta - 90) * Math.PI) / 180;
-          const sideSign = action.driveSide === "RIGHT" ? -1 : 1;
-          pose.x += Math.cos(rad) * (omegaDeg * Math.PI / 180) * arcR * dt * 0.3 * sideSign;
-          pose.y -= Math.sin(rad) * (omegaDeg * Math.PI / 180) * arcR * dt * 0.3 * sideSign;
+        const carrotAngle = angleToPoint(pose.x, pose.y, carrot.x, carrot.y);
+        const desiredHeading = close ? target.theta : (reversed ? normalizeAngle(carrotAngle + 180) : carrotAngle);
+        const angError = angleError(pose.theta, desiredHeading);
+
+        if (dist < latSmallErr && Math.abs(angError) < angSmallErr) {
+          settleSmallTimer += dt;
+        } else {
+          settleSmallTimer = 0;
+        }
+        if (dist < latLargeErr && Math.abs(angError) < angLargeErr) {
+          settleLargeTimer += dt;
+        } else {
+          settleLargeTimer = 0;
         }
 
+        if (settleSmallTimer >= latSmallTime || settleLargeTimer >= latLargeTime || (earlyExitRange > 0 && dist < earlyExitRange)) {
+          isSettled = true;
+          break;
+        }
+
+        const alignCos = Math.cos((angError * Math.PI) / 180);
+        const rawLatPid = latPid.update(dist, dt);
+        let latPower = clamp(rawLatPid / 127, -maxSpeed, maxSpeed);
+        if (close) {
+          latPower *= Math.max(0, alignCos);
+        } else {
+          latPower *= Math.max(0.15, alignCos);
+        }
+        if (Math.abs(latPower) < minSpeed) latPower = Math.sign(latPower) * minSpeed;
+        if (reversed) latPower = -latPower;
+
+        const rawAngPid = angPid.update(angError, dt);
+        let angPower = clamp((rawAngPid / 127) * Math.max(0.2, drift), -maxSpeed, maxSpeed);
+
+        const desat = lemlibDesaturate(latPower, angPower, maxSpeed);
+        const targetVLin = ((desat.left + desat.right) / 2) * vMax;
+        const targetOmega = (((desat.left - desat.right) * vMax) / trackWidth) * (180 / Math.PI);
+
+        const prevVLin = vLin;
+        const dV = clamp(((targetVLin - vLin) / tau) * dt, -maxStepV, maxStepV);
+        vLin += dV;
+
+        const dW = clamp(((targetOmega - omegaDeg) / tau) * dt, -maxStepW, maxStepW);
+        omegaDeg += dW;
+
+        if (dist < 1.0) vLin *= 0.75;
+        if (Math.abs(angError) < 1.5) omegaDeg *= 0.75;
+
+        // Differential drive heading kinematics: 0° is +Y, 90° is +X
+        const midTheta = normalizeAngle(pose.theta + (omegaDeg * dt) / 2);
+        const rad = (midTheta * Math.PI) / 180;
+        pose.x += Math.sin(rad) * vLin * dt;
+        pose.y += Math.cos(rad) * vLin * dt;
+        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+
         t += dt;
-        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg });
+        const stepPhys = calculateStepPhysics(prevVLin, vLin, omegaDeg, dt, phys, b);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg, targetVLin, targetOmega, ...stepPhys });
       }
-      return { endPose: pose, path: points, duration: t };
+
+      if (isSettled && points.length) {
+        points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+      }
+      return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: carrotPoint };
+    }
+
+    if (action.type === "moveToPoint" || action.type === "move" || action.x !== undefined) {
+      if (action.type !== "moveToPoint" && action.type !== "move" && action.type !== "bezierCurve" && action.type !== "turnToHeading" && action.type !== "turnToPoint" && action.type !== "swingToHeading" && action.type !== "swingToPoint") {
+        // default fallback if type not explicitly recognized
+      }
+    }
+
+    if (action.type === "moveToPoint" || !action.type || action.type === "move") {
+      const drift = (action.driftScaler != null ? action.driftScaler : (b.lateralDrift != null ? b.lateralDrift : 1.0));
+      const reversed = action.forwards === false;
+      const target = { x: action.x, y: action.y };
+      let close = false;
+      let settleSmallTimer = 0;
+      let settleLargeTimer = 0;
+      let isSettled = false;
+
+      while (t < timeoutS) {
+        const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
+        if (dist < 7.5 && !close) close = true;
+
+        const targetAngle = angleToPoint(pose.x, pose.y, target.x, target.y);
+        const desiredHeading = reversed ? normalizeAngle(targetAngle + 180) : targetAngle;
+        const angError = angleError(pose.theta, desiredHeading);
+
+        if (dist < latSmallErr) settleSmallTimer += dt;
+        else settleSmallTimer = 0;
+        if (dist < latLargeErr) settleLargeTimer += dt;
+        else settleLargeTimer = 0;
+
+        if (settleSmallTimer >= latSmallTime || settleLargeTimer >= latLargeTime || dist < 0.65 + earlyExitRange) {
+          isSettled = true;
+          break;
+        }
+
+        const alignCos = Math.cos((angError * Math.PI) / 180);
+        const rawLatPid = latPid.update(dist, dt);
+        let latPower = clamp(rawLatPid / 127, -maxSpeed, maxSpeed);
+        if (close) {
+          latPower *= Math.max(0, alignCos);
+        } else {
+          latPower *= Math.max(0.18, alignCos);
+        }
+        if (Math.abs(latPower) < minSpeed) latPower = Math.sign(latPower) * minSpeed;
+        if (reversed) latPower = -latPower;
+
+        const rawAngPid = angPid.update(angError, dt);
+        const angPower = close ? 0 : clamp((rawAngPid / 127) * Math.max(0.2, drift), -maxSpeed, maxSpeed);
+
+        const desat = lemlibDesaturate(latPower, angPower, maxSpeed);
+        const targetVLin = ((desat.left + desat.right) / 2) * vMax;
+        const targetOmega = (((desat.left - desat.right) * vMax) / trackWidth) * (180 / Math.PI);
+
+        const prevVLin = vLin;
+        const dV = clamp(((targetVLin - vLin) / tau) * dt, -maxStepV, maxStepV);
+        vLin += dV;
+
+        const dW = clamp(((targetOmega - omegaDeg) / tau) * dt, -maxStepW, maxStepW);
+        omegaDeg += dW;
+
+        if (dist < 1.0) vLin *= 0.75;
+        if (Math.abs(angError) < 1.5) omegaDeg *= 0.75;
+
+        // Differential drive heading kinematics: 0° is +Y, 90° is +X
+        const midTheta = normalizeAngle(pose.theta + (omegaDeg * dt) / 2);
+        const rad = (midTheta * Math.PI) / 180;
+        pose.x += Math.sin(rad) * vLin * dt;
+        pose.y += Math.cos(rad) * vLin * dt;
+        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+
+        t += dt;
+        const stepPhys = calculateStepPhysics(prevVLin, vLin, omegaDeg, dt, phys, b);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin, omegaDeg, targetVLin, targetOmega, ...stepPhys });
+      }
+
+      if (isSettled && points.length) {
+        points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+      }
+      return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: null };
     }
 
     if (action.type === "bezierCurve") {
       const p0 = { x: fromPose.x, y: fromPose.y };
-      const p1 = { x: action.x1 !== undefined ? action.x1 : (p0.x + action.x) / 2 - 10, y: action.y1 !== undefined ? action.y1 : (p0.y + action.y) / 2 - 10 };
-      const p2 = { x: action.x2 !== undefined ? action.x2 : (p0.x + action.x) / 2 + 10, y: action.y2 !== undefined ? action.y2 : (p0.y + action.y) / 2 + 10 };
       const p3 = { x: action.x, y: action.y };
+      const { cp1, cp2, targetHeading } = getBezierControlPoints(action, fromPose);
+      const reversed = action.forwards === false;
 
-      const totalDist = Math.hypot(p3.x - p0.x, p3.y - p0.y);
-      const estDur = Math.max(0.4, totalDist / (vMax * maxSpeed));
-      const steps = Math.max(10, Math.round(estDur / dt));
+      const SAMPLES = 200;
+      const table = [];
+      let prevX = p0.x, prevY = p0.y;
+      let totalLength = 0;
 
-      for (let s = 1; s <= steps; s++) {
-        const u = s / steps;
-        const inv = 1 - u;
-        const bx = inv * inv * inv * p0.x + 3 * inv * inv * u * p1.x + 3 * inv * u * u * p2.x + u * u * u * p3.x;
-        const by = inv * inv * inv * p0.y + 3 * inv * inv * u * p1.y + 3 * inv * u * u * p2.y + u * u * u * p3.y;
+      for (let i = 0; i <= SAMPLES; i++) {
+        const u = i / SAMPLES;
+        const pt = evalCubicBezier(p0, cp1, cp2, p3, u, !reversed);
+        if (i > 0) totalLength += Math.hypot(pt.x - prevX, pt.y - prevY);
+        table.push({ ...pt, s: totalLength });
+        prevX = pt.x;
+        prevY = pt.y;
+      }
 
-        const dx = 3 * inv * inv * (p1.x - p0.x) + 6 * inv * u * (p2.x - p1.x) + 3 * u * u * (p3.x - p2.x);
-        const dy = 3 * inv * inv * (p1.y - p0.y) + 6 * inv * u * (p2.y - p1.y) + 3 * u * u * (p3.y - p2.y);
-        const heading = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+      function sampleAtDistance(distAlong) {
+        const d = clamp(distAlong, 0, totalLength);
+        let low = 0, high = table.length - 1;
+        while (low <= high) {
+          const mid = (low + high) >> 1;
+          if (table[mid].s < d) low = mid + 1;
+          else high = mid - 1;
+        }
+        const idx = clamp(low, 1, table.length - 1);
+        const pA = table[idx - 1];
+        const pB = table[idx];
+        const span = Math.max(1e-4, pB.s - pA.s);
+        const frac = clamp((d - pA.s) / span, 0, 1);
+        return {
+          x: pA.x + (pB.x - pA.x) * frac,
+          y: pA.y + (pB.y - pA.y) * frac,
+          thetaDeg: normalizeAngle(pA.thetaDeg + angleError(pA.thetaDeg, pB.thetaDeg) * frac),
+          curvature: pA.curvature + (pB.curvature - pA.curvature) * frac,
+        };
+      }
+
+      const mu = Math.max(0.1, Number(b.wheelTraction) || 0.85);
+      const g = 386.09;
+      const maxDecel = phys.maxLinearAccelInSec2;
+      const maxAccel = phys.maxLinearAccelInSec2;
+
+      let sDist = 0;
+      let vLin = 0;
+      let omegaDeg = 0;
+      let isSettled = false;
+
+      while (t < timeoutS) {
+        const remaining = Math.max(0, totalLength - sDist);
+        if (remaining <= (0.5 + earlyExitRange) && t > 0.05) {
+          isSettled = true;
+          break;
+        }
+
+        const curSample = sampleAtDistance(sDist);
+        const kappa = curSample.curvature;
+        const absKappa = Math.abs(kappa);
+
+        const vGrip = Math.sqrt((mu * g) / Math.max(absKappa, 0.001));
+        const vDiff = vMax / (1 + (absKappa * trackWidth) / 2);
+        const vMaxAllowed = Math.min(vMax * maxSpeed, vGrip, vDiff);
+
+        const vBrake = Math.sqrt(2 * maxDecel * Math.max(0, remaining));
+        let vTarget = Math.min(vMaxAllowed, vBrake);
+        if (vTarget < minSpeed * vMax && remaining > 1.5) {
+          vTarget = minSpeed * vMax;
+        }
+
+        const prevVLin = vLin;
+        const dV = clamp(vTarget - vLin, -maxDecel * dt, maxAccel * dt);
+        vLin += dV;
+
+        const targetOmega = (vLin * kappa * (180 / Math.PI));
+        const dW = clamp(((targetOmega - omegaDeg) / tau) * dt, -maxStepW, maxStepW);
+        omegaDeg += dW;
+
+        sDist += Math.max(0.1, vLin) * dt;
+        t += dt;
+
+        pose.x = curSample.x;
+        pose.y = curSample.y;
+        pose.theta = curSample.thetaDeg;
+
+        const stepPhys = calculateStepPhysics(prevVLin, vLin, omegaDeg, dt, phys, b);
+        points.push({
+          x: pose.x,
+          y: pose.y,
+          theta: pose.theta,
+          t,
+          vLin: reversed ? -vLin : vLin,
+          omegaDeg,
+          targetVLin: vTarget,
+          targetOmega,
+          curvature: kappa,
+          ...stepPhys,
+        });
+      }
+
+      pose.x = p3.x;
+      pose.y = p3.y;
+      pose.theta = targetHeading;
+
+      if (isSettled && points.length) {
+        points[points.length - 1] = {
+          x: pose.x,
+          y: pose.y,
+          theta: pose.theta,
+          t,
+          vLin: 0,
+          omegaDeg: 0,
+          targetVLin: 0,
+          targetOmega: 0,
+        };
+      }
+
+      return {
+        endPose: pose,
+        path: points,
+        duration: Math.max(t, 0.1),
+        carrot: { x: cp2.x, y: cp2.y },
+        bezierCPs: { cp1, cp2 },
+      };
+    }
+
+    if (action.type === "turnToHeading" || action.type === "turnToPoint") {
+      let targetHeading = pose.theta;
+      if (action.type === "turnToHeading") {
+        targetHeading = action.theta !== undefined ? action.theta : (action.heading !== undefined ? action.heading : pose.theta);
+      } else {
+        targetHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
+        if (action.forwards === false) targetHeading = normalizeAngle(targetHeading + 180);
+      }
+
+      const maxOmega = getMaxTurnRateDps(b);
+      let settleSmallTimer = 0;
+      let settleLargeTimer = 0;
+      let isSettled = false;
+
+      while (t < timeoutS) {
+        const angError = angleError(pose.theta, targetHeading);
+        if (Math.abs(angError) < angSmallErr) settleSmallTimer += dt;
+        else settleSmallTimer = 0;
+        if (Math.abs(angError) < angLargeErr) settleLargeTimer += dt;
+        else settleLargeTimer = 0;
+
+        if (settleSmallTimer >= angSmallTime || settleLargeTimer >= angLargeTime || Math.abs(angError) < 1.0 + earlyExitRange) {
+          isSettled = true;
+          break;
+        }
+
+        const rawAngPid = angPid.update(angError, dt);
+        let angPower = clamp(rawAngPid / 127, -maxSpeed, maxSpeed);
+        if (Math.abs(angPower) < minSpeed) angPower = Math.sign(angPower) * minSpeed;
+
+        const targetOmega = angPower * maxOmega;
+        const dW = clamp(((targetOmega - omegaDeg) / tau) * dt, -maxStepW, maxStepW);
+        omegaDeg += dW;
+
+        if (Math.abs(angError) < 1.0) omegaDeg *= 0.75;
+
+        pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
+        t += dt;
+        const stepPhys = calculateStepPhysics(0, 0, omegaDeg, dt, phys, b);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg, targetVLin: 0, targetOmega: 0, ...stepPhys });
+      }
+
+      if (isSettled && points.length) {
+        points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+      }
+      return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
+    }
+
+    if (action.type === "swingToHeading" || action.type === "swingToPoint") {
+      const lockLeft = (action.lockedSide || action.driveSide || "LEFT") === "LEFT";
+      const h = trackWidth / 2;
+      const rad0 = (fromPose.theta * Math.PI) / 180;
+      const pivotX = lockLeft ? fromPose.x - h * Math.cos(rad0) : fromPose.x + h * Math.cos(rad0);
+      const pivotY = lockLeft ? fromPose.y + h * Math.sin(rad0) : fromPose.y - h * Math.sin(rad0);
+
+      function getCenter(th) {
+        const rad = (th * Math.PI) / 180;
+        const cx = lockLeft ? pivotX + h * Math.cos(rad) : pivotX - h * Math.cos(rad);
+        const cy = lockLeft ? pivotY - h * Math.sin(rad) : pivotY + h * Math.sin(rad);
+        return { x: cx, y: cy };
+      }
+
+      let vDrive = 0;
+      let settleSmallTimer = 0;
+      let settleLargeTimer = 0;
+      let isSettled = false;
+
+      while (t < timeoutS) {
+        let targetHeading = pose.theta;
+        if (action.type === "swingToHeading") {
+          targetHeading = action.theta !== undefined ? action.theta : (action.heading !== undefined ? action.heading : pose.theta);
+        } else {
+          targetHeading = angleToPoint(pose.x, pose.y, action.x, action.y);
+          if (action.forwards === false) targetHeading = normalizeAngle(targetHeading + 180);
+        }
+
+        const angError = angleError(pose.theta, targetHeading);
+        if (Math.abs(angError) < angSmallErr) settleSmallTimer += dt;
+        else settleSmallTimer = 0;
+        if (Math.abs(angError) < angLargeErr) settleLargeTimer += dt;
+        else settleLargeTimer = 0;
+
+        if (settleSmallTimer >= angSmallTime || settleLargeTimer >= angLargeTime || (Math.abs(angError) < 0.6 + earlyExitRange && t > 0.04)) {
+          isSettled = true;
+          break;
+        }
+
+        const rawAngPid = angPid.update(angError, dt);
+        let pwr = clamp(rawAngPid / 127, -maxSpeed, maxSpeed);
+        if (Math.abs(pwr) < minSpeed) pwr = Math.sign(pwr) * minSpeed;
+
+        const prevVDrive = vDrive;
+        const targetVDrive = pwr * vMax;
+        const dVDrive = clamp(((targetVDrive - vDrive) / tau) * dt, -maxStepV, maxStepV);
+        vDrive += dVDrive;
+
+        if (Math.abs(angError) < 1.0) vDrive *= 0.75;
+
+        const wDeg = (vDrive / trackWidth) * (180 / Math.PI);
+        pose.theta = normalizeAngle(pose.theta + wDeg * dt);
+
+        const c = getCenter(pose.theta);
+        pose.x = c.x;
+        pose.y = c.y;
 
         t += dt;
-        pose.x = bx;
-        pose.y = by;
-        pose.theta = heading;
-        vLin = vMax * maxSpeed;
-        points.push({ x: bx, y: by, theta: heading, t, vLin, omegaDeg: 0 });
+        const targetW = (targetVDrive / trackWidth) * (180 / Math.PI);
+        const vEff = Math.abs(vDrive) / 2;
+        const prevVEff = Math.abs(prevVDrive) / 2;
+        const stepPhys = calculateStepPhysics(prevVEff, vEff, wDeg, dt, phys, b);
+        points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: vEff, omegaDeg: wDeg, targetVLin: Math.abs(targetVDrive) / 2, targetOmega: targetW, ...stepPhys });
       }
-      return { endPose: pose, path: points, duration: t };
+
+      if (isSettled && points.length) {
+        points[points.length - 1] = { x: pose.x, y: pose.y, theta: pose.theta, t, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0 };
+      }
+      return { endPose: pose, path: points, duration: Math.max(t, 0.08), carrot: null };
     }
 
-    // Default: moveToPoint / moveToPose
-    const target = { x: action.x, y: action.y, theta: action.theta !== undefined ? action.theta : pose.theta };
-    while (t < timeoutS) {
-      const dist = Math.hypot(target.x - pose.x, target.y - pose.y);
-      const targetHeading = (Math.atan2(target.y - pose.y, target.x - pose.x) * 180 / Math.PI) + 90;
-      const angError = normalizeAngle(targetHeading - pose.theta);
+    return { endPose: pose, path: points, duration: Math.max(t, 0.1), carrot: null };
+  }
 
-      if (dist < (action.earlyExitRange || 1.5) && Math.abs(angError) < 3.0) break;
+  let cachedTeamSimResult = null;
+  let cachedRoutineKey = "";
 
-      const latOutput = Math.max(-127, Math.min(127, latPid.update(dist))) * maxSpeed;
-      const angOutput = Math.max(-127, Math.min(127, angPid.update(angError))) * maxSpeed;
-
-      vLin = (latOutput / 127) * vMax;
-      omegaDeg = (angOutput / 127) * 360;
-
-      const rad = ((pose.theta - 90) * Math.PI) / 180;
-      pose.x += Math.cos(rad) * vLin * dt;
-      pose.y -= Math.sin(rad) * vLin * dt;
-      pose.theta = normalizeAngle(pose.theta + omegaDeg * dt);
-
-      t += dt;
-      points.push({ x: pose.x, y: pose.y, theta: pose.theta, t, vLin: Math.abs(vLin), omegaDeg });
-    }
-
-    if (action.type === "moveToPose" && action.theta !== undefined) {
-      pose.theta = action.theta;
-    }
-
-    return { endPose: pose, path: points, duration: t };
+  function getRoutineSimKey(routine, botObj) {
+    if (!routine) return "";
+    const b = botObj || botConfig || bot;
+    const actStr = (routine.actions || []).map(a => `${a.id}_${a.type}_${a.x}_${a.y}_${a.theta}_${a.heading}_${a.timeout}_${a.maxSpeed}_${a.forwards}_${a.lead}`).join(";");
+    const p = routine.pose || { x: -60, y: -60, theta: 0 };
+    return `${routine.id || ""}_${p.x}_${p.y}_${p.theta}_${b.driveRpm}_${b.wheelDiam}_${b.trackWidth}_${actStr}`;
   }
 
   function simulateRoutine(routine, botObj = botConfig) {
     if (!routine) return { path: [], duration: 0 };
+    const key = getRoutineSimKey(routine, botObj);
+    if (cachedTeamSimResult && cachedRoutineKey === key) {
+      return cachedTeamSimResult;
+    }
+
     const b = botObj || botConfig || bot;
     const startPose = routine.pose || { x: -60, y: -60, theta: 0 };
-    let curPose = { ...startPose };
+    let curPose = { x: startPose.x, y: startPose.y, theta: normalizeAngle(startPose.theta || 0) };
     let fullPath = [{ x: curPose.x, y: curPose.y, theta: curPose.theta, t: 0, vLin: 0, omegaDeg: 0 }];
     let totalTime = 0;
 
@@ -380,43 +1023,164 @@
       }
     });
 
-    return { path: fullPath, duration: totalTime };
+    const res = { path: fullPath, duration: Math.max(totalTime, 0.1) };
+    cachedTeamSimResult = res;
+    cachedRoutineKey = key;
+    return res;
   }
 
   function getSimPoseAtTime(simResult, timeMs) {
-    const timeS = timeMs / 1000;
+    const timeS = Math.max(0, timeMs / 1000);
     const pts = (simResult && simResult.path) || [];
-    if (pts.length === 0) return { x: -60, y: -60, theta: 0, v: 0 };
-    if (timeS <= 0) return { x: pts[0].x, y: pts[0].y, theta: pts[0].theta, v: pts[0].vLin || 0 };
+    if (pts.length === 0) return { x: -60, y: -60, theta: 0, vLin: 0, omegaDeg: 0 };
+    if (timeS <= 0) return { x: pts[0].x, y: pts[0].y, theta: pts[0].theta, vLin: pts[0].vLin || 0, omegaDeg: pts[0].omegaDeg || 0 };
     if (timeS >= simResult.duration) {
       const last = pts[pts.length - 1];
-      return { x: last.x, y: last.y, theta: last.theta, v: 0 };
+      return { x: last.x, y: last.y, theta: last.theta, vLin: 0, omegaDeg: 0 };
     }
 
-    for (let i = 0; i < pts.length - 1; i++) {
-      if (timeS >= pts[i].t && timeS <= pts[i + 1].t) {
-        const segT = (timeS - pts[i].t) / (pts[i + 1].t - pts[i].t);
-        const p0 = pts[i];
-        const p1 = pts[i + 1];
-        return {
-          x: p0.x + (p1.x - p0.x) * segT,
-          y: p0.y + (p1.y - p0.y) * segT,
-          theta: p0.theta + (p1.theta - p0.theta) * segT,
-          v: p0.vLin + (p1.vLin - p0.vLin) * segT
-        };
+    // Binary search for O(log N) lookup
+    let low = 0;
+    let high = pts.length - 1;
+    let idx = 0;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (pts[mid].t <= timeS) {
+        idx = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
       }
     }
-    const last = pts[pts.length - 1];
-    return { x: last.x, y: last.y, theta: last.theta, v: 0 };
+    const p0 = pts[idx];
+    const p1 = pts[Math.min(idx + 1, pts.length - 1)];
+    if (p0 === p1 || p1.t <= p0.t) {
+      return { x: p0.x, y: p0.y, theta: p0.theta, vLin: p0.vLin || 0, omegaDeg: p0.omegaDeg || 0 };
+    }
+    const segT = clamp((timeS - p0.t) / (p1.t - p0.t), 0, 1);
+    const dTheta = angleError(p0.theta, p1.theta);
+    return {
+      x: p0.x + (p1.x - p0.x) * segT,
+      y: p0.y + (p1.y - p0.y) * segT,
+      theta: normalizeAngle(p0.theta + dTheta * segT),
+      vLin: (p0.vLin || 0) + ((p1.vLin || 0) - (p0.vLin || 0)) * segT,
+      omegaDeg: (p0.omegaDeg || 0) + ((p1.omegaDeg || 0) - (p0.omegaDeg || 0)) * segT,
+    };
   }
 
   function interpolatePathPose(timeRatio) {
     const routine = activePaths[activeRoutineIndex] || activePaths[0];
-    if (!routine) return { x: -60, y: -60, theta: 0, v: 0 };
+    if (!routine) return { x: -60, y: -60, theta: 0, vLin: 0, omegaDeg: 0 };
     const simRes = simulateRoutine(routine, botConfig);
     const totalDuration = (simRes && simRes.duration > 0) ? simRes.duration : 15.0;
     const timeMs = Math.max(0, Math.min(1, timeRatio)) * totalDuration * 1000;
     return getSimPoseAtTime(simRes, timeMs);
+  }
+
+  // Authentic LemLib Robot Rendering on Field Canvas (Copied from app.js)
+  function drawRobot(context, x, y, thetaDeg, color = "#38bdf8", alpha = 1, selected = false, isCollision = false) {
+    const cv = document.getElementById("teamFieldCanvas");
+    const cvW = cv ? cv.width : 900;
+    const cvH = cv ? cv.height : 900;
+    const { cx, cy } = fieldToCanvas(x, y, cvW, cvH);
+    const scale = cvW / FIELD_INCHES;
+    const w = (botConfig.robotW || 14.0) * scale; // Lateral width (in canvas px)
+    const l = (botConfig.robotL || 14.0) * scale; // Longitudinal length (in canvas px)
+    const rad = screenHeadingRad(thetaDeg);
+
+    if (isCollision) {
+      color = "#ef4444";
+    }
+
+    context.save();
+    context.globalAlpha = alpha;
+    context.translate(cx, cy);
+    context.rotate(rad);
+
+    if (isCollision) {
+      context.shadowColor = "#ef4444";
+      context.shadowBlur = 14;
+    }
+
+    // Chassis Body Box
+    context.fillStyle = isCollision ? "rgba(239, 68, 68, 0.85)" : color;
+    context.strokeStyle = isCollision ? "#fee2e2" : "#ffffff";
+    context.lineWidth = isCollision ? 2.5 : 1.8;
+    context.beginPath();
+    drawRoundedRect(context, -l / 2, -w / 2, l, w, 4);
+    context.fill();
+    context.stroke();
+
+    // Wheel pods (differential drive wheels along left and right sides)
+    const wheelW = Math.max(5, l * 0.28);
+    const wheelThickness = Math.max(4, w * 0.12);
+    context.fillStyle = "#0f172a";
+    // Left side wheels (at -w/2)
+    context.fillRect(l * 0.15, -w / 2 - wheelThickness / 2, wheelW, wheelThickness);
+    context.fillRect(-l * 0.45, -w / 2 - wheelThickness / 2, wheelW, wheelThickness);
+    // Right side wheels (at +w/2)
+    context.fillRect(l * 0.15, w / 2 - wheelThickness / 2, wheelW, wheelThickness);
+    context.fillRect(-l * 0.45, w / 2 - wheelThickness / 2, wheelW, wheelThickness);
+
+    // Front Bumper / Intake Direction Indicator Chevron (pointing along local +X, which is forward)
+    context.fillStyle = isCollision ? "#ffffff" : "#fbbf24";
+    context.beginPath();
+    context.moveTo(l * 0.45, 0);
+    context.lineTo(l * 0.15, -w * 0.28);
+    context.lineTo(l * 0.15, w * 0.28);
+    context.closePath();
+    context.fill();
+
+    // V5 Brain HUD screen on bot
+    const badgeW = l * 0.42;
+    const badgeH = w * 0.35;
+    context.fillStyle = "#18181b";
+    context.fillRect(-badgeW / 2, -badgeH / 2, badgeW, badgeH);
+    context.fillStyle = "#22c55e";
+    context.font = "bold 8px monospace";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("LEMLIB", 0, 0);
+
+    if (selected && !isCollision) {
+      context.strokeStyle = "#60a5fa";
+      context.lineWidth = 2.5;
+      context.setLineDash([4, 4]);
+      context.beginPath();
+      drawRoundedRect(context, -l / 2 - 4, -w / 2 - 4, l + 8, w + 8, 6);
+      context.stroke();
+      context.setLineDash([]);
+    } else if (isCollision) {
+      context.strokeStyle = "#ef4444";
+      context.lineWidth = 2.0;
+      context.beginPath();
+      drawRoundedRect(context, -l / 2 - 3, -w / 2 - 3, l + 6, w + 6, 6);
+      context.stroke();
+    }
+
+    // Tracking origin center
+    context.fillStyle = isCollision ? "#ef4444" : "#ffffff";
+    context.beginPath();
+    context.arc(0, 0, 2.5, 0, Math.PI * 2);
+    context.fill();
+
+    if (isCollision) {
+      context.save();
+      context.shadowColor = "#ef4444";
+      context.shadowBlur = 8;
+      context.fillStyle = "#ef4444";
+      context.beginPath();
+      drawRoundedRect(context, -26, -w / 2 - 20, 52, 16, 4);
+      context.fill();
+      context.fillStyle = "#ffffff";
+      context.font = "bold 9px sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText("💥 HIT", 0, -w / 2 - 12);
+      context.restore();
+    }
+
+    context.restore();
   }
 
   let collisionConfig = {
@@ -4161,47 +4925,12 @@
       const wy = inchToPx(wp.y, h, true);
 
       if (idx === 0) {
-        // Start Pose Robot Box (Scaled 18" V5 Bot Chassis)
-        const botPx = (18 / FIELD_INCHES) * w;
-        const halfBot = botPx / 2;
-
-        ctx.save();
-        ctx.translate(wx, wy);
-        ctx.rotate(-((wp.theta || 0) * Math.PI) / 180);
-
-        // Robot Shadow & Fill
-        ctx.fillStyle = "rgba(56, 189, 248, 0.3)";
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 2;
-        ctx.fillRect(-halfBot, -halfBot, botPx, botPx);
-        ctx.strokeRect(-halfBot, -halfBot, botPx, botPx);
-
-        // Drive Wheels Representation
-        ctx.fillStyle = "#0f172a";
-        ctx.fillRect(-halfBot - 2, -halfBot + 2, 4, halfBot);
-        ctx.fillRect(halfBot - 2, -halfBot + 2, 4, halfBot);
-        ctx.fillRect(-halfBot - 2, 2, 4, halfBot - 2);
-        ctx.fillRect(halfBot - 2, 2, 4, halfBot - 2);
-
-        // Front Intake / Heading Pointer
-        ctx.fillStyle = "#f59e0b";
-        ctx.beginPath();
-        ctx.moveTo(0, -halfBot - 6);
-        ctx.lineTo(6, -halfBot + 2);
-        ctx.lineTo(-6, -halfBot + 2);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
+        drawRobot(ctx, wp.x, wp.y, wp.theta, "#22c55e", 0.95, selectedActionId === "start_pose" || selectedActionId === "start", false);
 
         // Start Label Badge
         ctx.fillStyle = "#0284c7";
         ctx.beginPath();
-        if (typeof ctx.roundRect === "function") {
-          ctx.roundRect(wx + 12, wy - 18, 62, 18, 4);
-        } else {
-          ctx.fillRect(wx + 12, wy - 18, 62, 18);
-        }
+        drawRoundedRect(ctx, wx + 12, wy - 18, 62, 18, 4);
         ctx.fill();
         ctx.fillStyle = "#ffffff";
         ctx.font = "bold 9px sans-serif";
@@ -4245,11 +4974,7 @@
         const textWidth = ctx.measureText(labelText).width;
 
         ctx.beginPath();
-        if (typeof ctx.roundRect === "function") {
-          ctx.roundRect(wx + 12, wy - 10, textWidth + 10, 18, 4);
-        } else {
-          ctx.fillRect(wx + 12, wy - 10, textWidth + 10, 18);
-        }
+        drawRoundedRect(ctx, wx + 12, wy - 10, textWidth + 10, 18, 4);
         ctx.fill();
         ctx.stroke();
 
@@ -4261,6 +4986,13 @@
       }
     });
 
+    // Draw End Pose Ghost Robot
+    if (waypoints.length > 1) {
+      const endWp = waypoints[waypoints.length - 1];
+      const endTheta = endWp.theta != null ? endWp.theta : (endWp.heading != null ? endWp.heading : startPose.theta);
+      drawRobot(ctx, endWp.x, endWp.y, endTheta, "#f59e0b", 0.65, selectedActionId === endWp.id, false);
+    }
+
     // Render Animated Robot during Simulation
     drawSimAnimatedRobot(w, h);
 
@@ -4269,79 +5001,69 @@
   }
 
   // --------------------------------------------------------------------------
-  // ROBOT SIMULATION ANIMATION
+  // ROBOT SIMULATION ANIMATION (Copied from app.js)
   // --------------------------------------------------------------------------
   function drawSimAnimatedRobot(w, h) {
     const routine = activePaths[activeRoutineIndex] || activePaths[0];
     if (!routine) return;
 
     const simRes = simulateRoutine(routine);
-    const pose = getSimPoseAtTime(simRes, isSimPlaying ? simTimeMs : (simTimeMs > 0 ? simTimeMs : 0));
+    const totalMs = Math.max(1000, Math.ceil((simRes.duration || 15.0) * 1000));
+    const curTimeMs = isSimPlaying ? simTimeMs : (simTimeMs > 0 ? simTimeMs : 0);
+    const pose = getSimPoseAtTime(simRes, curTimeMs);
 
-    const rx = inchToPx(pose.x, w);
-    const ry = inchToPx(pose.y, h, true);
-    const botPx = ((botConfig.robotW || 14) / FIELD_INCHES) * w;
-    const halfBot = botPx / 2;
-
-    ctx.save();
-    ctx.translate(rx, ry);
-    ctx.rotate(-((pose.theta || 0) * Math.PI) / 180);
-
-    // Glowing Chassis Bounding Box
-    ctx.fillStyle = "rgba(16, 185, 129, 0.35)";
-    ctx.strokeStyle = "#10b981";
-    ctx.lineWidth = 2.5;
-    ctx.fillRect(-halfBot, -halfBot, botPx, botPx);
-    ctx.strokeRect(-halfBot, -halfBot, botPx, botPx);
-
-    // VEX V5 Aluminum C-Channels & Wheels
-    ctx.fillStyle = "#0f172a";
-    ctx.fillRect(-halfBot - 4, -halfBot + 2, 7, halfBot);
-    ctx.fillRect(halfBot - 3, -halfBot + 2, 7, halfBot);
-    ctx.fillRect(-halfBot - 4, 2, 7, halfBot - 2);
-    ctx.fillRect(halfBot - 3, 2, 7, halfBot - 2);
-
-    // Front Intake / Clamp Direction Indicator Arrow
-    ctx.fillStyle = "#f59e0b";
-    ctx.beginPath();
-    ctx.moveTo(0, -halfBot - 9);
-    ctx.lineTo(8, -halfBot + 1);
-    ctx.lineTo(-8, -halfBot + 1);
-    ctx.closePath();
-    ctx.fill();
-
-    // V5 Brain HUD screen on bot
-    ctx.fillStyle = "#18181b";
-    ctx.fillRect(-halfBot + 6, -halfBot + 8, botPx - 12, botPx - 16);
-    ctx.fillStyle = "#22c55e";
-    ctx.font = "bold 8px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("LEMLIB", 0, 0);
-
-    ctx.restore();
+    const cv = document.getElementById("teamFieldCanvas");
+    if (!cv) return;
+    const context = cv.getContext("2d");
+    if (!context) return;
 
     const colResult = checkCollision(pose);
-    updateSimTelemetryUI(pose, colResult);
+    const isLiveHit = colResult.isColliding;
+
+    drawRobot(context, pose.x, pose.y, pose.theta, isLiveHit ? "#ef4444" : "#38bdf8", 1, false, isLiveHit);
+
+    // Speed vector indicator arrow pointing along travel direction
+    if (Math.abs(pose.vLin || 0) > 1) {
+      const cp = fieldToCanvas(pose.x, pose.y, w, h);
+      const sRad = screenHeadingRad(pose.theta);
+      const dir = pose.vLin >= 0 ? 1 : -1;
+      const arrowLen = Math.min(32, Math.abs(pose.vLin) * 0.35);
+      context.strokeStyle = "#38bdf8";
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(cp.cx, cp.cy);
+      context.lineTo(cp.cx + Math.cos(sRad) * arrowLen * dir, cp.cy + Math.sin(sRad) * arrowLen * dir);
+      context.stroke();
+    }
+
+    updateSimTelemetryUI(pose, colResult, curTimeMs, totalMs);
   }
 
   function checkCollision(pose) {
+    if (typeof checkRobotCollisionAtPose === "function") {
+      const liveCol = checkRobotCollisionAtPose(pose.x, pose.y, pose.theta, collisionConfig.safetyBuffer);
+      if (liveCol.hit && liveCol.obstacles.length) {
+        return { isColliding: true, obstacle: liveCol.obstacles[0].name || "Obstacle Collision" };
+      }
+    }
     if (Math.abs(pose.x) > 63 || Math.abs(pose.y) > 63) {
       return { isColliding: true, obstacle: "Perimeter Wall Impact" };
     }
     return { isColliding: false, obstacle: "Clear" };
   }
 
-  function updateSimTelemetryUI(pose, colResult) {
+  function updateSimTelemetryUI(pose, colResult, curTimeMs = simTimeMs, totalMs = 15000) {
     const chipTime = document.getElementById("simHudTime");
     const chipSpeed = document.getElementById("simHudSpeed");
     const chipCoords = document.getElementById("simHudCoords");
     const chipCol = document.getElementById("simHudCollision");
     const chipScore = document.getElementById("simHudScore");
 
-    if (chipTime) chipTime.textContent = `⏱️ ${(simTimeMs / 1000).toFixed(2)}s / 15.00s`;
-    if (chipSpeed) chipSpeed.textContent = `🏎️ ${(pose.v || 0).toFixed(1)} in/s`;
-    if (chipCoords) chipCoords.textContent = `📍 (${pose.x.toFixed(1)}", ${pose.y.toFixed(1)}") θ=${pose.theta.toFixed(0)}°`;
+    const tCur = (curTimeMs / 1000).toFixed(2);
+    const tTot = (totalMs / 1000).toFixed(2);
+    if (chipTime) chipTime.textContent = `⏱️ ${tCur}s / ${tTot}s`;
+    if (chipSpeed) chipSpeed.textContent = `🏎️ ${(pose.vLin || 0).toFixed(1)} in/s`;
+    if (chipCoords) chipCoords.textContent = `📍 (${pose.x.toFixed(1)}", ${pose.y.toFixed(1)}") θ=${normalizeAngle(pose.theta).toFixed(0)}°`;
 
     if (chipCol) {
       if (colResult.isColliding) {
@@ -4351,7 +5073,7 @@
       } else {
         chipCol.textContent = "🛡️ Clear";
         chipCol.style.color = "#4ade80";
-        chipCol.style.background = "rgba(34, 197, 94, 0.1)";
+        chipCol.style.background = "rgba(34, 197, 94, 0.15)";
       }
     }
 
@@ -5701,34 +6423,64 @@
   // --------------------------------------------------------------------------
   // SIMULATION PLAYBACK
   // --------------------------------------------------------------------------
+  let isSimPlaying = false;
+  let simTimeMs = 0;
+  let simAnimId = null;
+  let simStartTime = 0;
+
   function toggleSimPlay() {
     const btn = document.getElementById("btnSimPlay");
+    const routine = activePaths[activeRoutineIndex] || activePaths[0];
+    const simRes = simulateRoutine(routine);
+    const totalMs = Math.max(1000, Math.ceil((simRes.duration || 15.0) * 1000));
+
     if (isSimPlaying) {
       isSimPlaying = false;
-      clearInterval(simTimer);
-      if (btn) btn.textContent = "▶ Play 15s Sim";
+      if (simAnimId) {
+        cancelAnimationFrame(simAnimId);
+        simAnimId = null;
+      }
+      if (btn) btn.textContent = "▶ Play Sim";
     } else {
       isSimPlaying = true;
       if (btn) btn.textContent = "⏸ Pause Sim";
-      const startSimTime = Date.now() - simTimeMs;
-      simTimer = setInterval(() => {
-        simTimeMs = Date.now() - startSimTime;
-        if (simTimeMs >= 15000) {
-          simTimeMs = 15000;
+      if (simTimeMs >= totalMs) {
+        simTimeMs = 0;
+      }
+      simStartTime = performance.now() - simTimeMs;
+
+      function simStep(now) {
+        if (!isSimPlaying) return;
+        simTimeMs = now - simStartTime;
+        if (simTimeMs >= totalMs) {
+          simTimeMs = totalMs;
           isSimPlaying = false;
-          clearInterval(simTimer);
-          if (btn) btn.textContent = "▶ Play 15s Sim";
+          simAnimId = null;
+          if (btn) btn.textContent = "▶ Play Sim";
+          updateSimScrubber();
+          return;
         }
         updateSimScrubber();
-      }, 50);
+        simAnimId = requestAnimationFrame(simStep);
+      }
+      simAnimId = requestAnimationFrame(simStep);
     }
   }
 
   function updateSimScrubber() {
     const sc = document.getElementById("simScrubber");
     const lbl = document.getElementById("lblSimTime");
-    if (sc) sc.value = simTimeMs;
-    if (lbl) lbl.textContent = `${(simTimeMs / 1000).toFixed(2)}s / 15.00s`;
+    const routine = activePaths[activeRoutineIndex] || activePaths[0];
+    const simRes = simulateRoutine(routine);
+    const totalMs = Math.max(1000, Math.ceil((simRes.duration || 15.0) * 1000));
+
+    if (sc) {
+      sc.max = totalMs;
+      sc.value = Math.min(simTimeMs, totalMs);
+    }
+    if (lbl) {
+      lbl.textContent = `${(simTimeMs / 1000).toFixed(2)}s / ${(totalMs / 1000).toFixed(2)}s`;
+    }
     drawField();
   }
 
@@ -7036,18 +7788,6 @@
       if (selectedVersionForRestore) {
         restoreVersionPrompt(selectedVersionForRestore);
       }
-    });
-
-    // 11. Simulation Playback Controls
-    document.getElementById("btnSimPlay")?.addEventListener("click", toggleSimPlay);
-    document.getElementById("btnSimReset")?.addEventListener("click", () => {
-      simTimeMs = 0;
-      updateSimScrubber();
-      if (isSimPlaying) toggleSimPlay();
-    });
-    document.getElementById("simScrubber")?.addEventListener("input", (e) => {
-      simTimeMs = Number(e.target.value) || 0;
-      updateSimScrubber();
     });
 
     // 12. Version History Filter input
