@@ -955,6 +955,19 @@ app.get(['/api/team/data', '/vex-path-planner/api/team/data'], (req, res) => {
   });
 });
 
+// Sync progress broadcast across user sessions
+app.post(['/api/team/sync-progress', '/vex-path-planner/api/team/sync-progress'], (req, res) => {
+  const { teamId, syncLock } = req.body || {};
+  if (!teamId) return res.status(400).json({ error: 'Missing teamId parameter' });
+  const team = getTeam(teamId);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+  team.syncLock = syncLock;
+  if (syncLock && syncLock.active) {
+    team.updatedAt = Date.now();
+  }
+  res.json({ success: true, syncLock: team.syncLock });
+});
+
 // 6. Real-time path & action sync edit (Stores up to 500 version history entries with author attribution)
 app.post(['/api/team/sync-edit', '/vex-path-planner/api/team/sync-edit'], (req, res) => {
   const { teamId, email, authorName, authorRole, editType, changeSummary, pathPayload, projectPayload, createSnapshot } = req.body || {};
@@ -965,6 +978,19 @@ app.post(['/api/team/sync-edit', '/vex-path-planner/api/team/sync-edit'], (req, 
   const team = getTeam(teamId);
   if (!team) {
     return res.status(404).json({ error: 'Team not found' });
+  }
+
+  // Guard against accidental edits overriding in-progress GitHub / major syncs
+  if (team.syncLock && team.syncLock.active && (Date.now() - (team.syncLock.updatedAt || 0) < 90000)) {
+    const lockAuthor = (team.syncLock.authorEmail || "").toLowerCase().trim();
+    const reqEmail = (email || "").toLowerCase().trim();
+    if (reqEmail && lockAuthor && reqEmail !== lockAuthor) {
+      return res.status(423).json({
+        error: `Workspace is locked. ${team.syncLock.authorName || 'Another teammate'} is currently syncing from GitHub (${team.syncLock.progress || 0}%). Edits paused to prevent conflicts.`,
+        syncLock: team.syncLock,
+        locked: true
+      });
+    }
   }
 
   const now = Date.now();

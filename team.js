@@ -3730,6 +3730,10 @@
   async function fsSaveTeamDoc(team) {
     const db = getFirestoreDb();
     if (!team || !team.teamId) return false;
+    if (isTeamSyncLocked()) {
+      console.warn("[TeamCollab] Prevented fsSaveTeamDoc: workspace is sync locked by another session.");
+      return false;
+    }
     try {
       await ensureFirebaseAuth();
       const codeKey = (team.teamCode || "").trim().toUpperCase();
@@ -3769,6 +3773,145 @@
     }
   }
 
+  // --------------------------------------------------------------------------
+  // CROSS-SESSION SYNC LOCK & PROGRESS BROADCASTING
+  // --------------------------------------------------------------------------
+  let activeSyncLockDismissTimeout = null;
+
+  function isTeamSyncLocked() {
+    if (!currentTeam || !currentTeam.syncLock) return false;
+    const lk = currentTeam.syncLock;
+    if (!lk.active) return false;
+    // Timeout guard: lock expires after 90 seconds to prevent permanent lockouts
+    if (Date.now() - (lk.updatedAt || lk.startedAt || 0) > 90000) {
+      lk.active = false;
+      return false;
+    }
+    // If the current logged-in user is the one performing the import, don't lock their own actions
+    const myEmail = (currentUser?.email || "").toLowerCase().trim();
+    if (myEmail && lk.authorEmail && myEmail === lk.authorEmail.toLowerCase().trim()) {
+      return false;
+    }
+    return true;
+  }
+
+  function handleRemoteSyncLock(syncLock) {
+    const banner = document.getElementById("teamSyncSessionBanner");
+    if (!banner) return;
+
+    if (!syncLock || !syncLock.active) {
+      // If was recently completed
+      if (syncLock && syncLock.completedAt && (Date.now() - syncLock.completedAt < 6000)) {
+        banner.style.display = "block";
+        const elTitle = document.getElementById("syncBannerTitle");
+        const elPct = document.getElementById("syncBannerPct");
+        const elStage = document.getElementById("syncBannerStage");
+        const elDetail = document.getElementById("syncBannerDetail");
+        const elEta = document.getElementById("syncBannerEta");
+        const elBar = document.getElementById("syncBannerBar");
+        const elLockPill = document.getElementById("syncBannerLockPill");
+        const elIcon = document.getElementById("syncBannerIcon");
+
+        if (elIcon) elIcon.style.animation = "none";
+        if (elTitle) elTitle.innerHTML = `✅ <strong>${escapeHtml(syncLock.authorName || 'Teammate')}</strong> synchronized workspace from GitHub!`;
+        if (elPct) { elPct.textContent = "100%"; elPct.style.background = "rgba(34,197,94,0.3)"; elPct.style.color = "#4ade80"; }
+        if (elStage) elStage.textContent = "Workspace Up to Date";
+        if (elDetail) elDetail.textContent = syncLock.detail || "All routines and files synced.";
+        if (elEta) elEta.textContent = "✅ Done";
+        if (elBar) { elBar.style.width = "100%"; elBar.style.background = "#22c55e"; }
+        if (elLockPill) {
+          elLockPill.textContent = "🔓 Edits Unlocked";
+          elLockPill.style.color = "#4ade80";
+          elLockPill.style.borderColor = "#22c55e";
+          elLockPill.style.background = "rgba(34,197,94,0.15)";
+        }
+
+        if (activeSyncLockDismissTimeout) clearTimeout(activeSyncLockDismissTimeout);
+        activeSyncLockDismissTimeout = setTimeout(() => {
+          banner.style.display = "none";
+        }, 4000);
+        return;
+      }
+
+      banner.style.display = "none";
+      return;
+    }
+
+    // Lock is ACTIVE! Check if stale (>90s)
+    if (Date.now() - (syncLock.updatedAt || syncLock.startedAt || 0) > 90000) {
+      banner.style.display = "none";
+      return;
+    }
+
+    const myEmail = (currentUser?.email || "").toLowerCase().trim();
+    const isMe = myEmail && syncLock.authorEmail && (myEmail === syncLock.authorEmail.toLowerCase().trim());
+
+    banner.style.display = "block";
+
+    const elTitle = document.getElementById("syncBannerTitle");
+    const elPct = document.getElementById("syncBannerPct");
+    const elStage = document.getElementById("syncBannerStage");
+    const elDetail = document.getElementById("syncBannerDetail");
+    const elEta = document.getElementById("syncBannerEta");
+    const elBar = document.getElementById("syncBannerBar");
+    const elLockPill = document.getElementById("syncBannerLockPill");
+    const elIcon = document.getElementById("syncBannerIcon");
+
+    if (elIcon) elIcon.style.animation = "team-spin 1.4s linear infinite";
+
+    const pct = Math.max(0, Math.min(100, Math.round(syncLock.progress || 0)));
+    const authorStr = isMe ? "You are" : `<strong>${escapeHtml(syncLock.authorName || 'Teammate')}</strong> is`;
+    const repoName = syncLock.repo ? syncLock.repo.split("/").slice(-2).join("/") : "repository";
+
+    if (elTitle) elTitle.innerHTML = `🔄 ${authorStr} importing GitHub <code>${escapeHtml(repoName)}</code>`;
+    if (elPct) elPct.textContent = `${pct}%`;
+    if (elStage) elStage.textContent = syncLock.stage || "Connecting to GitHub...";
+    if (elDetail) elDetail.textContent = syncLock.detail || "";
+    if (elEta) elEta.textContent = syncLock.eta ? (syncLock.eta.startsWith("⏱️") ? syncLock.eta : `⏱️ ${syncLock.eta}`) : "⏱️ Syncing...";
+    if (elBar) elBar.style.width = `${pct}%`;
+    if (elLockPill) {
+      if (isMe) {
+        elLockPill.textContent = "⚡ Sync in Progress (You)";
+        elLockPill.style.color = "#38bdf8";
+        elLockPill.style.borderColor = "#38bdf8";
+        elLockPill.style.background = "rgba(56,189,248,0.15)";
+      } else {
+        elLockPill.textContent = "🔒 Workspace Locked to Prevent Overrides";
+        elLockPill.style.color = "#f87171";
+        elLockPill.style.borderColor = "#ef4444";
+        elLockPill.style.background = "rgba(239,68,68,0.15)";
+      }
+    }
+  }
+
+  async function broadcastSyncLock(lockObj) {
+    if (!currentTeam || !currentTeam.teamId) return;
+    try {
+      currentTeam.syncLock = lockObj;
+      handleRemoteSyncLock(lockObj);
+
+      const db = getFirestoreDb();
+      if (db) {
+        await db.collection("teams").doc(currentTeam.teamId).set({ syncLock: lockObj }, { merge: true });
+        if (currentTeam.teamCode) {
+          const codeKey = currentTeam.teamCode.trim().toUpperCase();
+          await db.collection("teams").doc(codeKey).set({ syncLock: lockObj }, { merge: true });
+        }
+      }
+
+      const apiRoute = resolveApiUrl("/api/team/sync-progress");
+      if (apiRoute) {
+        fetch(apiRoute, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ teamId: currentTeam.teamId, syncLock: lockObj })
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("[TeamCollab] broadcastSyncLock notice:", e);
+    }
+  }
+
   function fsSubscribeTeam(teamId) {
     if (firestoreUnsub) {
       try { firestoreUnsub(); } catch (_) {}
@@ -3784,19 +3927,29 @@
       firestoreUnsub = db.collection("teams").doc(teamId).onSnapshot((doc) => {
         if (doc && doc.exists) {
           const remote = doc.data();
-          if (remote && remote.updatedAt > (currentTeam?.updatedAt || 0)) {
-            currentTeam = remote;
-            if (remote.pathPayload && remote.pathPayload.paths) {
-              activePaths = remote.pathPayload.paths;
-              renderRoutinesSelector(false);
-              renderActionBlocks();
-              syncIdeAutonsFromBlocks();
-              drawField();
+          if (remote) {
+            if (remote.syncLock) {
+              currentTeam.syncLock = remote.syncLock;
+              handleRemoteSyncLock(remote.syncLock);
+            } else if (currentTeam?.syncLock) {
+              currentTeam.syncLock = null;
+              handleRemoteSyncLock(null);
             }
-            renderStrategies();
-            renderPinComments();
-            renderVersionHistory();
-            renderMemberList();
+
+            if (remote.updatedAt > (currentTeam?.updatedAt || 0)) {
+              currentTeam = remote;
+              if (remote.pathPayload && remote.pathPayload.paths) {
+                activePaths = remote.pathPayload.paths;
+                renderRoutinesSelector(false);
+                renderActionBlocks();
+                syncIdeAutonsFromBlocks();
+                drawField();
+              }
+              renderStrategies();
+              renderPinComments();
+              renderVersionHistory();
+              renderMemberList();
+            }
           }
         }
       }, (error) => {
@@ -4669,6 +4822,11 @@
   // --------------------------------------------------------------------------
   async function broadcastEdit(summary, editType = "waypoint_edit", createSnapshot = true) {
     if (!currentTeam || !currentUser) return;
+    if (isTeamSyncLocked()) {
+      const lk = currentTeam.syncLock;
+      showToast(`🔒 Cannot edit: ${lk.authorName || 'Teammate'} is importing from GitHub (${lk.progress || 0}%). Edits are paused to prevent overwriting incoming changes.`, "⚠️");
+      return;
+    }
     try {
       currentTeam.pathPayload = { paths: activePaths };
       currentTeam.updatedAt = Date.now();
@@ -5332,6 +5490,11 @@
     });
 
     canvas.addEventListener("mousedown", (e) => {
+      if (isTeamSyncLocked()) {
+        const lk = currentTeam.syncLock;
+        showToast(`🔒 Canvas edits paused: ${lk.authorName || 'Teammate'} is importing from GitHub (${lk.progress || 0}%). Edits paused to prevent conflicts.`, "⚠️");
+        return;
+      }
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
@@ -6194,6 +6357,11 @@
 
       card.querySelector(".btn-del-act").onclick = (e) => {
         e.stopPropagation();
+        if (isTeamSyncLocked()) {
+          const lk = currentTeam.syncLock;
+          showToast(`🔒 Cannot delete action: ${lk.authorName || 'Teammate'} is importing from GitHub (${lk.progress || 0}%).`, "⚠️");
+          return;
+        }
         if (confirm(`Delete action #${idx + 1} (${act.type})?`)) {
           routine.actions.splice(idx, 1);
           renderActionBlocks();
@@ -6210,6 +6378,11 @@
   }
 
   function addAction(type) {
+    if (isTeamSyncLocked()) {
+      const lk = currentTeam.syncLock;
+      showToast(`🔒 Cannot add action: ${lk.authorName || 'Teammate'} is importing from GitHub (${lk.progress || 0}%).`, "⚠️");
+      return;
+    }
     const routine = activePaths[activeRoutineIndex];
     if (!routine) return;
     if (!routine.actions) routine.actions = [];
@@ -7711,6 +7884,11 @@
 
     document.getElementById("btnSaveCppCode")?.addEventListener("click", async () => {
       if (!currentTeam) return;
+      if (isTeamSyncLocked()) {
+        const lk = currentTeam.syncLock;
+        showToast(`🔒 Cannot save code: ${lk.authorName || 'Teammate'} is importing from GitHub (${lk.progress || 0}%). Edits paused to prevent conflicts.`, "⚠️");
+        return;
+      }
       if (!canCurrentUserEditCode()) {
         const note = prompt("Enter description for your C++ Code Suggestion:", `Updated ${activeIdeFile}`);
         if (note) proposeTeamSuggestion(note.trim(), "code_suggestion", { paths: activePaths, projectFiles: currentTeam.projectFiles });
@@ -8359,6 +8537,13 @@
     [btnCloseGithubModal, btnCancelGithubModal].forEach(btn => {
       btn?.addEventListener("click", () => {
         if (modalGithubImport) modalGithubImport.style.display = "none";
+        if (currentTeam?.syncLock?.active) {
+          const myEmail = (currentUser?.email || "").toLowerCase().trim();
+          if (myEmail && currentTeam.syncLock.authorEmail === myEmail) {
+            currentTeam.syncLock.active = false;
+            broadcastSyncLock(currentTeam.syncLock);
+          }
+        }
       });
     });
 
@@ -8379,12 +8564,29 @@
         btnExecuteGithubImport.disabled = true;
         btnExecuteGithubImport.textContent = "Cloning...";
 
+        const myLock = {
+          active: true,
+          type: "github_import",
+          authorEmail: (currentUser?.email || "").toLowerCase().trim(),
+          authorName: currentUser?.displayName || currentUser?.email.split("@")[0] || "Team Member",
+          repo: repoVal,
+          branch: branchVal,
+          progress: 6,
+          stage: "Connecting to GitHub",
+          detail: `Resolving repository "${repoVal}"...`,
+          eta: "~10s remaining",
+          startedAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        broadcastSyncLock(myLock);
+
         let cloneProgressTimer = null;
         const cloneStartTime = Date.now();
         let currentProgressPct = 6;
         let currentStage = "Connecting to GitHub";
         let currentDetail = `Authenticating & resolving repository "${repoVal}"...`;
         let currentEta = "~10s remaining";
+        let lastBroadcastTime = 0;
 
         const updateProgressUI = (pct, stage, detail, etaStr) => {
           if (githubImportStatus) {
@@ -8426,6 +8628,18 @@
           if (elEta) {
             const formatted = currentEta.startsWith("⏱️") ? currentEta : `⏱️ ${currentEta}`;
             elEta.textContent = currentProgressPct >= 100 ? "✅ Done!" : formatted;
+          }
+
+          // Broadcast sync progress to other user sessions so teammates see live progress & cannot override!
+          const nowTs = Date.now();
+          if (pct >= 100 || (nowTs - lastBroadcastTime > 350)) {
+            lastBroadcastTime = nowTs;
+            myLock.progress = currentProgressPct;
+            myLock.stage = currentStage;
+            myLock.detail = currentDetail;
+            myLock.eta = currentEta;
+            myLock.updatedAt = nowTs;
+            broadcastSyncLock(myLock);
           }
         };
 
@@ -8541,7 +8755,7 @@
               snapshot: { paths: detectedPaths }
             });
             if (currentTeam.versionHistory.length > 500) currentTeam.versionHistory.length = 500;
-            currentTeam.updatedAt = now;
+            currentTeam.updatedAt = now + 2500;
 
             await fsSaveTeamDoc(currentTeam);
             try {
@@ -8549,6 +8763,17 @@
             } catch (_) {}
             importData = { success: true, team: currentTeam };
           }
+
+          // Complete and clear lock
+          myLock.active = false;
+          myLock.completedAt = Date.now();
+          myLock.progress = 100;
+          myLock.stage = "Import Complete!";
+          myLock.detail = `Synchronized ${detectedPaths.length} routines into team workspace.`;
+          myLock.eta = "Complete!";
+          currentTeam.syncLock = myLock;
+          currentTeam.updatedAt = Date.now() + 2500;
+          await broadcastSyncLock(myLock);
 
           btnExecuteGithubImport.disabled = false;
           btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
@@ -8572,6 +8797,11 @@
             clearInterval(cloneProgressTimer);
             cloneProgressTimer = null;
           }
+          myLock.active = false;
+          myLock.error = err.message || String(err);
+          currentTeam.syncLock = myLock;
+          broadcastSyncLock(myLock);
+
           btnExecuteGithubImport.disabled = false;
           btnExecuteGithubImport.textContent = "🚀 Clone & Import Repository";
           if (githubImportStatus) {

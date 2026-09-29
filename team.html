@@ -178,6 +178,36 @@
       </div>
     </div>
 
+    <!-- REAL-TIME CROSS-SESSION SYNC PROGRESS & CONFLICT LOCK BANNER -->
+    <div id="teamSyncSessionBanner" style="display:none;background:linear-gradient(90deg, rgba(8,47,73,0.92), rgba(15,23,42,0.96));border-bottom:1px solid rgba(56,189,248,0.4);padding:8px 16px;z-index:90;position:relative;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="syncBannerIcon" style="font-size:1.15rem;display:inline-block;animation:team-spin 1.4s linear infinite;">🔄</span>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:8px;">
+              <span id="syncBannerTitle">Teammate is importing project...</span>
+              <span id="syncBannerPct" style="background:rgba(34,197,94,0.2);color:#4ade80;border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 6px;font-family:ui-monospace, monospace;font-size:0.75rem;font-weight:800;">0%</span>
+            </div>
+            <div style="font-size:0.72rem;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:2px;">
+              <span id="syncBannerStage" style="color:var(--text);font-weight:600;">Connecting...</span>
+              <span style="opacity:0.4;">·</span>
+              <span id="syncBannerDetail" style="max-width:380px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Preparing files</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span id="syncBannerEta" style="font-family:ui-monospace, monospace;font-size:0.75rem;color:#fbbf24;font-weight:700;">⏱️ Calculating...</span>
+          <span id="syncBannerLockPill" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:999px;display:flex;align-items:center;gap:5px;">
+            🔒 Workspace Edits Paused
+          </span>
+        </div>
+      </div>
+      <!-- Progress Bar Track -->
+      <div style="width:100%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;margin-top:6px;">
+        <div id="syncBannerBar" style="width:0%;height:100%;background:linear-gradient(90deg, #38bdf8, #22c55e);transition:width 0.25s ease;"></div>
+      </div>
+    </div>
+
     <!-- =========================================================================
          TEAM WORKSPACE VIEW (Shown when user is in a team)
          ========================================================================= -->
