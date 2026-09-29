@@ -12863,13 +12863,48 @@ body.palette-drag-active .action-flow-empty-dropzone {
 
 .team-workspace {
   display: flex;
-  gap: 14px;
+  gap: 4px;
   align-items: stretch;
   flex: 1 1 0;
   min-height: 0;
   height: auto;
   max-height: none;
   overflow: hidden;
+}
+
+.team-resizer {
+  width: 10px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 25;
+  user-select: none;
+  touch-action: none;
+}
+
+.team-resizer::before {
+  content: "";
+  width: 2px;
+  height: 44px;
+  background: var(--border, #334155);
+  border-radius: 2px;
+  transition: all 0.15s ease;
+}
+
+.team-resizer:hover::before,
+.team-resizer.is-dragging::before {
+  background: #38bdf8;
+  width: 4px;
+  height: 80px;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+}
+
+.team-resizer.is-dragging {
+  background: rgba(56, 189, 248, 0.08);
+  border-radius: 4px;
 }
 
 .team-col-left {
@@ -13377,12 +13412,303 @@ body.palette-drag-active .action-flow-empty-dropzone {
   border-color: #94a3b8 !important;
 }
 
-[data-theme="light"] .team-toast {
-  background: #ffffff !important;
-  border-color: #2563eb !important;
-  color: #0f172a !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12) !important;
+/* ==========================================================================
+   AUTONOMOUS MATCH REPLAY & LOG ANALYSIS SUITE (ALPHA)
+   ========================================================================== */
+.replay-modal-card {
+  max-width: 1200px !important;
+  width: 95vw !important;
+  max-height: 92vh !important;
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7) !important;
 }
+
+.replay-modal-header {
+  padding: 12px 20px;
+  background: var(--card-inner);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.replay-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.replay-badge {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.replay-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.replay-layout-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .replay-layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.replay-stage-card {
+  background: #090e1a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.replay-canvas-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1/1;
+  background: #060911;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.replay-canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.replay-legend-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 6px;
+}
+
+.replay-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.replay-legend-line {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.replay-controls-bar {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.replay-scrubber-wrap {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.replay-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.replay-metric-box {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.replay-metric-val {
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-family: ui-monospace, monospace;
+}
+
+.replay-metric-val.green { color: #4ade80; }
+.replay-metric-val.amber { color: #fbbf24; }
+.replay-metric-val.red { color: #f87171; }
+.replay-metric-val.cyan { color: #38bdf8; }
+
+.replay-metric-lbl {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.replay-diagnostics-card {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.diagnostic-item {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.diagnostic-item:hover {
+  border-color: #38bdf8;
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.diagnostic-item.critical {
+  border-left: 4px solid #ef4444;
+}
+
+.diagnostic-item.warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.diagnostic-item.clean {
+  border-left: 4px solid #22c55e;
+}
+
+.diagnostic-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.diagnostic-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diagnostic-body {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.diagnostic-fix {
+  font-size: 0.7rem;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border-left: 2px solid #38bdf8;
+}
+
+.replay-quick-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.replay-quick-btn {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.replay-quick-btn:hover {
+  background: #334155;
+  color: #fff;
+  border-color: #475569;
+}
+
+.replay-quick-btn.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+[data-theme="light"] .replay-modal-card {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] .replay-stage-card,
+[data-theme="light"] .diagnostic-item {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .diagnostic-body {
+  color: #334155 !important;
+}
+
 
 
 

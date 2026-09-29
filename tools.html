@@ -13,7 +13,7 @@
   <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
   <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
-  <link rel="stylesheet" href="style.css?v=20260928.k82" />
+  <link rel="stylesheet" href="style.css?v=20260929.k3" />
   <script>
     (function () {
       try {
@@ -616,7 +616,7 @@
       </div>
 
       <div class="tools-filter-pills" id="toolsFilterPills">
-        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">15</span>)</button>
+        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">16</span>)</button>
         <button type="button" class="tool-pill" data-filter="collab">👥 Team &amp; Cloud</button>
         <button type="button" class="tool-pill" data-filter="motion">🏎️ Motion &amp; Dyno</button>
         <button type="button" class="tool-pill" data-filter="tuning">🎛️ PID &amp; Bottlenecks</button>
@@ -667,6 +667,50 @@
             </a>
             <a href="team.html" class="btn-tool-action" title="View Team Version History and Strategy Voting">
               📜 500-Version History
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 0B: Autonomous Match Replay & Log Analysis Suite (ALPHA) -->
+      <article class="tool-card highlight" data-category="tuning collab" data-keywords="match replay log analysis actual vs planned odometry telemetry v5 brain deviation heatmap error root cause lemlib wheel slip collision">
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background:rgba(245, 158, 11, 0.15); border-color:rgba(245, 158, 11, 0.3); color:#f59e0b;">📊</div>
+          <div class="tool-title-info">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <h3>Autonomous Match Replay &amp; Log Analysis Suite</h3>
+              <span style="background:#ef4444;color:#ffffff;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius:10px;">ALPHA</span>
+            </div>
+            <p class="tool-tagline">Overlay actual recorded V5 Brain odometry logs against planned paths, analyze deviation heatmaps, and pinpoint root-cause failure steps.</p>
+          </div>
+          <span class="tool-category-badge" style="background:rgba(245, 158, 11, 0.15);color:#f59e0b;border-color:rgba(245, 158, 11, 0.3);">🎛️ Analysis</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Trajectory Mode</span>
+              <strong class="result-val green">Actual vs. Planned</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Diagnostics</span>
+              <strong class="result-val amber">Root-Cause Fixes</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Heatmap</span>
+              <strong class="result-val cyan">Deviation Gradient</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.73rem; color:var(--muted); line-height:1.4;">
+            Import odometry data logs (CSV, PROS printf streams, JSON) from your V5 Brain after a practice match. The tool renders your actual robot trajectory over the planned routine, computes point-to-point lateral &amp; angular error, highlights wheel slip or collision areas, and offers specific LemLib PID and settling parameter recommendations.
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="index.html#replay" class="btn-tool-action primary" id="btnLaunchReplayFromTools" title="Open Autonomous Match Replay in Visual Planner">
+              📊 Launch Replay in Planner (ALPHA)
+            </a>
+            <a href="team.html" class="btn-tool-action" title="Inspect Match Replays Collaboratively with Teammates">
+              👥 Review in Team Collab
             </a>
           </div>
         </div>
@@ -1469,7 +1513,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260928.k82"></script>
+  <script src="version.js?v=20260929.k3"></script>
   <script src="theme.js"></script>
   <script>
     // =========================================================================

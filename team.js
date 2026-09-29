@@ -6467,16 +6467,18 @@
       showToast("🚀 Compiling C++ auton code and flashing to V5 Brain...", "⚡");
     });
 
-    // 6b. Center Column View Mode Switcher (Field & Sim vs Integrated C++ IDE vs Suggestions)
+    // 6b. Center Column View Mode Switcher (Field & Sim vs Integrated C++ IDE vs Suggestions vs Match Replay)
     const btnViewModeField = document.getElementById("btnViewModeField");
     const btnViewModeIde = document.getElementById("btnViewModeIde");
     const btnViewModeSuggestions = document.getElementById("btnViewModeSuggestions");
+    const btnViewModeReplay = document.getElementById("btnViewModeReplay");
     const viewFieldContainer = document.getElementById("teamFieldViewContainer");
     const viewIdeContainer = document.getElementById("teamIdeContainer");
     const viewSuggestionsContainer = document.getElementById("teamSuggestionsContainer");
+    const viewReplayContainer = document.getElementById("teamReplayContainer");
 
     function setCenterViewMode(mode) {
-      [btnViewModeField, btnViewModeIde, btnViewModeSuggestions].forEach(btn => {
+      [btnViewModeField, btnViewModeIde, btnViewModeSuggestions, btnViewModeReplay].forEach(btn => {
         if (btn) {
           btn.classList.remove("active");
           btn.style.background = "#1e293b";
@@ -6488,6 +6490,7 @@
       if (viewFieldContainer) viewFieldContainer.style.display = "none";
       if (viewIdeContainer) viewIdeContainer.style.display = "none";
       if (viewSuggestionsContainer) viewSuggestionsContainer.style.display = "none";
+      if (viewReplayContainer) viewReplayContainer.style.display = "none";
 
       if (mode === "field") {
         if (btnViewModeField) {
@@ -6532,12 +6535,303 @@
         }
         if (viewSuggestionsContainer) viewSuggestionsContainer.style.display = "flex";
         renderSuggestions();
+      } else if (mode === "replay") {
+        if (btnViewModeReplay) {
+          btnViewModeReplay.classList.add("active");
+          btnViewModeReplay.style.background = "#0284c7";
+          btnViewModeReplay.style.color = "#fff";
+          btnViewModeReplay.style.borderColor = "#0369a1";
+        }
+        if (viewReplayContainer) viewReplayContainer.style.display = "flex";
+        renderTeamReplayStudio();
       }
     }
 
     btnViewModeField?.addEventListener("click", () => setCenterViewMode("field"));
     btnViewModeIde?.addEventListener("click", () => setCenterViewMode("ide"));
     btnViewModeSuggestions?.addEventListener("click", () => setCenterViewMode("suggestions"));
+    btnViewModeReplay?.addEventListener("click", () => setCenterViewMode("replay"));
+    document.getElementById("btnMenuMatchReplay")?.addEventListener("click", () => setCenterViewMode("replay"));
+
+    // ------------------------------------------------------------------------
+    // TEAM AUTONOMOUS MATCH REPLAY STUDIO (ALPHA)
+    // ------------------------------------------------------------------------
+    let teamReplaySamples = [];
+    let teamReplayAnalysis = null;
+    let isTeamReplayPlaying = false;
+    let teamReplayTimeMs = 0;
+    let teamReplayRaf = null;
+    let teamReplayLastTime = null;
+    let teamReplayScenario = "slip";
+
+    function getTeamPlannedPoints() {
+      const routine = activePaths[activeRoutineIndex] || activePaths[0] || { pose: { x: -60, y: -60, theta: 0 }, actions: [] };
+      const startP = routine.pose || { x: -60, y: -60, theta: 0 };
+      const acts = routine.actions || [];
+      const points = [{ t: 0, x: startP.x, y: startP.y, theta: startP.theta, actionIndex: 0 }];
+      const totalTime = 15000;
+      const count = Math.max(1, acts.length);
+
+      acts.forEach((act, idx) => {
+        const t = Math.round(((idx + 1) / count) * totalTime);
+        points.push({
+          t,
+          x: act.x !== undefined ? act.x : startP.x,
+          y: act.y !== undefined ? act.y : startP.y,
+          theta: act.theta !== undefined ? act.theta : (act.heading !== undefined ? act.heading : startP.theta),
+          actionIndex: idx + 1
+        });
+      });
+      return points;
+    }
+
+    function renderTeamReplayStudio(scenario = teamReplayScenario) {
+      const engine = window.MatchAnalysisEngine || (typeof MatchAnalysisEngine !== "undefined" ? MatchAnalysisEngine : null);
+      if (!engine) return;
+
+      const routine = activePaths[activeRoutineIndex] || activePaths[0];
+      teamReplayScenario = scenario;
+
+      if (!teamReplaySamples || teamReplaySamples.length === 0 || scenario) {
+        teamReplaySamples = engine.generateSampleLog(routine, scenario);
+      }
+
+      const plannedPts = getTeamPlannedPoints();
+      teamReplayAnalysis = engine.analyze(plannedPts, teamReplaySamples, routine?.actions || []);
+
+      const scrubber = document.getElementById("teamReplayScrubber");
+      if (scrubber) scrubber.max = teamReplayAnalysis.durationMs || 15000;
+
+      const kpiMax = document.getElementById("teamKpiMaxError");
+      const kpiAvg = document.getElementById("teamKpiAvgError");
+      const kpiAcc = document.getElementById("teamKpiAccuracy");
+      const badge = document.getElementById("teamReplayLogBadge");
+
+      if (kpiMax) kpiMax.textContent = `${teamReplayAnalysis.maxErrorInches}"`;
+      if (kpiAvg) kpiAvg.textContent = `${teamReplayAnalysis.avgErrorInches}"`;
+      if (kpiAcc) kpiAcc.textContent = `${teamReplayAnalysis.trackingAccuracyPct}%`;
+      if (badge) badge.textContent = `● ${teamReplayAnalysis.sampleCount} Samples (${(teamReplayAnalysis.durationMs / 1000).toFixed(1)}s)`;
+
+      renderTeamDiagnostics(teamReplayAnalysis.diagnostics || []);
+      drawTeamReplayCanvas();
+    }
+
+    function renderTeamDiagnostics(diagnostics) {
+      const list = document.getElementById("teamReplayDiagnosticsList");
+      if (!list) return;
+      list.innerHTML = "";
+
+      diagnostics.forEach(d => {
+        const item = document.createElement("div");
+        item.className = `diagnostic-item ${d.status}`;
+        item.innerHTML = `
+          <div class="diagnostic-head">
+            <span class="diagnostic-title">${d.icon} Step #${d.stepIndex} (${escapeHtml(d.actionType)})</span>
+            <span style="font-weight:700;font-size:0.68rem;color:${d.status === 'critical' ? '#ef4444' : (d.status === 'warning' ? '#f59e0b' : '#22c55e')};">${d.maxErrorInches}" err</span>
+          </div>
+          <div class="diagnostic-body">${escapeHtml(d.cause)}</div>
+          <div class="diagnostic-fix"><strong>Fix:</strong> ${escapeHtml(d.fix)}</div>
+        `;
+        item.onclick = () => {
+          teamReplayTimeMs = d.worstTimeMs || 0;
+          const s = document.getElementById("teamReplayScrubber");
+          if (s) s.value = teamReplayTimeMs;
+          pauseTeamReplay();
+          drawTeamReplayCanvas();
+        };
+        list.appendChild(item);
+      });
+    }
+
+    function drawTeamReplayCanvas() {
+      const c = document.getElementById("teamReplayCanvas");
+      if (!c) return;
+      const ctx2 = c.getContext("2d");
+      const w = c.width;
+      const h = c.height;
+
+      ctx2.clearRect(0, 0, w, h);
+
+      if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
+        ctx2.drawImage(fieldImg, 0, 0, w, h);
+      } else {
+        ctx2.fillStyle = "#0f172a";
+        ctx2.fillRect(0, 0, w, h);
+      }
+
+      // Draw Planned
+      const plannedPts = getTeamPlannedPoints();
+      if (plannedPts.length > 1) {
+        ctx2.save();
+        ctx2.setLineDash([8, 6]);
+        ctx2.strokeStyle = "#38bdf8";
+        ctx2.lineWidth = 3;
+        ctx2.beginPath();
+        plannedPts.forEach((pt, i) => {
+          const cx = inchToPx(pt.x, w);
+          const cy = inchToPx(pt.y, h, true);
+          if (i === 0) ctx2.moveTo(cx, cy);
+          else ctx2.lineTo(cx, cy);
+        });
+        ctx2.stroke();
+        ctx2.restore();
+      }
+
+      // Draw Actual Heatmap
+      if (teamReplayAnalysis && teamReplayAnalysis.merged && teamReplayAnalysis.merged.length > 1) {
+        const m = teamReplayAnalysis.merged;
+        ctx2.save();
+        ctx2.lineWidth = 4;
+        ctx2.lineCap = "round";
+
+        for (let i = 0; i < m.length - 1; i++) {
+          const p0 = m[i];
+          const p1 = m[i + 1];
+          ctx2.globalAlpha = p0.t <= teamReplayTimeMs ? 1.0 : 0.25;
+          ctx2.strokeStyle = p0.heatmapColor || "#22c55e";
+          ctx2.beginPath();
+          ctx2.moveTo(inchToPx(p0.actualX, w), inchToPx(p0.actualY, h, true));
+          ctx2.lineTo(inchToPx(p1.actualX, w), inchToPx(p1.actualY, h, true));
+          ctx2.stroke();
+        }
+        ctx2.restore();
+      }
+
+      // Robot Frame
+      const engine = window.MatchAnalysisEngine || (typeof MatchAnalysisEngine !== "undefined" ? MatchAnalysisEngine : null);
+      if (!engine || !teamReplayAnalysis) return;
+      const frame = engine.getReplayFrame(teamReplayAnalysis, teamReplayTimeMs);
+      if (!frame) return;
+
+      const liveErr = document.getElementById("teamKpiCurrentError");
+      if (liveErr) liveErr.textContent = `${frame.error.toFixed(1)}"`;
+      const timeLbl = document.getElementById("teamReplayTimeDisplay");
+      if (timeLbl) timeLbl.textContent = `${(teamReplayTimeMs / 1000).toFixed(2)}s / ${(teamReplayAnalysis.durationMs / 1000).toFixed(2)}s`;
+
+      const botW = ((botConfig.robotW || 14) / 144.0) * w;
+      const botH = ((botConfig.robotL || 14) / 144.0) * h;
+
+      // Actual Robot
+      const ax = inchToPx(frame.actualX, w);
+      const ay = inchToPx(frame.actualY, h, true);
+      ctx2.save();
+      ctx2.translate(ax, ay);
+      ctx2.rotate(-(frame.actualTheta * Math.PI) / 180);
+      ctx2.fillStyle = "#1e293b";
+      ctx2.fillRect(-botW / 2, -botH / 2, botW, botH);
+      ctx2.strokeStyle = frame.heatmapColor || "#f59e0b";
+      ctx2.lineWidth = 3;
+      ctx2.strokeRect(-botW / 2, -botH / 2, botW, botH);
+
+      // Front marker
+      ctx2.fillStyle = "#f59e0b";
+      ctx2.beginPath();
+      ctx2.moveTo(0, -botH * 0.5);
+      ctx2.lineTo(-6, -botH * 0.25);
+      ctx2.lineTo(6, -botH * 0.25);
+      ctx2.closePath();
+      ctx2.fill();
+      ctx2.restore();
+    }
+
+    function playTeamReplay() {
+      if (isTeamReplayPlaying) return;
+      isTeamReplayPlaying = true;
+      const btn = document.getElementById("btnTeamReplayPlay");
+      if (btn) btn.textContent = "⏸ Pause";
+      teamReplayLastTime = performance.now();
+
+      function step(now) {
+        if (!isTeamReplayPlaying) return;
+        const dt = now - teamReplayLastTime;
+        teamReplayLastTime = now;
+        teamReplayTimeMs += dt;
+        const maxT = teamReplayAnalysis ? teamReplayAnalysis.durationMs : 15000;
+        if (teamReplayTimeMs >= maxT) {
+          teamReplayTimeMs = maxT;
+          pauseTeamReplay();
+        }
+        const s = document.getElementById("teamReplayScrubber");
+        if (s) s.value = Math.round(teamReplayTimeMs);
+        drawTeamReplayCanvas();
+        if (isTeamReplayPlaying) {
+          teamReplayRaf = requestAnimationFrame(step);
+        }
+      }
+      teamReplayRaf = requestAnimationFrame(step);
+    }
+
+    function pauseTeamReplay() {
+      isTeamReplayPlaying = false;
+      const btn = document.getElementById("btnTeamReplayPlay");
+      if (btn) btn.textContent = "▶ Play";
+      if (teamReplayRaf) cancelAnimationFrame(teamReplayRaf);
+    }
+
+    document.getElementById("btnTeamReplayPlay")?.addEventListener("click", () => {
+      if (isTeamReplayPlaying) pauseTeamReplay();
+      else {
+        if (teamReplayAnalysis && teamReplayTimeMs >= teamReplayAnalysis.durationMs) {
+          teamReplayTimeMs = 0;
+        }
+        playTeamReplay();
+      }
+    });
+
+    document.getElementById("btnTeamReplayReset")?.addEventListener("click", () => {
+      pauseTeamReplay();
+      teamReplayTimeMs = 0;
+      const s = document.getElementById("teamReplayScrubber");
+      if (s) s.value = 0;
+      drawTeamReplayCanvas();
+    });
+
+    document.getElementById("teamReplayScrubber")?.addEventListener("input", (e) => {
+      teamReplayTimeMs = parseFloat(e.target.value) || 0;
+      drawTeamReplayCanvas();
+    });
+
+    document.querySelectorAll("#teamReplayScenariosGroup button").forEach(b => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#teamReplayScenariosGroup button").forEach(btn => btn.classList.remove("active"));
+        b.classList.add("active");
+        renderTeamReplayStudio(b.getAttribute("data-scenario") || "slip");
+      });
+    });
+
+    document.getElementById("btnTeamReplayLoadSample")?.addEventListener("click", () => {
+      renderTeamReplayStudio("slip");
+      showToast("📥 Loaded sample match run with wheel slip!", "📊");
+    });
+
+    const teamFileInput = document.getElementById("teamReplayFileInput");
+    document.getElementById("btnTeamReplayImportFile")?.addEventListener("click", () => teamFileInput?.click());
+    teamFileInput?.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const engine = window.MatchAnalysisEngine || (typeof MatchAnalysisEngine !== "undefined" ? MatchAnalysisEngine : null);
+        if (engine) {
+          const parsed = engine.parseLog(evt.target.result);
+          if (parsed && parsed.length > 0) {
+            teamReplaySamples = parsed;
+            renderTeamReplayStudio(null);
+            showToast(`📂 Imported ${parsed.length} odometry samples!`, "✅");
+          } else {
+            alert("Could not parse odometry points from file.");
+          }
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById("btnTeamReplayExport")?.addEventListener("click", () => {
+      if (!teamReplayAnalysis) return;
+      const rep = `Team Match Replay Analysis (ALPHA)\nAccuracy: ${teamReplayAnalysis.trackingAccuracyPct}%\nMax Drift: ${teamReplayAnalysis.maxErrorInches}"\nAvg Drift: ${teamReplayAnalysis.avgErrorInches}"`;
+      navigator.clipboard?.writeText(rep);
+      showToast("📋 Replay summary copied to clipboard!", "✅");
+    });
 
     // 6c. Integrated IDE File Tabs & Code Actions
     document.querySelectorAll("#ideFileTabs button").forEach(btn => {
@@ -7372,11 +7666,105 @@
   }
 
   // --------------------------------------------------------------------------
+  // RESIZABLE WINDOWS / COLUMNS SPLITTER
+  // --------------------------------------------------------------------------
+  function initResizableWindows() {
+    const leftCol = document.getElementById("teamColLeft");
+    const rightCol = document.getElementById("teamColRight");
+    const ideSidebar = document.getElementById("teamIdeSidebar");
+
+    // Restore saved column dimensions
+    const savedLeftWidth = localStorage.getItem("vex_team_col_left_width");
+    if (savedLeftWidth && leftCol) {
+      leftCol.style.width = `${Math.max(220, Math.min(600, parseInt(savedLeftWidth, 10)))}px`;
+    }
+
+    const savedRightWidth = localStorage.getItem("vex_team_col_right_width");
+    if (savedRightWidth && rightCol) {
+      rightCol.style.width = `${Math.max(260, Math.min(700, parseInt(savedRightWidth, 10)))}px`;
+    }
+
+    const savedIdeSidebarWidth = localStorage.getItem("vex_team_ide_sidebar_width");
+    if (savedIdeSidebarWidth && ideSidebar) {
+      ideSidebar.style.width = `${Math.max(160, Math.min(480, parseInt(savedIdeSidebarWidth, 10)))}px`;
+    }
+
+    function attachResizer(resizerEl, targetEl, isRightToLeft = false, minW = 200, maxW = 600, storageKey = "") {
+      if (!resizerEl || !targetEl) return;
+
+      let isDragging = false;
+      let startX = 0;
+      let startWidth = 0;
+
+      const startDrag = (e) => {
+        isDragging = true;
+        startX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+        startWidth = targetEl.offsetWidth;
+
+        resizerEl.classList.add("is-dragging");
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+
+        const onMove = (evt) => {
+          if (!isDragging) return;
+          const clientX = evt.clientX || (evt.touches && evt.touches[0] ? evt.touches[0].clientX : startX);
+          const deltaX = clientX - startX;
+          let newWidth = isRightToLeft ? startWidth - deltaX : startWidth + deltaX;
+          newWidth = Math.max(minW, Math.min(maxW, newWidth));
+
+          targetEl.style.width = `${newWidth}px`;
+          if (storageKey) {
+            localStorage.setItem(storageKey, String(Math.round(newWidth)));
+          }
+
+          if (typeof drawField === "function") drawField();
+          if (monacoEditor) {
+            try { monacoEditor.layout(); } catch (_) {}
+          }
+          window.dispatchEvent(new Event("resize"));
+        };
+
+        const stopDrag = () => {
+          if (!isDragging) return;
+          isDragging = false;
+          resizerEl.classList.remove("is-dragging");
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+
+          window.removeEventListener("mousemove", onMove);
+          window.removeEventListener("mouseup", stopDrag);
+          window.removeEventListener("touchmove", onMove);
+          window.removeEventListener("touchend", stopDrag);
+
+          if (typeof drawField === "function") drawField();
+          if (monacoEditor) {
+            try { monacoEditor.layout(); } catch (_) {}
+          }
+          window.dispatchEvent(new Event("resize"));
+        };
+
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", stopDrag);
+        window.addEventListener("touchmove", onMove, { passive: false });
+        window.addEventListener("touchend", stopDrag);
+      };
+
+      resizerEl.addEventListener("mousedown", startDrag);
+      resizerEl.addEventListener("touchstart", startDrag, { passive: true });
+    }
+
+    attachResizer(document.getElementById("resizerLeft"), leftCol, false, 220, 600, "vex_team_col_left_width");
+    attachResizer(document.getElementById("resizerRight"), rightCol, true, 260, 700, "vex_team_col_right_width");
+    attachResizer(document.getElementById("resizerIdeSidebar"), ideSidebar, false, 160, 480, "vex_team_ide_sidebar_width");
+  }
+
+  // --------------------------------------------------------------------------
   // INIT
   // --------------------------------------------------------------------------
   window.addEventListener("DOMContentLoaded", () => {
     initAuth();
     initTeamEditor();
+    initResizableWindows();
     wireScoringModal();
     wireCollisionModal();
     wireDebugPanel();

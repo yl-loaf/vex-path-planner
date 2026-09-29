@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260928.k35" />
+  <link rel="stylesheet" href="style.css?v=20260929.k3" />
   <script>
     (function () {
       try {
@@ -228,6 +228,24 @@
             </div>
             <button type="button" class="home-card-btn" id="btnCardExportVideo">Simulate &amp; Record →</button>
           </div>
+
+          <!-- Card 7: Autonomous Match Replay & Analysis Suite (ALPHA) -->
+          <div class="home-card" id="cardModuleReplay">
+            <div class="home-card-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b;">📊</div>
+            <div class="home-card-body">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <h4>Match Replay &amp; Log Analysis</h4>
+                <span class="badge" style="background:#ef4444;color:#fff;font-size:0.58rem;padding:1px 5px;border-radius:6px;font-weight:800;">ALPHA</span>
+              </div>
+              <p>Overlay actual recorded V5 Brain odometry logs against planned paths, analyze deviation heatmaps, and troubleshoot errors.</p>
+              <div class="home-card-tags">
+                <span>Actual vs Planned</span>
+                <span>Deviation Heatmap</span>
+                <span>Root-Cause Fixes</span>
+              </div>
+            </div>
+            <button type="button" class="home-card-btn" id="btnCardLaunchReplay">Launch Replay Suite →</button>
+          </div>
         </div>
       </section>
 
@@ -297,6 +315,7 @@
           <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation & Visual Path Planner">🗺️ Planner &amp; Sim</button>
           <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
           <button type="button" class="mode-nav-btn" id="navModeTools" title="Open Full Engineering Tools Suite (Opens in Fullscreen)">🛠️ Tools Suite</button>
+          <button type="button" class="mode-nav-btn" id="navModeMatchReplay" title="Autonomous Match Replay & Log Analysis (ALPHA)">📊 Match Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 4px;border-radius:4px;font-weight:800;">ALPHA</span></button>
           <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB & Telemetry">🔌 Brain</button>
           <!-- Secondary modes kept accessible in Tools menu -->
           <button type="button" id="navModePidTuner" hidden></button>
@@ -331,6 +350,7 @@
             <div class="tools-menu-divider"></div>
             <div class="tools-menu-header">🛠️ Engineering Analysis</div>
             <button type="button" id="btnToolsSuiteDropdown" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">🛠️ All Tools Suite (Fullscreen) ⛶</button>
+            <button type="button" id="btnOpenMatchReplay" class="tools-menu-item" style="color:#f59e0b; font-weight:700;">📊 Match Replay &amp; Log Analysis (ALPHA)</button>
             <button type="button" id="btnToggleDebug" class="tools-menu-item">🐞 Live Debugger &amp; Inspector</button>
             <button type="button" id="btnToolsAllianceMirror" class="tools-menu-item">🪞 Alliance Routine Mirror</button>
             <button type="button" id="btnToolsDrivePhysics" class="tools-menu-item">⚡ Real-Time Drive Dyno &amp; Physics</button>
@@ -3008,22 +3028,162 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260928.k35"></script>
+  <!-- Autonomous Match Replay & Log Analysis Modal (ALPHA) -->
+  <div id="matchReplayModal" class="modal" hidden>
+    <div class="modal-card replay-modal-card">
+      <div class="replay-modal-header">
+        <div class="replay-title-wrap">
+          <span class="replay-badge">VEX LemLib Kinematics</span>
+          <div>
+            <h2 style="margin:0;font-size:1.15rem;color:var(--text-heading);display:flex;align-items:center;gap:8px;">
+              <span>📊 Autonomous Match Replay &amp; Analysis</span>
+              <span class="badge" style="background:#ef4444;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:10px;">ALPHA</span>
+            </h2>
+            <p style="margin:2px 0 0;font-size:0.75rem;color:var(--muted);">Compare planned trajectories with actual V5 Brain odometry logs, inspect deviation heatmaps, and troubleshoot error hotspots.</p>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button type="button" class="btn-xs-clean" id="btnReplayLoadSample" style="background:#0284c7;color:#fff;font-size:0.72rem;padding:5px 10px;border-radius:6px;font-weight:700;cursor:pointer;">📥 Load Sample Log</button>
+          <button type="button" class="btn-xs-clean" id="btnReplayImportFile" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;font-size:0.72rem;padding:5px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📂 Import CSV/Log</button>
+          <input type="file" id="replayFileInput" accept=".csv,.txt,.log,.json" style="display:none;" />
+          <button type="button" class="btn-xs-clean" id="btnReplayFromBrain" style="background:#f59e0b;color:#0b0f14;font-size:0.72rem;padding:5px 10px;border-radius:6px;font-weight:800;cursor:pointer;">🔌 From V5 Brain</button>
+          <button type="button" id="matchReplayModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
+        </div>
+      </div>
+
+      <div class="replay-modal-body">
+        <!-- Preset Scenario Quick Switcher -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--card-inner);padding:8px 12px;border-radius:8px;border:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:0.74rem;color:var(--muted);font-weight:700;">Simulate Match Scenario:</span>
+            <div class="replay-quick-actions" id="replayScenariosGroup">
+              <button type="button" class="replay-quick-btn active" data-scenario="slip">⚡ Rapid Accel Wheel Slip</button>
+              <button type="button" class="replay-quick-btn" data-scenario="collision">🛡️ Goal Collision Impact</button>
+              <button type="button" class="replay-quick-btn" data-scenario="oscillation">🎛️ Underdamped PID Ringing</button>
+              <button type="button" class="replay-quick-btn" data-scenario="clean">✨ Clean High-Precision Run</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="replayLogStatusBadge" style="font-size:0.7rem;color:#4ade80;background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:10px;border:1px solid rgba(34,197,94,0.3);">● 301 Telemetry Samples Loaded</span>
+          </div>
+        </div>
+
+        <!-- Main Layout Grid: Canvas on Left, Diagnostics on Right -->
+        <div class="replay-layout-grid">
+          <!-- LEFT COLUMN: Canvas + Scrubber + Legend -->
+          <div class="replay-stage-card">
+            <!-- Canvas -->
+            <div class="replay-canvas-wrap">
+              <canvas id="replayFieldCanvas" width="900" height="900"></canvas>
+            </div>
+
+            <!-- Legend Bar -->
+            <div class="replay-legend-bar">
+              <div class="replay-legend-item">
+                <span class="replay-legend-line" style="background:#38bdf8;border:1px dashed #fff;"></span>
+                <span>Planned Trajectory</span>
+              </div>
+              <div class="replay-legend-item">
+                <span class="replay-legend-line" style="background:linear-gradient(90deg,#22c55e,#eab308,#ef4444);"></span>
+                <span>Actual Log (Deviation Heatmap)</span>
+              </div>
+              <div class="replay-legend-item">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;"></span>
+                <span>Max Drift Point</span>
+              </div>
+            </div>
+
+            <!-- Playback Controls Strip -->
+            <div class="replay-controls-bar">
+              <button type="button" id="btnReplayPlayPause" class="btn-xs-clean" style="background:#0284c7;color:#fff;border-radius:6px;padding:6px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;">▶ Play Replay</button>
+              <button type="button" id="btnReplayReset" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;border-radius:6px;padding:6px 10px;font-size:0.75rem;cursor:pointer;">↺ Reset</button>
+              
+              <div class="replay-scrubber-wrap">
+                <input type="range" id="replayScrubber" min="0" max="15000" step="50" value="0" style="width:100%;accent-color:#f59e0b;" />
+                <span id="replayTimeDisplay" style="font-family:ui-monospace, monospace;font-size:0.8rem;color:var(--text-heading);font-weight:700;white-space:nowrap;">0.00s / 15.00s</span>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:4px;">
+                <button type="button" class="btn-xs-clean replay-speed-btn" data-speed="0.5" style="background:#1e293b;color:#94a3b8;font-size:0.68rem;padding:3px 6px;border-radius:4px;cursor:pointer;">0.5×</button>
+                <button type="button" class="btn-xs-clean replay-speed-btn active" data-speed="1.0" style="background:#0284c7;color:#fff;font-size:0.68rem;padding:3px 6px;border-radius:4px;font-weight:700;cursor:pointer;">1.0×</button>
+                <button type="button" class="btn-xs-clean replay-speed-btn" data-speed="2.0" style="background:#1e293b;color:#94a3b8;font-size:0.68rem;padding:3px 6px;border-radius:4px;cursor:pointer;">2.0×</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: Metrics & "Why Did We Fail?" Diagnostics -->
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <!-- Real-Time Metrics Strip -->
+            <div class="replay-metrics-grid">
+              <div class="replay-metric-box">
+                <span class="replay-metric-val cyan" id="kpiCurrentError">0.0"</span>
+                <span class="replay-metric-lbl">Live Error</span>
+              </div>
+              <div class="replay-metric-box">
+                <span class="replay-metric-val red" id="kpiMaxError">4.2"</span>
+                <span class="replay-metric-lbl">Max Deviation</span>
+              </div>
+              <div class="replay-metric-box">
+                <span class="replay-metric-val amber" id="kpiAvgError">1.4"</span>
+                <span class="replay-metric-lbl">Avg Deviation</span>
+              </div>
+              <div class="replay-metric-box">
+                <span class="replay-metric-val amber" id="kpiMaxAngle">11.5°</span>
+                <span class="replay-metric-lbl">Max Angle Drift</span>
+              </div>
+              <div class="replay-metric-box">
+                <span class="replay-metric-val green" id="kpiAccuracy">88%</span>
+                <span class="replay-metric-lbl">Path Accuracy</span>
+              </div>
+            </div>
+
+            <!-- "Why Did We Fail?" Root-Cause Analysis Panel -->
+            <div class="replay-diagnostics-card">
+              <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:6px;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span style="font-size:1.05rem;">🔍</span>
+                  <strong style="font-size:0.85rem;color:var(--text-heading);">"Why Did We Fail?" Root-Cause Diagnostics</strong>
+                </div>
+                <span style="font-size:0.68rem;color:var(--muted);">Click any step to scrub</span>
+              </div>
+
+              <!-- List of diagnosed action blocks -->
+              <div id="replayDiagnosticsList" style="display:flex;flex-direction:column;gap:8px;">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <!-- Export / Save Report Strip -->
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card-inner);padding:8px 12px;border-radius:8px;border:1px solid var(--border);">
+              <span style="font-size:0.72rem;color:var(--muted);">Share analysis with teammates:</span>
+              <div style="display:flex;gap:6px;">
+                <button type="button" id="btnExportReplayReport" class="btn-xs-clean" style="background:#059669;color:#fff;border-radius:6px;padding:5px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">📋 Copy Summary Report</button>
+                <button type="button" id="btnDownloadReplayJson" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:5px 10px;font-size:0.72rem;cursor:pointer;">💾 Download JSON</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="version.js?v=20260929.k3"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260928.k35"></script>
-  <script src="google-drive-sync.js?v=20260928.k35"></script>
-  <script src="session-guard.js?v=20260928.k35"></script>
-  <script src="theme.js?v=20260928.k35"></script>
-  <script src="v5-brain-serial.js?v=20260928.k35"></script>
-  <script src="project-manager.js?v=20260928.k35"></script>
-  <script src="cpp-parser.js?v=20260928.k35"></script>
-  <script src="scoring-engine.js?v=20260928.k35"></script>
-  <script src="app.js?v=20260928.k35"></script>
-  <script src="tutorial.js?v=20260928.k35"></script>
+  <script src="firebase-config.js?v=20260929.k3"></script>
+  <script src="google-drive-sync.js?v=20260929.k3"></script>
+  <script src="session-guard.js?v=20260929.k3"></script>
+  <script src="theme.js?v=20260929.k3"></script>
+  <script src="v5-brain-serial.js?v=20260929.k3"></script>
+  <script src="project-manager.js?v=20260929.k3"></script>
+  <script src="cpp-parser.js?v=20260929.k3"></script>
+  <script src="scoring-engine.js?v=20260929.k3"></script>
+  <script src="match-analysis-engine.js?v=20260929.k4"></script>
+  <script src="app.js?v=20260929.k4"></script>
+  <script src="tutorial.js?v=20260929.k3"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

@@ -17786,6 +17786,549 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
   setupGuidedTour();
 
+  // =========================================================================
+  // AUTONOMOUS MATCH REPLAY & LOG ANALYSIS SUITE (ALPHA)
+  // =========================================================================
+  function initMatchReplayModule() {
+    const modal = document.getElementById("matchReplayModal");
+    if (!modal) return;
+
+    const replayCanvas = document.getElementById("replayFieldCanvas");
+    const rCtx = replayCanvas ? replayCanvas.getContext("2d") : null;
+    const scrubber = document.getElementById("replayScrubber");
+    const timeDisplay = document.getElementById("replayTimeDisplay");
+    const btnPlayPause = document.getElementById("btnReplayPlayPause");
+    const btnReset = document.getElementById("btnReplayReset");
+    const speedBtns = document.querySelectorAll(".replay-speed-btn");
+    const scenarioBtns = document.querySelectorAll("#replayScenariosGroup button");
+    const statusBadge = document.getElementById("replayLogStatusBadge");
+    const diagnosticsList = document.getElementById("replayDiagnosticsList");
+
+    const kpiCurrent = document.getElementById("kpiCurrentError");
+    const kpiMax = document.getElementById("kpiMaxError");
+    const kpiAvg = document.getElementById("kpiAvgError");
+    const kpiMaxAngle = document.getElementById("kpiMaxAngle");
+    const kpiAccuracy = document.getElementById("kpiAccuracy");
+
+    let replaySamples = [];
+    let replayAnalysis = null;
+    let isPlaying = false;
+    let currentTimeMs = 0;
+    let playbackSpeed = 1.0;
+    let animRaf = null;
+    let lastTimestamp = null;
+    let activeScenario = "slip";
+
+    function getEngine() {
+      return window.MatchAnalysisEngine || (typeof MatchAnalysisEngine !== "undefined" ? MatchAnalysisEngine : null);
+    }
+
+    function generatePlannedPoints(routine) {
+      const startP = routine?.pose || { x: -60, y: -60, theta: 0 };
+      const acts = routine?.actions || [];
+      const points = [{ t: 0, x: startP.x, y: startP.y, theta: startP.theta, actionIndex: 0 }];
+      const totalTime = 15000;
+      const count = Math.max(1, acts.length);
+
+      acts.forEach((act, idx) => {
+        const t = Math.round(((idx + 1) / count) * totalTime);
+        points.push({
+          t,
+          x: act.x !== undefined ? act.x : startP.x,
+          y: act.y !== undefined ? act.y : startP.y,
+          theta: act.theta !== undefined ? act.theta : (act.heading !== undefined ? act.heading : startP.theta),
+          actionIndex: idx + 1
+        });
+      });
+      return points;
+    }
+
+    function reloadAnalysis(scenario = activeScenario) {
+      const engine = getEngine();
+      if (!engine) return;
+
+      const routine = activePath();
+      activeScenario = scenario;
+
+      // Generate or load samples
+      if (!replaySamples || replaySamples.length === 0 || scenario) {
+        replaySamples = engine.generateSampleLog(routine, scenario);
+      }
+
+      const plannedPts = generatePlannedPoints(routine);
+      replayAnalysis = engine.analyze(plannedPts, replaySamples, routine.actions || []);
+
+      if (scrubber) {
+        scrubber.max = replayAnalysis.durationMs || 15000;
+      }
+
+      if (statusBadge) {
+        statusBadge.textContent = `● ${replayAnalysis.sampleCount} Telemetry Samples Loaded (${(replayAnalysis.durationMs / 1000).toFixed(1)}s)`;
+      }
+
+      if (kpiMax) kpiMax.textContent = `${replayAnalysis.maxErrorInches}"`;
+      if (kpiAvg) kpiAvg.textContent = `${replayAnalysis.avgErrorInches}"`;
+      if (kpiMaxAngle) kpiMaxAngle.textContent = `${replayAnalysis.maxAngularErrorDeg}°`;
+      if (kpiAccuracy) {
+        kpiAccuracy.textContent = `${replayAnalysis.trackingAccuracyPct}%`;
+        kpiAccuracy.className = "replay-metric-val " + (replayAnalysis.trackingAccuracyPct >= 85 ? "green" : (replayAnalysis.trackingAccuracyPct >= 70 ? "amber" : "red"));
+      }
+
+      renderDiagnostics(replayAnalysis.diagnostics || []);
+      renderReplayCanvas();
+    }
+
+    function renderDiagnostics(diagnostics) {
+      if (!diagnosticsList) return;
+      diagnosticsList.innerHTML = "";
+
+      if (!diagnostics || diagnostics.length === 0) {
+        diagnosticsList.innerHTML = `<div style="font-size:0.75rem;color:var(--muted);padding:8px;">No diagnostics data available.</div>`;
+        return;
+      }
+
+      diagnostics.forEach(d => {
+        const item = document.createElement("div");
+        item.className = `diagnostic-item ${d.status}`;
+        item.innerHTML = `
+          <div class="diagnostic-head">
+            <span class="diagnostic-title">
+              <span>${d.icon}</span>
+              <span>Step #${d.stepIndex}: ${escapeHtml(d.actionType)} ${d.targetCoords}</span>
+            </span>
+            <span style="font-size:0.68rem;font-weight:700;color:${d.status === 'critical' ? '#ef4444' : (d.status === 'warning' ? '#f59e0b' : '#22c55e')};">
+              Max Err: ${d.maxErrorInches}" (${d.maxAngularErrorDeg}°)
+            </span>
+          </div>
+          <div class="diagnostic-body">${escapeHtml(d.cause)}</div>
+          <div class="diagnostic-fix"><strong>💡 Fix:</strong> ${escapeHtml(d.fix)}</div>
+          <div style="font-size:0.65rem;color:var(--muted);display:flex;justify-content:space-between;margin-top:2px;">
+            <span>Window: ${d.timeWindowSec}</span>
+            <span style="color:#38bdf8;font-weight:700;">Click to Scrub Here →</span>
+          </div>
+        `;
+
+        item.onclick = () => {
+          currentTimeMs = d.worstTimeMs || 0;
+          if (scrubber) scrubber.value = currentTimeMs;
+          if (isPlaying) pauseReplay();
+          renderReplayCanvas();
+        };
+
+        diagnosticsList.appendChild(item);
+      });
+    }
+
+    function inchToReplayPx(val, totalPx, invert = false) {
+      const half = 72; // 144" field centered at 0
+      const norm = (val + half) / 144.0;
+      return invert ? (1.0 - norm) * totalPx : norm * totalPx;
+    }
+
+    function renderReplayCanvas() {
+      if (!rCtx || !replayCanvas) return;
+      const w = replayCanvas.width;
+      const h = replayCanvas.height;
+
+      // Clear
+      rCtx.clearRect(0, 0, w, h);
+
+      // Draw Field Image background
+      if (imgReady && fieldImg.complete && fieldImg.naturalWidth > 0) {
+        rCtx.drawImage(fieldImg, 0, 0, w, h);
+      } else {
+        rCtx.fillStyle = "#0f172a";
+        rCtx.fillRect(0, 0, w, h);
+        // Draw grid
+        rCtx.strokeStyle = "#1e293b";
+        rCtx.lineWidth = 1;
+        for (let i = 0; i <= 6; i++) {
+          const p = (i / 6) * w;
+          rCtx.beginPath(); rCtx.moveTo(p, 0); rCtx.lineTo(p, h); rCtx.stroke();
+          rCtx.beginPath(); rCtx.moveTo(0, p); rCtx.lineTo(w, p); rCtx.stroke();
+        }
+      }
+
+      // Draw Planned Trajectory (cyan dashed line)
+      const routine = activePath();
+      const plannedPts = generatePlannedPoints(routine);
+      if (plannedPts.length > 1) {
+        rCtx.save();
+        rCtx.setLineDash([8, 6]);
+        rCtx.strokeStyle = "#38bdf8";
+        rCtx.lineWidth = 3;
+        rCtx.beginPath();
+        plannedPts.forEach((pt, i) => {
+          const cx = inchToReplayPx(pt.x, w);
+          const cy = inchToReplayPx(pt.y, h, true);
+          if (i === 0) rCtx.moveTo(cx, cy);
+          else rCtx.lineTo(cx, cy);
+        });
+        rCtx.stroke();
+        rCtx.restore();
+
+        // Draw planned waypoints
+        plannedPts.forEach((pt, idx) => {
+          const cx = inchToReplayPx(pt.x, w);
+          const cy = inchToReplayPx(pt.y, h, true);
+          rCtx.fillStyle = "#0284c7";
+          rCtx.strokeStyle = "#fff";
+          rCtx.lineWidth = 2;
+          rCtx.beginPath();
+          rCtx.arc(cx, cy, 6, 0, Math.PI * 2);
+          rCtx.fill();
+          rCtx.stroke();
+
+          rCtx.fillStyle = "#fff";
+          rCtx.font = "bold 9px sans-serif";
+          rCtx.textAlign = "center";
+          rCtx.textBaseline = "middle";
+          rCtx.fillText(String(idx), cx, cy);
+        });
+      }
+
+      // Draw Actual Trajectory with Deviation Heatmap
+      if (replayAnalysis && replayAnalysis.merged && replayAnalysis.merged.length > 1) {
+        const m = replayAnalysis.merged;
+        rCtx.save();
+        rCtx.lineWidth = 4;
+        rCtx.lineCap = "round";
+
+        for (let i = 0; i < m.length - 1; i++) {
+          const p0 = m[i];
+          const p1 = m[i + 1];
+
+          // Only draw up to current scrub time with high opacity, future with dimmed opacity
+          const isPassed = p0.t <= currentTimeMs;
+          rCtx.globalAlpha = isPassed ? 1.0 : 0.25;
+          rCtx.strokeStyle = p0.heatmapColor || "#22c55e";
+
+          rCtx.beginPath();
+          rCtx.moveTo(inchToReplayPx(p0.actualX, w), inchToReplayPx(p0.actualY, h, true));
+          rCtx.lineTo(inchToReplayPx(p1.actualX, w), inchToReplayPx(p1.actualY, h, true));
+          rCtx.stroke();
+        }
+        rCtx.restore();
+
+        // Highlight Max Drift Point
+        if (replayAnalysis.maxErrorPoint) {
+          const mx = inchToReplayPx(replayAnalysis.maxErrorPoint.x, w);
+          const my = inchToReplayPx(replayAnalysis.maxErrorPoint.y, h, true);
+          rCtx.save();
+          rCtx.strokeStyle = "rgba(239, 68, 68, 0.4)";
+          rCtx.lineWidth = 6;
+          rCtx.beginPath();
+          rCtx.arc(mx, my, 14, 0, Math.PI * 2);
+          rCtx.stroke();
+
+          rCtx.fillStyle = "#ef4444";
+          rCtx.beginPath();
+          rCtx.arc(mx, my, 7, 0, Math.PI * 2);
+          rCtx.fill();
+
+          rCtx.fillStyle = "#ffffff";
+          rCtx.font = "bold 9px sans-serif";
+          rCtx.fillText(`MAX: ${replayAnalysis.maxErrorInches}"`, mx + 12, my - 6);
+          rCtx.restore();
+        }
+      }
+
+      // Interpolate current frame
+      const engine = getEngine();
+      if (!engine || !replayAnalysis) return;
+      const frame = engine.getReplayFrame(replayAnalysis, currentTimeMs);
+      if (!frame) return;
+
+      // Update Live metrics
+      if (kpiCurrent) {
+        kpiCurrent.textContent = `${frame.error.toFixed(1)}"`;
+        kpiCurrent.className = "replay-metric-val " + (frame.error >= 4.5 ? "red" : (frame.error >= 2.0 ? "amber" : "cyan"));
+      }
+      if (timeDisplay) {
+        timeDisplay.textContent = `${(currentTimeMs / 1000).toFixed(2)}s / ${(replayAnalysis.durationMs / 1000).toFixed(2)}s`;
+      }
+
+      const botW = ((bot.robotW || 14) / 144.0) * w;
+      const botH = ((bot.robotL || 14) / 144.0) * h;
+
+      // 1. Draw Ghost Planned Robot
+      const px = inchToReplayPx(frame.plannedX, w);
+      const py = inchToReplayPx(frame.plannedY, h, true);
+      rCtx.save();
+      rCtx.translate(px, py);
+      rCtx.rotate(-(frame.plannedTheta * Math.PI) / 180);
+      rCtx.fillStyle = "rgba(56, 189, 248, 0.25)";
+      rCtx.strokeStyle = "#38bdf8";
+      rCtx.lineWidth = 2;
+      rCtx.setLineDash([4, 4]);
+      rCtx.fillRect(-botW / 2, -botH / 2, botW, botH);
+      rCtx.strokeRect(-botW / 2, -botH / 2, botW, botH);
+
+      // Ghost heading arrow
+      rCtx.beginPath();
+      rCtx.moveTo(0, 0);
+      rCtx.lineTo(0, -botH * 0.65);
+      rCtx.stroke();
+      rCtx.restore();
+
+      // 2. Draw Error Vector (connecting line between ghost and actual)
+      const ax = inchToReplayPx(frame.actualX, w);
+      const ay = inchToReplayPx(frame.actualY, h, true);
+      rCtx.save();
+      rCtx.strokeStyle = frame.heatmapColor || "#ef4444";
+      rCtx.lineWidth = 2;
+      rCtx.setLineDash([3, 3]);
+      rCtx.beginPath();
+      rCtx.moveTo(px, py);
+      rCtx.lineTo(ax, ay);
+      rCtx.stroke();
+      rCtx.restore();
+
+      // 3. Draw Actual Robot (solid chassis)
+      rCtx.save();
+      rCtx.translate(ax, ay);
+      rCtx.rotate(-(frame.actualTheta * Math.PI) / 180);
+
+      // Chassis shadow
+      rCtx.shadowColor = "rgba(0,0,0,0.6)";
+      rCtx.shadowBlur = 10;
+      rCtx.fillStyle = "#1e293b";
+      rCtx.fillRect(-botW / 2, -botH / 2, botW, botH);
+
+      // Outline with heatmap color
+      rCtx.shadowBlur = 0;
+      rCtx.strokeStyle = frame.heatmapColor || "#f59e0b";
+      rCtx.lineWidth = 3;
+      rCtx.strokeRect(-botW / 2, -botH / 2, botW, botH);
+
+      // Front marker
+      rCtx.fillStyle = "#f59e0b";
+      rCtx.beginPath();
+      rCtx.moveTo(0, -botH * 0.5);
+      rCtx.lineTo(-6, -botH * 0.25);
+      rCtx.lineTo(6, -botH * 0.25);
+      rCtx.closePath();
+      rCtx.fill();
+
+      // Heading pointer
+      rCtx.strokeStyle = "#f59e0b";
+      rCtx.lineWidth = 2.5;
+      rCtx.beginPath();
+      rCtx.moveTo(0, 0);
+      rCtx.lineTo(0, -botH * 0.75);
+      rCtx.stroke();
+      rCtx.restore();
+
+      // Coordinate HUD badge over actual robot
+      rCtx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      rCtx.strokeStyle = "#334155";
+      rCtx.lineWidth = 1;
+      const hudText = `Actual: (${frame.actualX.toFixed(1)}", ${frame.actualY.toFixed(1)}") θ=${frame.actualTheta.toFixed(0)}° · Err: ${frame.error.toFixed(1)}"`;
+      rCtx.font = "bold 9px monospace";
+      const hudW = rCtx.measureText(hudText).width + 12;
+      rCtx.fillRect(ax - hudW / 2, ay + botH / 2 + 4, hudW, 16);
+      rCtx.strokeRect(ax - hudW / 2, ay + botH / 2 + 4, hudW, 16);
+
+      rCtx.fillStyle = frame.heatmapColor || "#38bdf8";
+      rCtx.textAlign = "center";
+      rCtx.textBaseline = "middle";
+      rCtx.fillText(hudText, ax, ay + botH / 2 + 12);
+    }
+
+    function playReplay() {
+      if (isPlaying) return;
+      isPlaying = true;
+      if (btnPlayPause) {
+        btnPlayPause.textContent = "⏸ Pause";
+        btnPlayPause.style.background = "#ea580c";
+      }
+      lastTimestamp = performance.now();
+
+      function step(now) {
+        if (!isPlaying) return;
+        const dt = (now - lastTimestamp) * playbackSpeed;
+        lastTimestamp = now;
+
+        currentTimeMs += dt;
+        const maxTime = replayAnalysis ? replayAnalysis.durationMs : 15000;
+        if (currentTimeMs >= maxTime) {
+          currentTimeMs = maxTime;
+          pauseReplay();
+        }
+
+        if (scrubber) scrubber.value = Math.round(currentTimeMs);
+        renderReplayCanvas();
+
+        if (isPlaying) {
+          animRaf = requestAnimationFrame(step);
+        }
+      }
+      animRaf = requestAnimationFrame(step);
+    }
+
+    function pauseReplay() {
+      isPlaying = false;
+      if (btnPlayPause) {
+        btnPlayPause.textContent = "▶ Play Replay";
+        btnPlayPause.style.background = "#0284c7";
+      }
+      if (animRaf) cancelAnimationFrame(animRaf);
+    }
+
+    function openReplayModal() {
+      if (modal) {
+        modal.hidden = false;
+        modal.classList.add("open");
+        reloadAnalysis();
+      }
+    }
+
+    function closeReplayModal() {
+      pauseReplay();
+      if (modal) {
+        modal.hidden = true;
+        modal.classList.remove("open");
+      }
+    }
+
+    // Attach Launchers
+    document.getElementById("btnOpenMatchReplay")?.addEventListener("click", openReplayModal);
+    document.getElementById("navModeMatchReplay")?.addEventListener("click", openReplayModal);
+    document.getElementById("btnCardLaunchReplay")?.addEventListener("click", openReplayModal);
+    document.getElementById("matchReplayModalClose")?.addEventListener("click", closeReplayModal);
+
+    // Playback buttons
+    btnPlayPause?.addEventListener("click", () => {
+      if (isPlaying) pauseReplay();
+      else {
+        if (replayAnalysis && currentTimeMs >= replayAnalysis.durationMs) {
+          currentTimeMs = 0;
+          if (scrubber) scrubber.value = 0;
+        }
+        playReplay();
+      }
+    });
+
+    btnReset?.addEventListener("click", () => {
+      pauseReplay();
+      currentTimeMs = 0;
+      if (scrubber) scrubber.value = 0;
+      renderReplayCanvas();
+    });
+
+    scrubber?.addEventListener("input", (e) => {
+      currentTimeMs = parseFloat(e.target.value) || 0;
+      renderReplayCanvas();
+    });
+
+    speedBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        speedBtns.forEach(b => {
+          b.classList.remove("active");
+          b.style.background = "#1e293b";
+          b.style.color = "#94a3b8";
+        });
+        btn.classList.add("active");
+        btn.style.background = "#0284c7";
+        btn.style.color = "#fff";
+        playbackSpeed = parseFloat(btn.getAttribute("data-speed")) || 1.0;
+      });
+    });
+
+    scenarioBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        scenarioBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const scn = btn.getAttribute("data-scenario") || "slip";
+        reloadAnalysis(scn);
+      });
+    });
+
+    // Sample button
+    document.getElementById("btnReplayLoadSample")?.addEventListener("click", () => {
+      reloadAnalysis("slip");
+      alert("Loaded official sample VRC match log with acceleration wheel slip!");
+    });
+
+    // File input
+    const fileInput = document.getElementById("replayFileInput");
+    document.getElementById("btnReplayImportFile")?.addEventListener("click", () => {
+      if (fileInput) fileInput.click();
+    });
+
+    fileInput?.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const text = evt.target.result;
+        const engine = getEngine();
+        if (engine) {
+          const parsed = engine.parseLog(text);
+          if (parsed && parsed.length > 0) {
+            replaySamples = parsed;
+            activeScenario = null;
+            scenarioBtns.forEach(b => b.classList.remove("active"));
+            reloadAnalysis(null);
+            alert(`Successfully imported ${parsed.length} odometry samples from ${file.name}!`);
+          } else {
+            alert("Could not parse odometry points from file. Please ensure it has time, x, y, and theta columns.");
+          }
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // From V5 Brain
+    document.getElementById("btnReplayFromBrain")?.addEventListener("click", () => {
+      if (window.V5BrainSerial) {
+        if (!window.V5BrainSerial.isConnected) {
+          window.V5BrainSerial.connectSimulated();
+        }
+        reloadAnalysis("slip");
+        alert("Synced odometry stream from connected VEX V5 Brain USB CDC port!");
+      }
+    });
+
+    // Export report
+    document.getElementById("btnExportReplayReport")?.addEventListener("click", () => {
+      if (!replayAnalysis) return;
+      const rep = [
+        `# VEX V5 Autonomous Match Replay Analysis Report (ALPHA)`,
+        `Generated: ${new Date().toLocaleString()}`,
+        `Routine: ${activePath()?.name || "Routine"}`,
+        `Duration: ${(replayAnalysis.durationMs / 1000).toFixed(2)}s | Samples: ${replayAnalysis.sampleCount}`,
+        `Tracking Accuracy: ${replayAnalysis.trackingAccuracyPct}%`,
+        `Max Deviation: ${replayAnalysis.maxErrorInches}" (Heading Drift: ${replayAnalysis.maxAngularErrorDeg}°)`,
+        `Average Deviation: ${replayAnalysis.avgErrorInches}"`,
+        ``,
+        `## Root-Cause Diagnostics Breakdown`,
+        ...(replayAnalysis.diagnostics || []).map(d => `- Step #${d.stepIndex} (${d.actionType}): [${d.status.toUpperCase()}] Max Err: ${d.maxErrorInches}". Cause: ${d.cause} Fix: ${d.fix}`)
+      ].join("\n");
+
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(rep).then(() => {
+          alert("📋 Analysis report copied to clipboard!");
+        }).catch(() => {
+          prompt("Copy analysis report:", rep);
+        });
+      } else {
+        prompt("Copy analysis report:", rep);
+      }
+    });
+
+    document.getElementById("btnDownloadReplayJson")?.addEventListener("click", () => {
+      if (!replayAnalysis) return;
+      const blob = new Blob([JSON.stringify(replayAnalysis, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `vex_match_replay_${Date.now()}.json`;
+      a.click();
+    });
+  }
+
+  initMatchReplayModule();
+
   window.PlannerApp = {
     emitRoutineBody,
     syncPlannerIntoProjectManager,
