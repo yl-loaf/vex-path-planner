@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260929.k3" />
+  <link rel="stylesheet" href="style.css?v=20260930.k1" />
   <script>
     (function () {
       try {
@@ -72,6 +72,9 @@
           <span class="theme-toggle-icon">☀️</span>
           <span class="theme-toggle-text">Theme</span>
         </button>
+        <a href="documentation.html" class="btn-nav-stats" title="VEX V5 &amp; LemLib Documentation &amp; API Guide">
+          📖 Docs
+        </a>
         <a href="stats.html" class="btn-nav-stats" title="View website visitor analytics and stats">
           📊 Stats <span id="globalVisitorBadge" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 6px;border-radius:10px;font-size:0.75rem;margin-left:4px;">...</span>
         </a>
@@ -317,6 +320,7 @@
           <button type="button" class="mode-nav-btn" id="navModeTools" title="Open Full Engineering Tools Suite (Opens in Fullscreen)">🛠️ Tools Suite</button>
           <button type="button" class="mode-nav-btn" id="navModeMatchReplay" title="Autonomous Match Replay & Log Analysis (ALPHA)">📊 Match Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 4px;border-radius:4px;font-weight:800;">ALPHA</span></button>
           <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB & Telemetry">🔌 Brain</button>
+          <a href="documentation.html" class="mode-nav-btn" id="navModeDocs" title="VEX V5 &amp; LemLib Documentation, Guides &amp; API Reference">📖 Documentation</a>
           <!-- Secondary modes kept accessible in Tools menu -->
           <button type="button" id="navModePidTuner" hidden></button>
         </nav>
@@ -367,6 +371,7 @@
 
             <div class="tools-menu-divider"></div>
             <div class="tools-menu-header">📖 Guides &amp; Analytics</div>
+            <a href="documentation.html" class="tools-menu-item" style="color:#38bdf8;font-weight:700;">📖 Documentation &amp; API Guide</a>
             <a href="team.html" class="tools-menu-item" style="color:#38bdf8;font-weight:700;">👥 Team Collaboration (ALPHA)</a>
             <button type="button" id="btnOpenTutorial" class="tools-menu-item">🎓 Interactive LemLib Tutorial</button>
             <a href="stats.html" class="tools-menu-item">📊 Site &amp; User Stats</a>
@@ -3167,23 +3172,23 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260929.k3"></script>
+  <script src="version.js?v=20260930.k1"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260929.k3"></script>
-  <script src="google-drive-sync.js?v=20260929.k3"></script>
-  <script src="session-guard.js?v=20260929.k3"></script>
-  <script src="theme.js?v=20260929.k3"></script>
-  <script src="v5-brain-serial.js?v=20260929.k3"></script>
-  <script src="project-manager.js?v=20260929.k3"></script>
-  <script src="cpp-parser.js?v=20260929.k3"></script>
-  <script src="scoring-engine.js?v=20260929.k3"></script>
-  <script src="match-analysis-engine.js?v=20260929.k4"></script>
-  <script src="app.js?v=20260929.k4"></script>
-  <script src="tutorial.js?v=20260929.k3"></script>
+  <script src="firebase-config.js?v=20260930.k1"></script>
+  <script src="google-drive-sync.js?v=20260930.k1"></script>
+  <script src="session-guard.js?v=20260930.k1"></script>
+  <script src="theme.js?v=20260930.k1"></script>
+  <script src="v5-brain-serial.js?v=20260930.k1"></script>
+  <script src="project-manager.js?v=20260930.k1"></script>
+  <script src="cpp-parser.js?v=20260930.k1"></script>
+  <script src="scoring-engine.js?v=20260930.k1"></script>
+  <script src="match-analysis-engine.js?v=20260930.k1"></script>
+  <script src="app.js?v=20260930.k1"></script>
+  <script src="tutorial.js?v=20260930.k1"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

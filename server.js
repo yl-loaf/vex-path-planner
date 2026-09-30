@@ -2210,6 +2210,18 @@ app.get(['/team', '/team.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'team.html'));
 });
 
+// Team Administration & Member Permissions Dashboard
+app.get(['/admin', '/admin.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// VEX V5 & LemLib Documentation Portal Route
+app.get(['/documentation', '/documentation.html', '/docs', '/docs.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
+  res.sendFile(path.join(__dirname, 'documentation.html'));
+});
+
 // Google Search Console & SEO Routes
 app.get(['/favicon.ico'], (req, res) => {
   res.set({

@@ -13,7 +13,7 @@
   <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
   <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
-  <link rel="stylesheet" href="style.css?v=20260929.k16" />
+  <link rel="stylesheet" href="style.css?v=20260930.k1" />
   <script>
     (function () {
       try {
@@ -577,6 +577,7 @@
       <a href="team.html" class="tools-tab-link" title="Real-Time Team Collaboration &amp; Cloud Sync (ALPHA)">👥 Team Collab <span style="background:#ef4444;color:#ffffff;font-size:0.6rem;padding:1px 5px;border-radius:8px;font-weight:800;">ALPHA</span></a>
       <a href="admin.html" class="tools-tab-link" title="VEX Team Administration &amp; Member Permissions Dashboard">🛡️ Admin Dashboard</a>
       <a href="tools.html" class="tools-tab-link active" title="Comprehensive Engineering Tools Suite">🛠️ Tools Suite</a>
+      <a href="documentation.html" class="tools-tab-link" title="VEX &amp; LemLib Comprehensive Documentation &amp; API Reference">📖 Documentation</a>
       <a href="translator.html" class="tools-tab-link" title="Raw C++ Auton to Visual Blocks Translator">🔄 C++ Translator</a>
       <a href="stats.html" class="tools-tab-link" title="Site & User Visitor Analytics">📊 Stats</a>
     </div>
@@ -617,7 +618,7 @@
       </div>
 
       <div class="tools-filter-pills" id="toolsFilterPills">
-        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">17</span>)</button>
+        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">18</span>)</button>
         <button type="button" class="tool-pill" data-filter="collab">👥 Team &amp; Cloud</button>
         <button type="button" class="tool-pill" data-filter="motion">🏎️ Motion &amp; Dyno</button>
         <button type="button" class="tool-pill" data-filter="tuning">🎛️ PID &amp; Bottlenecks</button>
@@ -712,6 +713,50 @@
             </a>
             <a href="team.html" class="btn-tool-action" title="Open Team Workspace">
               👥 Team Workspace
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 0D: LemLib Autonomous & Engineering Documentation Portal (documentation.html) -->
+      <article class="tool-card highlight" data-category="collab" data-keywords="documentation docs api guide manual reference lemlib boomerang pure pursuit coordinates angles pid hardware pros c++ cheat sheet">
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background:rgba(14, 165, 233, 0.15); border-color:rgba(14, 165, 233, 0.35); color:#38bdf8;">📖</div>
+          <div class="tool-title-info">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <h3>VEX V5 &amp; LemLib Engineering Documentation Portal</h3>
+              <span style="background:#0284c7;color:#ffffff;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius:10px;">MANUAL</span>
+            </div>
+            <p class="tool-tagline">Comprehensive engineering manual, LemLib C++ API signatures, Boomerang controller mathematical foundation, field coordinate guide, and live angle calculator.</p>
+          </div>
+          <span class="tool-category-badge" style="background:rgba(14, 165, 233, 0.15);color:#38bdf8;border-color:rgba(14, 165, 233, 0.35);">📖 Docs</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">API Signatures</span>
+              <strong class="result-val cyan">LemLib v0.5+ Complete</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Interactive</span>
+              <strong class="result-val green">Live Code Builder</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Field Specs</span>
+              <strong class="result-val amber">144" × 144" Override</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.73rem; color:var(--muted); line-height:1.4;">
+            Master autonomous programming for the Override season. Includes full C++ examples for <code>moveToPoint</code>, <code>moveToPose</code> with Boomerang curvature tuning, <code>swingToHeading</code>, Pure Pursuit, and asynchronous FreeRTOS <code>waitUntil()</code> subsystem triggers.
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="documentation.html" class="btn-tool-action primary" title="Open Complete VEX V5 &amp; LemLib Documentation">
+              📖 Open Documentation &amp; API Guide
+            </a>
+            <a href="documentation.html#section-api-moveToPose" class="btn-tool-action" title="View Boomerang Controller Mathematical Guide">
+              🏎️ Boomerang Guide
             </a>
           </div>
         </div>
@@ -1558,7 +1603,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260929.k16"></script>
+  <script src="version.js?v=20260930.k1"></script>
   <script src="theme.js"></script>
   <script>
     // =========================================================================

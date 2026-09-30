@@ -1,16 +1,34 @@
 {
-  "totalViews": 131,
-  "uniqueVisitors": 4,
+  "totalViews": 134,
+  "uniqueVisitors": 5,
   "pages": {
-    "home": 100,
+    "home": 102,
     "ide": 17,
     "translator": 0,
     "stats": 2,
-    "other": 0,
+    "other": 1,
     "tools": 6,
     "team": 6
   },
   "visitors": [
+    {
+      "ip": "127.0.0.1",
+      "page": "other",
+      "timestamp": "2026-09-30T03:54:45.671Z",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "ip": "2406:3003:204b:2b:a988:d7e9:42f7:a79d, 169.254.169.126",
+      "page": "home",
+      "timestamp": "2026-09-30T03:50:12.493Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
+    },
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-09-30T03:50:09.613Z",
+      "userAgent": "Go-http-client/1.1"
+    },
     {
       "ip": "127.0.0.1",
       "page": "team",
@@ -292,30 +310,13 @@
       "page": "home",
       "timestamp": "2026-09-27T23:48:44.139Z",
       "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
-    },
-    {
-      "ip": "127.0.0.1",
-      "page": "home",
-      "timestamp": "2026-09-27T23:48:43.424Z",
-      "userAgent": "Go-http-client/1.1"
-    },
-    {
-      "ip": "127.0.0.1",
-      "page": "home",
-      "timestamp": "2026-09-27T03:38:18.803Z",
-      "userAgent": "curl/7.88.1"
-    },
-    {
-      "ip": "2406:3003:204b:2b:a8f2:bd7b:914f:ef1a, 169.254.169.126",
-      "page": "ide",
-      "timestamp": "2026-09-27T03:36:31.588Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
     }
   ],
   "ips": [
     "127.0.0.1",
     "2406:3003:204b:2b:f445:3ae9:2c0a:f1f0, 169.254.169.126",
     "2406:3003:204b:2b:a8f2:bd7b:914f:ef1a, 169.254.169.126",
-    "129.126.36.134, 169.254.169.126"
+    "129.126.36.134, 169.254.169.126",
+    "2406:3003:204b:2b:a988:d7e9:42f7:a79d, 169.254.169.126"
   ]
 }

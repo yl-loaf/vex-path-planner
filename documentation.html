@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="shortcut icon" href="favicon.ico" />
+  <link rel="icon" href="https://yl-loaf.github.io/vex-path-planner/favicon.ico" type="image/x-icon" />
+  <link rel="canonical" href="https://yl-loaf.github.io/vex-path-planner/documentation.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Documentation &amp; API Guide · VEX V5 LemLib Suite</title>
+  <meta name="description" content="Comprehensive engineering manual and API reference for VEX V5 Robotics autonomous routines using LemLib and PROS C++. Features coordinate guides, Boomerang controller, Pure Pursuit, and PID tuning." />
+  <meta name="keywords" content="LemLib, VEX Robotics, VEX V5, LemLib API, PROS C++, Boomerang Controller, Pure Pursuit, PID Tuning, Odometry, Autonomous Coding, Path Planner Docs" />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://yl-loaf.github.io/vex-path-planner/documentation.html" />
+  <meta property="og:title" content="VEX V5 LemLib Suite Documentation &amp; API Reference" />
+  <meta property="og:description" content="Complete engineering documentation, LemLib API signatures, Boomerang motion tutorials, and PROS C++ autonomous guides for VEX Robotics Competition teams." />
+  <link rel="stylesheet" href="style.css?v=20260930.k1" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('vex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    /* Scoped Documentation Page Layout */
+    .docs-page-body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .docs-nav-header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+
+    .docs-nav-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .btn-docs-back {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-docs-back:hover {
+      background: #334155;
+      color: #ffffff;
+      border-color: #475569;
+    }
+
+    .docs-brand-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .docs-brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--text-heading);
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .docs-nav-center {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .docs-tab-link {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .docs-tab-link:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .docs-tab-link.active {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.14);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+
+    .docs-nav-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .docs-layout-container {
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex: 1;
+      padding: 0 20px 60px;
+      box-sizing: border-box;
+      gap: 32px;
+    }
+
+    /* Left Sidebar */
+    .docs-sidebar {
+      width: 290px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 65px;
+      max-height: calc(100vh - 85px);
+      overflow-y: auto;
+      padding: 24px 12px 24px 0;
+      box-sizing: border-box;
+      border-right: 1px solid var(--border);
+    }
+
+    .docs-search-box {
+      margin-bottom: 20px;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      padding-bottom: 12px;
+      z-index: 10;
+    }
+
+    .docs-search-input {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      padding: 9px 12px 9px 34px;
+      font-size: 0.84rem;
+      color: var(--text);
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .docs-search-input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+    .docs-search-icon {
+      position: absolute;
+      left: 10px;
+      top: 9px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    .docs-sidebar-group {
+      margin-bottom: 22px;
+    }
+
+    .docs-sidebar-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+      padding-left: 10px;
+    }
+
+    .docs-sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      color: var(--text);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      line-height: 1.3;
+    }
+    .docs-sidebar-link:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #38bdf8;
+    }
+    .docs-sidebar-link.active {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      font-weight: 700;
+      border-left: 3px solid #38bdf8;
+      border-radius: 0 6px 6px 0;
+    }
+
+    /* Main Content */
+    .docs-main-content {
+      flex: 1;
+      min-width: 0;
+      padding: 24px 0 60px;
+    }
+
+    .docs-hero {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(59, 130, 246, 0.04) 100%);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 32px 36px;
+      margin-bottom: 36px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .docs-hero-eyebrow {
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: #38bdf8;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .docs-hero h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--text-heading);
+      margin: 0 0 12px 0;
+      line-height: 1.2;
+    }
+
+    .docs-hero-desc {
+      font-size: 1.05rem;
+      color: var(--muted);
+      max-width: 820px;
+      line-height: 1.6;
+      margin: 0 0 20px 0;
+    }
+
+    .docs-hero-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+    .docs-hero-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Section Styling */
+    .doc-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 32px;
+      margin-bottom: 32px;
+      scroll-margin-top: 85px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .doc-section-header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .doc-section-header h2 {
+      margin: 0;
+      font-size: 1.55rem;
+      font-weight: 800;
+      color: var(--text-heading);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .doc-section-tag {
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.12);
+      color: #38bdf8;
+      font-weight: 700;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .doc-p {
+      font-size: 0.94rem;
+      line-height: 1.65;
+      color: var(--text);
+      margin: 0 0 16px 0;
+    }
+
+    .doc-subhead {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin: 28px 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Code Blocks */
+    .code-container {
+      position: relative;
+      background: #090d16;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      margin: 16px 0 24px 0;
+      overflow: hidden;
+    }
+
+    .code-header {
+      background: #0d1524;
+      border-bottom: 1px solid #1e293b;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      color: #94a3b8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .btn-copy-code {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .btn-copy-code:hover {
+      background: #334155;
+      color: #ffffff;
+      border-color: #475569;
+    }
+
+    .code-container pre {
+      margin: 0;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+      line-height: 1.55;
+      color: #e2e8f0;
+    }
+
+    .code-kw { color: #f43f5e; font-weight: 600; }
+    .code-fn { color: #38bdf8; font-weight: 600; }
+    .code-num { color: #f59e0b; }
+    .code-str { color: #10b981; }
+    .code-comm { color: #64748b; font-style: italic; }
+    .code-type { color: #c084fc; }
+
+    /* Tables */
+    .doc-table-wrap {
+      overflow-x: auto;
+      margin: 16px 0 24px 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+      text-align: left;
+    }
+
+    .doc-table th {
+      background: var(--card-inner);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-heading);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .doc-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: top;
+      line-height: 1.5;
+    }
+
+    .doc-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .doc-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .doc-badge-param {
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .doc-callout {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 4px solid #38bdf8;
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+      margin: 20px 0;
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+    .doc-callout.warning {
+      background: rgba(245, 158, 11, 0.08);
+      border-left-color: #f59e0b;
+    }
+    .doc-callout.success {
+      background: rgba(16, 185, 129, 0.08);
+      border-left-color: #10b981;
+    }
+
+    /* Interactive Angle / Coordinate Tool Card */
+    .docs-interactive-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin: 20px 0;
+    }
+
+    .docs-interactive-inputs {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 14px 0;
+    }
+
+    .docs-input-field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+    }
+    .docs-input-field label {
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .docs-input-field input {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.85rem;
+      width: 60px;
+      outline: none;
+    }
+
+    /* Toast Notification */
+    .docs-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #0284c7;
+      color: #ffffff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      z-index: 1000;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .docs-toast.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Footer */
+    .docs-footer {
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      padding: 24px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    /* Responsive */
+    @media (max-width: 960px) {
+      .docs-layout-container {
+        flex-direction: column;
+        padding: 0 16px 40px;
+      }
+      .docs-sidebar {
+        width: 100%;
+        position: static;
+        max-height: none;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 16px 0;
+      }
+      .docs-hero {
+        padding: 24px;
+      }
+      .docs-hero h1 {
+        font-size: 1.7rem;
+      }
+    }
+  </style>
+</head>
+<body class="docs-page-body">
+
+  <!-- Sticky Top Navigation Bar -->
+  <header class="docs-nav-header">
+    <div class="docs-nav-left">
+      <a href="index.html" class="btn-docs-back" title="Return to Visual Autonomous Path Planner">
+        ← Visual Planner
+      </a>
+      <div class="docs-brand-group">
+        <h1 class="docs-brand-title">📖 LemLib &amp; VEX Documentation</h1>
+      </div>
+    </div>
+
+    <!-- Center Navigation Across All App Suite Pages -->
+    <div class="docs-nav-center">
+      <a href="index.html" class="docs-tab-link" title="Visual 2D Autonomous Path Planner">🗺️ Planner &amp; Sim</a>
+      <a href="ide.html" class="docs-tab-link" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
+      <a href="team.html" class="docs-tab-link" title="Real-Time Team Collaboration &amp; Cloud Sync">👥 Team Collab</a>
+      <a href="admin.html" class="docs-tab-link" title="Team Administration &amp; Member Permissions">🛡️ Admin</a>
+      <a href="tools.html" class="docs-tab-link" title="Engineering Analysis &amp; Physics Suite">🛠️ Tools Suite</a>
+      <a href="documentation.html" class="docs-tab-link active" title="Comprehensive LemLib &amp; VEX V5 Documentation &amp; API Reference">📖 Documentation</a>
+      <a href="translator.html" class="docs-tab-link" title="C++ Auton to Visual Blocks Translator">🔄 C++ Translator</a>
+      <a href="stats.html" class="docs-tab-link" title="Site &amp; User Visitor Analytics">📊 Stats</a>
+    </div>
+
+    <!-- Right: Theme Switcher & Planner CTA -->
+    <div class="docs-nav-right">
+      <button type="button" class="btn-theme-toggle" data-theme-toggle aria-label="Toggle theme" title="Toggle Light/Dark Theme">
+        <span class="theme-toggle-icon">☀️</span>
+        <span class="theme-toggle-text">Theme</span>
+      </button>
+      <a href="index.html" class="btn-docs-back" style="background:#0284c7;border-color:#0369a1;color:#ffffff;" title="Open Visual Path Planner">
+        Launch Planner →
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="docs-layout-container">
+
+    <!-- Sticky Left Table of Contents / Sidebar -->
+    <aside class="docs-sidebar">
+      <div class="docs-search-box">
+        <span class="docs-search-icon">🔍</span>
+        <input type="text" id="docsSearchInput" class="docs-search-input" placeholder="Search docs (e.g. moveToPose, lead, PID, OTP)..." />
+      </div>
+
+      <nav id="docsSidebarNav">
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">1. Getting Started</div>
+          <a href="#section-overview" class="docs-sidebar-link active">Studio Overview</a>
+          <a href="#section-coordinates" class="docs-sidebar-link">Coordinate System &amp; Angles</a>
+          <a href="#section-workflow" class="docs-sidebar-link">Project Workflow &amp; .vpath</a>
+        </div>
+
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">2. LemLib Chassis API</div>
+          <a href="#section-api-moveToPoint" class="docs-sidebar-link">chassis.moveToPoint()</a>
+          <a href="#section-api-moveToPose" class="docs-sidebar-link">chassis.moveToPose() (Boomerang)</a>
+          <a href="#section-api-turnTo" class="docs-sidebar-link">turnToHeading() &amp; turnToPoint()</a>
+          <a href="#section-api-swing" class="docs-sidebar-link">chassis.swingToHeading()</a>
+          <a href="#section-api-follow" class="docs-sidebar-link">chassis.follow() (Pure Pursuit)</a>
+          <a href="#section-api-wait" class="docs-sidebar-link">waitUntil() &amp; waitUntilDone()</a>
+          <a href="#section-api-odometry" class="docs-sidebar-link">setPose() &amp; Odometry</a>
+        </div>
+
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">3. PROS C++ IDE &amp; Build</div>
+          <a href="#section-ide-sync" class="docs-sidebar-link">Visual &amp; C++ 2-Way Sync</a>
+          <a href="#section-ide-crossfile" class="docs-sidebar-link">Multi-File Symbol Indexing</a>
+          <a href="#section-ide-compilation" class="docs-sidebar-link">Compiling with pros make</a>
+        </div>
+
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">4. Hardware &amp; V5 Brain</div>
+          <a href="#section-hardware-serial" class="docs-sidebar-link">Web Serial CDC Link</a>
+          <a href="#section-hardware-flasher" class="docs-sidebar-link">8-Slot Brain Flasher</a>
+          <a href="#section-hardware-telemetry" class="docs-sidebar-link">Live Telemetry &amp; Diagnostics</a>
+        </div>
+
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">5. Motion Profiling &amp; PID</div>
+          <a href="#section-pid-tuning" class="docs-sidebar-link">PID Gains (kP, kI, kD)</a>
+          <a href="#section-pid-dyno" class="docs-sidebar-link">Drivetrain Dyno &amp; Gear Ratios</a>
+          <a href="#section-pid-exit" class="docs-sidebar-link">Exit Conditions &amp; Settle Timeout</a>
+        </div>
+
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">6. Team Collab &amp; Security</div>
+          <a href="#section-collab-realtime" class="docs-sidebar-link">Live Collaborative Editing</a>
+          <a href="#section-collab-otp" class="docs-sidebar-link">5-Min Rolling OTP Security</a>
+          <a href="#section-collab-hex" class="docs-sidebar-link">6-Digit Hex Challenge Invites</a>
+          <a href="#section-collab-admin" class="docs-sidebar-link">Admin &amp; Member Permissions</a>
+        </div>
+
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">7. Match Replay &amp; Logs</div>
+          <a href="#section-replay-logs" class="docs-sidebar-link">Brain CSV Odometry Replay</a>
+          <a href="#section-replay-deviation" class="docs-sidebar-link">Deviation Heatmaps &amp; Slip</a>
+        </div>
+
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">8. Reference &amp; FAQs</div>
+          <a href="#section-cheat-sheet" class="docs-sidebar-link">LemLib Motion Cheat Sheet</a>
+          <a href="#section-shortcuts" class="docs-sidebar-link">Keyboard Shortcuts</a>
+          <a href="#section-faqs" class="docs-sidebar-link">Troubleshooting &amp; FAQs</a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="docs-main-content" id="docsMainContent">
+
+      <!-- Hero Banner -->
+      <section class="docs-hero">
+        <div class="docs-hero-eyebrow">VEX V5 LemLib Suite · Engineering Manual</div>
+        <h1>LemLib Autonomous &amp; Studio Documentation</h1>
+        <p class="docs-hero-desc">
+          Everything you need to engineer championship-tier autonomous routines for the VEX Robotics Competition Override season. Learn the mathematical foundations of the Boomerang controller, master LemLib C++ API signatures, tune PID gains, and collaborate safely with your team.
+        </p>
+        <div class="docs-hero-meta">
+          <span>📚 Version: <strong id="lblDocsBuildVersion" style="color:#38bdf8;">20260930.k1</strong></span>
+          <span>·</span>
+          <span>🤖 LemLib Version: <strong>v0.5.x+ (PROS 4 &amp; 3)</strong></span>
+          <span>·</span>
+          <span>🎯 Field Standard: <strong>144" × 144" Override 2026-27</strong></span>
+          <span>·</span>
+          <span>⚡ Hardware: <strong>VEX V5 Brain USB CDC 115200</strong></span>
+        </div>
+      </section>
+
+      <!-- 1. GETTING STARTED: STUDIO OVERVIEW -->
+      <section class="doc-section" id="section-overview">
+        <div class="doc-section-header">
+          <h2><span>🏠</span> Studio Overview &amp; Architecture</h2>
+          <span class="doc-section-tag">Foundations</span>
+        </div>
+        <p class="doc-p">
+          The <strong>VEX V5 LemLib Suite</strong> is an all-in-one web-based autonomous engineering platform designed specifically for VEX Robotics Competition (VRC) teams. Rather than forcing you to switch between separate drawing software, code editors, and telemetry terminals, the suite unifies all stages of autonomous development:
+        </p>
+        <ul style="color:var(--text);font-size:0.92rem;line-height:1.7;margin-bottom:20px;">
+          <li><strong>2D Visual Path Planner &amp; Field Simulator:</strong> Drag waypoints on the Override competition field, configure entry/exit velocities, specify subsystem actions (intakes, clamps, lifts), and simulate kinematics in real-time.</li>
+          <li><strong>Full PROS C++ IDE:</strong> Multi-file development environment with cross-file variable parsing, AST syntax analysis, Monaco code editor, and ARM Cortex compilation.</li>
+          <li><strong>Team Collaboration &amp; Cloud Sync:</strong> Real-time multi-user editing with live collaborator cursors, 5-minute rolling OTP team join keys, and 500-snapshot version history.</li>
+          <li><strong>V5 Brain USB Web Serial CDC:</strong> Direct connection from Chrome/Edge browsers to flash your compiled autonomous routines directly into V5 Brain program slots 1 through 8.</li>
+          <li><strong>Autonomous Match Replay &amp; Diagnostics:</strong> Import recorded odometry telemetry from the physical robot to compare planned versus actual trajectories and pinpoint wheel slippage.</li>
+        </ul>
+        <div class="doc-callout">
+          💡 <strong>Tip for Competitors:</strong> The application runs fully offline once loaded, supports automatic saving to localStorage and Google Drive, and never exposes or overwrites your custom C++ header definitions.
+        </div>
+      </section>
+
+      <!-- 1. GETTING STARTED: COORDINATES & ANGLES -->
+      <section class="doc-section" id="section-coordinates">
+        <div class="doc-section-header">
+          <h2><span>📐</span> Field Coordinate System &amp; Heading Conventions</h2>
+          <span class="doc-section-tag">Coordinate Math</span>
+        </div>
+        <p class="doc-p">
+          LemLib and this Path Planner follow a standardized Cartesian coordinate framework mapped directly to the official 12-foot by 12-foot ($144\text{ in} \times 144\text{ in}$) competition field:
+        </p>
+
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Standard Value</th>
+                <th>Description &amp; Orientation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Field Center (Origin)</strong></td>
+                <td><span class="doc-badge-param">(0, 0)</span></td>
+                <td>The exact geometric midpoint of the field tiles is coordinate $(0, 0)$.</td>
+              </tr>
+              <tr>
+                <td><strong>X-Axis Range</strong></td>
+                <td><span class="doc-badge-param">-72.0" to +72.0"</span></td>
+                <td>$+X$ extends to the <strong>Right (East)</strong>; $-X$ extends to the <strong>Left (West)</strong>.</td>
+              </tr>
+              <tr>
+                <td><strong>Y-Axis Range</strong></td>
+                <td><span class="doc-badge-param">-72.0" to +72.0"</span></td>
+                <td>$+Y$ extends <strong>Up (North)</strong>; $-Y$ extends <strong>Down (South)</strong>.</td>
+              </tr>
+              <tr>
+                <td><strong>Heading Angle ($0^\circ$)</strong></td>
+                <td><span class="doc-badge-param">0° (North / +Y)</span></td>
+                <td>$0^\circ$ corresponds to the robot pointing straight along the positive Y-axis.</td>
+              </tr>
+              <tr>
+                <td><strong>Rotation Direction</strong></td>
+                <td><span class="doc-badge-param">Clockwise Positive</span></td>
+                <td>Headings increase clockwise: $90^\circ$ is East ($+X$), $180^\circ$ is South ($-Y$), $270^\circ$ is West ($-X$).</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="doc-subhead">Interactive Angle &amp; Heading Calculator</div>
+        <p class="doc-p">
+          Enter two field coordinates to instantly calculate the distance, target angle in LemLib format, and the exact C++ command:
+        </p>
+        <div class="docs-interactive-box">
+          <div class="docs-interactive-inputs">
+            <div class="docs-input-field">
+              <label>X1:</label>
+              <input type="number" id="calcX1" value="0" />
+            </div>
+            <div class="docs-input-field">
+              <label>Y1:</label>
+              <input type="number" id="calcY1" value="0" />
+            </div>
+            <span style="color:var(--muted);">➔</span>
+            <div class="docs-input-field">
+              <label>X2:</label>
+              <input type="number" id="calcX2" value="24" />
+            </div>
+            <div class="docs-input-field">
+              <label>Y2:</label>
+              <input type="number" id="calcY2" value="36" />
+            </div>
+          </div>
+          <div style="font-size:0.86rem;margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;">
+            <span>Distance: <strong id="calcDistance" style="color:#10b981;">43.3 in</strong></span>
+            <span>Bearing (LemLib): <strong id="calcHeading" style="color:#38bdf8;">33.7°</strong></span>
+          </div>
+          <div class="code-container" style="margin-top:12px;">
+            <div class="code-header">
+              <span>Generated LemLib Call</span>
+              <button type="button" class="btn-copy-code" id="btnCopyCalcCode">📋 Copy</button>
+            </div>
+            <pre><code id="calcOutputCode">chassis.moveToPose(24.0, 36.0, 34, 2500, {.lead = 0.6, .maxSpeed = 110});</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- 1. GETTING STARTED: WORKFLOW & .VPATH -->
+      <section class="doc-section" id="section-workflow">
+        <div class="doc-section-header">
+          <h2><span>📁</span> Project Workflow &amp; .vpath Files</h2>
+          <span class="doc-section-tag">Project Lifecycle</span>
+        </div>
+        <p class="doc-p">
+          The suite uses a flexible single-file format called <code>.vpath</code> (VEX Path Planner Project). This JSON-formatted file contains all waypoints, robot physical dimensions, PID gains, custom code blocks, subsystem timings, and routine metadata.
+        </p>
+        <div class="doc-subhead">Key Workflow Steps</div>
+        <ol style="color:var(--text);font-size:0.92rem;line-height:1.7;">
+          <li><strong>Create or Import:</strong> Click <em>Workspace Tools ➔ Import .vpath</em> or create a new routine from scratch.</li>
+          <li><strong>Configure Drivetrain:</strong> In the <em>Bot &amp; PID</em> tab, set your track width, wheel diameter (e.g. 2.75" or 3.25"), gear cartridge (e.g. 600 RPM blue), and motor ratio.</li>
+          <li><strong>Add Waypoints &amp; Subsystems:</strong> Click anywhere on the field canvas to add movement steps. Assign actions like <code>intake.move(127)</code> or <code>clamp.set_value(true)</code>.</li>
+          <li><strong>Simulate:</strong> Press <kbd>Space</kbd> or click <em>Play Sim</em> to watch the simulated kinematics, check for barrier collisions, and verify total match elapsed time (&le; 15.0s for Autonomous, &le; 60.0s for Skills).</li>
+          <li><strong>Sync to IDE:</strong> Switch to the <strong>PROS C++ IDE</strong> to compile the routine with <code>pros make</code>, run unit diagnostics, or flash directly to the connected Brain.</li>
+        </ol>
+      </section>
+
+      <!-- 2. LEMLIB CHASSIS API: moveToPoint -->
+      <section class="doc-section" id="section-api-moveToPoint">
+        <div class="doc-section-header">
+          <h2><span>🎯</span> chassis.moveToPoint()</h2>
+          <span class="doc-section-tag">API Reference</span>
+        </div>
+        <p class="doc-p">
+          Drives the chassis to a target $(X, Y)$ point on the field without enforcing a specific ending angle. Ideal for driving directly to game pieces or intermediate transit waypoints.
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Signature (LemLib v0.5+)</span>
+            <button type="button" class="btn-copy-code" data-copy="chassis.moveToPoint(float x, float y, int timeout, MoveToPointParams params = {});">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-type">void</span> <span class="code-fn">chassis.moveToPoint</span>(<span class="code-type">float</span> x, <span class="code-type">float</span> y, <span class="code-type">int</span> timeout, <span class="code-type">MoveToPointParams</span> params = {});</code></pre>
+        </div>
+
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Parameter</th>
+                <th>Type</th>
+                <th>Default</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="doc-badge-param">x</span></td>
+                <td>float</td>
+                <td><em>Required</em></td>
+                <td>Target X coordinate in inches.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">y</span></td>
+                <td>float</td>
+                <td><em>Required</em></td>
+                <td>Target Y coordinate in inches.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">timeout</span></td>
+                <td>int</td>
+                <td><em>Required</em></td>
+                <td>Maximum duration in milliseconds before timing out.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">params.forwards</span></td>
+                <td>bool</td>
+                <td><code>true</code></td>
+                <td>Set to <code>false</code> to have the robot reverse towards the point.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">params.maxSpeed</span></td>
+                <td>float</td>
+                <td><code>127.0</code></td>
+                <td>Top motor voltage speed limit (0–127).</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">params.minSpeed</span></td>
+                <td>float</td>
+                <td><code>0.0</code></td>
+                <td>Minimum speed floor to prevent stalling at low power.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">params.earlyExitRange</span></td>
+                <td>float</td>
+                <td><code>0.0</code></td>
+                <td>Distance in inches before target to complete movement early for fluid chained motions.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Example C++ Usage</span>
+            <button type="button" class="btn-copy-code" data-copy="// Move forwards to center ring stack at 110 max speed, exit 4 inches early for next motion&#10;chassis.moveToPoint(0.0, 24.0, 2000, {.forwards = true, .maxSpeed = 110, .earlyExitRange = 4.0});">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-comm">// Move forwards to center ring stack at 110 max speed, exit 4 inches early for next motion</span>
+<span class="code-fn">chassis.moveToPoint</span>(<span class="code-num">0.0</span>, <span class="code-num">24.0</span>, <span class="code-num">2000</span>, {
+    .<span class="code-type">forwards</span> = <span class="code-kw">true</span>,
+    .<span class="code-type">maxSpeed</span> = <span class="code-num">110</span>,
+    .<span class="code-type">earlyExitRange</span> = <span class="code-num">4.0</span>
+});</code></pre>
+        </div>
+      </section>
+
+      <!-- 2. LEMLIB CHASSIS API: moveToPose (BOOMERANG) -->
+      <section class="doc-section" id="section-api-moveToPose">
+        <div class="doc-section-header">
+          <h2><span>🏎️</span> chassis.moveToPose() (Boomerang Controller)</h2>
+          <span class="doc-section-tag">Core Motion</span>
+        </div>
+        <p class="doc-p">
+          The flagship motion primitive of LemLib. The <strong>Boomerang Controller</strong> guides the robot along a continuously curving path that guarantees the robot arrives at $(X, Y)$ facing exact heading $\theta$. It constructs an imaginary "carrot" target point along the vector of the desired final heading, pulling the robot into a natural, physics-optimized arc.
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Signature (LemLib v0.5+)</span>
+            <button type="button" class="btn-copy-code" data-copy="chassis.moveToPose(float x, float y, float theta, int timeout, MoveToPoseParams params = {});">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-type">void</span> <span class="code-fn">chassis.moveToPose</span>(<span class="code-type">float</span> x, <span class="code-type">float</span> y, <span class="code-type">float</span> theta, <span class="code-type">int</span> timeout, <span class="code-type">MoveToPoseParams</span> params = {});</code></pre>
+        </div>
+
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Parameter</th>
+                <th>Type</th>
+                <th>Recommended</th>
+                <th>Description &amp; Tuning Guide</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="doc-badge-param">x, y</span></td>
+                <td>float</td>
+                <td><em>Target</em></td>
+                <td>Target destination coordinates in inches.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">theta</span></td>
+                <td>float</td>
+                <td><em>0–360°</em></td>
+                <td>Target final heading at destination in degrees.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">params.lead</span></td>
+                <td>float</td>
+                <td><code>0.6</code></td>
+                <td><strong>Curvature control parameter (0.0 to 1.0):</strong> A lead of <code>0.0</code> disables the boomerang and moves straight. Values between <code>0.5–0.7</code> create smooth sweeping arcs. Values &gt; <code>0.8</code> create aggressive, wide hooks.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">params.horizontalDrift</span></td>
+                <td>float</td>
+                <td><code>2.0</code></td>
+                <td>Allows lateral drift during high-speed turns to prevent wheel scrubbing and motor heat buildup.</td>
+              </tr>
+              <tr>
+                <td><span class="doc-badge-param">params.forwards</span></td>
+                <td>bool</td>
+                <td><code>true</code></td>
+                <td>If <code>false</code>, the robot backs into the target pose (useful for goal clamps).</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Example: Reversing to Clamp a Mobile Goal</span>
+            <button type="button" class="btn-copy-code" data-copy="// Reverse into mobile goal at (-24, 36) facing 180 degrees&#10;chassis.moveToPose(-24.0, 36.0, 180.0, 3000, {.forwards = false, .lead = 0.55, .maxSpeed = 95});&#10;chassis.waitUntil(6.0); // 6 inches before target&#10;mogoClamp.set_value(true);&#10;chassis.waitUntilDone();">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-comm">// Reverse into mobile goal at (-24, 36) facing 180 degrees</span>
+<span class="code-fn">chassis.moveToPose</span>(-<span class="code-num">24.0</span>, <span class="code-num">36.0</span>, <span class="code-num">180.0</span>, <span class="code-num">3000</span>, {
+    .<span class="code-type">forwards</span> = <span class="code-kw">false</span>,
+    .<span class="code-type">lead</span> = <span class="code-num">0.55</span>,
+    .<span class="code-type">maxSpeed</span> = <span class="code-num">95</span>
+});
+
+<span class="code-comm">// Fire pneumatic clamp asynchronously when 6 inches away!</span>
+<span class="code-fn">chassis.waitUntil</span>(<span class="code-num">6.0</span>);
+mogoClamp.<span class="code-fn">set_value</span>(<span class="code-kw">true</span>);
+
+<span class="code-comm">// Block until chassis finishes settle</span>
+<span class="code-fn">chassis.waitUntilDone</span>();</code></pre>
+        </div>
+      </section>
+
+      <!-- 2. LEMLIB CHASSIS API: turnToHeading & turnToPoint -->
+      <section class="doc-section" id="section-api-turnTo">
+        <div class="doc-section-header">
+          <h2><span>🔄</span> turnToHeading() &amp; turnToPoint()</h2>
+          <span class="doc-section-tag">Angular PID</span>
+        </div>
+        <p class="doc-p">
+          Performs an in-place pivot turn using the robot's angular PID controller. LemLib automatically takes the shortest angular distance across the $0^\circ / 360^\circ$ wrap boundary unless directional locking is specified.
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Signatures</span>
+            <button type="button" class="btn-copy-code" data-copy="chassis.turnToHeading(float theta, int timeout, TurnToHeadingParams params = {});&#10;chassis.turnToPoint(float x, float y, int timeout, TurnToPointParams params = {});">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-type">void</span> <span class="code-fn">chassis.turnToHeading</span>(<span class="code-type">float</span> theta, <span class="code-type">int</span> timeout, <span class="code-type">TurnToHeadingParams</span> params = {});
+<span class="code-type">void</span> <span class="code-fn">chassis.turnToPoint</span>(<span class="code-type">float</span> x, <span class="code-type">float</span> y, <span class="code-type">int</span> timeout, <span class="code-type">TurnToPointParams</span> params = {});</code></pre>
+        </div>
+
+        <div class="doc-callout">
+          💡 <strong>turnToPoint vs turnToHeading:</strong> Use <code>turnToPoint(x, y)</code> whenever aiming a ball launcher, catapult, or intake at a known field target. You don't have to calculate the trigonometry manually—LemLib queries current odometry pose and turns to face $(X, Y)$ precisely.
+        </div>
+      </section>
+
+      <!-- 2. LEMLIB CHASSIS API: swingToHeading -->
+      <section class="doc-section" id="section-api-swing">
+        <div class="doc-section-header">
+          <h2><span>🪃</span> chassis.swingToHeading()</h2>
+          <span class="doc-section-tag">Swing Motion</span>
+        </div>
+        <p class="doc-p">
+          Locks one side of the drivetrain while driving the other, causing the robot to swing in an arc pinned at one track. This is essential for pivoting tightly around perimeter field walls or mobile goals without kicking the opposite wheels into obstacles.
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Example: Locking Left Wheel to Swing Tail Clear of Wall</span>
+            <button type="button" class="btn-copy-code" data-copy="// Swing right side to heading 90 while keeping left side stationary&#10;chassis.swingToHeading(90.0, lemlib::DriveSide::LEFT, 1500, {.maxSpeed = 90});">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-comm">// Swing right side to heading 90 while keeping left side stationary</span>
+<span class="code-fn">chassis.swingToHeading</span>(<span class="code-num">90.0</span>, lemlib::<span class="code-type">DriveSide::LEFT</span>, <span class="code-num">1500</span>, {
+    .<span class="code-type">maxSpeed</span> = <span class="code-num">90</span>
+});</code></pre>
+        </div>
+      </section>
+
+      <!-- 2. LEMLIB CHASSIS API: Pure Pursuit -->
+      <section class="doc-section" id="section-api-follow">
+        <div class="doc-section-header">
+          <h2><span>🗺️</span> chassis.follow() (Pure Pursuit)</h2>
+          <span class="doc-section-tag">Pure Pursuit</span>
+        </div>
+        <p class="doc-p">
+          Pure Pursuit follows pre-computed path files (e.g. exported from the planner) using a lookahead circle. The algorithm finds the intersection between the circle and the path ahead, steering smoothly toward it.
+        </p>
+        <div class="code-container">
+          <div class="code-header">
+            <span>Pure Pursuit Path Execution</span>
+            <button type="button" class="btn-copy-code" data-copy="chassis.follow(auton_path_txt, 4000, 15.0, {.forwards = true});">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-comm">// Follow path asset with 15.0 inch lookahead radius</span>
+<span class="code-fn">chassis.follow</span>(auton_path_txt, <span class="code-num">4000</span>, <span class="code-num">15.0</span>, {.<span class="code-type">forwards</span> = <span class="code-kw">true</span>});</code></pre>
+        </div>
+      </section>
+
+      <!-- 2. LEMLIB CHASSIS API: waitUntil & Odometry -->
+      <section class="doc-section" id="section-api-wait">
+        <div class="doc-section-header">
+          <h2><span>⏱️</span> chassis.waitUntil() &amp; Asynchronous Subsystems</h2>
+          <span class="doc-section-tag">Non-Blocking Actions</span>
+        </div>
+        <p class="doc-p">
+          LemLib executes movement commands in a dedicated FreeRTOS background task. This means your code does not block after calling <code>chassis.moveToPose()</code>! You can run parallel code while the robot is driving:
+        </p>
+        <ul style="color:var(--text);font-size:0.92rem;line-height:1.7;">
+          <li><code>chassis.waitUntil(float dist)</code>: Pauses the calling task until the robot is within <em>dist</em> inches of its target.</li>
+          <li><code>chassis.waitUntilDone()</code>: Blocks until the movement finishes and settles within tolerance.</li>
+          <li><code>chassis.isInMotion()</code>: Returns <code>true</code> if the chassis is actively tracking a motion profile.</li>
+        </ul>
+      </section>
+
+      <section class="doc-section" id="section-api-odometry">
+        <div class="doc-section-header">
+          <h2><span>📍</span> chassis.setPose() &amp; Odometry Calibration</h2>
+          <span class="doc-section-tag">Odometry</span>
+        </div>
+        <p class="doc-p">
+          Every autonomous routine MUST begin by initializing the starting odometry pose. If you start aligned against the field perimeter wall or tile corner, set the coordinates at the top of <code>autonomous()</code>:
+        </p>
+        <div class="code-container">
+          <div class="code-header">
+            <span>Odometry Initialization (src/autons.cpp)</span>
+            <button type="button" class="btn-copy-code" data-copy="void autonomous() {&#10;    // Set robot start location: X = -54.0, Y = -36.0, Heading = 90 deg East&#10;    chassis.setPose(-54.0, -36.0, 90.0);&#10;&#10;    // Start motion routine...&#10;}">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-type">void</span> <span class="code-fn">autonomous</span>() {
+    <span class="code-comm">// Set robot start location: X = -54.0, Y = -36.0, Heading = 90 deg East</span>
+    <span class="code-fn">chassis.setPose</span>(-<span class="code-num">54.0</span>, -<span class="code-num">36.0</span>, <span class="code-num">90.0</span>);
+
+    <span class="code-comm">// Start motion routine...</span>
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- 3. PROS C++ IDE & BUILD -->
+      <section class="doc-section" id="section-ide-sync">
+        <div class="doc-section-header">
+          <h2><span>💻</span> PROS C++ IDE &amp; 2-Way Code Synchronization</h2>
+          <span class="doc-section-tag">IDE Studio</span>
+        </div>
+        <p class="doc-p">
+          The embedded <strong>PROS C++ Multi-File Coding Studio</strong> allows seamless editing between graphical visual blocks and native C++ code:
+        </p>
+        <ul style="color:var(--text);font-size:0.92rem;line-height:1.7;">
+          <li><strong>Two-Way Synchronization:</strong> Edits made in the visual flowchart update <code>src/autons.cpp</code>. Conversely, typing C++ in the IDE parses functions directly back into flowchart waypoints.</li>
+          <li><strong>Raw C++ Preservation:</strong> Complex logic like while-loops, custom sensor readings, or custom function calls inside <code>autonomous()</code> are preserved intact without being stripped.</li>
+          <li><strong>Cross-File Device Indexing:</strong> The IDE indexes motor definitions and pneumatics declared in <code>include/robot-config.h</code> and offers autocomplete inside the visual flowchart action picker.</li>
+        </ul>
+      </section>
+
+      <section class="doc-section" id="section-ide-compilation">
+        <div class="doc-section-header">
+          <h2><span>⚡</span> Compiling with pros make</h2>
+          <span class="doc-section-tag">Toolchain</span>
+        </div>
+        <p class="doc-p">
+          Clicking <strong>⚡ Compile</strong> triggers an in-browser GCC ARM Cortex diagnostic pass. It checks for:
+        </p>
+        <ul style="color:var(--text);font-size:0.92rem;line-height:1.7;">
+          <li>Missing semicolons, typos, and undeclared identifiers.</li>
+          <li>Invalid LemLib parameter configurations.</li>
+          <li>Missing header includes (e.g. <code>#include "lemlib/api.hpp"</code>).</li>
+        </ul>
+      </section>
+
+      <!-- 4. HARDWARE & V5 BRAIN -->
+      <section class="doc-section" id="section-hardware-serial">
+        <div class="doc-section-header">
+          <h2><span>🔌</span> Web Serial CDC USB Flasher &amp; Diagnostics</h2>
+          <span class="doc-section-tag">Hardware</span>
+        </div>
+        <p class="doc-p">
+          Using standard Web Serial API (available in Google Chrome, Microsoft Edge, and Opera), you can connect your laptop directly to the VEX V5 Brain or V5 Controller via a micro-USB cable.
+        </p>
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Specification</th>
+                <th>Usage</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Baud Rate</strong></td>
+                <td>115200 CDC</td>
+                <td>Automatic USB handshake for standard VEX V5 user CDC channels.</td>
+              </tr>
+              <tr>
+                <td><strong>Slot Flashing</strong></td>
+                <td>Slots 1 through 8</td>
+                <td>Flash distinct routines into separate slots (e.g. Slot 1 = Autonomous Win Point, Slot 2 = Solo Autonomous, Slot 3 = 60s Skills).</td>
+              </tr>
+              <tr>
+                <td><strong>Live Telemetry</strong></td>
+                <td>Battery % &amp; Motor Temps</td>
+                <td>Monitors battery health and flags motors approaching thermal throttling (&gt; 55°C).</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 5. MOTION PROFILING & PID -->
+      <section class="doc-section" id="section-pid-tuning">
+        <div class="doc-section-header">
+          <h2><span>🎛️</span> PID Tuning Guidelines (kP, kI, kD)</h2>
+          <span class="doc-section-tag">PID Tuning</span>
+        </div>
+        <p class="doc-p">
+          LemLib utilizes two primary PID controllers: <strong>Lateral PID</strong> (distance error along the path) and <strong>Angular PID</strong> (heading error). Proper tuning ensures rapid settling without oscillations:
+        </p>
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Gain</th>
+                <th>Role in LemLib</th>
+                <th>Tuning Procedure</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>kP (Proportional)</strong></td>
+                <td>Applies output proportional to distance/heading error.</td>
+                <td>Start at <code>0.0</code>. Gradually increase until the robot drives to the target quickly and begins slight oscillation around the endpoint.</td>
+              </tr>
+              <tr>
+                <td><strong>kD (Derivative)</strong></td>
+                <td>Dampens velocity to eliminate overshoot.</td>
+                <td>Increase kD to brake gently as error shrinks, eliminating oscillation and overshoot.</td>
+              </tr>
+              <tr>
+                <td><strong>kI (Integral)</strong></td>
+                <td>Eliminates steady-state error caused by carpet friction.</td>
+                <td>Keep at <code>0.0</code> or very low (e.g. <code>0.001</code>). Only activate within a small integral error window to prevent integral windup.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 6. TEAM COLLABORATION & SECURITY -->
+      <section class="doc-section" id="section-collab-realtime">
+        <div class="doc-section-header">
+          <h2><span>👥</span> Real-Time Team Collaboration &amp; Security</h2>
+          <span class="doc-section-tag">Collaboration</span>
+        </div>
+        <p class="doc-p">
+          Teams can edit autonomous paths concurrently during pit meetings. Up to 10 teammates can open the same workspace with live collaborator cursors, pinned match comments, and instant cloud sync.
+        </p>
+        <div class="doc-subhead">Security Architecture: 5-Minute Rolling OTP &amp; 6-Digit Hex Challenge</div>
+        <ul style="color:var(--text);font-size:0.92rem;line-height:1.7;">
+          <li><strong>5-Minute Rolling OTP:</strong> When joining a team workspace via team code, teammates must enter the live 6-digit rolling OTP displayed on the team owner's dashboard. The OTP changes every 5 minutes to prevent unauthorized spectator access.</li>
+          <li><strong>6-Digit Hex Verification Challenge:</strong> Administrators can invite teammates by Gmail address. When the invited user signs in, a full-screen challenge presents 3 hexadecimal codes. Selecting the correct code immediately enrolls the member with designated permissions.</li>
+          <li><strong>Admin vs Member Roles:</strong> Only workspace owners and admins can modify motor configurations, alter permissions, or deploy routines to the connected Brain. Regular members can edit in "Suggestion Mode".</li>
+        </ul>
+      </section>
+
+      <!-- 7. MATCH REPLAY & LOGS -->
+      <section class="doc-section" id="section-replay-logs">
+        <div class="doc-section-header">
+          <h2><span>📊</span> Autonomous Match Replay &amp; Log Analysis</h2>
+          <span class="doc-section-tag">Diagnostics</span>
+        </div>
+        <p class="doc-p">
+          Have an autonomous run fail on the field? Log odometry values to an SD card on the V5 Brain during matches:
+        </p>
+        <div class="code-container">
+          <div class="code-header">
+            <span>SD Card Logging Loop Example (PROS C++)</span>
+            <button type="button" class="btn-copy-code" data-copy="FILE* logFile = fopen(&quot;/usd/auton_telemetry.csv&quot;, &quot;w&quot;);&#10;fprintf(logFile, &quot;time,x,y,theta\n&quot;);&#10;while (true) {&#10;    lemlib::Pose pose = chassis.getPose();&#10;    fprintf(logFile, &quot;%d,%.2f,%.2f,%.2f\n&quot;, pros::millis(), pose.x, pose.y, pose.theta);&#10;    pros::delay(20);&#10;}">📋 Copy</button>
+          </div>
+          <pre><code>FILE* logFile = <span class="code-fn">fopen</span>(<span class="code-str">"/usd/auton_telemetry.csv"</span>, <span class="code-str">"w"</span>);
+<span class="code-fn">fprintf</span>(logFile, <span class="code-str">"time,x,y,theta\n"</span>);
+<span class="code-kw">while</span> (<span class="code-kw">true</span>) {
+    lemlib::<span class="code-type">Pose</span> pose = chassis.<span class="code-fn">getPose</span>();
+    <span class="code-fn">fprintf</span>(logFile, <span class="code-str">"%d,%.2f,%.2f,%.2f\n"</span>, pros::<span class="code-fn">millis</span>(), pose.x, pose.y, pose.theta);
+    pros::<span class="code-fn">delay</span>(<span class="code-num">20</span>);
+}</code></pre>
+        </div>
+        <p class="doc-p">
+          Drag the resulting CSV file into <strong>📊 Match Replay</strong> in the studio. The tool overlays the actual recorded trajectory onto your planned visual path, generating a deviation heatmap that highlights where the robot slipped or lost odometry tracking!
+        </p>
+      </section>
+
+      <!-- 8. CHEAT SHEET & SHORTCUTS -->
+      <section class="doc-section" id="section-cheat-sheet">
+        <div class="doc-section-header">
+          <h2><span>⚡</span> LemLib Motion Cheat Sheet</h2>
+          <span class="doc-section-tag">Quick Reference</span>
+        </div>
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Motion Goal</th>
+                <th>Best LemLib Function</th>
+                <th>Key Parameters</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Drive straight to coordinate</td>
+                <td><code>chassis.moveToPoint(x, y, timeout)</code></td>
+                <td><code>{.forwards = true, .maxSpeed = 127}</code></td>
+              </tr>
+              <tr>
+                <td>Curve to pose with specific angle</td>
+                <td><code>chassis.moveToPose(x, y, theta, timeout)</code></td>
+                <td><code>{.lead = 0.6, .horizontalDrift = 2.0}</code></td>
+              </tr>
+              <tr>
+                <td>Reverse into a mobile goal</td>
+                <td><code>chassis.moveToPose(x, y, theta, timeout)</code></td>
+                <td><code>{.forwards = false, .lead = 0.55}</code></td>
+              </tr>
+              <tr>
+                <td>Pivot in place to angle</td>
+                <td><code>chassis.turnToHeading(theta, timeout)</code></td>
+                <td><code>{.maxSpeed = 100}</code></td>
+              </tr>
+              <tr>
+                <td>Aim launcher or intake at piece</td>
+                <td><code>chassis.turnToPoint(x, y, timeout)</code></td>
+                <td><code>{.forwards = true}</code></td>
+              </tr>
+              <tr>
+                <td>Arc swing around an obstacle</td>
+                <td><code>chassis.swingToHeading(theta, side, timeout)</code></td>
+                <td><code>lemlib::DriveSide::LEFT</code> or <code>RIGHT</code></td>
+              </tr>
+              <tr>
+                <td>Trigger intake during motion</td>
+                <td><code>chassis.waitUntil(distance)</code></td>
+                <td>Distance from endpoint in inches</td>
+              </tr>
+              <tr>
+                <td>Wait for movement to settle</td>
+                <td><code>chassis.waitUntilDone()</code></td>
+                <td>Blocks until settled within tolerance</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="doc-section" id="section-shortcuts">
+        <div class="doc-section-header">
+          <h2><span>⌨️</span> Studio Keyboard Shortcuts</h2>
+          <span class="doc-section-tag">Shortcuts</span>
+        </div>
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+                <th>Context</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><kbd>Space</kbd></td>
+                <td>Play / Pause Simulation</td>
+                <td>Planner Canvas</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>Cmd</kbd> + <kbd>K</kbd></td>
+                <td>Open Command Palette</td>
+                <td>Global</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd> + <kbd>S</kbd> / <kbd>Cmd</kbd> + <kbd>S</kbd></td>
+                <td>Save Project / Cloud Sync</td>
+                <td>Global &amp; IDE</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd> + <kbd>B</kbd> / <kbd>Cmd</kbd> + <kbd>B</kbd></td>
+                <td>Compile PROS C++ Project (pros make)</td>
+                <td>IDE Studio</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></td>
+                <td>Undo Waypoint Edit</td>
+                <td>Planner Canvas</td>
+              </tr>
+              <tr>
+                <td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td>
+                <td>Delete Selected Waypoint</td>
+                <td>Planner Canvas</td>
+              </tr>
+              <tr>
+                <td><kbd>M</kbd></td>
+                <td>Toggle Alliance Mirror (Red &harr; Blue)</td>
+                <td>Planner Canvas</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 8. FREQUENTLY ASKED QUESTIONS -->
+      <section class="doc-section" id="section-faqs">
+        <div class="doc-section-header">
+          <h2><span>❓</span> Frequently Asked Questions &amp; Troubleshooting</h2>
+          <span class="doc-section-tag">FAQ</span>
+        </div>
+
+        <div class="doc-subhead">Q: Why is my robot taking a huge loop instead of a tight curve with moveToPose?</div>
+        <p class="doc-p">
+          <strong>A:</strong> This happens when the <code>lead</code> parameter is too high or the target heading $\theta$ requires a sharp turnaround that exceeds the robot's turning radius. Try lowering <code>lead</code> from <code>0.6</code> to <code>0.3</code> or inserting an intermediate <code>moveToPoint</code> waypoint.
+        </p>
+
+        <div class="doc-subhead">Q: Why does my robot spin in the wrong direction during turnToHeading?</div>
+        <p class="doc-p">
+          <strong>A:</strong> Check your inertial sensor calibration in <code>robot-config.h</code> and make sure the IMU is mounted securely with low vibration. Remember that angles increase <strong>clockwise</strong> ($0^\circ$ North, $90^\circ$ East). If your IMU is mounted upside down, invert the rotation in your odometry configuration.
+        </p>
+
+        <div class="doc-subhead">Q: How do I connect the V5 Brain over USB on Linux or Chromebook?</div>
+        <p class="doc-p">
+          <strong>A:</strong> On Linux, ensure your user account belongs to the <code>dialout</code> group to access Web Serial CDC devices without root permissions: <code>sudo usermod -a -G dialout $USER</code>.
+        </p>
+
+        <div class="doc-subhead">Q: Can I mirror a Red Alliance routine to Blue Alliance automatically?</div>
+        <p class="doc-p">
+          <strong>A:</strong> Yes! Open <em>Workspace Tools ➔ Alliance Routine Mirror</em>. You can choose horizontal reflection ($X \to -X$), vertical reflection ($Y \to -Y$), or rotational inversion ($180^\circ$ point symmetry).
+        </p>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="docsToast" class="docs-toast">✓ Copied to clipboard!</div>
+
+  <!-- Footer -->
+  <footer class="docs-footer">
+    <div>
+      <strong>VEX V5 LemLib Suite</strong> · Engineering &amp; Autonomous Documentation Portal
+    </div>
+    <div>
+      Hosted at <a href="https://yl-loaf.github.io/vex-path-planner/" style="color:#38bdf8;text-decoration:none;">yl-loaf.github.io/vex-path-planner/</a>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="version.js?v=20260930.k1"></script>
+  <script src="theme.js?v=20260930.k1"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // 1. Display Current App Build Version
+      const versionEl = document.getElementById("lblDocsBuildVersion");
+      if (versionEl && window.APP_BUILD) {
+        versionEl.textContent = window.APP_BUILD;
+      }
+
+      // 2. Toast Notifications
+      const toastEl = document.getElementById("docsToast");
+      let toastTimer = null;
+      function showToast(msg) {
+        if (!toastEl) return;
+        toastEl.textContent = msg;
+        toastEl.classList.add("active");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastEl.classList.remove("active");
+        }, 2200);
+      }
+
+      // 3. 1-Click Code Copy Handlers
+      document.querySelectorAll(".btn-copy-code").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const directCopy = btn.getAttribute("data-copy");
+          let textToCopy = "";
+          if (directCopy) {
+            textToCopy = directCopy;
+          } else {
+            const container = btn.closest(".code-container");
+            const codeEl = container?.querySelector("pre code");
+            textToCopy = codeEl ? codeEl.innerText : "";
+          }
+
+          if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+              showToast("✓ Copied code to clipboard!");
+            }).catch(() => {
+              showToast("✓ Copied!");
+            });
+          }
+        });
+      });
+
+      // 4. Interactive Angle & Coordinate Calculator
+      const calcX1 = document.getElementById("calcX1");
+      const calcY1 = document.getElementById("calcY1");
+      const calcX2 = document.getElementById("calcX2");
+      const calcY2 = document.getElementById("calcY2");
+      const calcDistance = document.getElementById("calcDistance");
+      const calcHeading = document.getElementById("calcHeading");
+      const calcOutputCode = document.getElementById("calcOutputCode");
+      const btnCopyCalcCode = document.getElementById("btnCopyCalcCode");
+
+      function updateCalc() {
+        const x1 = parseFloat(calcX1?.value || "0");
+        const y1 = parseFloat(calcY1?.value || "0");
+        const x2 = parseFloat(calcX2?.value || "24");
+        const y2 = parseFloat(calcY2?.value || "36");
+
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const dist = Math.hypot(dx, dy);
+
+        // LemLib heading: 0 is +Y, increases clockwise (standard atan2 is 0 = +X, counter-clockwise)
+        // angle from north clockwise: Math.atan2(dx, dy) in radians
+        let rad = Math.atan2(dx, dy);
+        let deg = (rad * 180 / Math.PI);
+        if (deg < 0) deg += 360;
+
+        if (calcDistance) calcDistance.textContent = `${dist.toFixed(1)} in`;
+        if (calcHeading) calcHeading.textContent = `${deg.toFixed(1)}°`;
+
+        const codeStr = `chassis.moveToPose(${x2.toFixed(1)}, ${y2.toFixed(1)}, ${Math.round(deg)}, 2500, {.lead = 0.6, .maxSpeed = 110});`;
+        if (calcOutputCode) calcOutputCode.textContent = codeStr;
+      }
+
+      [calcX1, calcY1, calcX2, calcY2].forEach((el) => {
+        if (el) {
+          el.addEventListener("input", updateCalc);
+          el.addEventListener("change", updateCalc);
+        }
+      });
+      updateCalc();
+
+      if (btnCopyCalcCode) {
+        btnCopyCalcCode.addEventListener("click", () => {
+          if (calcOutputCode) {
+            navigator.clipboard.writeText(calcOutputCode.textContent).then(() => {
+              showToast("✓ Copied LemLib command to clipboard!");
+            });
+          }
+        });
+      }
+
+      // 5. Live Search & Filter Across Documentation
+      const searchInput = document.getElementById("docsSearchInput");
+      const sections = document.querySelectorAll(".doc-section");
+
+      if (searchInput) {
+        searchInput.addEventListener("input", () => {
+          const q = searchInput.value.trim().toLowerCase();
+          sections.forEach((sec) => {
+            if (!q) {
+              sec.style.display = "block";
+              return;
+            }
+            const text = sec.innerText.toLowerCase();
+            if (text.includes(q)) {
+              sec.style.display = "block";
+            } else {
+              sec.style.display = "none";
+            }
+          });
+        });
+      }
+
+      // 6. Scroll Spy for Sidebar Navigation
+      const sidebarLinks = document.querySelectorAll(".docs-sidebar-link");
+      window.addEventListener("scroll", () => {
+        let currentSectionId = "";
+        sections.forEach((sec) => {
+          const top = sec.offsetTop - 120;
+          if (window.scrollY >= top) {
+            currentSectionId = sec.getAttribute("id") || "";
+          }
+        });
+
+        if (currentSectionId) {
+          sidebarLinks.forEach((link) => {
+            const href = link.getAttribute("href") || "";
+            if (href === `#${currentSectionId}`) {
+              link.classList.add("active");
+            } else {
+              link.classList.remove("active");
+            }
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

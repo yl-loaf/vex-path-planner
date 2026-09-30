@@ -18,7 +18,7 @@
   <meta name="description" content="Translate raw C++ autonomous routines into visual blocks, multitask concurrency flows, and field trajectories for VEX V5 LemLib." />
   <meta property="og:title" content="C++ Auton to Blocks Translator · VEX V5 LemLib" />
   <meta property="og:description" content="Parse raw C++ autonomous code into visual blocks, synchronized with the user profile and auton slots." />
-  <link rel="stylesheet" href="style.css?v=20260928.k35" />
+  <link rel="stylesheet" href="style.css?v=20260930.k1" />
   <script>
     (function () {
       try {
@@ -51,6 +51,9 @@
         <button type="button" id="btnTransOpenTools" class="btn-return-planner" style="background:#0f172a; border-color:#38bdf8; color:#38bdf8;" title="Open Engineering Tools Suite in Fullscreen">
           🛠️ Tools Suite
         </button>
+        <a href="documentation.html" class="btn-return-planner" style="background:#0f172a; border-color:#38bdf8; color:#38bdf8; text-decoration:none;" title="Open Documentation &amp; API Guide">
+          📖 Docs
+        </a>
         <div id="authArea" class="auth-area">
           <button id="btnGoogleSignIn" type="button" class="primary" title="Sign in with Google (saved across sessions)">Sign in with Google</button>
           <span id="authUser" class="auth-user" hidden></span>
@@ -270,16 +273,16 @@ void autonomous() {
   <div id="toastNotification" class="toast-notify"></div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260928.k35"></script>
+  <script src="version.js?v=20260930.k1"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260928.k35"></script>
-  <script src="session-guard.js?v=20260928.k35"></script>
-  <script src="theme.js?v=20260928.k35"></script>
-  <script src="cpp-parser.js?v=20260928.k35"></script>
-  <script src="translator-page.js?v=20260928.k35"></script>
-  <script src="tutorial.js?v=20260928.k35"></script>
+  <script src="firebase-config.js?v=20260930.k1"></script>
+  <script src="session-guard.js?v=20260930.k1"></script>
+  <script src="theme.js?v=20260930.k1"></script>
+  <script src="cpp-parser.js?v=20260930.k1"></script>
+  <script src="translator-page.js?v=20260930.k1"></script>
+  <script src="tutorial.js?v=20260930.k1"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {
