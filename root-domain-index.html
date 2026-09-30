@@ -317,28 +317,147 @@
       text-align: right;
     }
 
-    /* Informational Engineering Copy */
+    /* Navigation Bar */
+    .portal-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .portal-nav-brand {
+      font-family: var(--font-display);
+      font-weight: 700;
+      color: #ffffff;
+      font-size: 1.05rem;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .portal-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .portal-nav-link {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    .portal-nav-link:hover {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
+
+    /* Informational Engineering Copy & Policy Sections */
     .editorial-article {
       border-top: 1px solid var(--border);
       padding-top: 28px;
-      margin-top: 24px;
+      margin-top: 36px;
       font-size: 0.88rem;
       color: var(--text-muted);
       line-height: 1.6;
     }
     .editorial-article h2 {
       font-family: var(--font-display);
-      font-size: 1.25rem;
+      font-size: 1.35rem;
       color: #ffffff;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .editorial-article h3 {
+      font-family: var(--font-sans);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin: 18px 0 8px 0;
     }
     .editorial-article p {
-      margin-bottom: 12px;
+      margin-bottom: 14px;
+    }
+    .editorial-article ul, .editorial-article ol {
+      margin: 0 0 16px 22px;
+    }
+    .editorial-article li {
+      margin-bottom: 6px;
     }
 
+    /* Content Cards & Policy Callout Boxes */
+    .editorial-card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 16px 0 24px;
+    }
+    @media (max-width: 768px) {
+      .editorial-card-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .info-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 18px 20px;
+      border-radius: 4px;
+    }
+    .info-card h4 {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .info-card p, .info-card li {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Contact Card */
+    .contact-card-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid #38bdf8;
+      padding: 20px 24px;
+      border-radius: 4px;
+      margin: 16px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .contact-email-badge {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      display: inline-block;
+      margin-top: 4px;
+      text-decoration: none;
+    }
+    .contact-email-badge:hover {
+      background: rgba(56, 189, 248, 0.2);
+    }
+
+    /* Footer */
     footer {
       margin-top: 48px;
-      padding-top: 20px;
+      padding-top: 24px;
       border-top: 1px solid var(--border-subtle);
       width: 100%;
       text-align: center;
@@ -346,10 +465,42 @@
       font-size: 0.78rem;
       font-family: var(--font-mono);
     }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .footer-link {
+      color: #94a3b8;
+      text-decoration: none;
+      font-family: var(--font-sans);
+      font-size: 0.82rem;
+    }
+    .footer-link:hover {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- Top Navigation -->
+    <nav class="portal-nav">
+      <a href="https://yl-loaf.github.io/vex-path-planner/" class="portal-nav-brand">
+        <span>🤖</span> VEX V5 LemLib Suite
+      </a>
+      <div class="portal-nav-links">
+        <a href="#toolchain" class="portal-nav-link">Toolchain</a>
+        <a href="#architecture" class="portal-nav-link">Architecture</a>
+        <a href="#about" class="portal-nav-link">About Us</a>
+        <a href="#privacy" class="portal-nav-link">Privacy &amp; Tracking</a>
+        <a href="#contact" class="portal-nav-link">Contact</a>
+        <a href="https://yl-loaf.github.io/vex-path-planner/" class="btn btn-primary" style="padding: 5px 12px; font-size: 0.78rem;">Open Planner ➔</a>
+      </div>
+    </nav>
+
     <header class="editorial-header">
       <div class="editorial-meta">VEX ROBOTICS COMPETITION · OVERRIDE 2026-27 SPECIFICATION</div>
       <h1>Deterministic trajectory design &amp; odometry control for LemLib.</h1>
@@ -377,7 +528,7 @@
     </div>
 
     <!-- Asymmetrical Grid: Modules Registry & Specifications -->
-    <div class="portal-asym-grid">
+    <div class="portal-asym-grid" id="toolchain">
       <!-- Left: Suite Module Table (Clean utilitarian directory) -->
       <section>
         <h2 class="section-title">Engineering Toolchain Directory</h2>
@@ -475,8 +626,8 @@
     </div>
 
     <!-- Editorial Architecture Documentation -->
-    <article class="editorial-article">
-      <h2>Architecture &amp; Kinematic Implementation</h2>
+    <article class="editorial-article" id="architecture">
+      <h2>⚙️ Architecture &amp; Kinematic Implementation</h2>
       <p>
         The VEX V5 LemLib Suite provides competition teams with high-precision autonomous motion profiling. Leveraging LemLib's pure pursuit algorithms and dual-wheel odometry tracking, teams model deterministic 15-second autonomous win-point routines and 60-second programming skills runs on the Override game field.
       </p>
@@ -485,8 +636,120 @@
       </p>
     </article>
 
+    <!-- About Us Section -->
+    <article class="editorial-article" id="about">
+      <h2>👤 About Us &amp; Author Qualifications</h2>
+      <p>
+        <strong>Who We Are:</strong> The VEX V5 LemLib Suite was architected and developed by dedicated <strong>VEX Robotics coders and autonomous systems engineers</strong> with years of first-hand competition experience in the VEX Robotics Competition (VRC).
+      </p>
+      <p>
+        <strong>Background &amp; Expertise:</strong> Having competed across multiple VRC seasons (including Spin Up, Over Under, High Stakes, and Override), our engineering focus centers on high-reliability robot kinematics, discrete odometry integration loops ($10\,\text{ms}$ tracking cycles), non-linear Pure Pursuit algorithms, and Boomerang pursuit controllers. We specialize in authoring production-grade C++ code on the open-source <strong>PROS kernel</strong> and the <strong>LemLib motion library</strong>.
+      </p>
+      <div class="editorial-card-grid">
+        <div class="info-card">
+          <h4>🏆 Engineering Pedagogy</h4>
+          <p>We built this platform to eliminate guesswork in competitive autonomous routines. Traditional autonomous development often requires hundreds of trial-and-error battery cycles. This toolchain gives teams mathematical certainty through real-time kinematics simulation and AST code translation.</p>
+        </div>
+        <div class="info-card">
+          <h4>💻 Open-Source Commitment</h4>
+          <p>Our software is designed openly for the international VEX robotics educational community, offering free trajectory planning, AST translation, hardware serial communication, and modular PROS project scaffolding to student teams worldwide.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- Privacy Policy & Explicit Ad Tracking Network Handling -->
+    <article class="editorial-article" id="privacy">
+      <h2>🛡️ Privacy Policy &amp; Data Handling Disclosures</h2>
+      <p>
+        We respect user privacy and adhere to rigorous transparent data governance standards. This disclosure explicitly outlines what data is processed, how cookies and third-party advertising networks operate, and your rights regarding data management.
+      </p>
+
+      <div class="editorial-card-grid">
+        <div class="info-card">
+          <h4>🍪 Advertising Networks &amp; Cookies</h4>
+          <p>
+            We use third-party advertising partners, including <strong>Google AdSense</strong>, to serve advertisements when you visit our website. Google and its partner advertising networks use cookies (such as the DoubleClick DART cookie) to serve relevant ads based on your prior visits to this website or other sites across the Internet.
+          </p>
+          <p style="margin-top:8px;">
+            You may opt out of personalized advertising at any time by visiting <a href="https://adssettings.google.com/" target="_blank" rel="noopener" style="color:#38bdf8;">Google Ads Settings</a> or through the <a href="https://optout.networkadvertising.org/" target="_blank" rel="noopener" style="color:#38bdf8;">Network Advertising Initiative Opt-Out Page</a>.
+          </p>
+        </div>
+
+        <div class="info-card">
+          <h4>💾 Client-Side Storage (LocalStorage &amp; IDB)</h4>
+          <p>
+            Your autonomous routines, waypoint coordinate paths, robot track width, custom PID tuning gains, and IDE source code files are stored <strong>strictly locally within your browser sandbox</strong> (via HTML5 LocalStorage and IndexedDB).
+          </p>
+          <p style="margin-top:8px;">
+            Your robot autonomous source code and strategic paths are never sold, rented, or broadcast to third parties without your explicit permission.
+          </p>
+        </div>
+
+        <div class="info-card">
+          <h4>🔐 Google Sign-In &amp; Cloud Sync</h4>
+          <p>
+            If you voluntarily choose to sign in via Google Authentication, our application processes your Google UID, email address, and display name using Google Firebase infrastructure solely to authenticate your account and securely synchronize your autonomous routines across your team's devices.
+          </p>
+        </div>
+
+        <div class="info-card">
+          <h4>🔌 Web Serial Hardware Communication</h4>
+          <p>
+            When connecting to a VEX V5 Brain via Web Serial USB CDC, communication occurs <strong>100% locally between your operating system USB driver and the browser sandbox</strong>. No serial telemetry, motor temperatures, or flashed program binaries are uploaded to any external analytics or ad servers.
+          </p>
+        </div>
+      </div>
+
+      <p>
+        <strong>No Sale of Personal Information:</strong> We do not sell or monetize personal user records. Non-identifiable diagnostic metrics (such as aggregate page views, browser type, and anonymous crash telemetry) are utilized strictly for platform reliability, performance monitoring, and server capacity planning.
+      </p>
+    </article>
+
+    <!-- Contact Us Section -->
+    <article class="editorial-article" id="contact">
+      <h2>📬 Contact Us &amp; Technical Support</h2>
+      <p>
+        Whether you are a VEX robotics competitor, team mentor, tournament organizer, or developer with feedback on our LemLib motion calculations, we welcome direct communication.
+      </p>
+
+      <div class="contact-card-box">
+        <div>
+          <h3 style="margin:0 0 6px 0; color:#ffffff; font-size:1rem;">Direct Developer &amp; Inquiries Channel</h3>
+          <p style="margin:0 0 4px 0; font-size:0.84rem; color:var(--text-muted);">
+            For technical support, bug reports, feature suggestions, and general inquiries, reach out directly to our lead engineer:
+          </p>
+          <a href="mailto:smashyblocks7@gmail.com" class="contact-email-badge">
+            ✉️ smashyblocks7@gmail.com
+          </a>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <a href="mailto:smashyblocks7@gmail.com?subject=VEX%20LemLib%20Suite%20Inquiry" class="btn btn-primary" style="font-size:0.82rem;">
+            Send Email Message ➔
+          </a>
+          <a href="https://github.com/yl-loaf/vex-path-planner/issues" target="_blank" rel="noopener" class="btn btn-outline" style="font-size:0.82rem;">
+            GitHub Issue Tracker ↗
+          </a>
+        </div>
+      </div>
+
+      <p style="font-size:0.82rem; color:#94a3b8;">
+        <strong>Response Commitment:</strong> We aim to review and respond to community inquiries within <strong>24 to 48 business hours</strong>.
+      </p>
+    </article>
+
     <footer>
-      <p>© 2026 VEX V5 LemLib Suite · Autonomous Robotics Studio · Override 2026-27</p>
+      <div class="footer-links">
+        <a href="#about" class="footer-link">About Us</a>
+        <span>·</span>
+        <a href="#privacy" class="footer-link">Privacy Policy &amp; Ad Tracking</a>
+        <span>·</span>
+        <a href="#contact" class="footer-link">Contact</a>
+        <span>·</span>
+        <a href="https://yl-loaf.github.io/vex-path-planner/documentation.html" class="footer-link">Documentation</a>
+        <span>·</span>
+        <a href="https://yl-loaf.github.io/vex-path-planner/stats.html" class="footer-link">Analytics</a>
+      </div>
+      <p>© 2026 VEX V5 LemLib Suite · Autonomous Robotics Studio · Override 2026-27 · Inquiries: smashyblocks7@gmail.com</p>
     </footer>
   </div>
 

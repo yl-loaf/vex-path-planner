@@ -11409,6 +11409,20 @@
     if (btnClose) btnClose.onclick = closeHelp;
     if (btnDone) btnDone.onclick = closeHelp;
 
+    const btnMenuAbout = document.getElementById("btnMenuAboutUs");
+    const btnMenuPrivacy = document.getElementById("btnMenuPrivacyPolicy");
+    const btnMenuContact = document.getElementById("btnMenuContactUs");
+    if (btnMenuAbout) btnMenuAbout.onclick = () => openHelp("about");
+    if (btnMenuPrivacy) btnMenuPrivacy.onclick = () => openHelp("privacy");
+    if (btnMenuContact) btnMenuContact.onclick = () => openHelp("contact");
+
+    const linkFootAbout = document.getElementById("linkFootAbout");
+    const linkFootPrivacy = document.getElementById("linkFootPrivacy");
+    const linkFootContact = document.getElementById("linkFootContact");
+    if (linkFootAbout) linkFootAbout.onclick = (e) => { e.preventDefault(); openHelp("about"); };
+    if (linkFootPrivacy) linkFootPrivacy.onclick = (e) => { e.preventDefault(); openHelp("privacy"); };
+    if (linkFootContact) linkFootContact.onclick = (e) => { e.preventDefault(); openHelp("contact"); };
+
     tabs.forEach((t) => {
       t.onclick = () => selectTab(t.dataset.tab);
     });
