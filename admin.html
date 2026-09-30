@@ -62,36 +62,57 @@
 
     <!-- Main Admin Container -->
     <main style="max-width:1100px;width:100%;margin:20px auto 40px;padding:0 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;">
-      
-      <!-- Team Status Banner -->
-      <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;box-shadow:0 8px 30px var(--shadow-color);">
-        <div style="display:flex;align-items:center;gap:16px;">
-          <div style="width:54px;height:54px;border-radius:14px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);display:flex;align-items:center;justify-content:center;font-size:2rem;">
-            🛡️
-          </div>
-          <div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <h2 id="lblBannerTeamName" style="margin:0;font-size:1.35rem;color:var(--text-heading);font-weight:800;">Loading Team...</h2>
-              <span id="badgeAdminRole" class="badge" style="background:#f59e0b;color:#0b0f14;font-size:0.7rem;padding:2px 8px;font-weight:800;">ADMIN</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:16px;margin-top:6px;font-size:0.78rem;color:var(--muted);flex-wrap:wrap;">
-              <span>Team Code: <code id="lblBannerTeamCode" style="color:#38bdf8;font-weight:700;background:rgba(56,189,248,0.1);padding:2px 6px;border-radius:4px;">---</code></span>
-              <span>Rolling OTP: <strong id="lblBannerTeamOtp" style="color:var(--amber);">------</strong></span>
-              <span>Total Members: <strong id="lblBannerMemberCount" style="color:#4ade80;">0</strong></span>
-            </div>
-          </div>
+
+      <!-- Access Denied Gate (shown to non-admins or unauthenticated users) -->
+      <div id="adminAccessDeniedGate" style="display:none;background:var(--panel);border:2px solid #ef4444;border-radius:14px;padding:36px 28px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);margin:20px auto;max-width:650px;">
+        <div style="width:68px;height:68px;margin:0 auto 16px;border-radius:50%;background:rgba(239,68,68,0.15);border:2px solid rgba(239,68,68,0.4);display:flex;align-items:center;justify-content:center;font-size:2.2rem;">
+          🛑
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button type="button" id="btnAdminSaveAll" class="btn-team-primary" style="padding:10px 20px;font-size:0.85rem;font-weight:700;">
-            💾 Save Roles &amp; Permissions
-          </button>
+        <h2 style="margin:0 0 10px;font-size:1.4rem;color:#f87171;font-weight:800;">Administrator Access Required</h2>
+        <p id="adminAccessDeniedMsg" style="margin:0 0 20px;font-size:0.9rem;color:var(--text);line-height:1.5;">
+          You must be a team administrator or the workspace owner to enter the Admin Dashboard. Standard team members cannot view permissions or invite codes.
+        </p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <a href="team.html" class="btn-team-primary" style="text-decoration:none;padding:10px 22px;font-size:0.85rem;">
+            ← Return to Team Workspace
+          </a>
+          <a href="index.html" class="btn-team-secondary" style="text-decoration:none;padding:10px 22px;font-size:0.85rem;">
+            🗺️ Open Path Planner
+          </a>
         </div>
       </div>
 
-      <!-- Access Guard Notice (if not admin) -->
-      <div id="adminAccessNotice" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px 18px;font-size:0.85rem;color:#f87171;">
-        🔒 <strong>Read-Only Mode:</strong> You are viewing this page as a normal team member. Only team administrators and the team owner can modify member roles, change permissions, create invites, or kick members.
-      </div>
+      <!-- Protected Admin Content (only displayed if currentUser is admin/owner) -->
+      <div id="adminMainContent" style="display:none;flex-direction:column;gap:18px;">
+        <!-- Team Status Banner -->
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;box-shadow:0 8px 30px var(--shadow-color);">
+          <div style="display:flex;align-items:center;gap:16px;">
+            <div style="width:54px;height:54px;border-radius:14px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);display:flex;align-items:center;justify-content:center;font-size:2rem;">
+              🛡️
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <h2 id="lblBannerTeamName" style="margin:0;font-size:1.35rem;color:var(--text-heading);font-weight:800;">Loading Team...</h2>
+                <span id="badgeAdminRole" class="badge" style="background:#f59e0b;color:#0b0f14;font-size:0.7rem;padding:2px 8px;font-weight:800;">ADMIN</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:16px;margin-top:6px;font-size:0.78rem;color:var(--muted);flex-wrap:wrap;">
+                <span>Team Code: <code id="lblBannerTeamCode" style="color:#38bdf8;font-weight:700;background:rgba(56,189,248,0.1);padding:2px 6px;border-radius:4px;">---</code></span>
+                <span>Rolling OTP: <strong id="lblBannerTeamOtp" style="color:var(--amber);">------</strong></span>
+                <span>Total Members: <strong id="lblBannerMemberCount" style="color:#4ade80;">0</strong></span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button type="button" id="btnAdminSaveAll" class="btn-team-primary" style="padding:10px 20px;font-size:0.85rem;font-weight:700;">
+              💾 Save Roles &amp; Permissions
+            </button>
+          </div>
+        </div>
+
+        <!-- Access Guard Notice (if not admin) -->
+        <div id="adminAccessNotice" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px 18px;font-size:0.85rem;color:#f87171;">
+          🔒 <strong>Read-Only Mode:</strong> You are viewing this page as a normal team member. Only team administrators and the team owner can modify member roles, change permissions, create invites, or kick members.
+        </div>
 
       <!-- 6-Digit Hexadecimal Invite Generator -->
       <section class="team-section-card" style="padding:20px 24px;border-radius:14px;">
@@ -175,6 +196,7 @@
           </table>
         </div>
       </section>
+      </div><!-- End adminMainContent -->
 
     </main>
 
@@ -219,12 +241,12 @@
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260930.k1"></script>
+  <script src="version.js?v=20260930.k4"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260930.k1"></script>
-  <script src="theme.js?v=20260930.k1"></script>
-  <script src="admin.js?v=20260930.k1"></script>
+  <script src="firebase-config.js?v=20260930.k4"></script>
+  <script src="theme.js?v=20260930.k4"></script>
+  <script src="admin.js?v=20260930.k4"></script>
 </body>
 </html>

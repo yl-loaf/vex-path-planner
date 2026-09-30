@@ -2725,10 +2725,20 @@
       }
 
       let actionHtml = "";
-      if (isOwner) {
+      if (isOwner && isMe) {
+        actionHtml = `
+          <button type="button" class="btn-self-leave-team" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;padding:3px 8px;border-radius:4px;font-size:0.72rem;cursor:pointer;font-weight:700;" title="Leave or switch team">
+            🚪 Leave / Switch
+          </button>
+        `;
+      } else if (isOwner) {
         actionHtml = `<span style="font-size:0.72rem;color:#fbbf24;font-weight:700;">👑 Owner</span>`;
       } else if (isMe) {
-        actionHtml = `<span style="font-size:0.72rem;color:#94a3b8;">(You)</span>`;
+        actionHtml = `
+          <button type="button" class="btn-self-leave-team" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;padding:3px 8px;border-radius:4px;font-size:0.72rem;cursor:pointer;font-weight:700;" title="Leave this team workspace">
+            🚪 Leave Team
+          </button>
+        `;
       } else if (canManage) {
         actionHtml = `
           <button type="button" class="btn-team-kick" data-idx="${idx}" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;padding:3px 8px;border-radius:4px;font-size:0.72rem;cursor:pointer;font-weight:700;" title="Kick member from team">
@@ -2855,6 +2865,12 @@
           renderMemberList();
           renderVersionHistory();
           showToast(`👢 Kicked ${kicked.displayName || kicked.email} from the team.`, "⚠️");
+        });
+      });
+
+      container.querySelectorAll(".btn-self-leave-team").forEach(btn => {
+        btn.addEventListener("click", () => {
+          openExitTeamChallengeModal();
         });
       });
     }
@@ -3058,7 +3074,9 @@
 
           const myEm = (currentUser?.email || "").toLowerCase().trim();
           if (targetEmail.toLowerCase().trim() === myEm) {
-            alert("You cannot kick yourself from the workspace.");
+            if (confirm("Do you want to leave this team workspace?\nYou will be removed from the team and can join another team or create a new team.")) {
+              openExitTeamChallengeModal();
+            }
             return;
           }
 
@@ -5044,7 +5062,10 @@
       const emailInput = document.getElementById("txtUserAccountEmail");
       let rawSaved = (emailInput && emailInput.value.trim()) || localStorage.getItem("lemlib_saved_google_email");
       if (!rawSaved || rawSaved === "null" || rawSaved === "undefined" || !rawSaved.includes("@")) {
-        rawSaved = "teammate@example.com";
+        currentTeam = null;
+        setSetupViewVisible(true);
+        loadAvailableTeams();
+        return;
       }
       const savedEmail = rawSaved.trim().toLowerCase();
       currentUser = {
@@ -5084,89 +5105,60 @@
       } catch (_) {}
     }
 
-    // 4. Fallback to LocalStorage
+    // 4. Fallback to LocalStorage (verify actual membership, ignore legacy auto-assigned dummy teams)
     if (!loadedTeam) {
       try {
         const rawLocal = localStorage.getItem("lemlib_active_team");
         if (rawLocal) {
           const parsed = JSON.parse(rawLocal);
-          const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
-          const userKeys = getCleanEmailKeys(currentUser.email);
-          const hasMatch = userKeys.some(k => uTeams[k] === parsed.teamId) || parsed.ownerEmail?.toLowerCase() === currentUser.email.toLowerCase();
-          if (parsed && parsed.teamId && hasMatch) {
-            loadedTeam = parsed;
+          // If this was the legacy auto-assigned 99999X dummy team, discard it unless explicitly indexed
+          if (parsed && parsed.teamId === "team_mukoxgqg_n33t0") {
+            const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+            const userKeys = getCleanEmailKeys(currentUser.email);
+            const explicitlyOwned = userKeys.some(k => uTeams[k] === "team_mukoxgqg_n33t0");
+            if (!explicitlyOwned) {
+              localStorage.removeItem("lemlib_active_team");
+              localStorage.removeItem("lemlib_user_team_id");
+            } else {
+              loadedTeam = parsed;
+            }
+          } else if (parsed && parsed.teamId) {
+            const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+            const userKeys = getCleanEmailKeys(currentUser.email);
+            const isMem = (parsed.members || []).some(m => (m.email || "").toLowerCase().trim() === currentUser.email.toLowerCase().trim());
+            const hasMatch = userKeys.some(k => uTeams[k] === parsed.teamId) || parsed.ownerEmail?.toLowerCase() === currentUser.email.toLowerCase() || isMem;
+            if (hasMatch) {
+              loadedTeam = parsed;
+            }
           }
         }
-      } catch (_) {}
-    }
-
-    if (!loadedTeam) {
-      const now = Date.now();
-      loadedTeam = {
-        teamId: "team_mukoxgqg_n33t0",
-        teamCode: "VEX-217",
-        teamName: "99999X Apex LemLib Team",
-        vexTeamNumber: "99999X",
-        joinSecret: "5f43bb1a46546ac89481068d3719f9d5",
-        ownerEmail: currentUser.email,
-        createdAt: now - 3600000,
-        updatedAt: now,
-        members: [
-          { email: currentUser.email, displayName: currentUser.displayName || currentUser.email.split("@")[0], role: "Programmer", isOwner: true, joinedAt: now - 3600000 }
-        ],
-        pathPayload: {
-          paths: [
-            {
-              id: "p_default",
-              name: "Red Left Mogo Rush",
-              pose: { x: -60, y: -60, theta: 0 },
-              actions: [
-                { id: "a_1", type: "moveToPoint", x: -24, y: -24, timeout: 2000, maxSpeed: 115, earlyExitRange: 2, comment: "Rush alliance goal" },
-                { id: "a_2", type: "moveToPose", x: 0, y: 48, theta: 90, timeout: 2500, lead: 0.6, comment: "Score preload in corner" }
-              ]
-            }
-          ]
-        },
-        versionHistory: [
-          {
-            id: "v_init",
-            timestamp: now - 3600000,
-            dateStr: new Date(now - 3600000).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }),
-            authorEmail: currentUser.email,
-            authorName: currentUser.displayName || "Owner",
-            authorRole: "Programmer",
-            authorColor: "#38bdf8",
-            actionSummary: "Initialized Team Workspace",
-            editType: "workspace_init",
-            snapshot: null
-          }
-        ],
-        comments: [],
-        strategies: []
-      };
-      try {
-        localStorage.setItem("lemlib_active_team", JSON.stringify(loadedTeam));
-        localStorage.setItem("lemlib_user_team_id", loadedTeam.teamId);
       } catch (_) {}
     }
 
     const gate = document.getElementById("modalTeamGate");
     if (gate) gate.style.display = "none";
 
-    if (loadedTeam) {
-      currentTeam = loadedTeam;
-      if (!currentTeam.otpInfo) currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
-      setSetupViewVisible(false);
-      try { fsSaveTeamDoc(currentTeam); } catch (_) {}
-      onTeamLoaded();
-      requestAnimationFrame(() => {
-        drawField();
-      });
-    } else {
+    // If user has no team, DO NOT auto-assign any default team!
+    // Show the Team Setup & Join Gateway so user can join another team or create their own.
+    if (!loadedTeam) {
       currentTeam = null;
+      try {
+        localStorage.removeItem("lemlib_active_team");
+        localStorage.removeItem("lemlib_user_team_id");
+      } catch (_) {}
       setSetupViewVisible(true);
       loadAvailableTeams();
+      return;
     }
+
+    currentTeam = loadedTeam;
+    if (!currentTeam.otpInfo) currentTeam.otpInfo = getTeamOtpInfo(currentTeam);
+    setSetupViewVisible(false);
+    try { fsSaveTeamDoc(currentTeam); } catch (_) {}
+    onTeamLoaded();
+    requestAnimationFrame(() => {
+      drawField();
+    });
   }
 
   let availableTeamsInterval = null;

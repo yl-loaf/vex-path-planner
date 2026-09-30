@@ -359,9 +359,49 @@
   }
 
   // --------------------------------------------------------------------------
+  // ADMIN ACCESS CHECK & GATE ENFORCEMENT
+  // --------------------------------------------------------------------------
+  function checkAdminAccess() {
+    const gate = document.getElementById("adminAccessDeniedGate");
+    const content = document.getElementById("adminMainContent");
+    const msg = document.getElementById("adminAccessDeniedMsg");
+
+    if (!currentUser || !currentUser.email) {
+      if (content) content.style.display = "none";
+      if (gate) gate.style.display = "block";
+      if (msg) msg.textContent = "Please sign in with your Google account. Administrator privileges are required to access the Admin Dashboard.";
+      return false;
+    }
+
+    if (!currentTeam || !currentTeam.teamId) {
+      if (content) content.style.display = "none";
+      if (gate) gate.style.display = "block";
+      if (msg) msg.textContent = "No active team workspace detected. You must join or create a VEX team as an administrator to use the Admin Dashboard.";
+      return false;
+    }
+
+    const isAdmin = isCurrentUserAdmin();
+    if (!isAdmin) {
+      if (content) content.style.display = "none";
+      if (gate) gate.style.display = "block";
+      if (msg) msg.textContent = `Access Denied: You are signed in as a standard member (${currentUser.email}) on "${currentTeam.teamName || 'this team'}". Only team administrators and the workspace owner can access the Admin Dashboard.`;
+      return false;
+    }
+
+    // Verified Admin or Owner
+    if (gate) gate.style.display = "none";
+    if (content) content.style.display = "flex";
+    return true;
+  }
+
+  // --------------------------------------------------------------------------
   // ADMIN DASHBOARD RENDERING
   // --------------------------------------------------------------------------
   function renderAll() {
+    const hasAccess = checkAdminAccess();
+    if (!hasAccess) {
+      return;
+    }
     renderTeamBanner();
     renderMembersTable();
     renderPendingInvites();
@@ -466,10 +506,20 @@
       }
 
       let actionHtml = "";
-      if (isOwner) {
+      if (isOwner && isMe) {
+        actionHtml = `
+          <button type="button" class="btn-admin-self-leave" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;padding:4px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;" title="Leave workspace to join or create another team">
+            🚪 Leave Team
+          </button>
+        `;
+      } else if (isOwner) {
         actionHtml = `<span style="font-size:0.75rem;color:#fbbf24;font-weight:800;">👑 Owner</span>`;
       } else if (isMe) {
-        actionHtml = `<span style="font-size:0.75rem;color:#94a3b8;">(You)</span>`;
+        actionHtml = `
+          <button type="button" class="btn-admin-self-leave" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;padding:4px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;" title="Leave workspace to join or create another team">
+            🚪 Leave Team
+          </button>
+        `;
       } else if (canManage) {
         actionHtml = `
           <button type="button" class="btn-kick-member" data-idx="${idx}" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;padding:4px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">
@@ -610,6 +660,41 @@
           await fsSaveTeamDoc(currentTeam);
           renderAll();
           showToast(`👢 Kicked ${kicked.displayName || kicked.email} from the team.`, "⚠️");
+        });
+      });
+
+      tbody.querySelectorAll(".btn-admin-self-leave").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("Are you sure you want to leave this team workspace?\nYou will be removed from the roster and can join another team or create a new one.")) {
+            return;
+          }
+          const myEmail = (currentUser?.email || "").toLowerCase().trim();
+          const idx = (currentTeam.members || []).findIndex(m => (m.email || "").toLowerCase().trim() === myEmail);
+          if (idx !== -1) {
+            currentTeam.members.splice(idx, 1);
+          }
+          currentTeam.updatedAt = Date.now();
+          await fsSaveTeamDoc(currentTeam);
+          try {
+            localStorage.removeItem("lemlib_active_team");
+            localStorage.removeItem("lemlib_user_team_id");
+            const uTeams = JSON.parse(localStorage.getItem("lemlib_user_teams") || "{}");
+            const cleanKeys = getCleanEmailKeys(myEmail);
+            cleanKeys.forEach(k => { delete uTeams[k]; });
+            localStorage.setItem("lemlib_user_teams", JSON.stringify(uTeams));
+          } catch (_) {}
+
+          const apiRoute = resolveApiUrl("/api/team/leave");
+          if (apiRoute) {
+            fetch(apiRoute, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ teamId: currentTeam.teamId, email: myEmail })
+            }).catch(() => {});
+          }
+
+          alert("🚪 You have successfully left the team workspace. Redirecting to team join gateway...");
+          window.location.href = "team.html";
         });
       });
     }
@@ -871,6 +956,24 @@
   }
 
   function loadInitialTeam() {
+    if (!currentUser) {
+      try {
+        const savedEmail = localStorage.getItem("lemlib_saved_google_email");
+        if (savedEmail && savedEmail.includes("@")) {
+          currentUser = {
+            email: savedEmail.toLowerCase().trim(),
+            displayName: savedEmail.split("@")[0],
+            uid: "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
+          };
+          const authUser = document.getElementById("authUser");
+          if (authUser) {
+            authUser.textContent = currentUser.displayName;
+            authUser.hidden = false;
+          }
+        }
+      } catch (_) {}
+    }
+
     // Read from localStorage
     try {
       const raw = localStorage.getItem("lemlib_active_team");

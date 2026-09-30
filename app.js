@@ -15953,8 +15953,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
     const btnMin = document.getElementById("btnHudMinimize");
     const handle = document.getElementById("hudDragHandle");
 
-    // Load saved preferences
-    const isDocked = localStorage.getItem("sim_hud_docked") === "true";
+    // Load saved preferences (docked above canvas by default for clean field view)
+    const isDocked = localStorage.getItem("sim_hud_docked") !== "false";
     const isMinimized = localStorage.getItem("sim_hud_minimized") === "true";
 
     if (isDocked) {
@@ -15987,6 +15987,23 @@ lemlib::ControllerSettings ${currentMode}_controller(
         btnMin.textContent = minned ? "+" : "―";
         localStorage.setItem("sim_hud_minimized", minned ? "true" : "false");
         resizeCanvas();
+      };
+    }
+
+    const btnToggleTel = document.getElementById("btnToggleHudTelemetry");
+    const extraTel = document.getElementById("hudTelemetryExtra");
+    if (btnToggleTel && extraTel) {
+      const savedTelOpen = localStorage.getItem("sim_hud_telemetry_expanded") === "true";
+      if (savedTelOpen) {
+        extraTel.style.display = "inline-flex";
+        btnToggleTel.textContent = "⚡ Telemetry ▴";
+      }
+      btnToggleTel.onclick = (e) => {
+        e.stopPropagation();
+        const isHidden = extraTel.style.display === "none";
+        extraTel.style.display = isHidden ? "inline-flex" : "none";
+        btnToggleTel.textContent = isHidden ? "⚡ Telemetry ▴" : "⚡ Telemetry ▾";
+        localStorage.setItem("sim_hud_telemetry_expanded", isHidden ? "true" : "false");
       };
     }
 

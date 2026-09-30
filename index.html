@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260930.k1" />
+  <link rel="stylesheet" href="style.css?v=20260930.k4" />
   <script>
     (function () {
       try {
@@ -317,10 +317,11 @@
         <nav class="header-mode-nav">
           <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation & Visual Path Planner">🗺️ Planner &amp; Sim</button>
           <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
-          <button type="button" class="mode-nav-btn" id="navModeTools" title="Open Full Engineering Tools Suite (Opens in Fullscreen)">🛠️ Tools Suite</button>
+          <a href="tools.html" class="mode-nav-btn" id="navModeTools" title="Open Full 20-Tool Engineering Suite (Drivetrain Dyno, PID, Mirror, Video, and more)">🛠️ Tools Suite</a>
           <button type="button" class="mode-nav-btn" id="navModeMatchReplay" title="Autonomous Match Replay & Log Analysis (ALPHA)">📊 Match Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 4px;border-radius:4px;font-weight:800;">ALPHA</span></button>
           <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB & Telemetry">🔌 Brain</button>
-          <a href="documentation.html" class="mode-nav-btn" id="navModeDocs" title="VEX V5 &amp; LemLib Documentation, Guides &amp; API Reference">📖 Documentation</a>
+          <a href="team.html" class="mode-nav-btn" title="Team Collaboration Workspace & Teammate Roster">👥 Team</a>
+          <a href="documentation.html" class="mode-nav-btn" id="navModeDocs" title="VEX V5 &amp; LemLib Documentation, Guides &amp; API Reference">📖 Docs</a>
           <!-- Secondary modes kept accessible in Tools menu -->
           <button type="button" id="navModePidTuner" hidden></button>
         </nav>
@@ -343,6 +344,11 @@
             ⚙️ Workspace Tools ▾
           </button>
           <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden>
+            <a href="tools.html" style="display:flex;align-items:center;justify-content:space-between;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);padding:9px 12px;border-radius:8px;color:#38bdf8;font-weight:700;text-decoration:none;margin-bottom:8px;font-size:0.82rem;">
+              <span>🛠️ Open Engineering Tools Suite</span>
+              <span style="font-size:0.7rem;background:#0284c7;color:#fff;padding:2px 7px;border-radius:4px;">20 Tools →</span>
+            </a>
+
             <div class="tools-menu-header">📁 Project &amp; Workspace</div>
             <button type="button" id="btnLoadProject" class="tools-menu-item">📁 Project Manager</button>
             <button type="button" id="btnSyncProjectToCloud" class="tools-menu-item">☁️ Sync Cloud Workspace</button>
@@ -352,7 +358,7 @@
             <button type="button" id="btnStartQuickTour" class="tools-menu-item">🎓 Guided Quick Tour</button>
 
             <div class="tools-menu-divider"></div>
-            <div class="tools-menu-header">🛠️ Engineering Analysis</div>
+            <div class="tools-menu-header">🛠️ Engineering Analysis (<a href="tools.html" style="color:#38bdf8;text-decoration:none;">View all 20 on Tools page</a>)</div>
             <button type="button" id="btnToolsSuiteDropdown" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">🛠️ All Tools Suite (Fullscreen) ⛶</button>
             <button type="button" id="btnOpenMatchReplay" class="tools-menu-item" style="color:#f59e0b; font-weight:700;">📊 Match Replay &amp; Log Analysis (ALPHA)</button>
             <button type="button" id="btnToggleDebug" class="tools-menu-item">🐞 Live Debugger &amp; Inspector</button>
@@ -370,9 +376,10 @@
             <button type="button" id="btnClear" class="tools-menu-item danger-item">🗑️ Clear Current Routine</button>
 
             <div class="tools-menu-divider"></div>
-            <div class="tools-menu-header">📖 Guides &amp; Analytics</div>
+            <div class="tools-menu-header">📖 Guides &amp; Team Portals</div>
             <a href="documentation.html" class="tools-menu-item" style="color:#38bdf8;font-weight:700;">📖 Documentation &amp; API Guide</a>
-            <a href="team.html" class="tools-menu-item" style="color:#38bdf8;font-weight:700;">👥 Team Collaboration (ALPHA)</a>
+            <a href="team.html" class="tools-menu-item" style="color:#38bdf8;font-weight:700;">👥 Team Collaboration (BETA)</a>
+            <a href="admin.html" class="tools-menu-item" style="color:#f59e0b;font-weight:700;">🛡️ Team Admin &amp; Permissions</a>
             <button type="button" id="btnOpenTutorial" class="tools-menu-item">🎓 Interactive LemLib Tutorial</button>
             <a href="stats.html" class="tools-menu-item">📊 Site &amp; User Stats</a>
             <button type="button" id="btnHelp" class="tools-menu-item">❓ Help &amp; Guides</button>
@@ -639,10 +646,11 @@
               <h2 style="margin-bottom:0;display:flex;align-items:center;gap:6px;">
                 <span>🤖 LemLib Bot &amp; Hardware Setup</span>
               </h2>
-              <div style="display:flex;gap:4px;">
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
                 <button type="button" id="btnSyncBotFromCpp" class="btn-xs-clean" title="Extract and sync values from src/robot-config.cpp">🔄 Sync from C++</button>
                 <button type="button" id="btnSaveBotToCpp" class="btn-xs-clean" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);" title="Inject these values into src/robot-config.cpp">💾 Update C++</button>
                 <button type="button" id="btnOpenPidFromBot" class="btn-sm-pid-shortcut" title="Open PID Tuning Visualizer">🎛️ Tune PID</button>
+                <a href="tools.html#pid" class="btn-xs-clean" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);text-decoration:none;" title="Open Dedicated LemLib PID Gain Step Response Playground on Tools Page">🛠️ Tools Page ↗</a>
               </div>
             </div>
             
@@ -701,9 +709,12 @@
 
             <!-- Real-Time Drive Physics & Dyno Configuration -->
             <div class="bot-physics-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius:8px;padding:8px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:6px;flex-wrap:wrap;">
                 <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;">⚡ Real-Time Drive Physics &amp; Dyno</span>
-                <button type="button" id="btnOpenPhysicsFromBot" class="btn-xs-clean" style="color:#fbbf24;border-color:rgba(245,158,11,0.4);" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Dyno &amp; 15s Clock</button>
+                <div style="display:flex;gap:4px;">
+                  <button type="button" id="btnOpenPhysicsFromBot" class="btn-xs-clean" style="color:#fbbf24;border-color:rgba(245,158,11,0.4);" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Dyno Modal</button>
+                  <a href="tools.html#dyno" class="btn-xs-clean" style="color:#fbbf24;border-color:rgba(245,158,11,0.4);text-decoration:none;" title="Open Dedicated Real-Time Drive Dyno on Tools Page">🛠️ Tools Page ↗</a>
+                </div>
               </div>
               <div class="row" style="margin-bottom:4px;">
                 <label title="Number of drivetrain drive motors">Motors
@@ -1049,33 +1060,42 @@
               <div class="sim-hud-chip chip-score" id="simHudScore" title="Live Autonomous Score & Dynamic Override Tracker (Beta). Click to open Scoring panel" style="display:none; cursor:pointer;">
                 🏆 0 pts · 🎚️ 0/4 Toggles · 🥅 0 Pins
               </div>
-              <button type="button" class="btn-xs-clean" id="btnQuickCommentGuide" title="Open step-by-step guide on how to use autonomous comments" style="background:rgba(56,189,248,0.18);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 8px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
-                <span>❓ Guide</span>
-              </button>
               <div class="sim-hud-chip chip-time" id="simHudTime" title="Live Elapsed & Total Path Duration">
                 ⏱ 0.00s / ~0.00s
               </div>
               <div class="sim-hud-chip chip-speed" id="simHudSpeed" title="Simulated Linear & Angular Velocity">
                 🏎️ 0.0 in/s
               </div>
-              <div class="sim-hud-chip chip-accel" id="simHudAccel" title="Linear Acceleration & Lateral G-Force">
-                🚀 0.00g (0 in/s²)
-              </div>
-              <div class="sim-hud-chip chip-power" id="simHudPower" title="Drivetrain Power & Battery Voltage Sag">
-                ⚡ 12.8V · 0W
-              </div>
-              <div class="sim-hud-chip chip-traction" id="simHudTraction" title="Wheel Traction Status on Foam Field Tiles">
-                🛞 Grip 100%
+              <div class="sim-hud-chip chip-coords" id="simHudCoords" title="Realtime Field Coordinates (X, Y, θ)">
+                📍 (-60.0", -60.0") θ=0°
               </div>
               <div class="sim-hud-chip chip-collision legal" id="simHudCollision" title="Real-Time Collision Detection with Walls, Loaders &amp; Goals">
                 🛡️ Clear
               </div>
-              <div class="sim-hud-chip chip-sharp-turn clean" id="simHudSharpTurn" title="Sharp Angle Transitions: Click to inspect velocity dips and optimize momentum" style="cursor:pointer;">
-                ⚡ 0 Sharp Turns
+
+              <!-- Sleek Secondary Telemetry Group (collapsible to eliminate visual clutter) -->
+              <button type="button" class="btn-xs-clean hud-telemetry-toggle" id="btnToggleHudTelemetry" title="Toggle detailed physics readouts (accel, battery sag, traction, sharp turns)" style="font-size:0.72rem;padding:2px 7px;border-radius:4px;cursor:pointer;background:rgba(30,41,59,0.7);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);">
+                ⚡ Telemetry ▾
+              </button>
+              <div id="hudTelemetryExtra" class="hud-telemetry-extra" style="display:none;align-items:center;gap:4px;">
+                <div class="sim-hud-chip chip-accel" id="simHudAccel" title="Linear Acceleration & Lateral G-Force">
+                  🚀 0.00g (0 in/s²)
+                </div>
+                <div class="sim-hud-chip chip-power" id="simHudPower" title="Drivetrain Power & Battery Voltage Sag">
+                  ⚡ 12.8V · 0W
+                </div>
+                <div class="sim-hud-chip chip-traction" id="simHudTraction" title="Wheel Traction Status on Foam Field Tiles">
+                  🛞 Grip 100%
+                </div>
+                <div class="sim-hud-chip chip-sharp-turn clean" id="simHudSharpTurn" title="Sharp Angle Transitions: Click to inspect velocity dips and optimize momentum" style="cursor:pointer;">
+                  ⚡ 0 Sharp Turns
+                </div>
+                <a href="tools.html#dyno" target="_blank" class="hud-tool-btn" style="color:#fbbf24;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:2px;" title="Open Dedicated Real-Time Drive Dyno on Tools Page">Dyno Suite ↗</a>
               </div>
-              <div class="sim-hud-chip chip-coords" id="simHudCoords" title="Realtime Field Coordinates (X, Y, θ)">
-                📍 (-60.0", -60.0") θ=0°
-              </div>
+
+              <button type="button" class="btn-xs-clean" id="btnQuickCommentGuide" title="Open step-by-step guide on how to use autonomous comments" style="background:rgba(56,189,248,0.18);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 8px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                <span>❓ Guide</span>
+              </button>
             </div>
           </div>
         </div>
@@ -3172,23 +3192,23 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260930.k1"></script>
+  <script src="version.js?v=20260930.k4"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260930.k1"></script>
-  <script src="google-drive-sync.js?v=20260930.k1"></script>
-  <script src="session-guard.js?v=20260930.k1"></script>
-  <script src="theme.js?v=20260930.k1"></script>
-  <script src="v5-brain-serial.js?v=20260930.k1"></script>
-  <script src="project-manager.js?v=20260930.k1"></script>
-  <script src="cpp-parser.js?v=20260930.k1"></script>
-  <script src="scoring-engine.js?v=20260930.k1"></script>
-  <script src="match-analysis-engine.js?v=20260930.k1"></script>
-  <script src="app.js?v=20260930.k1"></script>
-  <script src="tutorial.js?v=20260930.k1"></script>
+  <script src="firebase-config.js?v=20260930.k4"></script>
+  <script src="google-drive-sync.js?v=20260930.k4"></script>
+  <script src="session-guard.js?v=20260930.k4"></script>
+  <script src="theme.js?v=20260930.k4"></script>
+  <script src="v5-brain-serial.js?v=20260930.k4"></script>
+  <script src="project-manager.js?v=20260930.k4"></script>
+  <script src="cpp-parser.js?v=20260930.k4"></script>
+  <script src="scoring-engine.js?v=20260930.k4"></script>
+  <script src="match-analysis-engine.js?v=20260930.k4"></script>
+  <script src="app.js?v=20260930.k4"></script>
+  <script src="tutorial.js?v=20260930.k4"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

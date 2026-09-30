@@ -1464,6 +1464,30 @@ button.full { width: 100%; }
   flex-wrap: wrap;
 }
 
+.hud-telemetry-toggle {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.hud-telemetry-toggle:hover {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.hud-telemetry-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
 /* DOCKED MODE (placed static above field canvas) */
 .sim-floating-hud.is-docked {
   position: relative;

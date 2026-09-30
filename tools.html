@@ -13,7 +13,7 @@
   <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
   <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
-  <link rel="stylesheet" href="style.css?v=20260930.k1" />
+  <link rel="stylesheet" href="style.css?v=20260930.k4" />
   <script>
     (function () {
       try {
@@ -618,7 +618,7 @@
       </div>
 
       <div class="tools-filter-pills" id="toolsFilterPills">
-        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">18</span>)</button>
+        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">20</span>)</button>
         <button type="button" class="tool-pill" data-filter="collab">👥 Team &amp; Cloud</button>
         <button type="button" class="tool-pill" data-filter="motion">🏎️ Motion &amp; Dyno</button>
         <button type="button" class="tool-pill" data-filter="tuning">🎛️ PID &amp; Bottlenecks</button>
@@ -631,7 +631,7 @@
     <div class="tools-grid" id="toolsGrid">
 
       <!-- TOOL 0: Real-Time Team Collaboration & Cloud Sync (BETA) -->
-      <article class="tool-card highlight" data-category="collab" data-keywords="team collaboration cloud real-time multi-user cursor pin comments strategy voting version history 500 gmail">
+      <article id="team" class="tool-card highlight" data-category="collab" data-keywords="team collaboration cloud real-time multi-user cursor pin comments strategy voting version history 500 gmail">
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(56, 189, 248, 0.15); border-color:rgba(56, 189, 248, 0.3); color:#38bdf8;">👥</div>
           <div class="tool-title-info">
@@ -675,7 +675,7 @@
       </article>
 
       <!-- TOOL 0C: Team Admin & Member Permissions Dashboard (admin.html) -->
-      <article class="tool-card highlight" data-category="collab" data-keywords="admin permissions roles dashboard hex invite member kick search workspace settings google teammates">
+      <article id="admin" class="tool-card highlight" data-category="collab" data-keywords="admin permissions roles dashboard hex invite member kick search workspace settings google teammates">
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(245, 158, 11, 0.15); border-color:rgba(245, 158, 11, 0.35); color:#f59e0b;">🛡️</div>
           <div class="tool-title-info">
@@ -719,7 +719,7 @@
       </article>
 
       <!-- TOOL 0D: LemLib Autonomous & Engineering Documentation Portal (documentation.html) -->
-      <article class="tool-card highlight" data-category="collab" data-keywords="documentation docs api guide manual reference lemlib boomerang pure pursuit coordinates angles pid hardware pros c++ cheat sheet">
+      <article id="docs" class="tool-card highlight" data-category="collab" data-keywords="documentation docs api guide manual reference lemlib boomerang pure pursuit coordinates angles pid hardware pros c++ cheat sheet">
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(14, 165, 233, 0.15); border-color:rgba(14, 165, 233, 0.35); color:#38bdf8;">📖</div>
           <div class="tool-title-info">
@@ -763,7 +763,7 @@
       </article>
 
       <!-- TOOL 0B: Autonomous Match Replay & Log Analysis Suite (ALPHA) -->
-      <article class="tool-card highlight" data-category="tuning collab" data-keywords="match replay log analysis actual vs planned odometry telemetry v5 brain deviation heatmap error root cause lemlib wheel slip collision">
+      <article id="replay" class="tool-card highlight" data-category="tuning collab" data-keywords="match replay log analysis actual vs planned odometry telemetry v5 brain deviation heatmap error root cause lemlib wheel slip collision">
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(245, 158, 11, 0.15); border-color:rgba(245, 158, 11, 0.3); color:#f59e0b;">📊</div>
           <div class="tool-title-info">
@@ -807,7 +807,7 @@
       </article>
 
       <!-- TOOL 1: Real-Time Velocity vs Target & 15s+ Bottleneck Analyzer -->
-      <article class="tool-card highlight" data-category="tuning" data-keywords="velocity bottleneck target acceleration lag slew 15s simulation pid tuning saturation">
+      <article id="bottlenecks" class="tool-card highlight" data-category="tuning" data-keywords="velocity bottleneck target acceleration lag slew 15s simulation pid tuning saturation">
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(239, 68, 68, 0.15); border-color:rgba(239, 68, 68, 0.3); color:#f87171;">⚡</div>
           <div class="tool-title-info">
@@ -848,7 +848,7 @@
       </article>
 
       <!-- TOOL 2: Drivetrain Dyno & Speed Calculator -->
-      <article class="tool-card highlight" data-category="motion" data-keywords="drivetrain dyno speed calculator rpm gear ratio wheel size top speed travel time acceleration">
+      <article id="dyno" class="tool-card highlight" data-category="motion" data-keywords="drivetrain dyno speed calculator rpm gear ratio wheel size top speed travel time acceleration">
         <div class="tool-card-header">
           <div class="tool-icon-box">🏎️</div>
           <div class="tool-title-info">
@@ -932,7 +932,7 @@
       </article>
 
       <!-- TOOL 3: Interactive LemLib PID Gain & Slew Playground -->
-      <article class="tool-card" data-category="tuning" data-keywords="pid tuning gain controller step response lemlib kp ki kd slew overshoot settling time">
+      <article id="pid" class="tool-card" data-category="tuning" data-keywords="pid tuning gain controller step response lemlib kp ki kd slew overshoot settling time">
         <div class="tool-card-header">
           <div class="tool-icon-box">🎛️</div>
           <div class="tool-title-info">
@@ -988,7 +988,7 @@
       </article>
 
       <!-- TOOL 4: Sharp Turn Centripetal & Tipping Speed Analyzer -->
-      <article class="tool-card" data-category="motion" data-keywords="sharp turn centripetal acceleration tipping friction swing turn radius curvature">
+      <article id="sharp-turns" class="tool-card" data-category="motion" data-keywords="sharp turn centripetal acceleration tipping friction swing turn radius curvature">
         <div class="tool-card-header">
           <div class="tool-icon-box">📐</div>
           <div class="tool-title-info">
@@ -1042,7 +1042,7 @@
       </article>
 
       <!-- TOOL 5: Cross-Alliance Routine Mirroring Utility -->
-      <article class="tool-card" data-category="routines" data-keywords="mirror mirroring alliance red left red right blue symmetry coordinates transform">
+      <article id="mirror" class="tool-card" data-category="routines" data-keywords="mirror mirroring alliance red left red right blue symmetry coordinates transform">
         <div class="tool-card-header">
           <div class="tool-icon-box">🪞</div>
           <div class="tool-title-info">
@@ -1093,7 +1093,7 @@ chassis.turnToHeading(270, 1000);</div>
       </article>
 
       <!-- TOOL 6: Pure Pursuit Lookahead & Carrot Calculator -->
-      <article class="tool-card" data-category="motion" data-keywords="pure pursuit lookahead carrot lead distance radius tracking spline path following">
+      <article id="pure-pursuit" class="tool-card" data-category="motion" data-keywords="pure pursuit lookahead carrot lead distance radius tracking spline path following">
         <div class="tool-card-header">
           <div class="tool-icon-box">🎯</div>
           <div class="tool-title-info">
@@ -1150,7 +1150,7 @@ chassis.turnToHeading(270, 1000);</div>
       </article>
 
       <!-- TOOL 6B: Bezier Curve Spline & Curvature Control Calculator -->
-      <article class="tool-card" data-category="motion" data-keywords="bezier curve spline control points cp1 cp2 tangent lead curvature continuous momentum arc">
+      <article id="bezier" class="tool-card" data-category="motion" data-keywords="bezier curve spline control points cp1 cp2 tangent lead curvature continuous momentum arc">
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(56, 189, 248, 0.15); border-color:rgba(56, 189, 248, 0.35); color:#38bdf8;">🌊</div>
           <div class="tool-title-info">
@@ -1205,7 +1205,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
       </article>
 
       <!-- TOOL 7: Pneumatics Air Budget & Pressure Drop Calculator -->
-      <article class="tool-card" data-category="hardware" data-keywords="pneumatics air tank pressure psi cylinder clamp intake drop actuations">
+      <article id="pneumatics" class="tool-card" data-category="hardware" data-keywords="pneumatics air tank pressure psi cylinder clamp intake drop actuations">
         <div class="tool-card-header">
           <div class="tool-icon-box">🎈</div>
           <div class="tool-title-info">
@@ -1267,7 +1267,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
       </article>
 
       <!-- TOOL 8: VEX V5 Battery Voltage Sag & Internal Resistance -->
-      <article class="tool-card" data-category="hardware" data-keywords="battery voltage sag internal resistance brownout v5 brain current amp draw">
+      <article id="battery" class="tool-card" data-category="hardware" data-keywords="battery voltage sag internal resistance brownout v5 brain current amp draw">
         <div class="tool-card-header">
           <div class="tool-icon-box">🔋</div>
           <div class="tool-title-info">
@@ -1325,7 +1325,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
       </article>
 
       <!-- TOOL 9: Raw C++ Auton to Visual Blocks Translator -->
-      <article class="tool-card" data-category="routines" data-keywords="translator c++ raw code parse convert import pros lemlib multitask sync">
+      <article id="translator" class="tool-card" data-category="routines" data-keywords="translator c++ raw code parse convert import pros lemlib multitask sync">
         <div class="tool-card-header">
           <div class="tool-icon-box">📥</div>
           <div class="tool-title-info">
@@ -1362,7 +1362,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
       </article>
 
       <!-- TOOL 10: Full PROS C++ IDE Suite -->
-      <article class="tool-card" data-category="routines" data-keywords="ide pros compiler c++ code editor syntax highlighting build flash make">
+      <article id="ide" class="tool-card" data-category="routines" data-keywords="ide pros compiler c++ code editor syntax highlighting build flash make">
         <div class="tool-card-header">
           <div class="tool-icon-box">💻</div>
           <div class="tool-title-info">
@@ -1399,7 +1399,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
       </article>
 
       <!-- TOOL 11: VEX V5 Brain USB CDC Telemetry Link -->
-      <article class="tool-card" data-category="hardware" data-keywords="brain v5 usb web serial cdc telemetry battery terminal motor ports">
+      <article id="brain" class="tool-card" data-category="hardware" data-keywords="brain v5 usb web serial cdc telemetry battery terminal motor ports">
         <div class="tool-card-header">
           <div class="tool-icon-box">🔌</div>
           <div class="tool-title-info">
@@ -1436,7 +1436,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
       </article>
 
       <!-- TOOL 12: Site & Community Analytics Dashboard -->
-      <article class="tool-card" data-category="routines" data-keywords="stats statistics analytics visits page views users server traffic">
+      <article id="stats" class="tool-card" data-category="routines" data-keywords="stats statistics analytics visits page views users server traffic">
         <div class="tool-card-header">
           <div class="tool-icon-box">📊</div>
           <div class="tool-title-info">
@@ -1473,7 +1473,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
       </article>
 
       <!-- TOOL 13: High-Precision Coordinate & Odometry Resolution Converter -->
-      <article class="tool-card" data-category="motion" data-keywords="coordinate coordinates resolution precision pointer odometry units inches millimeters tiles snap convert high-precision">
+      <article id="coords" class="tool-card" data-category="motion" data-keywords="coordinate coordinates resolution precision pointer odometry units inches millimeters tiles snap convert high-precision">
         <div class="tool-card-header">
           <div class="tool-icon-box">🎯</div>
           <div class="tool-title-info">
@@ -1538,7 +1538,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
       </article>
 
       <!-- TOOL 14: VRC Override Game Engine & Dynamic Pin Tracker (BETA) -->
-      <article class="tool-card highlight" data-category="routines" data-keywords="override scoring score points pins toggles loaders goals stacking autonomous win point beta cw ccw">
+      <article id="scoring" class="tool-card highlight" data-category="routines" data-keywords="override scoring score points pins toggles loaders goals stacking autonomous win point beta cw ccw">
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(234, 179, 8, 0.15); border-color:rgba(234, 179, 8, 0.35); color:#facc15;">🎯</div>
           <div class="tool-title-info">
@@ -1593,6 +1593,82 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
         </div>
       </article>
 
+      <!-- TOOL 15: Field Collision Detection & Clearance Shield -->
+      <article id="collision" class="tool-card" data-category="motion" data-keywords="collision clearance shield obstacles walls loaders goals robot footprint margin bounding box hit detection">
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background:rgba(239, 68, 68, 0.15); border-color:rgba(239, 68, 68, 0.35); color:#f87171;">🛡️</div>
+          <div class="tool-title-info">
+            <h3>Field Collision Detection &amp; Clearance Shield</h3>
+            <p class="tool-tagline">Continuous swept-volume boundary checking against perimeter walls, goal pins, and field ladders to ensure crash-free execution.</p>
+          </div>
+          <span class="tool-category-badge" style="background:rgba(239, 68, 68, 0.15);color:#f87171;border-color:rgba(239, 68, 68, 0.35);">🏎️ Motion</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Safety Margin</span>
+              <strong class="result-val green">1.50 in Clearance</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Field Obstacles</span>
+              <strong class="result-val amber">14 Tracked Elements</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Status</span>
+              <strong class="result-val cyan">Clear &amp; Legal</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.71rem; color:var(--muted); line-height:1.4;">
+            Calculates 2D Oriented Bounding Box (OBB) intersections at each 10ms simulation tick. Alerts when the robot chassis breaches field boundaries, touches opponent alliance territory, or clips high stakes.
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="index.html#simFloatingHud" class="btn-tool-action primary" title="Inspect Collision Shield in 2D Visual Planner">
+              🛡️ Inspect in Visual Planner
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <!-- TOOL 16: Match Simulator & 60fps MP4 Video Exporter -->
+      <article id="video" class="tool-card highlight" data-category="routines" data-keywords="video export mp4 60fps match recording simulation scouting video exporter media recorder watermark gauges">
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background:rgba(56, 189, 248, 0.15); border-color:rgba(56, 189, 248, 0.35); color:#38bdf8;">🎥</div>
+          <div class="tool-title-info">
+            <h3>Match Simulator &amp; 60 FPS Video Exporter</h3>
+            <p class="tool-tagline">Render autonomous path simulations to crisp 60fps video with dynamic telemetry gauges, 15.0s clock timer, and alliance telemetry overlays for scouting.</p>
+          </div>
+          <span class="tool-category-badge" style="background:rgba(56, 189, 248, 0.15);color:#38bdf8;border-color:rgba(56, 189, 248, 0.35);">🔄 Routines</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-result-strip">
+            <div class="result-cell">
+              <span class="result-label">Export Framerate</span>
+              <strong class="result-val green">60 FPS Smooth</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Video Formats</span>
+              <strong class="result-val purple">MP4 / WebM</strong>
+            </div>
+            <div class="result-cell">
+              <span class="result-label">Overlays</span>
+              <strong class="result-val cyan">Timer + Gauges + Watermark</strong>
+            </div>
+          </div>
+
+          <div style="font-size:0.71rem; color:var(--muted); line-height:1.4;">
+            Create high-fidelity scouting and alliance pitch videos. Accurately displays the 15-second autonomous timer, velocity readouts, waypoint timestamps, and custom team name watermark.
+          </div>
+
+          <div class="tool-actions-row">
+            <a href="index.html" class="btn-tool-action primary" title="Open Video Exporter in Visual Planner">
+              🎥 Open Video Exporter in Planner
+            </a>
+          </div>
+        </div>
+      </article>
+
     </div>
   </div>
 
@@ -1603,7 +1679,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260930.k1"></script>
+  <script src="version.js?v=20260930.k4"></script>
   <script src="theme.js"></script>
   <script>
     // =========================================================================
