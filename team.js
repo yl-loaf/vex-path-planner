@@ -4795,29 +4795,51 @@
       } else {
         let rawSaved = (txtUserAccountEmail && txtUserAccountEmail.value.trim()) ||
           localStorage.getItem("lemlib_saved_google_email");
-        if (!rawSaved || rawSaved === "null" || rawSaved === "undefined" || !rawSaved.includes("@")) {
-          rawSaved = "teammate@example.com";
+        if (rawSaved === "teammate@example.com") {
+          try {
+            localStorage.removeItem("lemlib_saved_google_email");
+            localStorage.removeItem("lemlib_saved_google_user");
+          } catch (_) {}
+          rawSaved = null;
         }
-        const savedEmail = rawSaved.trim().toLowerCase();
-        let savedObj = null;
-        try { savedObj = JSON.parse(localStorage.getItem("lemlib_saved_google_user")); } catch (_) {}
-        currentUser = {
-          email: savedEmail,
-          displayName: (savedObj && savedObj.displayName) || savedEmail.split("@")[0],
-          uid: (savedObj && savedObj.uid) || "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
-        };
-        if (btnGoogleSignIn) btnGoogleSignIn.hidden = false;
-        if (btnSignOut) btnSignOut.hidden = true;
-        if (btnSwitchAccount) btnSwitchAccount.hidden = true;
-        if (authUser) {
-          authUser.hidden = false;
-          authUser.textContent = currentUser.displayName || currentUser.email;
-        }
-        if (txtUserAccountEmail) txtUserAccountEmail.value = currentUser.email;
-        if (badgeAuthStatus) {
-          badgeAuthStatus.textContent = "Workspace Account";
-          badgeAuthStatus.style.background = "rgba(56,189,248,0.15)";
-          badgeAuthStatus.style.color = "#38bdf8";
+
+        if (rawSaved && rawSaved !== "null" && rawSaved !== "undefined" && rawSaved.includes("@")) {
+          const savedEmail = rawSaved.trim().toLowerCase();
+          let savedObj = null;
+          try { savedObj = JSON.parse(localStorage.getItem("lemlib_saved_google_user")); } catch (_) {}
+          currentUser = {
+            email: savedEmail,
+            displayName: (savedObj && savedObj.displayName) || savedEmail.split("@")[0],
+            uid: (savedObj && savedObj.uid) || "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
+          };
+          if (btnGoogleSignIn) btnGoogleSignIn.hidden = false;
+          if (btnSignOut) btnSignOut.hidden = true;
+          if (btnSwitchAccount) btnSwitchAccount.hidden = true;
+          if (authUser) {
+            authUser.hidden = false;
+            authUser.textContent = currentUser.displayName || currentUser.email;
+          }
+          if (txtUserAccountEmail) txtUserAccountEmail.value = currentUser.email;
+          if (badgeAuthStatus) {
+            badgeAuthStatus.textContent = "Workspace Account";
+            badgeAuthStatus.style.background = "rgba(56,189,248,0.15)";
+            badgeAuthStatus.style.color = "#38bdf8";
+          }
+        } else {
+          currentUser = null;
+          if (btnGoogleSignIn) btnGoogleSignIn.hidden = false;
+          if (btnSignOut) btnSignOut.hidden = true;
+          if (btnSwitchAccount) btnSwitchAccount.hidden = true;
+          if (authUser) {
+            authUser.hidden = true;
+            authUser.textContent = "";
+          }
+          if (txtUserAccountEmail) txtUserAccountEmail.value = "";
+          if (badgeAuthStatus) {
+            badgeAuthStatus.textContent = "Not Signed In";
+            badgeAuthStatus.style.background = "rgba(148,163,184,0.15)";
+            badgeAuthStatus.style.color = "#94a3b8";
+          }
         }
       }
 
@@ -5033,6 +5055,10 @@
     if (show) {
       if (setupView) setupView.style.display = "block";
       if (wsView) wsView.style.display = "none";
+      const lblTeam = document.getElementById("lblTeamName");
+      const lblVex = document.getElementById("lblVexNumber");
+      if (lblTeam) lblTeam.textContent = "Team Setup Gateway";
+      if (lblVex) lblVex.textContent = "";
       document.body.classList.add("setup-mode");
       document.body.style.overflowY = "auto";
       document.body.style.height = "auto";
@@ -5061,6 +5087,13 @@
     if (!currentUser || !currentUser.email || currentUser.email === "null" || currentUser.email === "undefined" || !currentUser.email.includes("@")) {
       const emailInput = document.getElementById("txtUserAccountEmail");
       let rawSaved = (emailInput && emailInput.value.trim()) || localStorage.getItem("lemlib_saved_google_email");
+      if (rawSaved === "teammate@example.com") {
+        try {
+          localStorage.removeItem("lemlib_saved_google_email");
+          localStorage.removeItem("lemlib_saved_google_user");
+        } catch (_) {}
+        rawSaved = null;
+      }
       if (!rawSaved || rawSaved === "null" || rawSaved === "undefined" || !rawSaved.includes("@")) {
         currentTeam = null;
         setSetupViewVisible(true);
@@ -5073,6 +5106,20 @@
         displayName: savedEmail.split("@")[0],
         uid: "user_" + savedEmail.replace(/[^a-z0-9]/g, "_")
       };
+    }
+
+    if (currentUser?.email === "teammate@example.com") {
+      currentUser = null;
+      currentTeam = null;
+      try {
+        localStorage.removeItem("lemlib_saved_google_email");
+        localStorage.removeItem("lemlib_saved_google_user");
+        localStorage.removeItem("lemlib_active_team");
+        localStorage.removeItem("lemlib_user_team_id");
+      } catch (_) {}
+      setSetupViewVisible(true);
+      loadAvailableTeams();
+      return;
     }
 
     const clean = cleanEmailKey(currentUser.email);
