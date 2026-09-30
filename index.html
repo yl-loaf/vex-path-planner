@@ -44,7 +44,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260930.k4" />
+  <link rel="stylesheet" href="style.css?v=20260930.k6" />
   <script>
     (function () {
       try {
@@ -315,10 +315,10 @@
       <!-- Center: Navigation Modes -->
       <div class="header-center-modes">
         <nav class="header-mode-nav">
-          <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation & Visual Path Planner">🗺️ Planner &amp; Sim</button>
-          <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
-          <a href="tools.html" class="mode-nav-btn" id="navModeTools" title="Open Full 20-Tool Engineering Suite (Drivetrain Dyno, PID, Mirror, Video, and more)">🛠️ Tools Suite</a>
-          <button type="button" class="mode-nav-btn" id="navModeMatchReplay" title="Autonomous Match Replay & Log Analysis (ALPHA)">📊 Match Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 4px;border-radius:4px;font-weight:800;">ALPHA</span></button>
+          <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation & Visual Path Planner">🗺️ Planner</button>
+          <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 IDE</a>
+          <a href="tools.html" class="mode-nav-btn" id="navModeTools" title="Open Full 20-Tool Engineering Suite">🛠️ Tools</a>
+          <button type="button" class="mode-nav-btn" id="navModeMatchReplay" title="Autonomous Match Replay & Log Analysis (ALPHA)">📊 Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 3px;border-radius:3px;font-weight:800;">ALPHA</span></button>
           <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB & Telemetry">🔌 Brain</button>
           <a href="team.html" class="mode-nav-btn" title="Team Collaboration Workspace & Teammate Roster">👥 Team</a>
           <a href="documentation.html" class="mode-nav-btn" id="navModeDocs" title="VEX V5 &amp; LemLib Documentation, Guides &amp; API Reference">📖 Docs</a>
@@ -1018,16 +1018,16 @@
         <!-- Floating / Dockable Interactive Simulation Control HUD -->
         <div class="sim-floating-hud" id="simFloatingHud">
           <div class="sim-hud-handle-bar">
-            <div style="display:flex;align-items:center;gap:8px;">
+            <div style="display:flex;align-items:center;gap:6px;">
               <span class="hud-drag-handle" id="hudDragHandle" title="Drag to reposition simulation controls">⋮⋮</span>
-              <span class="hud-title-tag">SIMULATION &amp; DRIVE DYNAMICS</span>
+              <span class="hud-title-tag">SIMULATION</span>
             </div>
             <div class="hud-action-btns">
-              <button type="button" id="btnScoringBeta" class="hud-tool-btn beta-pill-btn" title="Toggle Beta: Interactive Field Scoring Engine & Dynamic Element State Tracking">🎯 Scoring <span class="badge-beta-text">BETA</span></button>
-              <button type="button" id="btnToolBezier" class="hud-tool-btn bezier-tool-btn" title="Toggle Bezier Curve Path Tool (Hotkey: B) - Drag control points between waypoints to create smooth curves">🌊 Bezier Tool <kbd style="font-size:0.65rem;background:rgba(255,255,255,0.15);padding:1px 4px;border-radius:3px;margin-left:2px;">B</kbd></button>
-              <button type="button" id="btnHudCollisionModal" class="hud-tool-btn" title="Open Field Collision Detection &amp; Obstacles Manager">🛡️ Collisions (<span id="hudCollisionStatus">Clear</span>)</button>
-              <button type="button" id="btnHudPhysicsModal" class="hud-tool-btn" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Physics</button>
-              <button type="button" id="btnHudDock" class="hud-tool-btn" title="Dock controls above field canvas so field image is 100% visible">📌 Dock Above</button>
+              <button type="button" id="btnScoringBeta" class="hud-tool-btn beta-pill-btn" title="Toggle Beta: Interactive Field Scoring Engine & Dynamic Element State Tracking">🎯 Scoring</button>
+              <button type="button" id="btnToolBezier" class="hud-tool-btn bezier-tool-btn" title="Toggle Bezier Curve Path Tool (Hotkey: B)">🌊 Bezier (B)</button>
+              <button type="button" id="btnHudCollisionModal" class="hud-tool-btn" title="Open Field Collision Detection & Obstacles Manager">🛡️ Clear (<span id="hudCollisionStatus">Clear</span>)</button>
+              <button type="button" id="btnHudPhysicsModal" class="hud-tool-btn" title="Open Real-Time Drive Dyno & Telemetry Inspector">⚡ Dyno</button>
+              <button type="button" id="btnHudDock" class="hud-tool-btn" title="Dock controls above field canvas so field image is 100% visible">📌 Dock</button>
               <button type="button" id="btnHudMinimize" class="hud-tool-btn" title="Minimize or expand controls">―</button>
             </div>
           </div>
@@ -3192,23 +3192,23 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260930.k4"></script>
+  <script src="version.js?v=20260930.k6"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260930.k4"></script>
-  <script src="google-drive-sync.js?v=20260930.k4"></script>
-  <script src="session-guard.js?v=20260930.k4"></script>
-  <script src="theme.js?v=20260930.k4"></script>
-  <script src="v5-brain-serial.js?v=20260930.k4"></script>
-  <script src="project-manager.js?v=20260930.k4"></script>
-  <script src="cpp-parser.js?v=20260930.k4"></script>
-  <script src="scoring-engine.js?v=20260930.k4"></script>
-  <script src="match-analysis-engine.js?v=20260930.k4"></script>
-  <script src="app.js?v=20260930.k4"></script>
-  <script src="tutorial.js?v=20260930.k4"></script>
+  <script src="firebase-config.js?v=20260930.k6"></script>
+  <script src="google-drive-sync.js?v=20260930.k6"></script>
+  <script src="session-guard.js?v=20260930.k6"></script>
+  <script src="theme.js?v=20260930.k6"></script>
+  <script src="v5-brain-serial.js?v=20260930.k6"></script>
+  <script src="project-manager.js?v=20260930.k6"></script>
+  <script src="cpp-parser.js?v=20260930.k6"></script>
+  <script src="scoring-engine.js?v=20260930.k6"></script>
+  <script src="match-analysis-engine.js?v=20260930.k6"></script>
+  <script src="app.js?v=20260930.k6"></script>
+  <script src="tutorial.js?v=20260930.k6"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
