@@ -44,7 +44,10 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260930.k6" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=20260930.k12" />
   <script>
     (function () {
       try {
@@ -57,244 +60,305 @@
 <body>
   <!-- =================================================================
        VEX V5 LemLib Suite - HOMEPAGE HUB
+       Stark Utilitarian / Neo-Brutalist Editorial Master Layout
        ================================================================= -->
   <div id="homepageView" class="homepage-container" style="display:none;">
     <header class="home-top-nav">
       <div class="home-nav-brand">
-        <div class="home-logo-icon">🤖</div>
-        <div>
-          <h1 class="home-brand-title">VEX V5 LemLib Suite</h1>
-          <p class="home-brand-subtitle">Override 2026-27 · Autonomous Path Planning &amp; PROS C++ IDE</p>
-        </div>
+        <a href="#homepageView" class="home-brand-title">VEX LemLib Studio</a>
       </div>
+      <nav class="home-nav-links">
+        <a href="ide.html" class="home-nav-link">C++ IDE</a>
+        <a href="tools.html" class="home-nav-link">Tools</a>
+        <a href="documentation.html" class="home-nav-link">Docs</a>
+        <a href="stats.html" class="home-nav-link">Analytics <span id="globalVisitorBadge" class="nav-visitor-badge">...</span></a>
+      </nav>
       <div class="home-nav-actions">
         <button type="button" id="btnHomeThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
           <span class="theme-toggle-icon">☀️</span>
           <span class="theme-toggle-text">Theme</span>
         </button>
-        <a href="documentation.html" class="btn-nav-stats" title="VEX V5 &amp; LemLib Documentation &amp; API Guide">
-          📖 Docs
-        </a>
-        <a href="stats.html" class="btn-nav-stats" title="View website visitor analytics and stats">
-          📊 Stats <span id="globalVisitorBadge" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 6px;border-radius:10px;font-size:0.75rem;margin-left:4px;">...</span>
-        </a>
         <div id="homeAuthArea" class="auth-area">
-          <button id="btnHomeGoogleSignIn" type="button" class="primary" title="Sign in with Google">Sign in with Google</button>
+          <button id="btnHomeGoogleSignIn" type="button" class="btn-utilitarian" title="Sign in with Google">Sign In</button>
           <span id="homeAuthUser" class="auth-user" hidden></span>
-          <button id="btnHomeSignOut" type="button" hidden title="Sign out">Sign out</button>
+          <button id="btnHomeSignOut" type="button" class="btn-utilitarian" hidden title="Sign out">Sign Out</button>
         </div>
-        <div id="homeBrainPill" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry">
+        <div id="homeBrainPill" class="utilitarian-status-flag" title="VEX V5 Brain USB telemetry">
           <span class="brain-status-dot disconnected" id="homeBrainDot"></span>
           <span class="brain-status-text" id="homeBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="homeBrainBatt" hidden>⚡ 94%</span>
+          <span class="brain-battery-pill font-mono tabular-nums" id="homeBrainBatt" hidden>94%</span>
         </div>
-        <button type="button" id="btnLaunchPlannerDirect" class="btn-home-primary-launch">
-          🗺️ Visual Path Planner &amp; Sim
+        <button type="button" id="btnLaunchPlannerDirect" class="btn-utilitarian-primary">
+          Launch Planner
         </button>
       </div>
     </header>
 
     <main class="home-main-content">
-      <!-- Hero Banner -->
-      <section class="home-hero-card">
-        <div class="home-hero-text">
-          <div class="home-hero-badge">VEX ROBOTICS COMPETITION · OVERRIDE SEASON</div>
-          <h2 class="home-hero-headline">Autonomous Robotics Studio</h2>
-          <p class="home-hero-desc">
-            Complete high-performance engineering suite for VEX V5 teams using LemLib. Design precise 2D odometry trajectories, write C++ code with cross-script variable indexing, test motion profiles, and flash directly to your V5 Brain.
-          </p>
-          <div class="home-hero-actions">
-            <button type="button" id="btnHeroOpenPlanner" class="btn-hero-main">
-              🗺️ Launch Visual Path Planner
-            </button>
-            <a href="ide.html" class="btn-hero-secondary">
-              💻 Open PROS C++ IDE
-            </a>
-            <button type="button" id="btnHeroConnectBrain" class="btn-hero-tertiary">
-              🔌 Connect V5 Brain
-            </button>
+      <!-- Editorial Masthead: Asymmetrical Grid & Raw Whitespace -->
+      <section class="editorial-masthead">
+        <div class="masthead-grid">
+          <div class="masthead-lead">
+            <h1 class="editorial-hero-headline">Deterministic trajectory design and motion control for LemLib.</h1>
+            <p class="editorial-hero-desc">
+              Engineered for VEX V5 teams programming autonomous routines in PROS. Generate 2D odometry paths, calibrate settling tolerances, inspect sensor telemetries, and flash routines directly via Web Serial USB CDC.
+            </p>
+            <div class="masthead-actions">
+              <button type="button" id="btnHeroOpenPlanner" class="btn-utilitarian-primary">
+                Launch Visual Path Planner
+              </button>
+              <a href="ide.html" class="btn-utilitarian-secondary">
+                Open PROS C++ IDE
+              </a>
+              <button type="button" id="btnHeroConnectBrain" class="btn-utilitarian-secondary">
+                Connect V5 Brain
+              </button>
+            </div>
           </div>
+
+          <aside class="masthead-specs">
+            <div class="specs-header">
+              <span class="specs-title">System Architecture</span>
+              <span class="specs-kicker">OVERRIDE 2026-27</span>
+            </div>
+            <dl class="specs-ledger">
+              <div class="spec-row">
+                <dt>Field Geometry</dt>
+                <dd class="font-mono tabular-nums">144.0" × 144.0" Field Canvas</dd>
+              </div>
+              <div class="spec-row">
+                <dt>Runtime Target</dt>
+                <dd class="font-mono">LemLib v0.5.4 · PROS 4.1.0</dd>
+              </div>
+              <div class="spec-row">
+                <dt>Active Workspace</dt>
+                <dd><span id="homeStatProjects" class="font-mono tabular-nums">1</span> project loaded</dd>
+              </div>
+              <div class="spec-row">
+                <dt>Configured Routines</dt>
+                <dd><span id="homeStatAutons" class="font-mono tabular-nums">4</span> paths</dd>
+              </div>
+              <div class="spec-row">
+                <dt>Hardware Bus</dt>
+                <dd><span id="homeStatDevices" class="font-mono tabular-nums">12</span> smart ports indexed</dd>
+              </div>
+              <div class="spec-row">
+                <dt>Serial Interface</dt>
+                <dd class="font-mono">CDC 115200 Baud / Web Serial</dd>
+              </div>
+            </dl>
+          </aside>
         </div>
-        <div class="home-hero-stats-panel">
-          <div class="home-stat-box">
-            <span class="home-stat-num" id="homeStatProjects">1</span>
-            <span class="home-stat-label">Active Project</span>
+      </section>
+
+      <!-- Autonomous Systems Workbench: Asymmetrical Split Layout -->
+      <section class="editorial-workbench-section">
+        <div class="section-editorial-header">
+          <h2 class="editorial-section-title">Autonomous Systems Workbench</h2>
+          <p class="section-meta-text">Integrated toolchain spanning kinematic spline generation to on-robot execution.</p>
+        </div>
+
+        <div class="workbench-asym-grid">
+          <!-- Featured Workbench Panel: Visual Flowchart & Odometry Canvas -->
+          <div class="workbench-featured-panel" id="cardModulePlanner">
+            <div class="featured-panel-header">
+              <div>
+                <h3 class="panel-headline">Visual Flowchart &amp; Odometry Planner</h3>
+                <div class="panel-meta-row">
+                  <span>Field Coordinates</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Pure Pursuit</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Boomerang Controller</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Subsystem Actions</span>
+                </div>
+              </div>
+              <button type="button" class="btn-utilitarian-primary" id="btnCardLaunchPlanner">Launch Planner →</button>
+            </div>
+
+            <!-- Concrete UI Coordinate Ledger (No abstract illustrations) -->
+            <div class="concrete-trajectory-ledger">
+              <div class="ledger-header">SAMPLE KINEMATIC SEQUENCE · OVERRIDE MATCH</div>
+              <table class="ledger-table">
+                <thead>
+                  <tr>
+                    <th>Step</th>
+                    <th>Motion Primitive</th>
+                    <th>Pose Target (X, Y, θ)</th>
+                    <th>Velocity / Settle</th>
+                    <th>Subsystem Action</th>
+                  </tr>
+                </thead>
+                <tbody class="font-mono tabular-nums">
+                  <tr>
+                    <td>01</td>
+                    <td>setPose</td>
+                    <td>-60.0", -60.0", 0.0°</td>
+                    <td>Start Position</td>
+                    <td>Initialize Odometry</td>
+                  </tr>
+                  <tr>
+                    <td>02</td>
+                    <td>moveToPoint</td>
+                    <td>-24.0", -24.0"</td>
+                    <td>Max: 127 · Min: 0</td>
+                    <td>Rush Center Goal</td>
+                  </tr>
+                  <tr>
+                    <td>03</td>
+                    <td>clampPiston</td>
+                    <td>Current Pose</td>
+                    <td>Delay: 100ms</td>
+                    <td>Clamp Alliance Mobile Goal</td>
+                  </tr>
+                  <tr>
+                    <td>04</td>
+                    <td>intakeMotor</td>
+                    <td>Current Pose</td>
+                    <td>Speed: 127</td>
+                    <td>Intake 3 Rings</td>
+                  </tr>
+                  <tr>
+                    <td>05</td>
+                    <td>moveToPose</td>
+                    <td>-50.0", -50.0", 225.0°</td>
+                    <td>Max: 100 · Settle: 2.5s</td>
+                    <td>Score In Corner Zone</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div class="home-stat-box">
-            <span class="home-stat-num" id="homeStatAutons">4</span>
-            <span class="home-stat-label">Auton Routines</span>
-          </div>
-          <div class="home-stat-box">
-            <span class="home-stat-num" id="homeStatDevices">12</span>
-            <span class="home-stat-label">Indexed Devices</span>
-          </div>
-          <div class="home-stat-box">
-            <span class="home-stat-num" style="color:#22c55e;">LemLib 0.5.4</span>
-            <span class="home-stat-label">PROS Kernel 4.1</span>
+
+          <!-- Utilitarian Systems Manifest (Stark directory instead of cloned cards) -->
+          <div class="workbench-systems-manifest">
+            <div class="manifest-header">
+              <span>MODULE REGISTRY</span>
+              <span class="manifest-count">6 SUBSYSTEMS</span>
+            </div>
+
+            <div class="manifest-rows">
+              <!-- Item 1: PROS C++ IDE -->
+              <div class="manifest-row" id="cardModuleIde">
+                <div class="manifest-row-main">
+                  <h4 class="manifest-title">PROS C++ Coding Studio</h4>
+                  <p class="manifest-desc">Multi-file variable indexing across robot-config.h, syntax diagnostics, and pros make compilation.</p>
+                </div>
+                <a href="ide.html" class="manifest-action-link">Open IDE →</a>
+              </div>
+
+              <!-- Item 2: V5 Brain Hardware Manager -->
+              <div class="manifest-row" id="cardModuleBrain">
+                <div class="manifest-row-main">
+                  <h4 class="manifest-title">VEX V5 Brain Hardware Manager</h4>
+                  <p class="manifest-desc">Web Serial USB CDC link, 21-port device diagnostics, motor temperature telemetry, and slot flasher.</p>
+                </div>
+                <button type="button" class="manifest-action-link" id="btnCardOpenBrain">Inspect Hardware →</button>
+              </div>
+
+              <!-- Item 3: AST Code Translator -->
+              <div class="manifest-row" id="cardModuleTranslator">
+                <div class="manifest-row-main">
+                  <h4 class="manifest-title">AST C++ Code Translator</h4>
+                  <p class="manifest-desc">Converts raw LemLib moveToPose and waitUntil code into draggable visual action blocks.</p>
+                </div>
+                <a href="translator.html" class="manifest-action-link">Open Translator →</a>
+              </div>
+
+              <!-- Item 4: PID Motion Tuner -->
+              <div class="manifest-row" id="cardModulePid">
+                <div class="manifest-row-main">
+                  <h4 class="manifest-title">Kinematic PID &amp; Settle Tuner</h4>
+                  <p class="manifest-desc">Step-response curve analysis, overshoot calculation, and real-time kP, kI, kD gain tuning.</p>
+                </div>
+                <button type="button" class="manifest-action-link" id="btnCardOpenPid">Tune Gains →</button>
+              </div>
+
+              <!-- Item 5: Video Exporter & Simulator -->
+              <div class="manifest-row" id="cardModuleVideo">
+                <div class="manifest-row-main">
+                  <h4 class="manifest-title">Match Simulator &amp; Exporter</h4>
+                  <p class="manifest-desc">Deterministic 15s match simulation with 60fps MP4 export for alliance scouting.</p>
+                </div>
+                <button type="button" class="manifest-action-link" id="btnCardExportVideo">Export Video →</button>
+              </div>
+
+              <!-- Item 6: Match Replay & Log Analysis -->
+              <div class="manifest-row" id="cardModuleReplay">
+                <div class="manifest-row-main">
+                  <h4 class="manifest-title">Odometry Match Replay &amp; Logs</h4>
+                  <p class="manifest-desc">Overlay recorded V5 Brain odometry against planned paths with deviation heatmaps and slip diagnostics.</p>
+                </div>
+                <button type="button" class="manifest-action-link" id="btnCardLaunchReplay">Launch Replay →</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- Core Modules Bento Grid -->
-      <section class="home-modules-section">
-        <div class="home-section-header">
-          <h3>🛠️ Core Engineering Modules</h3>
-          <p>Everything you need from initial waypoint planning to competition match execution</p>
+      <!-- Pre-Engineered Autonomous Routines: Utilitarian Table Layout -->
+      <section class="editorial-routines-section">
+        <div class="section-editorial-header">
+          <h2 class="editorial-section-title">Pre-Engineered Autonomous Routines</h2>
+          <p class="section-meta-text">Calibrated reference trajectories for the Override 2026-27 field coordinate system.</p>
         </div>
-        <div class="home-grid">
-          <!-- Card 1: Visual Path Planner -->
-          <div class="home-card" id="cardModulePlanner">
-            <div class="home-card-icon" style="background:rgba(56,189,248,0.15);color:#38bdf8;">🗺️</div>
-            <div class="home-card-body">
-              <h4>Visual Flowchart &amp; Path Planner</h4>
-              <p>Design multi-action autonomous routines with interactive waypoints, booleans, and 2D simulation.</p>
-              <div class="home-card-tags">
-                <span>Field Trajectories</span>
-                <span>Pose Coordinates</span>
-                <span>Subsystem Actions</span>
-              </div>
-            </div>
-            <button type="button" class="home-card-btn" id="btnCardLaunchPlanner">Launch Planner →</button>
-          </div>
 
-          <!-- Card 2: PROS C++ IDE -->
-          <div class="home-card" id="cardModuleIde">
-            <div class="home-card-icon" style="background:rgba(16,185,129,0.15);color:#10b981;">💻</div>
-            <div class="home-card-body">
-              <h4>PROS C++ Multi-File Coding Studio</h4>
-              <p>Dedicated coding IDE with cross-file variable indexing, syntax diagnostics, and ARM Cortex compilation.</p>
-              <div class="home-card-tags">
-                <span>src/autons.cpp</span>
-                <span>pros make</span>
-                <span>Navigation Guard</span>
-              </div>
-            </div>
-            <a href="ide.html" class="home-card-btn">Open C++ IDE →</a>
-          </div>
-
-          <!-- Card 3: V5 Brain Hardware Manager -->
-          <div class="home-card" id="cardModuleBrain">
-            <div class="home-card-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b;">🔌</div>
-            <div class="home-card-body">
-              <h4>VEX V5 Brain Suite &amp; Flasher</h4>
-              <p>Direct Web Serial USB CDC communication, 21-port device diagnostics, and 8-slot program flasher.</p>
-              <div class="home-card-tags">
-                <span>Live Battery</span>
-                <span>Motor Temps</span>
-                <span>CDC 115200</span>
-              </div>
-            </div>
-            <button type="button" class="home-card-btn" id="btnCardOpenBrain">Inspect Hardware →</button>
-          </div>
-
-          <!-- Card 4: C++ Code Translator -->
-          <div class="home-card" id="cardModuleTranslator">
-            <div class="home-card-icon" style="background:rgba(168,85,247,0.15);color:#c084fc;">📥</div>
-            <div class="home-card-body">
-              <h4>C++ to Flowchart Translator</h4>
-              <p>Paste raw LemLib C++ autonomous code to instantly generate interactive visual blocks and trajectory paths.</p>
-              <div class="home-card-tags">
-                <span>AST Parser</span>
-                <span>moveToPose</span>
-                <span>waitUntil</span>
-              </div>
-            </div>
-            <a href="translator.html" class="home-card-btn">Open Translator →</a>
-          </div>
-
-          <!-- Card 5: PID Motion Tuner -->
-          <div class="home-card" id="cardModulePid">
-            <div class="home-card-icon" style="background:rgba(236,72,153,0.15);color:#f472b6;">🎛️</div>
-            <div class="home-card-body">
-              <h4>PID Velocity &amp; Heading Tuner</h4>
-              <p>Analyze step-response curves, settle times, overshoot percentages, and tune kP, kI, kD gains in real time.</p>
-              <div class="home-card-tags">
-                <span>Lateral PID</span>
-                <span>Angular PID</span>
-                <span>Step Response</span>
-              </div>
-            </div>
-            <button type="button" class="home-card-btn" id="btnCardOpenPid">Open PID Tuner →</button>
-          </div>
-
-          <!-- Card 6: Video Exporter & Simulator -->
-          <div class="home-card" id="cardModuleVideo">
-            <div class="home-card-icon" style="background:rgba(2,132,199,0.15);color:#38bdf8;">🎥</div>
-            <div class="home-card-body">
-              <h4>Match Simulator &amp; Video Exporter</h4>
-              <p>Simulate full 15s autonomous routines or 60s skills runs and export 60fps MP4 match videos for scouting.</p>
-              <div class="home-card-tags">
-                <span>60 FPS MP4</span>
-                <span>Time Clearance</span>
-                <span>Scouting Logs</span>
-              </div>
-            </div>
-            <button type="button" class="home-card-btn" id="btnCardExportVideo">Simulate &amp; Record →</button>
-          </div>
-
-          <!-- Card 7: Autonomous Match Replay & Analysis Suite (ALPHA) -->
-          <div class="home-card" id="cardModuleReplay">
-            <div class="home-card-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b;">📊</div>
-            <div class="home-card-body">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <h4>Match Replay &amp; Log Analysis</h4>
-                <span class="badge" style="background:#ef4444;color:#fff;font-size:0.58rem;padding:1px 5px;border-radius:6px;font-weight:800;">ALPHA</span>
-              </div>
-              <p>Overlay actual recorded V5 Brain odometry logs against planned paths, analyze deviation heatmaps, and troubleshoot errors.</p>
-              <div class="home-card-tags">
-                <span>Actual vs Planned</span>
-                <span>Deviation Heatmap</span>
-                <span>Root-Cause Fixes</span>
-              </div>
-            </div>
-            <button type="button" class="home-card-btn" id="btnCardLaunchReplay">Launch Replay Suite →</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Competition Starter Templates -->
-      <section class="home-templates-section">
-        <div class="home-section-header">
-          <h3>⚡ Quick-Start Competition Templates</h3>
-          <p>Pre-configured LemLib autonomous routines ready for the Override 2026-27 field</p>
-        </div>
-        <div class="home-template-grid">
-          <div class="template-card" data-template="highstakes">
-            <div class="template-badge">OVERRIDE 2026-27</div>
-            <h4>Autonomous Match Routine Suite</h4>
-            <p>Rush center goal, clamp alliance mobile goal, intake 3 rings, and score in the corner zone.</p>
-            <div class="template-meta">
-              <span>⏱️ 14.2s runtime</span>
-              <span>📍 4 actions</span>
-            </div>
-            <button type="button" class="btn-template-load" id="btnTplOverride">Load Routine in Planner</button>
-          </div>
-
-          <div class="template-card" data-template="skills">
-            <div class="template-badge skills">ROBOT SKILLS</div>
-            <h4>60-Second Full Field Skills</h4>
-            <p>Comprehensive routing through all 4 field quadrants, mobile goal clearing, and hang sequence.</p>
-            <div class="template-meta">
-              <span>⏱️ 58.4s runtime</span>
-              <span>📍 12 actions</span>
-            </div>
-            <button type="button" class="btn-template-load" id="btnTplSkills">Load Skills Template</button>
-          </div>
-
-          <div class="template-card" data-template="solo_awp">
-            <div class="template-badge awp">SOLO AWP</div>
-            <h4>Autonomous Win Point (Solo AWP)</h4>
-            <p>Guaranteed win-point routine clearing alliance line, scoring preload ring, and touching ladder.</p>
-            <div class="template-meta">
-              <span>⏱️ 13.8s runtime</span>
-              <span>📍 5 actions</span>
-            </div>
-            <button type="button" class="btn-template-load" id="btnTplSoloAwp">Load AWP Template</button>
-          </div>
+        <div class="utilitarian-table-container">
+          <table class="utilitarian-routines-table">
+            <thead>
+              <tr>
+                <th>Routine Identifier</th>
+                <th>Discipline</th>
+                <th>Target Runtime</th>
+                <th>Kinematic Sequence Summary</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Override Match Routine</strong>
+                  <span class="table-sub-detail">Center goal control &amp; alliance mobile goal</span>
+                </td>
+                <td>15s Autonomous Match</td>
+                <td class="font-mono tabular-nums">14.2s</td>
+                <td>Rush center goal → clamp alliance mobile goal → intake 3 rings → corner deposit.</td>
+                <td>
+                  <button type="button" class="btn-utilitarian-sm" id="btnTplOverride">Load Routine</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Full Field Programming Skills</strong>
+                  <span class="table-sub-detail">60-second autonomous skill run</span>
+                </td>
+                <td>60s Robot Skills</td>
+                <td class="font-mono tabular-nums">58.4s</td>
+                <td>Quad-quadrant traversal → mobile goal clearing sequence → tier-1 hang sequence.</td>
+                <td>
+                  <button type="button" class="btn-utilitarian-sm" id="btnTplSkills">Load Routine</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Autonomous Win Point (Solo AWP)</strong>
+                  <span class="table-sub-detail">Alliance line clearance &amp; ladder touch</span>
+                </td>
+                <td>Solo AWP</td>
+                <td class="font-mono tabular-nums">13.8s</td>
+                <td>Cross alliance line → intake preload ring → turn to heading 180° → touch ladder.</td>
+                <td>
+                  <button type="button" class="btn-utilitarian-sm" id="btnTplSoloAwp">Load Routine</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </main>
   </div>
+
 
   <!-- =================================================================
        MAIN VISUAL PATH PLANNER APP INTERFACE
@@ -304,24 +368,24 @@
       <!-- Left: Home Hub Button & App Title -->
       <div class="header-left">
         <button type="button" id="btnReturnHomeHub" class="btn-nav-home" title="View Competition Dashboard Hub">
-          🏠 Hub
+          Hub
         </button>
         <div class="header-titles">
           <h1>VEX V5 LemLib Planner</h1>
-          <button type="button" class="header-project-pill" id="headerProjectBadge" title="Click to manage project workspace">📁 Override_LemLib_Bot</button>
+          <button type="button" class="header-project-pill" id="headerProjectBadge" title="Click to manage project workspace">Override_LemLib_Bot</button>
         </div>
       </div>
 
       <!-- Center: Navigation Modes -->
       <div class="header-center-modes">
         <nav class="header-mode-nav">
-          <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation & Visual Path Planner">🗺️ Planner</button>
-          <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 IDE</a>
-          <a href="tools.html" class="mode-nav-btn" id="navModeTools" title="Open Full 20-Tool Engineering Suite">🛠️ Tools</a>
-          <button type="button" class="mode-nav-btn" id="navModeMatchReplay" title="Autonomous Match Replay & Log Analysis (ALPHA)">📊 Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 3px;border-radius:3px;font-weight:800;">ALPHA</span></button>
-          <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB & Telemetry">🔌 Brain</button>
-          <a href="team.html" class="mode-nav-btn" title="Team Collaboration Workspace & Teammate Roster">👥 Team</a>
-          <a href="documentation.html" class="mode-nav-btn" id="navModeDocs" title="VEX V5 &amp; LemLib Documentation, Guides &amp; API Reference">📖 Docs</a>
+          <button type="button" class="mode-nav-btn active" id="navModePlanner" title="2D Simulation &amp; Visual Path Planner">Planner</button>
+          <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">IDE</a>
+          <a href="tools.html" class="mode-nav-btn" id="navModeTools" title="Open Full 20-Tool Engineering Suite">Tools</a>
+          <button type="button" class="mode-nav-btn" id="navModeMatchReplay" title="Autonomous Match Replay &amp; Log Analysis">Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 3px;border-radius: 4px;font-weight:800;">ALPHA</span></button>
+          <button type="button" class="mode-nav-btn" id="navModeBrain" title="VEX V5 Brain USB &amp; Telemetry">Brain</button>
+          <a href="team.html" class="mode-nav-btn" title="Team Collaboration Workspace &amp; Teammate Roster">Team</a>
+          <a href="documentation.html" class="mode-nav-btn" id="navModeDocs" title="VEX V5 &amp; LemLib Documentation, Guides &amp; API Reference">Docs</a>
           <!-- Secondary modes kept accessible in Tools menu -->
           <button type="button" id="navModePidTuner" hidden></button>
         </nav>
@@ -333,20 +397,20 @@
         <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB">
           <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
           <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
-          <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">🔌 Connect</button>
-          <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;">🚀 Upload &amp; Run</button>
+          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>94%</span>
+          <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">Connect</button>
+          <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;">Upload &amp; Run</button>
         </div>
 
         <!-- Consolidated Tools & Project Menu -->
         <div class="tools-dropdown-wrap">
           <button type="button" id="btnToolsDropdown" class="btn-nav-tools" title="Project, Engineering Tools &amp; Guides">
-            ⚙️ Workspace Tools ▾
+            Workspace Tools ▾
           </button>
           <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden>
-            <a href="tools.html" style="display:flex;align-items:center;justify-content:space-between;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);padding:9px 12px;border-radius:8px;color:#38bdf8;font-weight:700;text-decoration:none;margin-bottom:8px;font-size:0.82rem;">
+            <a href="tools.html" style="display:flex;align-items:center;justify-content:space-between;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);padding:9px 12px;border-radius: 8px;color:#38bdf8;font-weight:700;text-decoration:none;margin-bottom:8px;font-size:0.82rem;">
               <span>🛠️ Open Engineering Tools Suite</span>
-              <span style="font-size:0.7rem;background:#0284c7;color:#fff;padding:2px 7px;border-radius:4px;">20 Tools →</span>
+              <span style="font-size:0.7rem;background:#0284c7;color:#fff;padding:2px 7px;border-radius: 4px;">20 Tools →</span>
             </a>
 
             <div class="tools-menu-header">📁 Project &amp; Workspace</div>
@@ -492,7 +556,7 @@
             <div class="palette-block-list">
               <button type="button" class="palette-block-btn btn-motion" draggable="true" data-act-type="moveToPoint" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point" title="Drag into action flow or click to add">🔵 moveToPoint(x, y)</button>
               <button type="button" class="palette-block-btn btn-motion" draggable="true" data-act-type="moveToPose" data-category="motion" data-keywords="movetopose moveToPose x y theta heading motion pose" title="Drag into action flow or click to add">🔵 moveToPose(x, y, θ)</button>
-              <button type="button" class="palette-block-btn btn-bezier" draggable="true" data-act-type="bezierCurve" data-category="motion" data-keywords="bezier curve spline arc control point smooth curved trajectory" style="background:linear-gradient(135deg,rgba(14,116,144,0.35),rgba(8,145,178,0.35));border-color:#06b6d4;color:#cffafe;" title="Drag into action flow or click to add">🌊 bezierCurve(x, y, θ)</button>
+              <button type="button" class="palette-block-btn btn-bezier" draggable="true" data-act-type="bezierCurve" data-category="motion" data-keywords="bezier curve spline arc control point smooth curved trajectory" style="background:rgba(14,116,144,0.35),rgba(8,145,178,0.35));border-color:#06b6d4;color:#cffafe;" title="Drag into action flow or click to add">🌊 bezierCurve(x, y, θ)</button>
               <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="turnToHeading" data-category="turn" data-keywords="turntoheading turnToHeading theta heading turn rotate" title="Drag into action flow or click to add">🟣 turnToHeading(θ)</button>
               <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="turnToPoint" data-category="turn" data-keywords="turntopoint turnToPoint x y turn rotate point" title="Drag into action flow or click to add">🟣 turnToPoint(x, y)</button>
               <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="swingToHeading" data-category="turn" data-keywords="swingtoheading swingToHeading theta swing rotate" title="Drag into action flow or click to add">🟣 swingToHeading(θ)</button>
@@ -607,7 +671,7 @@
             <!-- Search & Active Count -->
             <div class="cond-search-bar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;margin-bottom:6px;">
               <div style="display:flex;align-items:center;gap:6px;flex:1;">
-                <input type="text" id="condSearchInput" placeholder="🔍 Filter variables..." style="font-size:0.75rem;padding:4px 8px;border-radius:6px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;width:100%;" />
+                <input type="text" id="condSearchInput" placeholder="🔍 Filter variables..." style="font-size:0.75rem;padding:4px 8px;border-radius: 4px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;width:100%;" />
               </div>
               <span id="condActiveCountBadge" class="badge" style="font-size:0.7rem;background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);white-space:nowrap;">5 Variables</span>
             </div>
@@ -618,7 +682,7 @@
             </div>
 
             <!-- Active Routine Usage Summary -->
-            <div class="cond-usage-box" id="condUsageBox" style="margin-top:10px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+            <div class="cond-usage-box" id="condUsageBox" style="margin-top:10px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                 <span style="font-size:0.74rem;font-weight:700;color:#fbbf24;">⚡ Condition Usage in Active Routine</span>
                 <span id="condIfElseCountBadge" style="font-size:0.68rem;color:#94a3b8;">0 blocks</span>
@@ -629,12 +693,12 @@
             </div>
 
             <!-- C++ Code Declarations Preview -->
-            <div class="cond-cpp-preview-box" style="margin-top:10px;background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:8px;">
+            <div class="cond-cpp-preview-box" style="margin-top:10px;background:#090d16;border:1px solid #1e293b;border-radius: 8px;padding:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                 <span style="font-size:0.72rem;font-weight:700;color:#94a3b8;">📄 C++ Variable Declarations</span>
                 <button type="button" id="btnCopyCondCpp" class="btn-xs-clean" style="font-size:0.65rem;">📋 Copy C++</button>
               </div>
-              <pre id="condCppPreview" style="margin:0;padding:6px;background:#030712;border-radius:4px;font-family:ui-monospace, monospace;font-size:0.7rem;color:#38bdf8;overflow-x:auto;max-height:100px;"></pre>
+              <pre id="condCppPreview" style="margin:0;padding:6px;background:#030712;border-radius: 4px;font-family:ui-monospace, monospace;font-size:0.7rem;color:#38bdf8;overflow-x:auto;max-height:100px;"></pre>
             </div>
           </section>
         </div>
@@ -654,7 +718,7 @@
               </div>
             </div>
             
-            <div id="botSyncStatusBadge" class="bot-sync-badge synced" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:4px 8px;font-size:0.72rem;color:#34d399;">
+            <div id="botSyncStatusBadge" class="bot-sync-badge synced" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius: 4px;padding:4px 8px;font-size:0.72rem;color:#34d399;">
               <span>⚡ Synced with <code>src/robot-config.cpp</code></span>
               <span id="botSyncDetail" style="color:#94a3b8;font-size:0.68rem;">600 RPM · 3.25" Wheels</span>
             </div>
@@ -677,7 +741,7 @@
               <label>Wheel diam (in)
                 <div style="display:flex;gap:4px;">
                   <input type="number" id="wheelDiam" step="0.05" value="3.25" min="0.5" style="width:65px;"/>
-                  <select id="wheelDiamPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;flex:1;">
+                  <select id="wheelDiamPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;flex:1;">
                     <option value="3.25">3.25" (NEW_325)</option>
                     <option value="2.75">2.75" (NEW_275)</option>
                     <option value="2.0">2.00" (NEW_2)</option>
@@ -688,7 +752,7 @@
               <label>Drivetrain RPM
                 <div style="display:flex;gap:4px;">
                   <input type="number" id="driveRpm" step="1" value="600" min="1" style="width:65px;"/>
-                  <select id="driveRpmPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;flex:1;">
+                  <select id="driveRpmPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;flex:1;">
                     <option value="600">600 RPM (Blue 1:1)</option>
                     <option value="450">450 RPM (Blue 36:48)</option>
                     <option value="360">360 RPM (Green 36:60)</option>
@@ -708,7 +772,7 @@
             </div>
 
             <!-- Real-Time Drive Physics & Dyno Configuration -->
-            <div class="bot-physics-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+            <div class="bot-physics-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:6px;flex-wrap:wrap;">
                 <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;">⚡ Real-Time Drive Physics &amp; Dyno</span>
                 <div style="display:flex;gap:4px;">
@@ -718,7 +782,7 @@
               </div>
               <div class="row" style="margin-bottom:4px;">
                 <label title="Number of drivetrain drive motors">Motors
-                  <select id="botMotorCount" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;">
+                  <select id="botMotorCount" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;">
                     <option value="6" selected>6-Motor (3L/3R)</option>
                     <option value="4">4-Motor (2L/2R)</option>
                     <option value="8">8-Motor (4L/4R)</option>
@@ -730,14 +794,14 @@
               </div>
               <div class="row">
                 <label title="Friction coefficient between drive wheels and foam field tiles">Traction (µ)
-                  <select id="botWheelTraction" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;">
+                  <select id="botWheelTraction" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;">
                     <option value="0.85" selected>0.85 µ (Omni on Foam)</option>
                     <option value="1.10">1.10 µ (Traction Wheels)</option>
                     <option value="0.65">0.65 µ (Worn Rollers)</option>
                   </select>
                 </label>
                 <label title="Battery state of charge / initial voltage">Battery (V)
-                  <select id="botBatteryVolts" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:4px;">
+                  <select id="botBatteryVolts" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;">
                     <option value="12.8" selected>12.8V (100% Fresh)</option>
                     <option value="12.2">12.2V (60% Typical)</option>
                     <option value="11.5">11.5V (Low Sag)</option>
@@ -747,12 +811,12 @@
             </div>
 
             <!-- LemLib PID Controllers Configuration (Direct in UI) -->
-            <div class="lemlib-pid-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+            <div class="lemlib-pid-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                 <span style="font-size:0.75rem;font-weight:700;color:#38bdf8;">🎛️ LemLib PID Controller Constants</span>
-                <div class="pid-ui-tab-toggle" style="display:flex;gap:2px;background:#0b0f19;padding:2px;border-radius:4px;">
-                  <button type="button" id="btnBotPidTabLat" class="btn-xs-tab active" style="padding:2px 6px;font-size:0.68rem;background:#0284c7;color:#fff;border:none;border-radius:3px;cursor:pointer;">Lateral</button>
-                  <button type="button" id="btnBotPidTabAng" class="btn-xs-tab" style="padding:2px 6px;font-size:0.68rem;background:transparent;color:#94a3b8;border:none;border-radius:3px;cursor:pointer;">Angular</button>
+                <div class="pid-ui-tab-toggle" style="display:flex;gap:2px;background:#0b0f19;padding:2px;border-radius: 4px;">
+                  <button type="button" id="btnBotPidTabLat" class="btn-xs-tab active" style="padding:2px 6px;font-size:0.68rem;background:#0284c7;color:#fff;border:none;border-radius: 4px;cursor:pointer;">Lateral</button>
+                  <button type="button" id="btnBotPidTabAng" class="btn-xs-tab" style="padding:2px 6px;font-size:0.68rem;background:transparent;color:#94a3b8;border:none;border-radius: 4px;cursor:pointer;">Angular</button>
                 </div>
               </div>
 
@@ -834,7 +898,7 @@
             </div>
 
             <!-- Tracking Wheels & Sensors -->
-            <div class="tracking-sensors-section" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+            <div class="tracking-sensors-section" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                 <span style="font-size:0.75rem;font-weight:700;color:#a78bfa;">🎯 Tracking Wheels &amp; Odom Sensors</span>
                 <span style="font-size:0.68rem;color:#64748b;">lemlib::OdomSensors</span>
@@ -853,7 +917,7 @@
             </div>
 
             <!-- Drive Curves & Drift Scalers -->
-            <div class="drift-scalers-box" id="driftScalersBox" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:8px;">
+            <div class="drift-scalers-box" id="driftScalersBox" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                 <span style="font-size:0.75rem;font-weight:700;color:#93c5fd;">🏎️ Drive Curves &amp; Drift Scalers</span>
                 <span style="font-size:0.68rem;color:#64748b;">moveToPose &amp; Kinematics</span>
@@ -959,7 +1023,7 @@
             </div>
 
             <!-- Keyboard Shortcuts & Hotkeys Settings Card -->
-            <div class="bot-shortcuts-card" style="margin-top:12px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div class="bot-shortcuts-card" style="margin-top:12px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius: 8px;padding:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
               <div style="display:flex;align-items:center;gap:10px;">
                 <span style="font-size:1.3rem;">⌨️</span>
                 <div>
@@ -967,7 +1031,7 @@
                   <span style="font-size:0.72rem;color:#94a3b8;">Customize hotkeys for Bezier Curve tool (B), simulation, block duplication, and tabs.</span>
                 </div>
               </div>
-              <button type="button" id="btnOpenShortcutsModal" class="btn-xs-clean" style="background:#2563eb;color:#ffffff;border:none;padding:5px 12px;border-radius:6px;font-weight:600;font-size:0.78rem;cursor:pointer;">Customize Shortcuts ⚙️</button>
+              <button type="button" id="btnOpenShortcutsModal" class="btn-xs-clean" style="background:#2563eb;color:#ffffff;border:none;padding:5px 12px;border-radius: 4px;font-weight:600;font-size:0.78rem;cursor:pointer;">Customize Shortcuts ⚙️</button>
             </div>
           </section>
         </div>
@@ -1074,7 +1138,7 @@
               </div>
 
               <!-- Sleek Secondary Telemetry Group (collapsible to eliminate visual clutter) -->
-              <button type="button" class="btn-xs-clean hud-telemetry-toggle" id="btnToggleHudTelemetry" title="Toggle detailed physics readouts (accel, battery sag, traction, sharp turns)" style="font-size:0.72rem;padding:2px 7px;border-radius:4px;cursor:pointer;background:rgba(30,41,59,0.7);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);">
+              <button type="button" class="btn-xs-clean hud-telemetry-toggle" id="btnToggleHudTelemetry" title="Toggle detailed physics readouts (accel, battery sag, traction, sharp turns)" style="font-size:0.72rem;padding:2px 7px;border-radius: 4px;cursor:pointer;background:rgba(30,41,59,0.7);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);">
                 ⚡ Telemetry ▾
               </button>
               <div id="hudTelemetryExtra" class="hud-telemetry-extra" style="display:none;align-items:center;gap:4px;">
@@ -1093,7 +1157,7 @@
                 <a href="tools.html#dyno" target="_blank" class="hud-tool-btn" style="color:#fbbf24;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:2px;" title="Open Dedicated Real-Time Drive Dyno on Tools Page">Dyno Suite ↗</a>
               </div>
 
-              <button type="button" class="btn-xs-clean" id="btnQuickCommentGuide" title="Open step-by-step guide on how to use autonomous comments" style="background:rgba(56,189,248,0.18);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 8px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+              <button type="button" class="btn-xs-clean" id="btnQuickCommentGuide" title="Open step-by-step guide on how to use autonomous comments" style="background:rgba(56,189,248,0.18);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 8px;border-radius: 4px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
                 <span>❓ Guide</span>
               </button>
             </div>
@@ -1249,8 +1313,8 @@
               </div>
               <div style="display:flex;gap:6px;margin-top:8px;">
                 <button type="button" id="btnDebugUploadAuton" class="primary" style="flex:1;padding:6px;font-size:0.75rem;">⚡ Flash Auton to Brain</button>
-                <button type="button" id="btnDebugRunProgram" style="background:#16a34a;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.75rem;cursor:pointer;">▶ Run</button>
-                <button type="button" id="btnDebugStopProgram" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.75rem;cursor:pointer;">⏹ Stop</button>
+                <button type="button" id="btnDebugRunProgram" style="background:#16a34a;color:#fff;border:none;padding:6px 10px;border-radius: 4px;font-size:0.75rem;cursor:pointer;">▶ Run</button>
+                <button type="button" id="btnDebugStopProgram" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius: 4px;font-size:0.75rem;cursor:pointer;">⏹ Stop</button>
               </div>
             </div>
 
@@ -2342,7 +2406,7 @@ void autonomous() {
         <div class="help-pane" data-pane="shortcuts">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <h3 style="margin:0;">Keyboard Shortcuts &amp; Fast Controls</h3>
-            <button type="button" id="btnLaunchShortcutsFromHelp" class="btn-xs-clean" style="background:#2563eb;color:#ffffff;border:none;padding:5px 12px;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;">⚙️ Customize Shortcuts</button>
+            <button type="button" id="btnLaunchShortcutsFromHelp" class="btn-xs-clean" style="background:#2563eb;color:#ffffff;border:none;padding:5px 12px;border-radius: 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">⚙️ Customize Shortcuts</button>
           </div>
           
           <table class="help-table">
@@ -2481,7 +2545,7 @@ void autonomous() {
 
   <!-- Wipe & Overwrite Project Security Challenge Modal -->
   <div id="wipeChallengeModal" class="modal-overlay" hidden>
-    <div class="modal-box wipe-challenge-box" style="width: min(540px, 94vw); border: 2px solid #ef4444; background: #0f172a; border-radius: 12px; padding: 22px; color: #f8fafc; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+    <div class="modal-box wipe-challenge-box" style="width: min(540px, 94vw); border: 2px solid #ef4444; background: #0f172a; border-radius: 8px; padding: 22px; color: #f8fafc; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
       <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #1e293b;padding-bottom:12px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:1.6rem;">⚠️</span>
@@ -2497,12 +2561,12 @@ void autonomous() {
           You are about to <strong style="color:#ef4444;">permanently wipe and overwrite</strong> your current project workspace (<span id="wipeCurrentProjectName" style="color:#38bdf8;font-weight:600;">Override_LemLib_Bot</span>).
         </p>
 
-        <div style="background:#1e1b4b;border:1px solid #4338ca;border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+        <div style="background:#1e1b4b;border:1px solid #4338ca;border-radius: 8px;padding:12px 14px;margin-bottom:14px;">
           <div style="font-size:0.78rem;color:#a5b4fc;margin-bottom:4px;font-weight:600;letter-spacing:0.5px;">NEW PROJECT TO IMPORT:</div>
           <div id="wipeTargetProjectName" style="font-size:0.95rem;color:#fff;font-weight:700;">Custom_Uploaded_Project.json</div>
         </div>
 
-        <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 14px;">
+        <div style="background:#1e293b;border:1px solid #334155;border-radius: 8px;padding:12px 14px;">
           <label style="display:block;font-size:0.85rem;color:#cbd5e1;margin-bottom:6px;font-weight:600;">
             🔐 Security Verification Challenge:
           </label>
@@ -2511,13 +2575,13 @@ void autonomous() {
           </div>
 
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <div id="wipeChallengeDisplay" style="background:#0f172a;border:1px dashed #ef4444;color:#f87171;font-family:monospace;font-size:1.15rem;font-weight:700;padding:8px 16px;border-radius:6px;letter-spacing:1.5px;user-select:none;">
+            <div id="wipeChallengeDisplay" style="background:#0f172a;border:1px dashed #ef4444;color:#f87171;font-family:monospace;font-size:1.15rem;font-weight:700;padding:8px 16px;border-radius: 4px;letter-spacing:1.5px;user-select:none;">
               WIPE-8492
             </div>
             <button type="button" id="btnRefreshWipeChallenge" class="btn-subtle" style="padding:8px 12px;font-size:0.8rem;" title="Get a new challenge code">🔄 Refresh Code</button>
           </div>
 
-          <input type="text" id="wipeChallengeInput" placeholder="Type verification code here..." style="width:100%;padding:10px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;font-family:monospace;font-size:1rem;" autocomplete="off" />
+          <input type="text" id="wipeChallengeInput" placeholder="Type verification code here..." style="width:100%;padding:10px;border-radius: 4px;border:1px solid #475569;background:#0f172a;color:#fff;font-family:monospace;font-size:1rem;" autocomplete="off" />
           <div id="wipeChallengeError" style="color:#f87171;font-size:0.8rem;margin-top:6px;display:none;">❌ Incorrect verification code. Please try again.</div>
         </div>
       </div>
@@ -2534,7 +2598,7 @@ void autonomous() {
 
   <!-- Delete Action Block Confirmation Modal -->
   <div id="deleteBlockModal" class="modal-overlay" hidden>
-    <div class="modal-box" style="width: min(440px, 94vw); border: 2px solid #ef4444; background: #0f172a; border-radius: 12px; padding: 22px; color: #f8fafc; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+    <div class="modal-box" style="width: min(440px, 94vw); border: 2px solid #ef4444; background: #0f172a; border-radius: 8px; padding: 22px; color: #f8fafc; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
       <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #1e293b;padding-bottom:12px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:1.5rem;">🗑️</span>
@@ -2555,8 +2619,8 @@ void autonomous() {
         </label>
       </div>
       <div class="modal-footer" style="display:flex;justify-content:flex-end;align-items:center;gap:10px;border-top:1px solid #1e293b;padding-top:14px;">
-        <button type="button" id="btnDeleteBlockCancel" class="btn-subtle" style="padding:8px 14px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.82rem;">Cancel</button>
-        <button type="button" id="btnDeleteBlockConfirm" class="primary" style="background:#dc2626;border-color:#ef4444;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.82rem;">Delete Block</button>
+        <button type="button" id="btnDeleteBlockCancel" class="btn-subtle" style="padding:8px 14px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;cursor:pointer;font-weight:600;font-size:0.82rem;">Cancel</button>
+        <button type="button" id="btnDeleteBlockConfirm" class="primary" style="background:#dc2626;border-color:#ef4444;color:#fff;padding:8px 16px;border-radius: 4px;cursor:pointer;font-weight:600;font-size:0.82rem;">Delete Block</button>
       </div>
     </div>
   </div>
@@ -2630,8 +2694,8 @@ void autonomous() {
             </div>
             <div style="display:flex;gap:6px;">
               <button type="button" id="btnModalUploadAuton" class="primary" style="flex:1;font-size:0.78rem;padding:7px;">⚡ Flash Current Auton</button>
-              <button type="button" id="btnModalRunProgram" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">▶ Run</button>
-              <button type="button" id="btnModalStopProgram" style="background:#dc2626;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">⏹ Stop</button>
+              <button type="button" id="btnModalRunProgram" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius: 4px;font-size:0.78rem;font-weight:600;cursor:pointer;">▶ Run</button>
+              <button type="button" id="btnModalStopProgram" style="background:#dc2626;color:#fff;border:none;padding:7px 12px;border-radius: 4px;font-size:0.78rem;font-weight:600;cursor:pointer;">⏹ Stop</button>
             </div>
             <div id="modalUploadProgressWrap" style="margin-top:6px;display:none;">
               <div style="font-size:0.70rem;color:#38bdf8;margin-bottom:2px;" id="modalUploadProgressLabel">Uploading... 0%</div>
@@ -2831,7 +2895,7 @@ void autonomous() {
           <span class="scoring-badge">VRC Override (2026-27) · Game Engine &amp; Dynamic Tracking</span>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             <h2 id="scoringModalTitle" style="margin:0;">🎯 Override Scoring Engine <span class="badge-beta-text">BETA</span></h2>
-            <button type="button" class="btn-xs-clean" id="btnLaunchCommentGuideFromModal" style="background:rgba(56,189,248,0.2);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 10px;border-radius:6px;cursor:pointer;">❓ Comment Tutorial</button>
+            <button type="button" class="btn-xs-clean" id="btnLaunchCommentGuideFromModal" style="background:rgba(56,189,248,0.2);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 10px;border-radius: 4px;cursor:pointer;">❓ Comment Tutorial</button>
           </div>
         </div>
         <button type="button" id="scoringModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
@@ -3008,7 +3072,7 @@ void autonomous() {
               <h3 style="margin:0;">⚠️ Path Trajectory Collision Report</h3>
               <span class="collision-diag-count" id="collisionReportCount">0 collisions</span>
             </div>
-            <button type="button" id="btnExportCollisionPdf" class="btn-subtle" style="background:#1e293b; border:1px solid #38bdf8; color:#38bdf8; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:0.82rem; font-weight:600; display:inline-flex; align-items:center; gap:6px;" title="Generate downloadable PDF safety report">
+            <button type="button" id="btnExportCollisionPdf" class="btn-subtle" style="background:#1e293b; border:1px solid #38bdf8; color:#38bdf8; padding:6px 14px; border-radius: 4px; cursor:pointer; font-size:0.82rem; font-weight:600; display:inline-flex; align-items:center; gap:6px;" title="Generate downloadable PDF safety report">
               📄 Download PDF Report
             </button>
           </div>
@@ -3062,23 +3126,23 @@ void autonomous() {
           <div>
             <h2 style="margin:0;font-size:1.15rem;color:var(--text-heading);display:flex;align-items:center;gap:8px;">
               <span>📊 Autonomous Match Replay &amp; Analysis</span>
-              <span class="badge" style="background:#ef4444;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:10px;">ALPHA</span>
+              <span class="badge" style="background:#ef4444;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius: 8px;">ALPHA</span>
             </h2>
             <p style="margin:2px 0 0;font-size:0.75rem;color:var(--muted);">Compare planned trajectories with actual V5 Brain odometry logs, inspect deviation heatmaps, and troubleshoot error hotspots.</p>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
-          <button type="button" class="btn-xs-clean" id="btnReplayLoadSample" style="background:#0284c7;color:#fff;font-size:0.72rem;padding:5px 10px;border-radius:6px;font-weight:700;cursor:pointer;">📥 Load Sample Log</button>
-          <button type="button" class="btn-xs-clean" id="btnReplayImportFile" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;font-size:0.72rem;padding:5px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📂 Import CSV/Log</button>
+          <button type="button" class="btn-xs-clean" id="btnReplayLoadSample" style="background:#0284c7;color:#fff;font-size:0.72rem;padding:5px 10px;border-radius: 4px;font-weight:700;cursor:pointer;">📥 Load Sample Log</button>
+          <button type="button" class="btn-xs-clean" id="btnReplayImportFile" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;font-size:0.72rem;padding:5px 10px;border-radius: 4px;font-weight:600;cursor:pointer;">📂 Import CSV/Log</button>
           <input type="file" id="replayFileInput" accept=".csv,.txt,.log,.json" style="display:none;" />
-          <button type="button" class="btn-xs-clean" id="btnReplayFromBrain" style="background:#f59e0b;color:#0b0f14;font-size:0.72rem;padding:5px 10px;border-radius:6px;font-weight:800;cursor:pointer;">🔌 From V5 Brain</button>
+          <button type="button" class="btn-xs-clean" id="btnReplayFromBrain" style="background:#f59e0b;color:#0b0f14;font-size:0.72rem;padding:5px 10px;border-radius: 4px;font-weight:800;cursor:pointer;">🔌 From V5 Brain</button>
           <button type="button" id="matchReplayModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
         </div>
       </div>
 
       <div class="replay-modal-body">
         <!-- Preset Scenario Quick Switcher -->
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--card-inner);padding:8px 12px;border-radius:8px;border:1px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--card-inner);padding:8px 12px;border-radius: 8px;border:1px solid var(--border);">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span style="font-size:0.74rem;color:var(--muted);font-weight:700;">Simulate Match Scenario:</span>
             <div class="replay-quick-actions" id="replayScenariosGroup">
@@ -3089,7 +3153,7 @@ void autonomous() {
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <span id="replayLogStatusBadge" style="font-size:0.7rem;color:#4ade80;background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:10px;border:1px solid rgba(34,197,94,0.3);">● 301 Telemetry Samples Loaded</span>
+            <span id="replayLogStatusBadge" style="font-size:0.7rem;color:#4ade80;background:rgba(34,197,94,0.15);padding:2px 8px;border-radius: 8px;border:1px solid rgba(34,197,94,0.3);">● 301 Telemetry Samples Loaded</span>
           </div>
         </div>
 
@@ -3109,7 +3173,7 @@ void autonomous() {
                 <span>Planned Trajectory</span>
               </div>
               <div class="replay-legend-item">
-                <span class="replay-legend-line" style="background:linear-gradient(90deg,#22c55e,#eab308,#ef4444);"></span>
+                <span class="replay-legend-line" style="background:#22c55e;"></span>
                 <span>Actual Log (Deviation Heatmap)</span>
               </div>
               <div class="replay-legend-item">
@@ -3120,8 +3184,8 @@ void autonomous() {
 
             <!-- Playback Controls Strip -->
             <div class="replay-controls-bar">
-              <button type="button" id="btnReplayPlayPause" class="btn-xs-clean" style="background:#0284c7;color:#fff;border-radius:6px;padding:6px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;">▶ Play Replay</button>
-              <button type="button" id="btnReplayReset" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;border-radius:6px;padding:6px 10px;font-size:0.75rem;cursor:pointer;">↺ Reset</button>
+              <button type="button" id="btnReplayPlayPause" class="btn-xs-clean" style="background:#0284c7;color:#fff;border-radius: 4px;padding:6px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;">▶ Play Replay</button>
+              <button type="button" id="btnReplayReset" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;border-radius: 4px;padding:6px 10px;font-size:0.75rem;cursor:pointer;">↺ Reset</button>
               
               <div class="replay-scrubber-wrap">
                 <input type="range" id="replayScrubber" min="0" max="15000" step="50" value="0" style="width:100%;accent-color:#f59e0b;" />
@@ -3129,9 +3193,9 @@ void autonomous() {
               </div>
 
               <div style="display:flex;align-items:center;gap:4px;">
-                <button type="button" class="btn-xs-clean replay-speed-btn" data-speed="0.5" style="background:#1e293b;color:#94a3b8;font-size:0.68rem;padding:3px 6px;border-radius:4px;cursor:pointer;">0.5×</button>
-                <button type="button" class="btn-xs-clean replay-speed-btn active" data-speed="1.0" style="background:#0284c7;color:#fff;font-size:0.68rem;padding:3px 6px;border-radius:4px;font-weight:700;cursor:pointer;">1.0×</button>
-                <button type="button" class="btn-xs-clean replay-speed-btn" data-speed="2.0" style="background:#1e293b;color:#94a3b8;font-size:0.68rem;padding:3px 6px;border-radius:4px;cursor:pointer;">2.0×</button>
+                <button type="button" class="btn-xs-clean replay-speed-btn" data-speed="0.5" style="background:#1e293b;color:#94a3b8;font-size:0.68rem;padding:3px 6px;border-radius: 4px;cursor:pointer;">0.5×</button>
+                <button type="button" class="btn-xs-clean replay-speed-btn active" data-speed="1.0" style="background:#0284c7;color:#fff;font-size:0.68rem;padding:3px 6px;border-radius: 4px;font-weight:700;cursor:pointer;">1.0×</button>
+                <button type="button" class="btn-xs-clean replay-speed-btn" data-speed="2.0" style="background:#1e293b;color:#94a3b8;font-size:0.68rem;padding:3px 6px;border-radius: 4px;cursor:pointer;">2.0×</button>
               </div>
             </div>
           </div>
@@ -3179,11 +3243,11 @@ void autonomous() {
             </div>
 
             <!-- Export / Save Report Strip -->
-            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card-inner);padding:8px 12px;border-radius:8px;border:1px solid var(--border);">
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card-inner);padding:8px 12px;border-radius: 8px;border:1px solid var(--border);">
               <span style="font-size:0.72rem;color:var(--muted);">Share analysis with teammates:</span>
               <div style="display:flex;gap:6px;">
-                <button type="button" id="btnExportReplayReport" class="btn-xs-clean" style="background:#059669;color:#fff;border-radius:6px;padding:5px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">📋 Copy Summary Report</button>
-                <button type="button" id="btnDownloadReplayJson" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:5px 10px;font-size:0.72rem;cursor:pointer;">💾 Download JSON</button>
+                <button type="button" id="btnExportReplayReport" class="btn-xs-clean" style="background:#059669;color:#fff;border-radius: 4px;padding:5px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">📋 Copy Summary Report</button>
+                <button type="button" id="btnDownloadReplayJson" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius: 4px;padding:5px 10px;font-size:0.72rem;cursor:pointer;">💾 Download JSON</button>
               </div>
             </div>
           </div>
@@ -3192,23 +3256,23 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20260930.k6"></script>
+  <script src="version.js?v=20260930.k12"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260930.k6"></script>
-  <script src="google-drive-sync.js?v=20260930.k6"></script>
-  <script src="session-guard.js?v=20260930.k6"></script>
-  <script src="theme.js?v=20260930.k6"></script>
-  <script src="v5-brain-serial.js?v=20260930.k6"></script>
-  <script src="project-manager.js?v=20260930.k6"></script>
-  <script src="cpp-parser.js?v=20260930.k6"></script>
-  <script src="scoring-engine.js?v=20260930.k6"></script>
-  <script src="match-analysis-engine.js?v=20260930.k6"></script>
-  <script src="app.js?v=20260930.k6"></script>
-  <script src="tutorial.js?v=20260930.k6"></script>
+  <script src="firebase-config.js?v=20260930.k12"></script>
+  <script src="google-drive-sync.js?v=20260930.k12"></script>
+  <script src="session-guard.js?v=20260930.k12"></script>
+  <script src="theme.js?v=20260930.k12"></script>
+  <script src="v5-brain-serial.js?v=20260930.k12"></script>
+  <script src="project-manager.js?v=20260930.k12"></script>
+  <script src="cpp-parser.js?v=20260930.k12"></script>
+  <script src="scoring-engine.js?v=20260930.k12"></script>
+  <script src="match-analysis-engine.js?v=20260930.k12"></script>
+  <script src="app.js?v=20260930.k12"></script>
+  <script src="tutorial.js?v=20260930.k12"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
@@ -3339,7 +3403,7 @@ void autonomous() {
     <div class="collision-modal-content" style="max-width:760px;">
       <div class="collision-modal-header">
         <div style="display:flex;align-items:center;gap:10px;">
-          <div style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:8px 12px;border-radius:8px;font-size:1.4rem;">⚡</div>
+          <div style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:8px 12px;border-radius: 8px;font-size:1.4rem;">⚡</div>
           <div>
             <h2 style="margin:0;font-size:1.25rem;color:#f8fafc;">LemLib Velocity &amp; Sharp Turn Analyzer</h2>
             <p style="margin:2px 0 0 0;font-size:0.78rem;color:#94a3b8;">Detects sharp angle transitions where LemLib chassis must brake to 0 in/s and suggests velocity-preserving curvature or early exit chaining.</p>
@@ -3350,7 +3414,7 @@ void autonomous() {
 
       <div class="collision-modal-body" style="padding:16px;">
         <!-- Summary Callout -->
-        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(15,23,42,0.8);border:1px solid #334155;border-radius:8px;padding:12px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(15,23,42,0.8);border:1px solid #334155;border-radius: 8px;padding:12px;margin-bottom:16px;">
           <div style="display:flex;align-items:center;gap:12px;">
             <div style="font-size:1.8rem;" id="sharpTurnModalIcon">✨</div>
             <div>
@@ -3358,13 +3422,13 @@ void autonomous() {
               <div style="font-size:0.78rem;color:#cbd5e1;margin-top:2px;" id="sharpTurnModalSub">All waypoint transitions maintain smooth continuous velocity.</div>
             </div>
           </div>
-          <button type="button" id="btnFixAllSharpTurnsModal" class="primary" style="background:#f59e0b;color:#0f172a;border:none;padding:8px 16px;border-radius:6px;font-weight:700;font-size:0.82rem;cursor:pointer;display:none;">
+          <button type="button" id="btnFixAllSharpTurnsModal" class="primary" style="background:#f59e0b;color:#0f172a;border:none;padding:8px 16px;border-radius: 4px;font-weight:700;font-size:0.82rem;cursor:pointer;display:none;">
             ⚡ Auto-Fix All Sharp Turns
           </button>
         </div>
 
         <!-- Transitions List Table -->
-        <div style="background:#090d16;border:1px solid #1e293b;border-radius:8px;overflow:hidden;">
+        <div style="background:#090d16;border:1px solid #1e293b;border-radius: 8px;overflow:hidden;">
           <table style="width:100%;border-collapse:collapse;font-size:0.8rem;text-align:left;">
             <thead>
               <tr style="background:#0f172a;color:#94a3b8;border-bottom:1px solid #1e293b;">
@@ -3414,7 +3478,7 @@ void autonomous() {
         <div class="shortcuts-recording-banner" id="shortcutsRecordingBanner" style="display:none;">
           <span class="pulse-indicator">●</span>
           <span id="shortcutsRecordingText">Press any key or key combination...</span>
-          <button type="button" id="btnCancelRecordShortcut" class="btn-xs-clean" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.2);color:#facc15;padding:2px 8px;border-radius:4px;cursor:pointer;">Cancel (Esc)</button>
+          <button type="button" id="btnCancelRecordShortcut" class="btn-xs-clean" style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.2);color:#facc15;padding:2px 8px;border-radius: 4px;cursor:pointer;">Cancel (Esc)</button>
         </div>
 
         <div class="shortcuts-table-wrap" id="shortcutsTableWrap">

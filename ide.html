@@ -16,8 +16,11 @@
   <meta http-equiv="Expires" content="0" />
   <title>PROS & LemLib C++ IDE · VEX V5 Path Planner</title>
   <meta name="description" content="Dedicated multi-file C++ coding IDE for VEX V5 robotics with LemLib, full project compiler, and cloud persistence." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20260930.k6" />
+  <link rel="stylesheet" href="style.css?v=20260930.k12" />
   <script>
     (function () {
       try {
@@ -33,19 +36,19 @@
     <header class="ide-nav-header">
       <div class="header-left">
         <button type="button" id="btnBackToPlanner" class="btn-ide-back" title="Return to Visual Path Planner (requires save &amp; sync)">
-          ← Back to Visual Planner
+          ← Planner
         </button>
         <button type="button" id="btnIdeOpenTools" class="btn-ide-back" title="Open Full Engineering Tools Suite (Fullscreen)">
-          🛠️ Tools Suite
+          Tools Suite
         </button>
         <a href="documentation.html" class="btn-ide-back" title="Open Documentation &amp; API Reference">
-          📖 Documentation
+          Docs
         </a>
         <div class="ide-title-wrap">
-          <span class="ide-project-tag">📁 Project</span>
-          <span class="ide-project-name" id="ideProjectName">Override_LemLib_Bot</span>
-          <span class="ide-dirty-badge" id="ideDirtyBadge" hidden>● Unsaved Changes</span>
-          <span class="ide-autosave-badge" id="ideAutosaveBadge" title="Autosave status: Automatically saving changes in background">
+          <span class="ide-project-tag" style="border-radius: 4px; font-family:var(--font-mono);">[PROJECT]</span>
+          <span class="ide-project-name" id="ideProjectName" style="font-family:var(--font-mono);">Override_LemLib_Bot</span>
+          <span class="ide-dirty-badge" id="ideDirtyBadge" hidden style="border-radius: 4px; font-family:var(--font-mono);">● Unsaved</span>
+          <span class="ide-autosave-badge" id="ideAutosaveBadge" title="Autosave status: Automatically saving changes in background" style="border-radius: 4px; font-family:var(--font-mono);">
             <span class="autosave-dot active" id="ideAutosaveDot"></span>
             <span id="ideAutosaveText">Autosave: Ready</span>
           </span>
@@ -54,20 +57,20 @@
 
       <div class="header-center">
         <!-- Hardware Brain Status & Quick Connect -->
-        <div id="ideBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect USB">
+        <div id="ideBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect USB" style="border-radius: 4px; font-family:var(--font-mono);">
           <span class="brain-status-dot disconnected" id="ideBrainDot"></span>
           <span class="brain-status-text" id="ideBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="ideBrainBatt" hidden>⚡ 94%</span>
-          <button type="button" id="btnConnectBrain" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">🔌 Connect</button>
+          <span class="brain-battery-pill" id="ideBrainBatt" hidden>94%</span>
+          <button type="button" id="btnConnectBrain" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC" style="border-radius: 4px;">Connect</button>
         </div>
 
         <!-- Build & Flash Primary Group -->
         <div class="ide-btn-group">
-          <button type="button" id="btnCompileProject" class="btn-ide-compile" title="Compile entire PROS LemLib project (pros make)">
-            ⚡ Compile
+          <button type="button" id="btnCompileProject" class="btn-ide-compile" title="Compile entire PROS LemLib project (pros make)" style="border-radius: 4px; font-family:var(--font-mono);">
+            Compile
           </button>
-          <button type="button" id="btnUploadToBrain" class="btn-ide-upload" title="Upload compiled PROS binary to VEX V5 Brain slot">
-            🚀 Flash
+          <button type="button" id="btnUploadToBrain" class="btn-ide-upload" title="Upload compiled PROS binary to VEX V5 Brain slot" style="border-radius: 4px; font-family:var(--font-mono);">
+            Flash
           </button>
         </div>
 
@@ -76,43 +79,43 @@
 
         <!-- Consolidated Project & Cloud Menu -->
         <div class="compact-dropdown-wrap">
-          <button type="button" id="btnIdeProjectDropdown" class="btn-ide-save-cloud" title="Project actions, version history, exports, and cloud synchronization">
-            📁 Project ▾
+          <button type="button" id="btnIdeProjectDropdown" class="btn-ide-save-cloud" title="Project actions, version history, exports, and cloud synchronization" style="border-radius: 4px; font-family:var(--font-mono);">
+            Project ▾
           </button>
-          <div class="compact-dropdown-menu" id="ideProjectMenu" hidden>
+          <div class="compact-dropdown-menu" id="ideProjectMenu" hidden style="border-radius: 4px; box-shadow:none; border:1px solid var(--border);">
             <button type="button" id="btnSaveGoogleDrive" title="Save complete project directly into your personal Google Drive">
-              📁 Save to Google Drive
+              Save to Google Drive
             </button>
             <button type="button" id="btnLoadGoogleDrive" title="Open and load project file directly from your Google Drive">
-              📂 Open from Google Drive
+              Open from Google Drive
             </button>
             <button type="button" id="btnGithubSyncIDE" title="Clone from or Push edits directly to GitHub repositories">
-              🐙 GitHub / Git Sync
+              GitHub Repository Sync
             </button>
             <button type="button" id="btnVersionHistoryIDE" title="View Code Version History, Backups &amp; Snapshots">
-              📜 Version History (<span id="ideVersionCount">0</span>)
+              Version History (<span id="ideVersionCount">0</span>)
             </button>
             <button type="button" id="btnDownloadCode" title="Download active file or export full PROS project">
-              📥 Download Code / Export
+              Download Code / Export
             </button>
             <div class="compact-dropdown-divider"></div>
             <button type="button" id="btnOpenInPlanner" title="Load active autons.cpp into the visual flowchart planner">
-              🗺️ Open in Visual Planner
+              Open in Visual Planner
             </button>
             <button type="button" id="btnIdeOpenTutorial" title="Launch Interactive LemLib Studio Tutorial">
-              🎓 Interactive Tutorial
+              Interactive Tutorial
             </button>
             <button type="button" id="btnForceRefreshIDE" title="Force refresh workspace, clear cache and reload application">
-              🔄 Force Refresh App
+              Force Refresh App
             </button>
             <a href="documentation.html" class="tools-menu-item" style="text-decoration:none;color:#38bdf8;font-weight:700;display:block;padding:8px 12px;" title="VEX &amp; LemLib Documentation &amp; API Reference">
-              📖 Documentation &amp; API
+              Documentation &amp; API
             </a>
             <a href="team.html" class="tools-menu-item" style="text-decoration:none;color:#38bdf8;font-weight:700;display:block;padding:8px 12px;" title="Real-Time Team Collaboration &amp; Cloud Sync (ALPHA)">
-              👥 Team Collaboration (ALPHA)
+              Team Collaboration (ALPHA)
             </a>
             <a href="stats.html" class="tools-menu-item" style="text-decoration:none;color:inherit;display:block;padding:8px 12px;" title="View visitor stats">
-              📊 Site &amp; User Stats
+              Visitor Telemetry Stats
             </a>
           </div>
         </div>
@@ -316,7 +319,7 @@
           </div>
           <div style="display:flex;gap:8px;">
             <button type="button" id="btnModalConnectBrain" class="primary" style="padding:6px 14px;font-size:0.82rem;">🔌 Connect via USB Serial</button>
-            <button type="button" id="btnModalSimulateBrain" style="padding:6px 10px;font-size:0.78rem;background:#1e293b;border:1px solid #475569;color:#cbd5e1;border-radius:6px;cursor:pointer;" title="Simulate VEX V5 Brain without physical USB hardware">🧪 Demo Mode</button>
+            <button type="button" id="btnModalSimulateBrain" style="padding:6px 10px;font-size:0.78rem;background:#1e293b;border:1px solid #475569;color:#cbd5e1;border-radius: 4px;cursor:pointer;" title="Simulate VEX V5 Brain without physical USB hardware">🧪 Demo Mode</button>
             <button type="button" id="btnModalDisconnectBrain" class="btn-danger-outline" style="padding:6px 12px;font-size:0.82rem;display:none;">Disconnect</button>
           </div>
         </div>
@@ -363,8 +366,8 @@
             </div>
             <div style="display:flex;gap:6px;">
               <button type="button" id="btnModalUploadAuton" class="primary" style="flex:1;font-size:0.78rem;padding:7px;">⚡ Flash Current Code</button>
-              <button type="button" id="btnModalRunProgram" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">▶ Run</button>
-              <button type="button" id="btnModalStopProgram" style="background:#dc2626;color:#fff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">⏹ Stop</button>
+              <button type="button" id="btnModalRunProgram" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius: 4px;font-size:0.78rem;font-weight:600;cursor:pointer;">▶ Run</button>
+              <button type="button" id="btnModalStopProgram" style="background:#dc2626;color:#fff;border:none;padding:7px 12px;border-radius: 4px;font-size:0.78rem;font-weight:600;cursor:pointer;">⏹ Stop</button>
             </div>
             <div id="modalUploadProgressWrap" style="margin-top:6px;display:none;">
               <div style="font-size:0.70rem;color:#38bdf8;margin-bottom:2px;" id="modalUploadProgressLabel">Uploading... 0%</div>
@@ -394,7 +397,7 @@
 
   <!-- Wipe & Overwrite Project Security Challenge Modal -->
   <div id="wipeChallengeModal" class="modal-overlay" hidden>
-    <div class="modal-box wipe-challenge-box" style="width: min(540px, 94vw); border: 2px solid #ef4444; background: #0f172a; border-radius: 12px; padding: 22px; color: #f8fafc; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+    <div class="modal-box wipe-challenge-box" style="width: min(540px, 94vw); border: 2px solid #ef4444; background: #0f172a; border-radius: 8px; padding: 22px; color: #f8fafc; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
       <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #1e293b;padding-bottom:12px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:1.6rem;">⚠️</span>
@@ -410,12 +413,12 @@
           You are about to <strong style="color:#ef4444;">permanently wipe and overwrite</strong> your current project workspace (<span id="wipeCurrentProjectName" style="color:#38bdf8;font-weight:600;">Override_LemLib_Bot</span>).
         </p>
 
-        <div style="background:#1e1b4b;border:1px solid #4338ca;border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+        <div style="background:#1e1b4b;border:1px solid #4338ca;border-radius: 8px;padding:12px 14px;margin-bottom:14px;">
           <div style="font-size:0.78rem;color:#a5b4fc;margin-bottom:4px;font-weight:600;letter-spacing:0.5px;">NEW PROJECT TO IMPORT:</div>
           <div id="wipeTargetProjectName" style="font-size:0.95rem;color:#fff;font-weight:700;">Imported_Project_Folder</div>
         </div>
 
-        <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 14px;">
+        <div style="background:#1e293b;border:1px solid #334155;border-radius: 8px;padding:12px 14px;">
           <label style="display:block;font-size:0.85rem;color:#cbd5e1;margin-bottom:6px;font-weight:600;">
             🔐 Security Verification Challenge:
           </label>
@@ -424,13 +427,13 @@
           </div>
 
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <div id="wipeChallengeDisplay" style="background:#0f172a;border:1px dashed #ef4444;color:#f87171;font-family:monospace;font-size:1.15rem;font-weight:700;padding:8px 16px;border-radius:6px;letter-spacing:1.5px;user-select:none;">
+            <div id="wipeChallengeDisplay" style="background:#0f172a;border:1px dashed #ef4444;color:#f87171;font-family:monospace;font-size:1.15rem;font-weight:700;padding:8px 16px;border-radius: 4px;letter-spacing:1.5px;user-select:none;">
               WIPE-8492
             </div>
             <button type="button" id="btnRefreshWipeChallenge" class="btn-subtle" style="padding:8px 12px;font-size:0.8rem;" title="Get a new challenge code">🔄 Refresh Code</button>
           </div>
 
-          <input type="text" id="wipeChallengeInput" placeholder="Type verification code here..." style="width:100%;padding:10px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;font-family:monospace;font-size:1rem;" autocomplete="off" />
+          <input type="text" id="wipeChallengeInput" placeholder="Type verification code here..." style="width:100%;padding:10px;border-radius: 4px;border:1px solid #475569;background:#0f172a;color:#fff;font-family:monospace;font-size:1rem;" autocomplete="off" />
           <div id="wipeChallengeError" style="color:#f87171;font-size:0.8rem;margin-top:6px;display:none;">❌ Incorrect verification code. Please try again.</div>
         </div>
       </div>
@@ -539,7 +542,7 @@
 
   <!-- File Deletion Confirmation Modal -->
   <div id="ideDeleteFileModal" class="modal-backdrop" hidden>
-    <div class="modal-card" style="max-width:480px;background:#0b1329;border:1px solid #334155;border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);overflow:hidden;">
+    <div class="modal-card" style="max-width:480px;background:#0b1329;border:1px solid #334155;border-radius: 8px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);overflow:hidden;">
       <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;background:#0f172a;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:1.4rem;">🗑️</span>
@@ -552,10 +555,10 @@
       </div>
       <div class="modal-body" style="padding:20px;color:#e2e8f0;font-size:0.9rem;line-height:1.5;">
         <p style="margin:0 0 14px 0;">
-          Are you sure you want to permanently delete <strong id="ideDeleteModalFileName" style="color:#38bdf8;font-family:monospace;background:rgba(56,189,248,0.12);padding:2px 6px;border-radius:4px;">src/autons.cpp</strong>?
+          Are you sure you want to permanently delete <strong id="ideDeleteModalFileName" style="color:#38bdf8;font-family:monospace;background:rgba(56,189,248,0.12);padding:2px 6px;border-radius: 4px;">src/autons.cpp</strong>?
         </p>
 
-        <div id="ideDeleteModalCoreWarning" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+        <div id="ideDeleteModalCoreWarning" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius: 8px;padding:12px 14px;margin-bottom:14px;">
           <div style="display:flex;align-items:flex-start;gap:8px;color:#fca5a5;font-size:0.82rem;line-height:1.4;">
             <span style="font-size:1.1rem;line-height:1;">⚠️</span>
             <div>
@@ -565,7 +568,7 @@
           </div>
         </div>
 
-        <div id="ideDeleteModalMeta" style="background:#09111e;border:1px solid #1e293b;border-radius:8px;padding:10px 12px;font-size:0.78rem;color:#94a3b8;display:flex;justify-content:space-between;align-items:center;">
+        <div id="ideDeleteModalMeta" style="background:#09111e;border:1px solid #1e293b;border-radius: 8px;padding:10px 12px;font-size:0.78rem;color:#94a3b8;display:flex;justify-content:space-between;align-items:center;">
           <span>Lines: <strong id="ideDeleteModalLines" style="color:#f1f5f9;">0</strong></span>
           <span>Size: <strong id="ideDeleteModalSize" style="color:#f1f5f9;">0 B</strong></span>
         </div>
@@ -574,7 +577,7 @@
         <button type="button" id="btnIdeDeleteModalBackup" class="btn-subtle" style="font-size:0.80rem;padding:7px 12px;" title="Download a copy before deleting">💾 Download Copy</button>
         <div style="display:flex;gap:8px;">
           <button type="button" id="btnIdeDeleteModalCancel" class="btn-subtle" style="font-size:0.82rem;padding:7px 14px;">Cancel</button>
-          <button type="button" id="btnIdeDeleteModalConfirm" style="background:#dc2626;color:#ffffff;border:1px solid #ef4444;border-radius:6px;padding:7px 16px;font-size:0.84rem;font-weight:700;cursor:pointer;transition:all 0.15s ease;">🗑️ Delete File</button>
+          <button type="button" id="btnIdeDeleteModalConfirm" style="background:#dc2626;color:#ffffff;border:1px solid #ef4444;border-radius: 4px;padding:7px 16px;font-size:0.84rem;font-weight:700;cursor:pointer;transition:all 0.15s ease;">🗑️ Delete File</button>
         </div>
       </div>
     </div>
@@ -582,14 +585,14 @@
 
   <!-- Google Drive Connect Modal -->
   <div id="gdriveConnectModal" class="modal-backdrop" hidden>
-    <div class="modal-card" style="max-width:480px;text-align:center;padding:24px;border:1px solid #334155;background:#0b1329;border-radius:12px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
+    <div class="modal-card" style="max-width:480px;text-align:center;padding:24px;border:1px solid #334155;background:#0b1329;border-radius: 8px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
       <div style="font-size:2.8rem;margin-bottom:12px;">📁</div>
       <h3 style="margin:0 0 8px 0;font-size:1.2rem;color:#f8fafc;font-weight:700;">Connect Google Drive</h3>
       <p style="margin:0 0 20px 0;color:#94a3b8;font-size:0.88rem;line-height:1.5;">
         Sign in with Google to enable automatic cloud saving, cross-device path syncing, and secure backups for your VEX Path Planner workspace!
       </p>
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <button type="button" id="btnGdriveModalConnect" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px 16px;background:#2563eb;color:#ffffff;border:none;border-radius:8px;font-size:0.92rem;font-weight:600;cursor:pointer;transition:background 0.2s;">
+        <button type="button" id="btnGdriveModalConnect" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px 16px;background:#2563eb;color:#ffffff;border:none;border-radius: 8px;font-size:0.92rem;font-weight:600;cursor:pointer;transition:background 0.2s;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -598,7 +601,7 @@
           </svg>
           Sign In with Google Drive
         </button>
-        <button type="button" id="btnGdriveModalSkip" style="width:100%;padding:8px;background:transparent;border:1px solid #334155;color:#64748b;border-radius:8px;font-size:0.8rem;cursor:pointer;">
+        <button type="button" id="btnGdriveModalSkip" style="width:100%;padding:8px;background:transparent;border:1px solid #334155;color:#64748b;border-radius: 8px;font-size:0.8rem;cursor:pointer;">
           Continue Offline (Local Save Only)
         </button>
       </div>
@@ -607,7 +610,7 @@
 
   <!-- GitHub Clone & Push Integration Modal -->
   <div id="githubSyncModal" class="modal-backdrop" hidden>
-    <div class="modal-card" style="max-width:580px;background:#0b1329;border:1px solid #334155;border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);overflow:hidden;padding:0;">
+    <div class="modal-card" style="max-width:580px;background:#0b1329;border:1px solid #334155;border-radius: 8px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);overflow:hidden;padding:0;">
       <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;background:#0f172a;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:1.5rem;">🐙</span>
@@ -634,26 +637,26 @@
 
           <div style="margin-bottom:12px;">
             <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Repository (Owner/Repo or URL):</label>
-            <input type="text" id="inputGithubCloneRepo" placeholder="e.g. LemLib/LemLib or https://github.com/owner/repo" style="width:100%;padding:9px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.9rem;" />
+            <input type="text" id="inputGithubCloneRepo" placeholder="e.g. LemLib/LemLib or https://github.com/owner/repo" style="width:100%;padding:9px;border-radius: 4px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.9rem;" />
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
             <div>
               <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Branch (Optional):</label>
-              <input type="text" id="inputGithubCloneBranch" placeholder="main (default)" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
+              <input type="text" id="inputGithubCloneBranch" placeholder="main (default)" style="width:100%;padding:8px;border-radius: 4px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
             </div>
             <div>
               <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Personal Access Token (PAT) <button type="button" class="btnPatHelp" title="How to get a GitHub PAT" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);border-radius:50%;width:18px;height:18px;font-size:0.68rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;margin-left:6px;vertical-align:middle;transition:all 0.15s;">?</button>:</label>
               <div style="position:relative;display:flex;align-items:center;">
-                <input type="password" id="inputGithubCloneToken" placeholder="Optional for public repos" style="width:100%;padding:8px 34px 8px 8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
-                <button type="button" id="btnToggleCloneToken" title="Show PAT" aria-label="Show PAT" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px 6px;display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:0.95rem;transition:color 0.15s,background 0.15s;">
+                <input type="password" id="inputGithubCloneToken" placeholder="Optional for public repos" style="width:100%;padding:8px 34px 8px 8px;border-radius: 4px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
+                <button type="button" id="btnToggleCloneToken" title="Show PAT" aria-label="Show PAT" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px 6px;display:flex;align-items:center;justify-content:center;border-radius: 4px;font-size:0.95rem;transition:color 0.15s,background 0.15s;">
                   <svg id="iconCloneEye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
               </div>
             </div>
           </div>
 
-          <div id="githubCloneStatus" style="display:none;padding:10px;border-radius:6px;font-size:0.82rem;margin-bottom:12px;"></div>
+          <div id="githubCloneStatus" style="display:none;padding:10px;border-radius: 4px;font-size:0.82rem;margin-bottom:12px;"></div>
 
           <button type="button" id="btnGithubActionClone" class="primary" style="width:100%;padding:10px;font-size:0.9rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;">
             ⚡ Clone Repository into Workspace
@@ -668,31 +671,31 @@
 
           <div style="margin-bottom:12px;">
             <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Target Repository (Owner/Repo):</label>
-            <input type="text" id="inputGithubPushRepo" placeholder="e.g. username/vex-robot-code" style="width:100%;padding:9px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.9rem;" />
+            <input type="text" id="inputGithubPushRepo" placeholder="e.g. username/vex-robot-code" style="width:100%;padding:9px;border-radius: 4px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.9rem;" />
           </div>
 
           <div style="margin-bottom:12px;">
             <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Target Branch:</label>
-            <input type="text" id="inputGithubPushBranch" placeholder="main" value="main" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
+            <input type="text" id="inputGithubPushBranch" placeholder="main" value="main" style="width:100%;padding:8px;border-radius: 4px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
           </div>
 
           <div style="margin-bottom:12px;">
             <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">Commit Message:</label>
-            <input type="text" id="inputGithubPushMsg" placeholder="Sync from VEX Path Planner Workspace 🚀" value="Sync from VEX Path Planner Workspace 🚀" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-size:0.85rem;" />
+            <input type="text" id="inputGithubPushMsg" placeholder="Sync from VEX Path Planner Workspace 🚀" value="Sync from VEX Path Planner Workspace 🚀" style="width:100%;padding:8px;border-radius: 4px;border:1px solid #334155;background:#0f172a;color:#fff;font-size:0.85rem;" />
           </div>
 
           <div style="margin-bottom:14px;">
             <label style="display:block;font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;font-weight:600;">GitHub Personal Access Token (PAT) <button type="button" class="btnPatHelp" title="How to get a GitHub PAT" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);border-radius:50%;width:18px;height:18px;font-size:0.68rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;margin-left:6px;vertical-align:middle;transition:all 0.15s;">?</button>: <span style="color:#ef4444;">*Required</span></label>
             <div style="position:relative;display:flex;align-items:center;">
-              <input type="password" id="inputGithubPushToken" placeholder="ghp_..." style="width:100%;padding:8px 34px 8px 8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
-              <button type="button" id="btnTogglePushToken" title="Show PAT" aria-label="Show PAT" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px 6px;display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:0.95rem;transition:color 0.15s,background 0.15s;">
+              <input type="password" id="inputGithubPushToken" placeholder="ghp_..." style="width:100%;padding:8px 34px 8px 8px;border-radius: 4px;border:1px solid #334155;background:#0f172a;color:#fff;font-family:monospace;font-size:0.85rem;" />
+              <button type="button" id="btnTogglePushToken" title="Show PAT" aria-label="Show PAT" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px 6px;display:flex;align-items:center;justify-content:center;border-radius: 4px;font-size:0.95rem;transition:color 0.15s,background 0.15s;">
                 <svg id="iconPushEye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
             <span style="font-size:0.72rem;color:#64748b;display:block;margin-top:4px;">Token requires 'repo' write permission. Stored locally in your browser session.</span>
           </div>
 
-          <div id="githubPushStatus" style="display:none;padding:10px;border-radius:6px;font-size:0.82rem;margin-bottom:12px;"></div>
+          <div id="githubPushStatus" style="display:none;padding:10px;border-radius: 4px;font-size:0.82rem;margin-bottom:12px;"></div>
 
           <button type="button" id="btnGithubActionPush" class="primary" style="width:100%;padding:10px;font-size:0.9rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;background:#16a34a;border-color:#22c55e;">
             🚀 Commit &amp; Push to GitHub
@@ -708,7 +711,7 @@
 
   <!-- GitHub PAT Help Modal -->
   <div id="patHelpModal" class="modal-backdrop" hidden>
-    <div class="modal-card" style="max-width:540px;background:#0b1329;border:1px solid #334155;border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);overflow:hidden;padding:0;">
+    <div class="modal-card" style="max-width:540px;background:#0b1329;border:1px solid #334155;border-radius: 8px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.8);overflow:hidden;padding:0;">
       <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;background:#0f172a;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:1.5rem;">🔑</span>
@@ -722,12 +725,12 @@
       <div class="modal-body" style="padding:20px;color:#cbd5e1;font-size:0.86rem;line-height:1.6;">
         <ol style="margin:0 0 16px 0;padding-left:20px;display:flex;flex-direction:column;gap:8px;">
           <li>Click the button below to open GitHub's token generator page directly with pre-selected scopes.</li>
-          <li>Ensure the token has the <code style="background:#0f172a;padding:2px 6px;border-radius:4px;color:#38bdf8;border:1px solid #334155;">repo</code> scope checked (Full control of private repositories).</li>
+          <li>Ensure the token has the <code style="background:#0f172a;padding:2px 6px;border-radius: 4px;color:#38bdf8;border:1px solid #334155;">repo</code> scope checked (Full control of private repositories).</li>
           <li>Scroll to the bottom of the page and click <strong>Generate token</strong>.</li>
-          <li>Copy your generated token (<code style="background:#0f172a;padding:2px 6px;border-radius:4px;color:#38bdf8;border:1px solid #334155;">ghp_...</code>) and paste it into the PAT field in the IDE.</li>
+          <li>Copy your generated token (<code style="background:#0f172a;padding:2px 6px;border-radius: 4px;color:#38bdf8;border:1px solid #334155;">ghp_...</code>) and paste it into the PAT field in the IDE.</li>
         </ol>
-        <div style="background:rgba(15,23,42,0.8);border:1px solid #334155;border-radius:8px;padding:14px;text-align:center;margin-top:12px;">
-          <a href="https://github.com/settings/tokens/new?scopes=repo&description=VEX+V5+LemLib+Workspace" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#0284c7;color:#fff;padding:10px 20px;border-radius:6px;font-weight:600;font-size:0.88rem;text-decoration:none;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+        <div style="background:rgba(15,23,42,0.8);border:1px solid #334155;border-radius: 8px;padding:14px;text-align:center;margin-top:12px;">
+          <a href="https://github.com/settings/tokens/new?scopes=repo&description=VEX+V5+LemLib+Workspace" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#0284c7;color:#fff;padding:10px 20px;border-radius: 4px;font-weight:600;font-size:0.88rem;text-decoration:none;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
             🔗 Open GitHub Token Generator Page
           </a>
         </div>
@@ -741,20 +744,20 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20260930.k6"></script>
+  <script src="version.js?v=20260930.k12"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260930.k6"></script>
-  <script src="google-drive-sync.js?v=20260930.k6"></script>
-  <script src="session-guard.js?v=20260930.k6"></script>
-  <script src="theme.js?v=20260930.k6"></script>
-  <script src="v5-brain-serial.js?v=20260930.k6"></script>
-  <script src="project-manager.js?v=20260930.k6"></script>
+  <script src="firebase-config.js?v=20260930.k12"></script>
+  <script src="google-drive-sync.js?v=20260930.k12"></script>
+  <script src="session-guard.js?v=20260930.k12"></script>
+  <script src="theme.js?v=20260930.k12"></script>
+  <script src="v5-brain-serial.js?v=20260930.k12"></script>
+  <script src="project-manager.js?v=20260930.k12"></script>
   <!-- Monaco Editor (VS Code Engine) AMD Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="ide.js?v=20260930.k6"></script>
-  <script src="tutorial.js?v=20260930.k6"></script>
+  <script src="ide.js?v=20260930.k12"></script>
+  <script src="tutorial.js?v=20260930.k12"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {

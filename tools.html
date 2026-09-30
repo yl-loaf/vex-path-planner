@@ -13,7 +13,10 @@
   <meta name="description" content="All-in-one VEX V5 robotics and LemLib engineering tools suite: Drivetrain Dyno, PID Tuner, Velocity Bottleneck Analyzer, Alliance Mirroring, Pneumatics Budget, and more." />
   <meta property="og:title" content="Engineering Tools Suite · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Complete suite of robotics engineering tools for VEX V5 LemLib autonomous routines." />
-  <link rel="stylesheet" href="style.css?v=20260930.k6" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=20260930.k12" />
   <script>
     (function () {
       try {
@@ -23,11 +26,11 @@
     })();
   </script>
   <style>
-    /* Tools Suite Layout & Components */
+    /* Tools Suite Layout & Components - Stark Utilitarian Engineering Aesthetic */
     .tools-page-body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: var(--font-sans);
       margin: 0;
       padding: 0;
       min-height: 100vh;
@@ -38,7 +41,7 @@
     .tools-container {
       max-width: 1440px;
       margin: 0 auto;
-      padding: 16px 20px 40px;
+      padding: 24px 20px 48px;
       width: 100%;
       box-sizing: border-box;
       flex: 1;
@@ -57,43 +60,47 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      box-shadow: none;
     }
 
     .tools-header-left {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
     }
 
     .btn-tools-back {
-      background: #1e293b;
-      color: #cbd5e1;
-      border: 1px solid #334155;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 0.8rem;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 4px 6px;
+      border-radius: 0;
+      font-size: 0.82rem;
       font-weight: 600;
+      font-family: var(--font-mono);
       text-decoration: none;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: all 0.15s ease;
+      transition: color 0.15s ease;
     }
     .btn-tools-back:hover {
-      background: #334155;
-      color: #ffffff;
-      border-color: #475569;
+      background: transparent;
+      color: var(--text-heading);
+      text-decoration: underline;
+      text-underline-offset: 4px;
     }
 
     .tools-title-group {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
     .tools-title-group h1 {
       font-size: 1.15rem;
+      font-family: var(--font-display);
       font-weight: 700;
+      letter-spacing: -0.01em;
       margin: 0;
       color: var(--text-heading);
       display: flex;
@@ -104,31 +111,35 @@
     .tools-header-center {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
     }
 
     .tools-tab-link {
       background: transparent;
       color: var(--muted);
-      border: 1px solid transparent;
-      padding: 5px 10px;
-      border-radius: 6px;
-      font-size: 0.78rem;
+      border: none;
+      padding: 4px 6px;
+      border-radius: 0;
+      font-size: 0.8rem;
       font-weight: 600;
       text-decoration: none;
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      transition: all 0.15s ease;
+      transition: color 0.15s ease;
     }
     .tools-tab-link:hover {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-heading);
+      background: transparent;
+      text-decoration: underline;
+      text-underline-offset: 4px;
     }
     .tools-tab-link.active {
       color: #38bdf8;
-      background: rgba(56, 189, 248, 0.12);
-      border-color: rgba(56, 189, 248, 0.35);
+      background: transparent;
+      border: none;
+      text-decoration: underline;
+      text-underline-offset: 4px;
     }
 
     .tools-header-actions {
@@ -138,69 +149,76 @@
     }
 
     .btn-fullscreen-toggle {
-      background: linear-gradient(135deg, #0284c7, #0369a1);
-      color: #ffffff;
-      border: 1px solid rgba(56, 189, 248, 0.5);
-      border-radius: 6px;
-      padding: 6px 12px;
-      font-size: 0.78rem;
-      font-weight: 700;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 4px 6px;
+      border-radius: 0;
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-      transition: all 0.15s ease;
+      box-shadow: none;
+      transition: color 0.15s ease;
     }
     .btn-fullscreen-toggle:hover {
-      background: linear-gradient(135deg, #0ea5e9, #0284c7);
-      box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+      background: transparent;
+      color: var(--text-heading);
+      text-decoration: underline;
+      text-underline-offset: 4px;
     }
     .btn-fullscreen-toggle.active {
-      background: linear-gradient(135deg, #10b981, #059669);
-      border-color: rgba(52, 211, 153, 0.6);
+      background: transparent;
+      color: #10b981;
+      text-decoration: underline;
+      text-underline-offset: 4px;
     }
 
-    /* Fullscreen Banner Notice (shown if not in fullscreen) */
+    /* Fullscreen Banner Notice */
     .fullscreen-prompt-banner {
-      background: linear-gradient(90deg, rgba(2, 132, 199, 0.15), rgba(56, 189, 248, 0.25), rgba(2, 132, 199, 0.15));
-      border: 1px solid rgba(56, 189, 248, 0.4);
-      border-radius: 8px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid #38bdf8;
+      border-radius: 4px;
       padding: 10px 16px;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      animation: pulseBanner 2s infinite alternate ease-in-out;
-    }
-    @keyframes pulseBanner {
-      0% { border-color: rgba(56, 189, 248, 0.3); }
-      100% { border-color: rgba(56, 189, 248, 0.7); }
+      box-shadow: none;
     }
     .fullscreen-prompt-banner.hidden {
       display: none;
     }
     .fs-banner-text {
-      font-size: 0.85rem;
-      color: #e0f2fe;
+      font-size: 0.82rem;
+      color: var(--text);
       display: flex;
       align-items: center;
       gap: 8px;
     }
     .fs-banner-btn {
-      background: #0284c7;
-      color: #ffffff;
-      border: none;
-      border-radius: 6px;
+      background: var(--card);
+      color: #38bdf8;
+      border: 1px solid #38bdf8;
+      border-radius: 4px;
       padding: 5px 12px;
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 700;
+      font-family: var(--font-mono);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .fs-banner-btn:hover {
+      background: #38bdf8;
+      color: #0b0f14;
     }
 
     /* Filter & Search Toolbar */
@@ -209,7 +227,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
       flex-wrap: wrap;
     }
 
@@ -221,19 +239,19 @@
     }
     .tools-search-input {
       width: 100%;
-      background: var(--input-bg);
-      border: 1px solid var(--input-border);
-      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 8px 12px 8px 32px;
       color: var(--text);
       font-size: 0.82rem;
+      font-family: var(--font-sans);
       box-sizing: border-box;
       outline: none;
       transition: border-color 0.15s ease;
     }
     .tools-search-input:focus {
       border-color: #38bdf8;
-      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
     }
     .tools-search-icon {
       position: absolute;
@@ -251,24 +269,27 @@
       flex-wrap: wrap;
     }
     .tool-pill {
-      background: var(--panel);
+      background: var(--card);
       border: 1px solid var(--border);
       color: var(--muted);
-      border-radius: 20px;
-      padding: 5px 12px;
-      font-size: 0.75rem;
-      font-weight: 600;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
       cursor: pointer;
       transition: all 0.15s ease;
     }
     .tool-pill:hover {
       color: var(--text);
-      border-color: var(--border-subtle);
+      border-color: #64748b;
     }
     .tool-pill.active {
-      background: rgba(56, 189, 248, 0.15);
-      border-color: #38bdf8;
-      color: #38bdf8;
+      background: #0284c7;
+      border-color: #0284c7;
+      color: #ffffff;
     }
 
     /* Tools Grid */
@@ -285,24 +306,23 @@
     }
 
     .tool-card {
-      background: var(--card);
+      background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 4px;
       padding: 20px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+      box-shadow: none;
       display: flex;
       flex-direction: column;
       position: relative;
       overflow: hidden;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      transition: border-color 0.15s ease;
     }
     .tool-card:hover {
-      border-color: rgba(56, 189, 248, 0.45);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      border-color: #38bdf8;
     }
     .tool-card.highlight {
-      border-color: rgba(56, 189, 248, 0.6);
-      background: linear-gradient(180deg, rgba(56, 189, 248, 0.04) 0%, var(--card) 100%);
+      border: 1px solid #38bdf8;
+      background: var(--panel);
     }
 
     .tool-card-header {
@@ -313,42 +333,48 @@
     }
 
     .tool-icon-box {
-      font-size: 1.5rem;
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      border-radius: 8px;
-      width: 42px;
-      height: 42px;
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      width: 44px;
+      height: 44px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      color: #38bdf8;
     }
 
     .tool-title-info {
       flex: 1;
     }
     .tool-title-info h3 {
-      font-size: 0.96rem;
+      font-size: 0.95rem;
+      font-family: var(--font-display);
       font-weight: 700;
       margin: 0;
       color: var(--text-heading);
+      letter-spacing: -0.01em;
     }
     .tool-tagline {
       font-size: 0.72rem;
       color: var(--muted);
       margin: 3px 0 0;
-      line-height: 1.35;
+      line-height: 1.4;
     }
 
     .tool-category-badge {
       font-size: 0.62rem;
+      font-family: var(--font-mono);
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      padding: 2px 8px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--card);
       color: var(--muted);
       border: 1px solid var(--border);
     }
@@ -384,12 +410,13 @@
     .tool-field input,
     .tool-field select,
     .tool-field textarea {
-      background: var(--input-bg);
-      border: 1px solid var(--input-border);
-      border-radius: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 6px 8px;
       color: var(--text);
       font-size: 0.78rem;
+      font-family: var(--font-sans);
       box-sizing: border-box;
       outline: none;
     }
@@ -401,9 +428,9 @@
 
     /* Results Metric Display */
     .tool-result-strip {
-      background: var(--card-inner);
+      background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 4px;
       padding: 10px;
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
@@ -417,19 +444,21 @@
     }
     .result-label {
       font-size: 0.60rem;
+      font-family: var(--font-mono);
       color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.04em;
     }
     .result-val {
       font-size: 0.88rem;
       font-weight: 700;
       color: #38bdf8;
-      font-family: ui-monospace, monospace;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
     }
     .result-val.green { color: #4ade80; }
     .result-val.amber { color: #fbbf24; }
-    .result-val.purple { color: #c084fc; }
+    .result-val.purple { color: #818cf8; }
     .result-val.red { color: #f87171; }
 
     /* Interactive Canvas Wrappers */
@@ -437,8 +466,8 @@
       width: 100%;
       height: 140px;
       background: #090e17;
-      border: 1px solid #1e293b;
-      border-radius: 6px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
       overflow: hidden;
       position: relative;
     }
@@ -456,17 +485,18 @@
       gap: 8px;
       margin-top: 6px;
       padding-top: 10px;
-      border-top: 1px solid var(--border-subtle);
+      border-top: 1px solid var(--border);
     }
 
     .btn-tool-action {
-      background: #1e293b;
-      color: #e2e8f0;
-      border: 1px solid #334155;
-      padding: 5px 10px;
-      border-radius: 6px;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 4px;
       font-size: 0.72rem;
-      font-weight: 600;
+      font-weight: 700;
+      font-family: var(--font-mono);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -475,36 +505,39 @@
       transition: all 0.15s ease;
     }
     .btn-tool-action:hover {
-      background: #334155;
+      background: var(--border-subtle);
+      border-color: #64748b;
       color: #ffffff;
     }
     .btn-tool-action.primary {
       background: #0284c7;
-      border-color: #0369a1;
+      border-color: #0284c7;
       color: #ffffff;
     }
     .btn-tool-action.primary:hover {
       background: #0369a1;
+      border-color: #0369a1;
     }
     .btn-tool-action.success {
       background: #059669;
-      border-color: #047857;
+      border-color: #059669;
       color: #ffffff;
     }
     .btn-tool-action.success:hover {
       background: #047857;
+      border-color: #047857;
     }
 
     /* Code Snippet Box */
     .tool-code-preview {
-      background: #090e17;
-      border: 1px solid #1e293b;
-      border-radius: 6px;
+      background: #06090e;
+      border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 8px 10px;
-      font-family: ui-monospace, monospace;
-      font-size: 0.68rem;
+      font-family: var(--font-mono);
+      font-size: 0.70rem;
       color: #7dd3fc;
-      line-height: 1.4;
+      line-height: 1.45;
       white-space: pre;
       overflow-x: auto;
       max-height: 110px;
@@ -516,16 +549,18 @@
       align-items: center;
       gap: 4px;
       font-size: 0.66rem;
+      font-family: var(--font-mono);
+      font-weight: 700;
       padding: 2px 6px;
-      border-radius: 10px;
-      background: rgba(34, 197, 94, 0.15);
+      border-radius: 4px;
+      background: rgba(34, 197, 94, 0.12);
       color: #4ade80;
-      border: 1px solid rgba(34, 197, 94, 0.3);
+      border: 1px solid rgba(34, 197, 94, 0.35);
     }
     .status-indicator-pill.warn {
-      background: rgba(245, 158, 11, 0.15);
+      background: rgba(245, 158, 11, 0.12);
       color: #fbbf24;
-      border-color: rgba(245, 158, 11, 0.3);
+      border-color: rgba(245, 158, 11, 0.35);
     }
 
     /* Toast Notification */
@@ -533,20 +568,21 @@
       position: fixed;
       bottom: 24px;
       right: 24px;
-      background: #0f172a;
+      background: var(--panel);
       border: 1px solid #38bdf8;
-      border-radius: 8px;
+      border-radius: 4px;
       padding: 10px 16px;
       color: #ffffff;
-      font-size: 0.82rem;
+      font-family: var(--font-mono);
+      font-size: 0.80rem;
       font-weight: 600;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      box-shadow: none;
       z-index: 99999;
       display: flex;
       align-items: center;
       gap: 8px;
       opacity: 0;
-      transform: translateY(20px);
+      transform: translateY(10px);
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       pointer-events: none;
     }
@@ -562,31 +598,31 @@
   <header class="tools-nav-header">
     <div class="tools-header-left">
       <a href="index.html" class="btn-tools-back" id="btnBackToPlanner" title="Return to Visual Autonomous Path Planner">
-        ← Visual Planner
+        ← Planner
       </a>
       <div class="tools-title-group">
-        <h1>🛠️ VEX V5 &amp; LemLib Engineering Tools Suite</h1>
-        <span class="status-indicator-pill" id="fsLiveStatusBadge">⛶ Window Mode</span>
+        <h1>LemLib Engineering Tools Manifest</h1>
+        <span class="status-indicator-pill" id="fsLiveStatusBadge">[WINDOW MODE]</span>
       </div>
     </div>
 
     <!-- Center Navigation Tabs across all pages -->
     <div class="tools-header-center">
-      <a href="index.html" class="tools-tab-link" title="Visual 2D Autonomous Path Planner">🗺️ Planner &amp; Sim</a>
-      <a href="ide.html" class="tools-tab-link" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
-      <a href="team.html" class="tools-tab-link" title="Real-Time Team Collaboration &amp; Cloud Sync (ALPHA)">👥 Team Collab <span style="background:#ef4444;color:#ffffff;font-size:0.6rem;padding:1px 5px;border-radius:8px;font-weight:800;">ALPHA</span></a>
-      <a href="admin.html" class="tools-tab-link" title="VEX Team Administration &amp; Member Permissions Dashboard">🛡️ Admin Dashboard</a>
-      <a href="tools.html" class="tools-tab-link active" title="Comprehensive Engineering Tools Suite">🛠️ Tools Suite</a>
-      <a href="documentation.html" class="tools-tab-link" title="VEX &amp; LemLib Comprehensive Documentation &amp; API Reference">📖 Documentation</a>
-      <a href="translator.html" class="tools-tab-link" title="Raw C++ Auton to Visual Blocks Translator">🔄 C++ Translator</a>
-      <a href="stats.html" class="tools-tab-link" title="Site & User Visitor Analytics">📊 Stats</a>
+      <a href="index.html" class="tools-tab-link" title="Visual 2D Autonomous Path Planner">Planner &amp; Sim</a>
+      <a href="ide.html" class="tools-tab-link" title="Full PROS C++ IDE with Syntax Highlighting">PROS IDE</a>
+      <a href="team.html" class="tools-tab-link" title="Real-Time Team Collaboration &amp; Cloud Sync">Team Collab <span style="background:#ef4444;color:#ffffff;font-size:0.6rem;padding:1px 5px;border-radius: 4px;font-family:var(--font-mono);font-weight:700;">ALPHA</span></a>
+      <a href="admin.html" class="tools-tab-link" title="VEX Team Administration &amp; Member Permissions Dashboard">Admin</a>
+      <a href="tools.html" class="tools-tab-link active" title="Comprehensive Engineering Tools Suite">Tools Suite</a>
+      <a href="documentation.html" class="tools-tab-link" title="VEX &amp; LemLib Comprehensive Documentation &amp; API Reference">Documentation</a>
+      <a href="translator.html" class="tools-tab-link" title="Raw C++ Auton to Visual Blocks Translator">C++ Translator</a>
+      <a href="stats.html" class="tools-tab-link" title="Site &amp; User Visitor Analytics">Stats</a>
     </div>
 
     <!-- Right: Fullscreen Launcher & Theme Switcher -->
     <div class="tools-header-actions">
       <button type="button" id="btnToggleFullscreen" class="btn-fullscreen-toggle" title="Toggle Fullscreen Mode for distraction-free engineering analysis">
         <span id="fsBtnIcon">⛶</span>
-        <span id="fsBtnText">Enter Fullscreen</span>
+        <span id="fsBtnText">Fullscreen</span>
       </button>
 
       <button type="button" class="btn-theme-toggle" data-theme-toggle aria-label="Toggle theme" title="Toggle Light/Dark Theme">
@@ -602,28 +638,27 @@
     <!-- Fullscreen Prompt Banner (Dismisses when in fullscreen) -->
     <div class="fullscreen-prompt-banner" id="fsPromptBanner">
       <div class="fs-banner-text">
-        <span>⛶</span>
-        <span><strong>Fullscreen Engineering View:</strong> For optimal canvas telemetry, dyno graphs, and PID curves, click below to open in full screen!</span>
+        <span><strong>Telemetry Display:</strong> Maximize viewport to expand canvas telemetry, torque curve overlays, and step-response diagnostics.</span>
       </div>
       <button type="button" class="fs-banner-btn" id="btnBannerFullscreen">
-        <span>⛶</span> Maximize Fullscreen
+        <span>⛶</span> Expand Viewport
       </button>
     </div>
 
     <!-- Filter & Search Toolbar -->
     <div class="tools-toolbar">
       <div class="tools-search-wrap">
-        <span class="tools-search-icon">🔍</span>
-        <input type="text" id="toolSearchInput" class="tools-search-input" placeholder="Search tools (e.g., Team, Dyno, PID, Bottlenecks, Slew, Air, Mirror, Battery)..." />
+        <span class="tools-search-icon">/</span>
+        <input type="text" id="toolSearchInput" class="tools-search-input" placeholder="Filter by module, keyword, or subsystem (Dyno, PID, Slew, Air, Mirror)..." />
       </div>
 
       <div class="tools-filter-pills" id="toolsFilterPills">
-        <button type="button" class="tool-pill active" data-filter="all">✨ All Tools (<span id="countAll">20</span>)</button>
-        <button type="button" class="tool-pill" data-filter="collab">👥 Team &amp; Cloud</button>
-        <button type="button" class="tool-pill" data-filter="motion">🏎️ Motion &amp; Dyno</button>
-        <button type="button" class="tool-pill" data-filter="tuning">🎛️ PID &amp; Bottlenecks</button>
-        <button type="button" class="tool-pill" data-filter="routines">🔄 Routines &amp; Symmetry</button>
-        <button type="button" class="tool-pill" data-filter="hardware">⚡ Hardware &amp; Air</button>
+        <button type="button" class="tool-pill active" data-filter="all">[ALL TOOLS · <span id="countAll">20</span>]</button>
+        <button type="button" class="tool-pill" data-filter="collab">[COLLAB &amp; SYNC]</button>
+        <button type="button" class="tool-pill" data-filter="motion">[KINEMATICS &amp; DYNO]</button>
+        <button type="button" class="tool-pill" data-filter="tuning">[PID &amp; BOTTLENECKS]</button>
+        <button type="button" class="tool-pill" data-filter="routines">[ROUTINES &amp; SYMMETRY]</button>
+        <button type="button" class="tool-pill" data-filter="hardware">[HARDWARE &amp; AIR]</button>
       </div>
     </div>
 
@@ -637,7 +672,7 @@
           <div class="tool-title-info">
             <div style="display:flex;align-items:center;gap:6px;">
               <h3>Real-Time Team Collaboration &amp; Cloud Sync</h3>
-              <span style="background:#f59e0b;color:#0b0f14;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius:10px;">BETA</span>
+              <span style="background:#f59e0b;color:#0b0f14;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius: 8px;">BETA</span>
             </div>
             <p class="tool-tagline">Multi-user real-time autonomous path editing with live collaborator cursors, strategy consensus voting, collaborative field pin comments, and up to 500 version history snapshots.</p>
           </div>
@@ -681,7 +716,7 @@
           <div class="tool-title-info">
             <div style="display:flex;align-items:center;gap:6px;">
               <h3>VEX Team Admin &amp; Permissions Dashboard</h3>
-              <span style="background:#f59e0b;color:#0b0f14;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius:10px;">ADMIN</span>
+              <span style="background:#f59e0b;color:#0b0f14;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius: 8px;">ADMIN</span>
             </div>
             <p class="tool-tagline">Manage workspace teammate roles, restrict PROS C++ IDE editing permissions, search existing teammates, generate 6-digit hex verification invites, and kick members.</p>
           </div>
@@ -725,7 +760,7 @@
           <div class="tool-title-info">
             <div style="display:flex;align-items:center;gap:6px;">
               <h3>VEX V5 &amp; LemLib Engineering Documentation Portal</h3>
-              <span style="background:#0284c7;color:#ffffff;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius:10px;">MANUAL</span>
+              <span style="background:#0284c7;color:#ffffff;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius: 8px;">MANUAL</span>
             </div>
             <p class="tool-tagline">Comprehensive engineering manual, LemLib C++ API signatures, Boomerang controller mathematical foundation, field coordinate guide, and live angle calculator.</p>
           </div>
@@ -769,7 +804,7 @@
           <div class="tool-title-info">
             <div style="display:flex;align-items:center;gap:6px;">
               <h3>Autonomous Match Replay &amp; Log Analysis Suite</h3>
-              <span style="background:#ef4444;color:#ffffff;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius:10px;">ALPHA</span>
+              <span style="background:#ef4444;color:#ffffff;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius: 8px;">ALPHA</span>
             </div>
             <p class="tool-tagline">Overlay actual recorded V5 Brain odometry logs against planned paths, analyze deviation heatmaps, and pinpoint root-cause failure steps.</p>
           </div>
@@ -1542,7 +1577,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
         <div class="tool-card-header">
           <div class="tool-icon-box" style="background:rgba(234, 179, 8, 0.15); border-color:rgba(234, 179, 8, 0.35); color:#facc15;">🎯</div>
           <div class="tool-title-info">
-            <h3>VRC Override Game Engine &amp; Pin Tracker <span style="font-size:0.6rem;background:#eab308;color:#0f172a;font-weight:900;padding:1px 5px;border-radius:3px;margin-left:4px;">BETA</span></h3>
+            <h3>VRC Override Game Engine &amp; Pin Tracker <span style="font-size:0.6rem;background:#eab308;color:#0f172a;font-weight:900;padding:1px 5px;border-radius: 4px;margin-left:4px;">BETA</span></h3>
             <p class="tool-tagline">Simulate official VRC Override game mechanics: Pins (63 total), 4 Wall Loaders (always ready), 4 Wall Toggles (CW/CCW), and 9 Goals with stacking.</p>
           </div>
           <span class="tool-category-badge">🔄 Routines</span>
@@ -1679,7 +1714,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260930.k6"></script>
+  <script src="version.js?v=20260930.k12"></script>
   <script src="theme.js"></script>
   <script>
     // =========================================================================

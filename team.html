@@ -18,8 +18,11 @@
   <meta name="description" content="Collaborate in real time with teammates on VEX V5 LemLib autonomous paths. Live multi-user cursor editing, strategy consensus voting, collaborative field pin comments, and up to 500 version history checkpoints." />
   <meta property="og:title" content="Real-Time Team Collaboration (ALPHA) · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Multi-user real-time path planning, live cursors, strategy voting, and 500-entry version history for VEX robotics teams." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20260930.k6" />
+  <link rel="stylesheet" href="style.css?v=20260930.k12" />
   <script>
     (function () {
       try {
@@ -74,12 +77,12 @@
       <!-- Left: Hub / Back & Header Titles -->
       <div class="header-left">
         <a href="index.html" class="btn-nav-home" title="View Competition Dashboard Hub">
-          🏠 Hub
+          Hub
         </a>
         <div class="header-titles">
-          <h1>VEX V5 LemLib Suite</h1>
+          <h1 style="font-family:var(--font-display); letter-spacing:-0.01em;">LemLib Collaborative Workspace</h1>
           <span class="header-project-pill" id="lblTeamHeaderBadge" title="Current Active Team Workspace">
-            👥 <span id="lblTeamName">Loading Team...</span> <span id="lblVexNumber" style="opacity:0.8;"></span>
+            <span id="lblTeamName">Loading Team...</span> <span id="lblVexNumber" style="opacity:0.8;"></span>
           </span>
         </div>
       </div>
@@ -87,46 +90,46 @@
       <!-- Center: Navigation Modes (Pill Bar) -->
       <div class="header-center-modes">
         <nav class="header-mode-nav">
-          <a href="index.html" class="mode-nav-btn" title="2D Simulation &amp; Visual Path Planner">🗺️ Planner &amp; Sim</a>
-          <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">💻 PROS C++ IDE</a>
-          <a href="team.html" class="mode-nav-btn active" title="Real-Time Team Collaboration &amp; Cloud Sync (ALPHA)">👥 Team Collab <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.6rem;padding:1px 4px;margin-left:2px;">ALPHA</span></a>
-          <a href="admin.html" class="mode-nav-btn" title="Team Administration &amp; Member Permissions">🛡️ Admin Dashboard</a>
-          <a href="tools.html" class="mode-nav-btn" title="Full Engineering Tools Suite">🛠️ Tools Suite</a>
-          <a href="documentation.html" class="mode-nav-btn" title="VEX &amp; LemLib Documentation &amp; API Guide">📖 Documentation</a>
-          <a href="translator.html" class="mode-nav-btn" title="Raw C++ Auton to Visual Blocks Translator">🔄 C++ Translator</a>
-          <a href="stats.html" class="mode-nav-btn" title="Site &amp; User Visitor Analytics">📊 Stats</a>
+          <a href="index.html" class="mode-nav-btn" title="2D Simulation &amp; Visual Path Planner">Planner &amp; Sim</a>
+          <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">PROS IDE</a>
+          <a href="team.html" class="mode-nav-btn active" title="Real-Time Team Collaboration &amp; Cloud Sync">Team Collab <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.6rem;padding:1px 4px;margin-left:2px;border-radius: 4px;font-family:var(--font-mono);">ALPHA</span></a>
+          <a href="admin.html" class="mode-nav-btn" title="Team Administration &amp; Member Permissions">Admin</a>
+          <a href="tools.html" class="mode-nav-btn" title="Full Engineering Tools Suite">Tools Suite</a>
+          <a href="documentation.html" class="mode-nav-btn" title="VEX &amp; LemLib Documentation &amp; API Guide">Documentation</a>
+          <a href="translator.html" class="mode-nav-btn" title="Raw C++ Auton to Visual Blocks Translator">C++ Translator</a>
+          <a href="stats.html" class="mode-nav-btn" title="Site &amp; User Visitor Analytics">Stats</a>
         </nav>
       </div>
 
       <!-- Right: Hardware Brain Link, Tools, Theme & Google Auth -->
       <div class="header-actions">
         <!-- Hardware Brain Link & Quick Connect -->
-        <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB">
+        <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB" style="border-radius: 4px; font-family:var(--font-mono);">
           <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
           <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>⚡ 94%</span>
-          <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">🔌 Connect</button>
-          <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;">🚀 Upload &amp; Run</button>
+          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>94%</span>
+          <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC" style="border-radius: 4px;">Connect</button>
+          <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none; border-radius: 4px;">Upload &amp; Run</button>
         </div>
 
         <!-- Consolidated Tools & Project Menu -->
         <div class="tools-dropdown-wrap">
           <button type="button" id="btnToolsDropdown" class="btn-nav-tools" title="Project, Engineering Tools &amp; Guides">
-            ⚙️ Team Tools ▾
+            Workspace Menu ▾
           </button>
-          <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden>
-            <div class="tools-menu-header">👥 Team Workspace</div>
-            <button type="button" id="btnMenuManageTeam" class="tools-menu-item">⚙️ Team Settings &amp; Permissions</button>
-            <button type="button" id="btnMenuMatchReplay" class="tools-menu-item" style="color:#f59e0b;font-weight:700;">📊 Match Replay &amp; Analysis (ALPHA)</button>
-            <button type="button" id="btnMenuDriveSync" class="tools-menu-item">☁️ Google Drive Workspace Sync</button>
-            <button type="button" id="btnMenuGithubSync" class="tools-menu-item">🐙 GitHub Direct Sync</button>
-            <button type="button" id="btnMenuSyncLocal" class="tools-menu-item">📲 Sync to Local Planner</button>
+          <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden style="border-radius: 4px; box-shadow:none; border:1px solid var(--border);">
+            <div class="tools-menu-header" style="font-family:var(--font-mono); text-transform:uppercase; font-size:0.68rem;">Team Operations</div>
+            <button type="button" id="btnMenuManageTeam" class="tools-menu-item">Team Settings &amp; Permissions</button>
+            <button type="button" id="btnMenuMatchReplay" class="tools-menu-item" style="color:#f59e0b;font-weight:700;">Match Replay Diagnostics</button>
+            <button type="button" id="btnMenuDriveSync" class="tools-menu-item">Google Drive Cloud Sync</button>
+            <button type="button" id="btnMenuGithubSync" class="tools-menu-item">GitHub Repository Sync</button>
+            <button type="button" id="btnMenuSyncLocal" class="tools-menu-item">Sync to Local Planner</button>
             <div class="tools-menu-divider"></div>
-            <div class="tools-menu-header">🛠️ Engineering Analysis</div>
-            <a href="documentation.html" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">📖 Documentation &amp; LemLib API</a>
-            <a href="tools.html" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">🛠️ All Tools Suite (Fullscreen) ⛶</a>
-            <a href="translator.html" class="tools-menu-item">📥 C++ Code Translator</a>
-            <a href="stats.html" class="tools-menu-item">📊 Site &amp; User Stats</a>
+            <div class="tools-menu-header" style="font-family:var(--font-mono); text-transform:uppercase; font-size:0.68rem;">Diagnostics &amp; Docs</div>
+            <a href="documentation.html" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">Documentation &amp; API</a>
+            <a href="tools.html" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">Engineering Tools Suite</a>
+            <a href="translator.html" class="tools-menu-item">C++ Code Translator</a>
+            <a href="stats.html" class="tools-menu-item">Visitor Telemetry Stats</a>
           </div>
         </div>
 
@@ -182,14 +185,14 @@
     </div>
 
     <!-- REAL-TIME CROSS-SESSION SYNC PROGRESS & CONFLICT LOCK BANNER -->
-    <div id="teamSyncSessionBanner" style="display:none;background:linear-gradient(90deg, rgba(8,47,73,0.92), rgba(15,23,42,0.96));border-bottom:1px solid rgba(56,189,248,0.4);padding:8px 16px;z-index:90;position:relative;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+    <div id="teamSyncSessionBanner" style="display:none;background:rgba(8,47,73,0.92), rgba(15,23,42,0.96));border-bottom:1px solid rgba(56,189,248,0.4);padding:8px 16px;z-index:90;position:relative;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span id="syncBannerIcon" style="font-size:1.15rem;display:inline-block;animation:team-spin 1.4s linear infinite;">🔄</span>
           <div>
             <div style="font-size:0.82rem;font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:8px;">
               <span id="syncBannerTitle">Teammate is importing project...</span>
-              <span id="syncBannerPct" style="background:rgba(34,197,94,0.2);color:#4ade80;border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 6px;font-family:ui-monospace, monospace;font-size:0.75rem;font-weight:800;">0%</span>
+              <span id="syncBannerPct" style="background:rgba(34,197,94,0.2);color:#4ade80;border:1px solid rgba(34,197,94,0.4);border-radius: 4px;padding:1px 6px;font-family:ui-monospace, monospace;font-size:0.75rem;font-weight:800;">0%</span>
             </div>
             <div style="font-size:0.72rem;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:2px;">
               <span id="syncBannerStage" style="color:var(--text);font-weight:600;">Connecting...</span>
@@ -200,14 +203,14 @@
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
           <span id="syncBannerEta" style="font-family:ui-monospace, monospace;font-size:0.75rem;color:#fbbf24;font-weight:700;">⏱️ Calculating...</span>
-          <span id="syncBannerLockPill" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:999px;display:flex;align-items:center;gap:5px;">
+          <span id="syncBannerLockPill" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius: 8px;display:flex;align-items:center;gap:5px;">
             🔒 Workspace Edits Paused
           </span>
         </div>
       </div>
       <!-- Progress Bar Track -->
-      <div style="width:100%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;margin-top:6px;">
-        <div id="syncBannerBar" style="width:0%;height:100%;background:linear-gradient(90deg, #38bdf8, #22c55e);transition:width 0.25s ease;"></div>
+      <div style="width:100%;height:3px;background:rgba(255,255,255,0.08);border-radius: 4px;overflow:hidden;margin-top:6px;">
+        <div id="syncBannerBar" style="width:0%;height:100%;background:#38bdf8;transition:width 0.25s ease;"></div>
       </div>
     </div>
 
@@ -223,7 +226,7 @@
           <div class="team-section-title">
             <span>👥 Team Members (<span id="memberCountBadge">0</span>)</span>
             <div style="display:flex;gap:6px;align-items:center;">
-              <button type="button" class="btn-xs-clean" id="btnExitTeamRoster" style="color:#f87171;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);padding:2px 8px;border-radius:6px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Exit current team">🚪 Leave</button>
+              <button type="button" class="btn-xs-clean" id="btnExitTeamRoster" style="color:#f87171;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);padding:2px 8px;border-radius: 4px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Exit current team">🚪 Leave</button>
               <button type="button" class="btn-xs-clean" id="btnInviteMember" style="color:#38bdf8;background:none;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;">⚙️ Team Settings</button>
             </div>
           </div>
@@ -266,7 +269,7 @@
         <section class="team-section-card">
           <div class="team-section-title">
             <span>📍 Field Pin Comments</span>
-            <button type="button" class="btn-xs-clean" id="btnTogglePinTool" style="background:#f59e0b;color:#0b0f14;border:none;padding:2px 8px;border-radius:10px;font-weight:700;cursor:pointer;font-size:0.7rem;">+ Drop Pin</button>
+            <button type="button" class="btn-xs-clean" id="btnTogglePinTool" style="background:#f59e0b;color:#0b0f14;border:none;padding:2px 8px;border-radius: 8px;font-weight:700;cursor:pointer;font-size:0.7rem;">+ Drop Pin</button>
           </div>
           <div id="pinCommentsList" style="max-height:160px;overflow-y:auto;">
             <!-- Dynamically populated -->
@@ -280,12 +283,12 @@
       <!-- CENTER COLUMN: Interactive Live Field Canvas & Integrated IDE -->
       <section class="team-col-center" id="teamColCenter">
         <!-- Mode View Switcher Strip -->
-        <div class="planner-tab-bar" style="margin-bottom:0;border-radius:0;border-top:none;border-left:none;border-right:none;display:flex;align-items:center;justify-content:space-between;padding:6px 12px;">
+        <div class="planner-tab-bar" style="margin-bottom:0;border-radius: 0;border-top:none;border-left:none;border-right:none;display:flex;align-items:center;justify-content:space-between;padding:6px 12px;">
           <div style="display:flex;align-items:center;gap:6px;">
             <button type="button" id="btnViewModeField" class="planner-tab-btn active" style="font-size:0.75rem;padding:5px 12px;">🗺️ Field &amp; Sim</button>
             <button type="button" id="btnViewModeIde" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">💻 Integrated C++ IDE</button>
-            <button type="button" id="btnViewModeSuggestions" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">💡 Suggestions <span id="badgeSuggestionsCount" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 5px;border-radius:8px;font-size:0.65rem;">0</span></button>
-            <button type="button" id="btnViewModeReplay" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">📊 Match Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 4px;border-radius:4px;font-weight:800;">ALPHA</span></button>
+            <button type="button" id="btnViewModeSuggestions" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">💡 Suggestions <span id="badgeSuggestionsCount" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 5px;border-radius: 8px;font-size:0.65rem;">0</span></button>
+            <button type="button" id="btnViewModeReplay" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">📊 Match Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 4px;border-radius: 4px;font-weight:800;">ALPHA</span></button>
             <button type="button" id="btnViewModeAdmin" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;color:#f59e0b;font-weight:700;">🛡️ Admin Dashboard</button>
           </div>
           <div id="lblRolePermissionStatus" style="font-size:0.72rem;color:#38bdf8;font-weight:600;display:flex;align-items:center;gap:6px;">
@@ -296,7 +299,7 @@
         <!-- Teammate Edit Diff Banner -->
         <div id="teamDiffBanner" style="display:none;background:rgba(56,189,248,0.15);border-bottom:1px solid rgba(56,189,248,0.4);padding:8px 14px;font-size:0.78rem;color:#e0f2fe;align-items:center;justify-content:space-between;z-index:10;">
           <span>⚡ Teammate updated blocks or C++ code! Review incoming changes.</span>
-          <button type="button" id="btnReviewDiffs" class="btn-xs-clean" style="background:#0284c7;color:#ffffff;border:none;padding:3px 10px;border-radius:6px;font-weight:700;cursor:pointer;">🔍 View Diffs &amp; Merge</button>
+          <button type="button" id="btnReviewDiffs" class="btn-xs-clean" style="background:#0284c7;color:#ffffff;border:none;padding:3px 10px;border-radius: 4px;font-weight:700;cursor:pointer;">🔍 View Diffs &amp; Merge</button>
         </div>
 
         <!-- VIEW 1: FIELD CANVAS & SIMULATOR -->
@@ -310,7 +313,7 @@
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <button type="button" id="btnScoringBeta" class="btn-team-secondary" style="background:rgba(245,158,11,0.12);border-color:#f59e0b;color:#f59e0b;padding:3px 8px;font-size:0.72rem;font-weight:700;" title="Toggle Beta Scoring Engine">🎯 Scoring <span class="badge" style="font-size:0.55rem;padding:1px 4px;background:#f59e0b;color:#0b0f14;">BETA</span></button>
-              <button type="button" id="btnToolBezier" class="btn-team-secondary" style="background:rgba(6,182,212,0.15);border-color:#06b6d4;color:#cffafe;padding:3px 8px;font-size:0.72rem;font-weight:700;" title="Toggle Bezier Curve Path Tool (Hotkey: B)">🌊 Bezier Tool <kbd style="font-size:0.6rem;background:rgba(255,255,255,0.15);padding:1px 3px;border-radius:3px;">B</kbd></button>
+              <button type="button" id="btnToolBezier" class="btn-team-secondary" style="background:rgba(6,182,212,0.15);border-color:#06b6d4;color:#cffafe;padding:3px 8px;font-size:0.72rem;font-weight:700;" title="Toggle Bezier Curve Path Tool (Hotkey: B)">🌊 Bezier Tool <kbd style="font-size:0.6rem;background:rgba(255,255,255,0.15);padding:1px 3px;border-radius: 4px;">B</kbd></button>
               <button type="button" id="btnHudCollisionModal" class="btn-team-secondary" style="padding:3px 8px;font-size:0.72rem;" title="Open Field Collision Detection">🛡️ Collisions (<span id="hudCollisionStatus">Clear</span>)</button>
               <button type="button" id="btnToggleDebug" class="btn-team-secondary" style="background:rgba(168,85,247,0.15);border-color:#a855f7;color:#e9d5ff;padding:3px 8px;font-size:0.72rem;font-weight:700;" title="Open Live Telemetry &amp; Inspector">🐞 Debugger</button>
               <button type="button" id="btnCenterCanvasPinTool" class="btn-team-secondary" style="padding:3px 8px;font-size:0.72rem;display:inline-flex;align-items:center;gap:4px;">
@@ -354,11 +357,11 @@
           <!-- Field Canvas Container with Collaborator Cursor Overlay -->
           <div class="canvas-wrap" id="fieldCanvasContainer" style="display:flex;align-items:center;justify-content:center;flex:1 1 0;min-height:0;width:100%;height:auto;position:relative;overflow:hidden;padding:8px;box-sizing:border-box;background:#080d1a;">
             <div id="teamCanvasBox" class="team-canvas-box" style="position:relative;display:flex;align-items:center;justify-content:center;max-width:100%;max-height:100%;aspect-ratio:1/1;height:100%;width:100%;min-width:0;min-height:0;">
-              <canvas id="teamFieldCanvas" width="900" height="900" style="display:block;width:auto;height:auto;max-width:100%;max-height:100%;aspect-ratio:1/1;object-fit:contain;background:#0f172a;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.6);cursor:crosshair;"></canvas>
-              <div id="teammateCursorsLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;border-radius:8px;z-index:25;">
+              <canvas id="teamFieldCanvas" width="900" height="900" style="display:block;width:auto;height:auto;max-width:100%;max-height:100%;aspect-ratio:1/1;object-fit:contain;background:#0f172a;border-radius: 8px;box-shadow:0 8px 32px rgba(0,0,0,0.6);cursor:crosshair;"></canvas>
+              <div id="teammateCursorsLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;border-radius: 8px;z-index:25;">
                 <!-- Dynamically rendered collaborator cursors -->
               </div>
-              <div id="fieldPinsLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;border-radius:8px;z-index:20;">
+              <div id="fieldPinsLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;border-radius: 8px;z-index:20;">
                 <!-- Dynamically rendered comment pins -->
               </div>
             </div>
@@ -366,19 +369,19 @@
 
           <!-- Real-Time Telemetry Chips Strip -->
           <div style="background:var(--card-inner);border-top:1px solid var(--border);padding:6px 14px;display:flex;align-items:center;gap:10px;font-size:0.72rem;overflow-x:auto;white-space:nowrap;flex-shrink:0;">
-            <div class="sim-hud-chip chip-score" id="simHudScore" style="color:#fbbf24;background:rgba(245,158,11,0.1);padding:3px 8px;border-radius:4px;font-weight:700;" title="Live Auton Score">
+            <div class="sim-hud-chip chip-score" id="simHudScore" style="color:#fbbf24;background:rgba(245,158,11,0.1);padding:3px 8px;border-radius: 4px;font-weight:700;" title="Live Auton Score">
               🏆 0 pts
             </div>
-            <div class="sim-hud-chip chip-time" id="simHudTime" style="color:var(--text);background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:4px;font-family:ui-monospace,monospace;font-weight:700;" title="Elapsed Auton Time">
+            <div class="sim-hud-chip chip-time" id="simHudTime" style="color:var(--text);background:rgba(255,255,255,0.05);padding:3px 8px;border-radius: 4px;font-family:ui-monospace,monospace;font-weight:700;" title="Elapsed Auton Time">
               ⏱️ 0.00s / 15.00s
             </div>
-            <div class="sim-hud-chip chip-speed" id="simHudSpeed" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:3px 8px;border-radius:4px;font-family:ui-monospace,monospace;" title="Simulated Velocity">
+            <div class="sim-hud-chip chip-speed" id="simHudSpeed" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:3px 8px;border-radius: 4px;font-family:ui-monospace,monospace;" title="Simulated Velocity">
               🏎️ 0.0 in/s
             </div>
-            <div class="sim-hud-chip chip-collision legal" id="simHudCollision" style="color:#4ade80;background:rgba(34,197,94,0.1);padding:3px 8px;border-radius:4px;font-weight:700;" title="Collision Clearance Status">
+            <div class="sim-hud-chip chip-collision legal" id="simHudCollision" style="color:#4ade80;background:rgba(34,197,94,0.1);padding:3px 8px;border-radius: 4px;font-weight:700;" title="Collision Clearance Status">
               🛡️ Clear
             </div>
-            <div class="sim-hud-chip chip-coords" id="simHudCoords" style="color:var(--text);background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:4px;font-family:ui-monospace,monospace;" title="Robot Pose">
+            <div class="sim-hud-chip chip-coords" id="simHudCoords" style="color:var(--text);background:rgba(255,255,255,0.05);padding:3px 8px;border-radius: 4px;font-family:ui-monospace,monospace;" title="Robot Pose">
               📍 (-60.0", -60.0") θ=0°
             </div>
           </div>
@@ -408,7 +411,7 @@
             <div class="ide-sidebar-header" style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--card-inner);">
               <h3 style="margin:0;font-size:0.72rem;font-weight:800;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;">PROJECT EXPLORER</h3>
               <div style="display:flex;gap:4px;">
-                <button type="button" id="btnTeamIdeNewFile" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:700;cursor:pointer;" title="Add new C++ source (.cpp) or header (.hpp, .h) file">+ File</button>
+                <button type="button" id="btnTeamIdeNewFile" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:2px 7px;border-radius: 4px;font-size:0.68rem;font-weight:700;cursor:pointer;" title="Add new C++ source (.cpp) or header (.hpp, .h) file">+ File</button>
                 <button type="button" id="btnTeamIdeImportFolder" class="btn-xs-clean" style="font-size:0.68rem;cursor:pointer;" title="Import folder into team project">📂</button>
                 <input type="file" id="teamIdeFolderFileInput" webkitdirectory directory mozdirectory hidden />
               </div>
@@ -490,7 +493,7 @@
             <div>
               <div style="display:flex;align-items:center;gap:8px;">
                 <h3 style="margin:0;font-size:1.1rem;color:var(--text-heading);">📊 Collaborative Match Replay &amp; Telemetry Analysis</h3>
-                <span class="badge" style="background:#ef4444;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius:10px;">ALPHA</span>
+                <span class="badge" style="background:#ef4444;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius: 8px;">ALPHA</span>
               </div>
               <p style="margin:3px 0 0;font-size:0.75rem;color:var(--muted);">Inspect team match logs against planned trajectories, audit deviation heatmaps together, and pinpoint failure causes.</p>
             </div>
@@ -503,7 +506,7 @@
           </div>
 
           <!-- Scenario Chips -->
-          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:8px 12px;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="font-size:0.72rem;color:var(--muted);font-weight:700;">Simulated Run:</span>
               <div class="replay-quick-actions" id="teamReplayScenariosGroup">
@@ -513,7 +516,7 @@
                 <button type="button" class="replay-quick-btn" data-scenario="clean">✨ Clean Run</button>
               </div>
             </div>
-            <span id="teamReplayLogBadge" style="font-size:0.7rem;color:#4ade80;background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:10px;border:1px solid rgba(34,197,94,0.3);">● Ready</span>
+            <span id="teamReplayLogBadge" style="font-size:0.7rem;color:#4ade80;background:rgba(34,197,94,0.15);padding:2px 8px;border-radius: 8px;border:1px solid rgba(34,197,94,0.3);">● Ready</span>
           </div>
 
           <!-- Replay Grid -->
@@ -530,7 +533,7 @@
                   <span>Team Plan</span>
                 </div>
                 <div class="replay-legend-item">
-                  <span class="replay-legend-line" style="background:linear-gradient(90deg,#22c55e,#eab308,#ef4444);"></span>
+                  <span class="replay-legend-line" style="background:#22c55e;"></span>
                   <span>Actual Run (Heatmap)</span>
                 </div>
                 <div class="replay-legend-item">
@@ -541,8 +544,8 @@
 
               <!-- Controls -->
               <div class="replay-controls-bar">
-                <button type="button" id="btnTeamReplayPlay" class="btn-xs-clean" style="background:#0284c7;color:#fff;border-radius:6px;padding:6px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;">▶ Play</button>
-                <button type="button" id="btnTeamReplayReset" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;border-radius:6px;padding:6px 10px;font-size:0.72rem;cursor:pointer;">↺</button>
+                <button type="button" id="btnTeamReplayPlay" class="btn-xs-clean" style="background:#0284c7;color:#fff;border-radius: 4px;padding:6px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;">▶ Play</button>
+                <button type="button" id="btnTeamReplayReset" class="btn-xs-clean" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;border-radius: 4px;padding:6px 10px;font-size:0.72rem;cursor:pointer;">↺</button>
                 
                 <div class="replay-scrubber-wrap">
                   <input type="range" id="teamReplayScrubber" min="0" max="15000" step="50" value="0" style="width:100%;accent-color:#f59e0b;" />
@@ -589,9 +592,9 @@
         <!-- VIEW 5: ADMIN DASHBOARD VIEW TAB -->
         <div id="teamAdminViewContainer" style="display:none;flex-direction:column;flex:1 1 0;min-height:0;height:100%;overflow-y:auto;padding:16px;box-sizing:border-box;background:var(--card-inner);gap:16px;">
           <!-- Admin Header Bar -->
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:14px 18px;">
             <div style="display:flex;align-items:center;gap:12px;">
-              <span style="font-size:1.8rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;">🛡️</span>
+              <span style="font-size:1.8rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);width:44px;height:44px;border-radius: 8px;display:flex;align-items:center;justify-content:center;">🛡️</span>
               <div>
                 <h2 style="margin:0;font-size:1.15rem;color:var(--text-heading);font-weight:800;">Team Admin Dashboard</h2>
                 <p style="margin:2px 0 0;font-size:0.75rem;color:var(--muted);">Manage workspace member permissions, generate 6-digit hex verification invites &amp; kick members</p>
@@ -608,7 +611,7 @@
           </div>
 
           <!-- 6-Digit Hex Invite Generator Card -->
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:16px 18px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="font-size:1.1rem;">🔐</span>
@@ -618,7 +621,7 @@
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
               <input type="email" id="txtAdminInviteEmail" class="form-input" placeholder="teammate@gmail.com (recipient Gmail)..." style="flex:1;min-width:240px;padding:8px 12px;font-size:0.8rem;" />
-              <button type="button" id="btnAdminGenerateHexInvite" class="btn-team-primary" style="padding:8px 16px;font-size:0.8rem;white-space:nowrap;background:linear-gradient(90deg,#0284c7,#2563eb);">
+              <button type="button" id="btnAdminGenerateHexInvite" class="btn-team-primary" style="padding:8px 16px;font-size:0.8rem;white-space:nowrap;background:#0284c7;">
                 ⚡ Create Hex Invite Code
               </button>
             </div>
@@ -627,7 +630,7 @@
           </div>
 
           <!-- Teammate Roster & Permissions Table with Search -->
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <strong style="font-size:0.88rem;color:var(--text-heading);">👥 Workspace Members (<span id="lblAdminMemberCount">0</span>)</strong>
@@ -639,7 +642,7 @@
             </div>
 
             <!-- Interactive Members Table -->
-            <div id="adminMembersTableWrap" style="background:var(--card-inner);border:1px solid var(--border);border-radius:8px;overflow-x:auto;">
+            <div id="adminMembersTableWrap" style="background:var(--card-inner);border:1px solid var(--border);border-radius: 8px;overflow-x:auto;">
               <!-- Dynamically populated admin roster table -->
             </div>
           </div>
@@ -655,11 +658,11 @@
         <div class="planner-tab-bar" style="margin-bottom:4px;">
           <button type="button" class="planner-tab-btn active" id="tabBtnActions" data-tab="actions">
             <span>🧩 Action Flow</span>
-            <span style="background:rgba(56,189,248,0.2);color:#38bdf8;padding:1px 6px;border-radius:10px;font-size:0.68rem;" id="badgeActionsCount">0</span>
+            <span style="background:rgba(56,189,248,0.2);color:#38bdf8;padding:1px 6px;border-radius: 8px;font-size:0.68rem;" id="badgeActionsCount">0</span>
           </button>
           <button type="button" class="planner-tab-btn" id="tabBtnVersions" data-tab="versions">
             <span>📜 Version History</span>
-            <span style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 6px;border-radius:10px;font-size:0.68rem;" id="badgeVersionsCount">0</span>
+            <span style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 6px;border-radius: 8px;font-size:0.68rem;" id="badgeVersionsCount">0</span>
           </button>
         </div>
 
@@ -688,9 +691,9 @@
           <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0;">
             <span style="font-size:0.8rem;font-weight:700;color:var(--text-heading);">Action Sequence</span>
             <div style="display:flex;gap:4px;">
-              <button type="button" id="btnAddActionMovePoint" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:0.7rem;font-weight:700;">+ Point</button>
-              <button type="button" id="btnAddActionMovePose" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:0.7rem;font-weight:700;">+ Pose</button>
-              <button type="button" id="btnAddActionTurn" class="btn-xs-clean" style="background:#7c3aed;color:#fff;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:0.7rem;font-weight:700;">+ Turn</button>
+              <button type="button" id="btnAddActionMovePoint" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:3px 6px;border-radius: 4px;cursor:pointer;font-size:0.7rem;font-weight:700;">+ Point</button>
+              <button type="button" id="btnAddActionMovePose" class="btn-xs-clean" style="background:#0284c7;color:#fff;border:none;padding:3px 6px;border-radius: 4px;cursor:pointer;font-size:0.7rem;font-weight:700;">+ Pose</button>
+              <button type="button" id="btnAddActionTurn" class="btn-xs-clean" style="background:#7c3aed;color:#fff;border:none;padding:3px 6px;border-radius: 4px;cursor:pointer;font-size:0.7rem;font-weight:700;">+ Turn</button>
             </div>
           </div>
 
@@ -713,7 +716,7 @@
               <h3 style="margin:0;font-size:0.95rem;color:var(--text-heading);">Team Version History</h3>
               <p style="margin:2px 0 0;font-size:0.72rem;color:var(--muted);">Stores checkpoints with full author attribution</p>
             </div>
-            <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 8px;border-radius:10px;font-weight:700;" id="lblVersionCapPill">
+            <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 8px;border-radius: 8px;font-weight:700;" id="lblVersionCapPill">
               Checkpoints
             </span>
           </div>
@@ -738,7 +741,7 @@
       <div class="team-setup-card">
         <div class="team-setup-header">
           <div style="display:flex;align-items:center;gap:12px;">
-            <span style="font-size:1.8rem;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;">👥</span>
+            <span style="font-size:1.8rem;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);width:48px;height:48px;border-radius: 8px;display:flex;align-items:center;justify-content:center;">👥</span>
             <div>
               <h1 style="margin:0;font-size:1.3rem;color:var(--text-heading);font-weight:800;letter-spacing:-0.02em;">VEX Team Workspace Setup <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.65rem;">ALPHA</span></h1>
               <p style="margin:3px 0 0;font-size:0.78rem;color:var(--muted);">Real-time multi-user editing, live field telemetry &amp; 500 version checkpoints</p>
@@ -748,7 +751,7 @@
 
         <div class="team-setup-body">
           <!-- Explanatory Banner -->
-          <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.78rem;line-height:1.45;color:var(--text);">
+          <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius: 8px;padding:12px 14px;margin-bottom:16px;font-size:0.78rem;line-height:1.45;color:var(--text);">
             <strong style="color:#38bdf8;">📌 Team Collaboration Rules:</strong><br/>
             • Different Gmail addresses collaborate seamlessly on the same shared team.<br/>
             • <strong>1 Gmail account belongs to 1 team at a time</strong>.<br/>
@@ -756,10 +759,10 @@
           </div>
 
           <!-- Google / Workspace Account Configuration -->
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:12px 14px;margin-bottom:16px;">
             <label for="txtUserAccountEmail" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:0.76rem;color:var(--muted);font-weight:700;">
               <span>👤 Your Google / Workspace Account:</span>
-              <span id="badgeAuthStatus" style="font-size:0.7rem;background:rgba(34,197,94,0.15);color:#4ade80;padding:2px 8px;border-radius:10px;font-weight:700;">Account Ready</span>
+              <span id="badgeAuthStatus" style="font-size:0.7rem;background:rgba(34,197,94,0.15);color:#4ade80;padding:2px 8px;border-radius: 8px;font-weight:700;">Account Ready</span>
             </label>
             <div style="display:flex;gap:8px;">
               <input type="email" id="txtUserAccountEmail" class="form-input" placeholder="e.g. teammate@example.com" style="flex:1;font-size:0.84rem;" />
@@ -771,11 +774,11 @@
           </div>
 
           <!-- Google Drive Backup & Recovery -->
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
             <div style="flex:1;min-width:0;">
               <div style="font-weight:700;font-size:0.82rem;color:var(--text-heading);display:flex;align-items:center;gap:6px;">
                 <span>☁️ Google Drive Workspace Recovery</span>
-                <span style="font-size:0.62rem;background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 6px;border-radius:6px;font-weight:700;">Multi-Device Sync</span>
+                <span style="font-size:0.62rem;background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 6px;border-radius: 4px;font-weight:700;">Multi-Device Sync</span>
               </div>
               <div style="font-size:0.68rem;color:var(--muted);margin-top:3px;line-height:1.35;">
                 Want to restore an existing team from your Google Drive on this device? Authenticate and retrieve your team workspaces immediately.
@@ -824,21 +827,21 @@
                   <span style="font-size:0.7rem;color:#38bdf8;font-weight:700;">Owner Option</span>
                 </label>
                 <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">
-                  <label style="display:flex;align-items:flex-start;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 10px;cursor:pointer;">
+                  <label style="display:flex;align-items:flex-start;gap:8px;background:var(--card);border:1px solid var(--border);border-radius: 4px;padding:8px 10px;cursor:pointer;">
                     <input type="radio" name="initProjectSource" id="srcRadioTemplate" value="template" checked style="margin-top:3px;" />
                     <div>
                       <div style="font-weight:700;font-size:0.8rem;color:var(--text-heading);">✨ Default High Stakes Template</div>
                       <div style="font-size:0.7rem;color:var(--muted);">Clean autonomous routine with standard field start pose</div>
                     </div>
                   </label>
-                  <label style="display:flex;align-items:flex-start;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 10px;cursor:pointer;">
+                  <label style="display:flex;align-items:flex-start;gap:8px;background:var(--card);border:1px solid var(--border);border-radius: 4px;padding:8px 10px;cursor:pointer;">
                     <input type="radio" name="initProjectSource" id="srcRadioPlanner" value="planner" style="margin-top:3px;" />
                     <div>
                       <div style="font-weight:700;font-size:0.8rem;color:#38bdf8;">🗺️ Import from Visual Planner</div>
                       <div style="font-size:0.7rem;color:var(--muted);" id="lblGatePlannerPreview">Load active routines and robot setup from your local planner</div>
                     </div>
                   </label>
-                  <label style="display:flex;align-items:flex-start;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 10px;cursor:pointer;">
+                  <label style="display:flex;align-items:flex-start;gap:8px;background:var(--card);border:1px solid var(--border);border-radius: 4px;padding:8px 10px;cursor:pointer;">
                     <input type="radio" name="initProjectSource" id="srcRadioGithub" value="github" style="margin-top:3px;" />
                     <div>
                       <div style="font-weight:700;font-size:0.8rem;color:#4ade80;">🐙 Import from GitHub Repository</div>
@@ -848,7 +851,7 @@
                 </div>
 
                 <!-- GitHub Fields when GitHub source is selected in gate -->
-                <div id="gateGithubFields" style="display:none;background:var(--card-inner);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:8px;">
+                <div id="gateGithubFields" style="display:none;background:var(--card-inner);border:1px solid var(--border);border-radius: 4px;padding:10px;margin-top:8px;">
                   <div style="margin-bottom:8px;">
                     <label for="txtGateGithubRepo" style="font-size:0.74rem;">GitHub Repository</label>
                     <input type="text" id="txtGateGithubRepo" class="form-input" placeholder="e.g. LemLib/LemLib or owner/robot-code" style="font-size:0.78rem;" />
@@ -869,13 +872,13 @@
               <button type="button" id="btnSubmitCreateTeam" class="btn-team-primary" style="width:100%;justify-content:center;padding:12px;margin-top:8px;font-size:0.86rem;">
                 🚀 Create Team &amp; Start Collaborating
               </button>
-              <div id="createAlertBox" style="display:none;margin-top:10px;padding:10px 12px;border-radius:6px;font-size:0.78rem;"></div>
+              <div id="createAlertBox" style="display:none;margin-top:10px;padding:10px 12px;border-radius: 4px;font-size:0.78rem;"></div>
             </div>
 
             <!-- PANE 2: Join Team -->
             <div id="paneGateJoin" style="display:none;">
               <!-- 5-Minute OTP Security Callout -->
-              <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.76rem;line-height:1.45;color:var(--text);">
+              <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius: 8px;padding:12px;margin-bottom:16px;font-size:0.76rem;line-height:1.45;color:var(--text);">
                 <strong style="color:#fbbf24;">🛡️ 5-Minute Authorization OTP Required:</strong><br/>
                 To enter an existing team, you must enter a constantly changing (every 5 min) code as an OTP to ensure that you are authorized to join. Ask an active teammate currently on the team workspace for their live code.<br/>
                 <span style="color:#6ee7b7;font-size:0.72rem;margin-top:4px;display:inline-block;">✅ After joining, you will not need to rejoin again unless you leave the team.</span>
@@ -890,7 +893,7 @@
               <div class="form-group">
                 <label for="txtJoinOtp" style="display:flex;align-items:center;justify-content:space-between;">
                   <span>5-Minute Authorization OTP</span>
-                  <span style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;padding:2px 8px;border-radius:10px;font-size:0.68rem;font-weight:700;">⏱️ Changes Every 5 Min</span>
+                  <span style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;padding:2px 8px;border-radius: 8px;font-size:0.68rem;font-weight:700;">⏱️ Changes Every 5 Min</span>
                 </label>
                 <input type="text" id="txtJoinOtp" class="form-input" placeholder="e.g. 482910" maxlength="8" style="font-family:ui-monospace, monospace;font-size:1.15rem;letter-spacing:0.18em;text-align:center;color:#38bdf8;font-weight:700;" />
                 <span style="font-size:0.7rem;color:var(--muted);display:block;margin-top:4px;">Ask an active team member on the workspace to provide the live 6-digit OTP from their header.</span>
@@ -908,7 +911,7 @@
               <button type="button" id="btnSubmitJoinTeam" class="btn-team-primary" style="width:100%;justify-content:center;padding:12px;margin-top:8px;font-size:0.86rem;">
                 🔗 Verify 5-Min OTP &amp; Join Team Workspace
               </button>
-              <div id="joinAlertBox" style="display:none;margin-top:10px;padding:10px 12px;border-radius:6px;font-size:0.78rem;"></div>
+              <div id="joinAlertBox" style="display:none;margin-top:10px;padding:10px 12px;border-radius: 4px;font-size:0.78rem;"></div>
             </div>
           </div>
         </div>
@@ -936,14 +939,14 @@
           <button type="button" id="btnCloseInspectModal" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <div id="inspectAuthorAttributionBox" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;">
+          <div id="inspectAuthorAttributionBox" style="background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;">
             <!-- Dynamically populated author, role, and summary -->
           </div>
 
           <div style="margin-bottom:8px;font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;">
             Code / Autonomous Routines Snapshot:
           </div>
-          <pre id="inspectCodeView" style="background:var(--card-inner);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:ui-monospace, monospace;font-size:0.72rem;color:#38bdf8;max-height:280px;overflow:auto;margin:0;line-height:1.45;white-space:pre-wrap;"></pre>
+          <pre id="inspectCodeView" style="background:var(--card-inner);border:1px solid var(--border);border-radius: 8px;padding:12px;font-family:ui-monospace, monospace;font-size:0.72rem;color:#38bdf8;max-height:280px;overflow:auto;margin:0;line-height:1.45;white-space:pre-wrap;"></pre>
         </div>
         <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
           <button type="button" id="btnExportVersionSnapshot" class="btn-team-secondary">📥 Export Snapshot</button>
@@ -1036,15 +1039,15 @@
           <div style="margin-bottom:12px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:0.78rem;">
               <strong id="importProgressPhaseText" style="color:#38bdf8;">Connecting &amp; Downloading files...</strong>
-              <span id="importPercentBadge" style="background:rgba(56,189,248,0.2);color:#38bdf8;padding:2px 8px;border-radius:10px;font-weight:800;font-family:ui-monospace,monospace;">0%</span>
+              <span id="importPercentBadge" style="background:rgba(56,189,248,0.2);color:#38bdf8;padding:2px 8px;border-radius: 8px;font-weight:800;font-family:ui-monospace,monospace;">0%</span>
             </div>
-            <div style="background:var(--card-inner);border:1px solid var(--border);border-radius:8px;height:12px;overflow:hidden;padding:2px;">
-              <div id="importProgressBarFill" style="background:linear-gradient(90deg, #0284c7, #38bdf8, #22c55e);height:100%;width:0%;border-radius:6px;transition:width 0.15s ease-out;"></div>
+            <div style="background:var(--card-inner);border:1px solid var(--border);border-radius: 8px;height:12px;overflow:hidden;padding:2px;">
+              <div id="importProgressBarFill" style="background:#0284c7;height:100%;width:0%;border-radius: 4px;transition:width 0.15s ease-out;"></div>
             </div>
           </div>
 
           <!-- Elapsed Time & ETA Chips -->
-          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.74rem;color:var(--text);">
+          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:8px 12px;font-size:0.74rem;color:var(--text);">
             <div style="display:flex;align-items:center;gap:6px;">
               <span>⏱️ Elapsed: <strong id="importElapsedTime" style="color:var(--text-heading);">0.0s</strong></span>
               <span style="color:var(--border);">|</span>
@@ -1086,7 +1089,7 @@
           <button type="button" id="btnCloseGithubImportModal" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.76rem;color:var(--text);line-height:1.4;">
+          <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius: 8px;padding:10px 12px;margin-bottom:12px;font-size:0.76rem;color:var(--text);line-height:1.4;">
             <strong style="color:#4ade80;">👑 Owner Action:</strong> This will import the selected GitHub repository and parse its autonomous routines (from <code>src/autons.cpp</code> or <code>src/main.cpp</code>). Teammates will immediately receive the synced paths with a recorded version history checkpoint.
           </div>
           <div class="form-group">
@@ -1104,7 +1107,7 @@
               <input type="password" id="txtImportGithubToken" class="form-input" placeholder="Optional for public repos" />
             </div>
           </div>
-          <div id="githubImportStatus" style="font-size:0.75rem;padding:12px 14px;border-radius:8px;display:none;margin-bottom:12px;background:rgba(15,23,42,0.7);border:1px solid rgba(56,189,248,0.3);">
+          <div id="githubImportStatus" style="font-size:0.75rem;padding:12px 14px;border-radius: 8px;display:none;margin-bottom:12px;background:rgba(15,23,42,0.7);border:1px solid rgba(56,189,248,0.3);">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;">
               <span id="githubImportStage" style="font-weight:700;font-size:0.82rem;color:#38bdf8;display:flex;align-items:center;gap:6px;">
                 <span id="githubImportSpinner" class="import-spinner" style="display:inline-block;width:12px;height:12px;border:2px solid #38bdf8;border-top-color:transparent;border-radius:50%;animation:team-spin 0.8s linear infinite;"></span>
@@ -1114,8 +1117,8 @@
             </div>
 
             <!-- Progress Track & Animated Glow Bar -->
-            <div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden;margin-bottom:8px;position:relative;">
-              <div id="githubImportBar" style="width:0%;height:100%;background:linear-gradient(90deg, #38bdf8, #22c55e);border-radius:999px;transition:width 0.25s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 0 10px rgba(56,189,248,0.5);"></div>
+            <div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius: 8px;overflow:hidden;margin-bottom:8px;position:relative;">
+              <div id="githubImportBar" style="width:0%;height:100%;background:#38bdf8;border-radius: 8px;transition:width 0.25s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 0 10px rgba(56,189,248,0.5);"></div>
             </div>
 
             <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.72rem;color:var(--muted);gap:10px;">
@@ -1147,14 +1150,14 @@
           <button type="button" id="btnClosePlannerImportModal" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.78rem;color:var(--text);line-height:1.45;">
+          <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius: 8px;padding:12px;margin-bottom:14px;font-size:0.78rem;color:var(--text);line-height:1.45;">
             <strong style="color:#38bdf8;">📌 Synchronize with Teammates:</strong><br/>
             This action will read the active autonomous paths, robot configuration, and project files from your local browser's visual planner and update the shared team workspace for all connected members.
           </div>
-          <div id="plannerImportPreviewBox" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.78rem;color:var(--text);margin-bottom:12px;">
+          <div id="plannerImportPreviewBox" style="background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:12px;font-size:0.78rem;color:var(--text);margin-bottom:12px;">
             <!-- Dynamically populated with local routines summary -->
           </div>
-          <div id="plannerImportStatus" style="font-size:0.75rem;padding:8px 12px;border-radius:6px;display:none;margin-bottom:8px;"></div>
+          <div id="plannerImportStatus" style="font-size:0.75rem;padding:8px 12px;border-radius: 4px;display:none;margin-bottom:8px;"></div>
         </div>
         <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
           <button type="button" id="btnCancelPlannerImport" class="btn-team-secondary">Cancel</button>
@@ -1179,7 +1182,7 @@
           <button type="button" id="btnCloseTeamSettingsModal" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <div style="margin-bottom:14px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;">
+          <div style="margin-bottom:14px;background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:12px;">
             <div style="font-weight:700;font-size:0.82rem;color:#38bdf8;margin-bottom:4px;" id="lblSettingsTeamHeader">Team Details</div>
             <div style="font-size:0.75rem;color:var(--text);display:flex;gap:16px;flex-wrap:wrap;">
               <span>Code: <strong id="lblSettingsCode" style="color:var(--text-heading);">---</strong></span>
@@ -1189,7 +1192,7 @@
           </div>
 
           <div style="font-weight:700;font-size:0.8rem;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">👥 Member Roles &amp; Edit Permissions</div>
-          <div id="settingsRosterTableContainer" style="background:var(--card-inner);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px;">
+          <div id="settingsRosterTableContainer" style="background:var(--card-inner);border:1px solid var(--border);border-radius: 8px;overflow:hidden;margin-bottom:16px;">
             <!-- Dynamically populated roster settings table -->
           </div>
         </div>
@@ -1215,13 +1218,13 @@
         </div>
         <div class="modal-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;">
+            <div style="background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:10px;">
               <div style="font-weight:700;font-size:0.78rem;color:#f87171;margin-bottom:6px;">Current Local Version</div>
-              <pre id="diffLocalView" style="background:var(--card-inner);padding:8px;border-radius:6px;font-size:0.72rem;color:var(--text);max-height:240px;overflow:auto;margin:0;font-family:ui-monospace,monospace;white-space:pre-wrap;"></pre>
+              <pre id="diffLocalView" style="background:var(--card-inner);padding:8px;border-radius: 4px;font-size:0.72rem;color:var(--text);max-height:240px;overflow:auto;margin:0;font-family:ui-monospace,monospace;white-space:pre-wrap;"></pre>
             </div>
-            <div style="background:var(--card);border:1px solid #0284c7;border-radius:8px;padding:10px;">
+            <div style="background:var(--card);border:1px solid #0284c7;border-radius: 8px;padding:10px;">
               <div style="font-weight:700;font-size:0.78rem;color:#38bdf8;margin-bottom:6px;">Incoming Teammate Edit</div>
-              <pre id="diffRemoteView" style="background:var(--card-inner);padding:8px;border-radius:6px;font-size:0.72rem;color:#38bdf8;max-height:240px;overflow:auto;margin:0;font-family:ui-monospace,monospace;white-space:pre-wrap;"></pre>
+              <pre id="diffRemoteView" style="background:var(--card-inner);padding:8px;border-radius: 4px;font-size:0.72rem;color:#38bdf8;max-height:240px;overflow:auto;margin:0;font-family:ui-monospace,monospace;white-space:pre-wrap;"></pre>
             </div>
           </div>
         </div>
@@ -1246,7 +1249,7 @@
           <button type="button" id="btnCloseDriveSelectorModal" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <div style="background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.78rem;color:var(--text);line-height:1.45;">
+          <div style="background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius: 8px;padding:12px;margin-bottom:14px;font-size:0.78rem;color:var(--text);line-height:1.45;">
             <strong>☁️ Incognito / New Device Session Detected:</strong><br/>
             You do not have local data on this device, but we found existing VEX team project files saved in your Cloud / Google Drive storage! Click below to open and restore your workspace.
           </div>
@@ -1274,7 +1277,7 @@
           <button type="button" id="btnCloseGithubPushModal" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.76rem;color:var(--text);line-height:1.4;">
+          <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius: 8px;padding:10px 12px;margin-bottom:12px;font-size:0.76rem;color:var(--text);line-height:1.4;">
             <strong style="color:#4ade80;">🐙 GitHub Direct Sync:</strong> This will commit and sync your team's active C++ files (<code>autons.cpp</code>, <code>main.cpp</code>, <code>config.cpp</code>, <code>driver_control.cpp</code>) directly to your GitHub repository.
           </div>
           <div class="form-group">
@@ -1292,7 +1295,7 @@
               <input type="password" id="txtGithubPushToken" class="form-input" placeholder="ghp_xxxx (Required to commit)" />
             </div>
           </div>
-          <div id="githubPushStatus" style="font-size:0.75rem;padding:8px 12px;border-radius:6px;display:none;margin-bottom:8px;"></div>
+          <div id="githubPushStatus" style="font-size:0.75rem;padding:8px 12px;border-radius: 4px;display:none;margin-bottom:8px;"></div>
         </div>
         <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
           <button type="button" id="btnCancelGithubPush" class="btn-team-secondary">Cancel</button>
@@ -1317,19 +1320,19 @@
           <button type="button" id="btnCloseExitTeamModal" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.78rem;color:#fca5a5;line-height:1.45;">
+          <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius: 8px;padding:12px;margin-bottom:14px;font-size:0.78rem;color:#fca5a5;line-height:1.45;">
             <strong>⚠️ Warning: Exiting Team Workspace</strong><br/>
             You are about to exit <strong id="lblExitTeamTargetName">this team</strong>. You will lose active access to live path edits, consensus votes, and team version history until you re-join with a valid 5-minute OTP.
           </div>
 
-          <div class="form-group" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px;">
+          <div class="form-group" style="background:var(--card);border:1px solid var(--border);border-radius: 8px;padding:12px;margin-bottom:12px;">
             <label style="display:block;font-size:0.78rem;color:var(--text);margin-bottom:6px;font-weight:700;">
               🛡️ Verification Challenge:
             </label>
             <div style="font-size:0.82rem;color:var(--muted);margin-bottom:8px;">
               To confirm departure, please type the required code exactly as shown below:
             </div>
-            <div style="display:flex;align-items:center;justify-content:center;background:var(--card-inner);border:1px dashed #ef4444;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-family:ui-monospace, monospace;font-size:1.2rem;letter-spacing:0.12em;font-weight:800;color:#f87171;" id="lblExitChallengePrompt">
+            <div style="display:flex;align-items:center;justify-content:center;background:var(--card-inner);border:1px dashed #ef4444;border-radius: 4px;padding:8px 12px;margin-bottom:10px;font-family:ui-monospace, monospace;font-size:1.2rem;letter-spacing:0.12em;font-weight:800;color:#f87171;" id="lblExitChallengePrompt">
               LEAVE-0000
             </div>
             <input type="text" id="txtExitChallengeInput" class="form-input" placeholder="Type verification code here..." style="font-family:ui-monospace, monospace;text-align:center;font-size:1.05rem;letter-spacing:0.08em;color:var(--text-heading);" />
@@ -1415,8 +1418,8 @@
             </div>
             <div style="display:flex;gap:6px;margin-top:8px;">
               <button type="button" id="btnDebugUploadAuton" class="primary" style="flex:1;padding:6px;font-size:0.75rem;">⚡ Flash Auton to Brain</button>
-              <button type="button" id="btnDebugRunProgram" style="background:#16a34a;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.75rem;cursor:pointer;">▶ Run</button>
-              <button type="button" id="btnDebugStopProgram" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius:4px;font-size:0.75rem;cursor:pointer;">⏹ Stop</button>
+              <button type="button" id="btnDebugRunProgram" style="background:#16a34a;color:#fff;border:none;padding:6px 10px;border-radius: 4px;font-size:0.75rem;cursor:pointer;">▶ Run</button>
+              <button type="button" id="btnDebugStopProgram" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius: 4px;font-size:0.75rem;cursor:pointer;">⏹ Stop</button>
             </div>
           </div>
 
@@ -1488,7 +1491,7 @@
             <span class="scoring-badge">VRC Override (2026-27) · Game Engine &amp; Dynamic Tracking</span>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <h2 id="scoringModalTitle" style="margin:0;">🎯 Override Scoring Engine <span class="badge-beta-text">BETA</span></h2>
-              <button type="button" class="btn-xs-clean" id="btnLaunchCommentGuideFromModal" style="background:rgba(56,189,248,0.2);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 10px;border-radius:6px;cursor:pointer;">❓ Comment Tutorial</button>
+              <button type="button" class="btn-xs-clean" id="btnLaunchCommentGuideFromModal" style="background:rgba(56,189,248,0.2);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 10px;border-radius: 4px;cursor:pointer;">❓ Comment Tutorial</button>
             </div>
           </div>
           <button type="button" id="scoringModalClose" class="modal-close-btn" title="Close (Esc)">✕</button>
@@ -1691,11 +1694,11 @@
           Join <span id="lblInvitedTeamName" style="color:#38bdf8;">Team</span>
         </h2>
         <p style="font-size:0.85rem;color:var(--muted);line-height:1.5;margin:0 0 16px;">
-          <strong id="lblInvitedBy" style="color:#f8fafc;">Team Admin</strong> has invited your account (<code id="lblInvitedUserEmail" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:1px 6px;border-radius:4px;">user@example.com</code>) to collaborate in their VEX V5 workspace.
+          <strong id="lblInvitedBy" style="color:#f8fafc;">Team Admin</strong> has invited your account (<code id="lblInvitedUserEmail" style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:1px 6px;border-radius: 4px;">user@example.com</code>) to collaborate in their VEX V5 workspace.
         </p>
 
         <div class="invite-verify-box">
-          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;padding:3px 10px;border-radius:999px;font-size:0.75rem;font-weight:700;">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;padding:3px 10px;border-radius: 8px;font-size:0.75rem;font-weight:700;">
             🔐 6-Digit Hex Authorization Challenge
           </div>
           <p style="font-size:0.82rem;color:var(--text);margin:10px 0 14px;line-height:1.4;">
@@ -1709,34 +1712,34 @@
         </div>
 
         <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;">
-          <button type="button" id="btnDeclineTeamInvite" class="btn-decline-invite">
-            ❌ Decline Invitation
+          <button type="button" id="btnDeclineTeamInvite" class="btn-decline-invite" style="border-radius: 4px; font-family:var(--font-mono);">
+            Decline Invitation
           </button>
         </div>
       </div>
     </div>
 
     <!-- Toast Notification Container -->
-    <div id="teamToast" class="team-toast">
-      <span id="teamToastIcon">✅</span>
+    <div id="teamToast" class="team-toast" style="border-radius: 4px; box-shadow:none; border:1px solid var(--border); font-family:var(--font-mono);">
+      <span id="teamToastIcon">●</span>
       <span id="teamToastMsg">Action completed</span>
     </div>
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20260930.k6"></script>
+  <script src="version.js?v=20260930.k12"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20260930.k6"></script>
-  <script src="theme.js?v=20260930.k6"></script>
-  <script src="cpp-parser.js?v=20260930.k6"></script>
-  <script src="project-manager.js?v=20260930.k6"></script>
-  <script src="v5-brain-serial.js?v=20260930.k6"></script>
-  <script src="scoring-engine.js?v=20260930.k6"></script>
-  <script src="match-analysis-engine.js?v=20260930.k6"></script>
-  <script src="google-drive-sync.js?v=20260930.k6"></script>
+  <script src="firebase-config.js?v=20260930.k12"></script>
+  <script src="theme.js?v=20260930.k12"></script>
+  <script src="cpp-parser.js?v=20260930.k12"></script>
+  <script src="project-manager.js?v=20260930.k12"></script>
+  <script src="v5-brain-serial.js?v=20260930.k12"></script>
+  <script src="scoring-engine.js?v=20260930.k12"></script>
+  <script src="match-analysis-engine.js?v=20260930.k12"></script>
+  <script src="google-drive-sync.js?v=20260930.k12"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="team.js?v=20260930.k6"></script>
+  <script src="team.js?v=20260930.k12"></script>
 </body>
 </html>

@@ -56,17 +56,24 @@
   }
   </script>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
   <style>
     :root {
-      --bg: #0b1120;
-      --card-bg: rgba(30, 41, 59, 0.7);
-      --card-border: rgba(148, 163, 184, 0.15);
-      --primary: #38bdf8;
-      --primary-hover: #0ea5e9;
-      --accent: #06b6d4;
-      --success: #22c55e;
-      --text: #f8fafc;
-      --muted: #94a3b8;
+      --bg: #090d15;
+      --surface: #101622;
+      --surface-subtle: #161e2e;
+      --border: #232d3f;
+      --border-subtle: #1a2232;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --text: #f1f5f9;
+      --text-muted: #8b9bb4;
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
     }
     * {
       box-sizing: border-box;
@@ -74,84 +81,88 @@
       padding: 0;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0b1120 70%);
+      font-family: var(--font-sans);
+      background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
+      line-height: 1.5;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 40px 20px;
+      padding: 48px 24px 80px;
+      -webkit-font-smoothing: antialiased;
     }
     .container {
-      max-width: 860px;
+      max-width: 1080px;
       width: 100%;
       margin: 0 auto;
     }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      border-radius: 9999px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: var(--primary);
-      margin-bottom: 16px;
+    .editorial-header {
+      margin-bottom: 36px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
     }
-    header {
-      text-align: center;
-      margin-bottom: 32px;
+    .editorial-meta {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      text-transform: uppercase;
     }
     h1 {
-      font-size: 2.2rem;
-      font-weight: 800;
+      font-family: var(--font-display);
+      font-size: 2.5rem;
+      font-weight: 700;
       letter-spacing: -0.025em;
-      margin-bottom: 12px;
-      background: linear-gradient(135deg, #ffffff 40%, var(--primary) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      line-height: 1.15;
+      color: #ffffff;
+      margin-bottom: 14px;
+      text-wrap: balance;
     }
     .lead {
-      color: var(--muted);
-      font-size: 1.1rem;
-      max-width: 680px;
-      margin: 0 auto 24px;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 760px;
+      line-height: 1.6;
     }
-    /* Auto-redirect countdown banner */
-    .redirect-card {
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(56, 189, 248, 0.35);
-      border-radius: 12px;
-      padding: 18px 24px;
-      margin-bottom: 36px;
-      text-align: center;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    /* Utilitarian Redirection Notice */
+    .redirect-banner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px 20px;
+      margin-bottom: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .redirect-bar-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
     }
     .redirect-title {
-      font-size: 1rem;
+      font-size: 0.88rem;
       font-weight: 600;
       color: var(--text);
       display: flex;
       align-items: center;
-      justify-content: center;
       gap: 8px;
     }
     .progress-bar-wrap {
       width: 100%;
-      height: 6px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 9999px;
-      margin: 14px 0 16px;
+      height: 4px;
+      background: var(--surface-subtle);
+      border-radius: 0;
       overflow: hidden;
     }
     .progress-bar {
       height: 100%;
       width: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--primary));
+      background: #38bdf8;
       transform-origin: left;
       animation: countdown 3s linear forwards;
     }
@@ -161,183 +172,321 @@
     }
     .actions {
       display: flex;
-      justify-content: center;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
     }
     .btn {
-      padding: 10px 22px;
-      border-radius: 8px;
+      padding: 8px 18px;
+      border-radius: 4px;
       font-weight: 600;
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       text-decoration: none;
-      transition: all 0.2s ease;
+      transition: all 0.15s ease;
       display: inline-flex;
       align-items: center;
       gap: 8px;
       cursor: pointer;
+      line-height: 1.2;
     }
     .btn-primary {
-      background: var(--primary);
-      color: #0b1120;
-      border: none;
+      background: #ffffff;
+      color: #090d15;
+      border: 1px solid #ffffff;
     }
     .btn-primary:hover {
-      background: var(--primary-hover);
-      box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+      background: #e2e8f0;
+      border-color: #e2e8f0;
     }
     .btn-outline {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--card-border);
+      background: transparent;
+      border: 1px solid var(--border);
       color: var(--text);
     }
     .btn-outline:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: var(--primary);
+      background: var(--surface-subtle);
+      border-color: #475569;
     }
-    /* Feature Hub Cards */
-    .features-grid {
+
+    /* Asymmetrical Editorial Content Grid */
+    .portal-asym-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 18px;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 32px;
       margin-bottom: 40px;
     }
-    .feature-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 20px;
-      transition: transform 0.2s ease, border-color 0.2s ease;
+    @media (max-width: 860px) {
+      .portal-asym-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Structured Module Registry Table */
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 16px;
+    }
+    .manifest-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .manifest-table th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-subtle);
+    }
+    .manifest-table td {
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .manifest-table tr:last-child td {
+      border-bottom: none;
+    }
+    .manifest-name {
+      font-weight: 600;
+      color: #ffffff;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .manifest-desc {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .manifest-link {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #38bdf8;
       text-decoration: none;
-      color: inherit;
+      white-space: nowrap;
+    }
+    .manifest-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Technical Specification Matrix */
+    .spec-sheet {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 18px 20px;
+      border-radius: 4px;
+    }
+    .spec-sheet-title {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: #ffffff;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .spec-list {
       display: flex;
       flex-direction: column;
+      gap: 10px;
     }
-    .feature-card:hover {
-      transform: translateY(-3px);
-      border-color: rgba(56, 189, 248, 0.4);
+    .spec-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.82rem;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-subtle);
     }
-    .feature-icon {
-      font-size: 1.8rem;
-      margin-bottom: 12px;
+    .spec-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
     }
-    .feature-title {
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 8px;
+    .spec-label {
+      color: var(--text-muted);
     }
-    .feature-desc {
-      color: var(--muted);
+    .spec-value {
+      font-family: var(--font-mono);
+      color: #e2e8f0;
+      text-align: right;
+    }
+
+    /* Informational Engineering Copy */
+    .editorial-article {
+      border-top: 1px solid var(--border);
+      padding-top: 28px;
+      margin-top: 24px;
       font-size: 0.88rem;
-      line-height: 1.5;
-      flex-grow: 1;
-    }
-    .feature-link {
-      margin-top: 14px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--primary);
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-    /* Comprehensive Informational Content for Googlebot */
-    .seo-info {
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 24px;
-      font-size: 0.9rem;
-      color: var(--muted);
+      color: var(--text-muted);
       line-height: 1.6;
     }
-    .seo-info h2 {
+    .editorial-article h2 {
+      font-family: var(--font-display);
       font-size: 1.25rem;
-      color: var(--text);
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+    .editorial-article p {
       margin-bottom: 12px;
     }
+
     footer {
-      margin-top: 40px;
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-subtle);
+      width: 100%;
       text-align: center;
       color: #64748b;
-      font-size: 0.85rem;
+      font-size: 0.78rem;
+      font-family: var(--font-mono);
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <header>
-      <div class="badge">🤖 VEX Robotics Override 2026-27</div>
-      <h1>VEX V5 LemLib Suite</h1>
-      <p class="lead">Autonomous Path Planning, Field Simulation, and PROS C++ Development Hub for VEX V5 Robotics Competition.</p>
+    <header class="editorial-header">
+      <div class="editorial-meta">VEX ROBOTICS COMPETITION · OVERRIDE 2026-27 SPECIFICATION</div>
+      <h1>Deterministic trajectory design &amp; odometry control for LemLib.</h1>
+      <p class="lead">Autonomous path planning, PROS C++ source synchronization, and Web Serial USB CDC telemetry for VEX V5 robotics competition teams.</p>
     </header>
 
-    <!-- Graceful Automatic Redirection Box -->
-    <div class="redirect-card">
-      <div class="redirect-title">
-        <span>🚀</span> Redirecting to VEX V5 Path Planner in <span id="countdownText" style="color: var(--primary); font-weight: bold;">3</span>s...
+    <!-- Utilitarian Automatic Redirection Banner -->
+    <div class="redirect-banner">
+      <div class="redirect-bar-top">
+        <div class="redirect-title">
+          Redirecting to visual path planner in <span id="countdownText" style="color: #38bdf8; font-family: var(--font-mono); font-weight: 700; margin: 0 4px;">3</span>s...
+        </div>
+        <div class="actions">
+          <a href="https://yl-loaf.github.io/vex-path-planner/" class="btn btn-primary" id="btnLaunchNow">
+            Open Path Planner Now ➔
+          </a>
+          <button type="button" class="btn btn-outline" id="btnCancelRedirect">
+            Stay on Portal
+          </button>
+        </div>
       </div>
       <div class="progress-bar-wrap">
         <div class="progress-bar" id="progressBar"></div>
       </div>
-      <div class="actions">
-        <a href="https://yl-loaf.github.io/vex-path-planner/" class="btn btn-primary" id="btnLaunchNow">
-          Open Path Planner Now ➔
-        </a>
-        <button type="button" class="btn btn-outline" id="btnCancelRedirect">
-          Stay on Portal
-        </button>
-      </div>
     </div>
 
-    <!-- Semantic Feature Navigation Hub for Crawlers and Users -->
-    <section>
-      <h2 style="font-size: 1.3rem; margin-bottom: 16px; color: var(--text);">Suite Modules &amp; Tools</h2>
-      <div class="features-grid">
-        <a href="https://yl-loaf.github.io/vex-path-planner/" class="feature-card">
-          <div class="feature-icon">🗺️</div>
-          <div class="feature-title">Autonomous Path Planner</div>
-          <div class="feature-desc">Visual waypoint sequencing, Bezier path curves, LemLib moveToPoint &amp; boomerang generator, and real-time collision detection.</div>
-          <div class="feature-link">Launch Planner ➔</div>
-        </a>
+    <!-- Asymmetrical Grid: Modules Registry & Specifications -->
+    <div class="portal-asym-grid">
+      <!-- Left: Suite Module Table (Clean utilitarian directory) -->
+      <section>
+        <h2 class="section-title">Engineering Toolchain Directory</h2>
+        <table class="manifest-table">
+          <thead>
+            <tr>
+              <th>Module</th>
+              <th>Operational Function</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <span class="manifest-name">Visual Path Planner</span>
+              </td>
+              <td class="manifest-desc">2D spline trajectories, pure pursuit lookahead, Boomerang poses, and boundary collision checks.</td>
+              <td><a href="https://yl-loaf.github.io/vex-path-planner/" class="manifest-link">Launch ➔</a></td>
+            </tr>
+            <tr>
+              <td>
+                <span class="manifest-name">PROS C++ Coding Studio</span>
+              </td>
+              <td class="manifest-desc">Monaco C++ editor with cross-file device indexing, syntax diagnostics, and pros make compilation.</td>
+              <td><a href="https://yl-loaf.github.io/vex-path-planner/ide.html" class="manifest-link">Open IDE ➔</a></td>
+            </tr>
+            <tr>
+              <td>
+                <span class="manifest-name">AST Code Translator</span>
+              </td>
+              <td class="manifest-desc">Two-way parser converting LemLib C++ routines into draggable visual waypoint nodes and vice-versa.</td>
+              <td><a href="https://yl-loaf.github.io/vex-path-planner/translator.html" class="manifest-link">Open ➔</a></td>
+            </tr>
+            <tr>
+              <td>
+                <span class="manifest-name">Web Serial V5 Flasher</span>
+              </td>
+              <td class="manifest-desc">Direct USB CDC 115200 baud communication, 21-port device diagnostics, and program slot management.</td>
+              <td><a href="https://yl-loaf.github.io/vex-path-planner/" class="manifest-link">Connect ➔</a></td>
+            </tr>
+            <tr>
+              <td>
+                <span class="manifest-name">Documentation &amp; API Guide</span>
+              </td>
+              <td class="manifest-desc">Comprehensive reference manual for LemLib pose controllers, angular PID loops, and odometry setup.</td>
+              <td><a href="https://yl-loaf.github.io/vex-path-planner/documentation.html" class="manifest-link">Docs ➔</a></td>
+            </tr>
+            <tr>
+              <td>
+                <span class="manifest-name">Analytics &amp; Usage</span>
+              </td>
+              <td class="manifest-desc">Real-time visitor counts, module telemetry breakdown, and Google search indexing status.</td>
+              <td><a href="https://yl-loaf.github.io/vex-path-planner/stats.html" class="manifest-link">Stats ➔</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
 
-        <a href="https://yl-loaf.github.io/vex-path-planner/ide.html" class="feature-card">
-          <div class="feature-icon">💻</div>
-          <div class="feature-title">PROS C++ Cloud IDE</div>
-          <div class="feature-desc">Full-featured Monaco C++ code editor with syntax highlighting, live syntax analysis, and instant LemLib project generation.</div>
-          <div class="feature-link">Open IDE ➔</div>
-        </a>
+      <!-- Right: Technical Specification Matrix -->
+      <aside>
+        <div class="spec-sheet">
+          <h3 class="spec-sheet-title">Technical Specifications</h3>
+          <div class="spec-list">
+            <div class="spec-item">
+              <span class="spec-label">Target Field</span>
+              <span class="spec-value">Override 2026-27 (144"×144")</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Chassis Kinematics</span>
+              <span class="spec-value">Differential Drive (2 Tracking)</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">LemLib Compatibility</span>
+              <span class="spec-value">v0.5.4 Stable</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">PROS Kernel</span>
+              <span class="spec-value">v4.1.0 / v3.8.0</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Serial Interface</span>
+              <span class="spec-value">USB CDC @ 115,200 Baud</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Motion Profiles</span>
+              <span class="spec-value">S-Curve, Pure Pursuit, Boomerang</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Persistence</span>
+              <span class="spec-value">Browser LocalStorage &amp; Cloud Sync</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
 
-        <a href="https://yl-loaf.github.io/vex-path-planner/translator.html" class="feature-card">
-          <div class="feature-icon">🔄</div>
-          <div class="feature-title">C++ Code Translator</div>
-          <div class="feature-desc">Two-way parser converting existing PROS C++ autonomous routines into visual draggable waypoints and vice-versa.</div>
-          <div class="feature-link">Open Translator ➔</div>
-        </a>
-
-        <a href="https://yl-loaf.github.io/vex-path-planner/stats.html" class="feature-card">
-          <div class="feature-icon">📊</div>
-          <div class="feature-title">Traffic &amp; Analytics</div>
-          <div class="feature-desc">Real-time visitor counts, traffic breakdown by module, and Google Search Console indexing verification helpers.</div>
-          <div class="feature-link">View Stats ➔</div>
-        </a>
-      </div>
-    </section>
-
-    <!-- Comprehensive Indexable Content for Googlebot & AdSense Review -->
-    <article class="seo-info">
-      <h2>About the VEX V5 LemLib Suite</h2>
+    <!-- Editorial Architecture Documentation -->
+    <article class="editorial-article">
+      <h2>Architecture &amp; Kinematic Implementation</h2>
       <p>
-        The VEX V5 LemLib Suite provides high school and collegiate robotics teams competing in the VEX Robotics Competition (VRC) with advanced autonomous motion profiling. Leveraging LemLib's pure pursuit algorithms and odometry tracking, users can build reliable 15-second autonomous win-point routines and 60-second programming skills runs on the Override game field.
+        The VEX V5 LemLib Suite provides competition teams with high-precision autonomous motion profiling. Leveraging LemLib's pure pursuit algorithms and dual-wheel odometry tracking, teams model deterministic 15-second autonomous win-point routines and 60-second programming skills runs on the Override game field.
       </p>
-      <p style="margin-top: 10px;">
-        Designed for teams using PROS 3 and PROS 4 with modern C++, this suite combines visual drag-and-drop spline editing with direct source code synchronization, USB V5 Brain telemetry streaming, and automated Google Drive autonomous backups.
+      <p>
+        Built for teams authoring PROS C++, this suite combines visual waypoint sequencing with direct source code synchronization, USB V5 Brain telemetry streaming, and cross-file variable indexing.
       </p>
     </article>
 
     <footer>
-      <p>© 2026 VEX V5 LemLib Suite · Powered by LemLib &amp; PROS C++</p>
+      <p>© 2026 VEX V5 LemLib Suite · Autonomous Robotics Studio · Override 2026-27</p>
     </footer>
   </div>
 
