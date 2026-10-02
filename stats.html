@@ -16,12 +16,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261002.k11" />
+  <link rel="stylesheet" href="style.css?v=20261002.k16" />
   <!-- Firebase SDK Compat CDN -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261002.k11"></script>
+  <script src="firebase-config.js?v=20261002.k16"></script>
+  <script src="analytics-tracker.js"></script>
   <script>
     (function () {
       try {
@@ -238,7 +239,6 @@
     <div class="stats-section">
       <h3>
         Access Log Manifest
-        <span style="font-size:0.75rem; font-family:var(--font-mono); font-weight:normal; color:var(--muted); margin-left:12px;">[CLIENT IDS CRYPTOGRAPHICALLY MASKED]</span>
       </h3>
       <div class="table-container">
         <table>
@@ -246,13 +246,11 @@
             <tr>
               <th>Timestamp</th>
               <th>Module / Page</th>
-              <th>Session ID</th>
-              <th>User Agent</th>
             </tr>
           </thead>
           <tbody id="recentVisitsBody">
             <tr>
-              <td colspan="4" style="text-align: center; color: var(--muted); font-family: var(--font-mono); padding: 24px;">Loading telemetry records...</td>
+              <td colspan="2" style="text-align: center; color: var(--muted); font-family: var(--font-mono); padding: 24px;">Loading telemetry records...</td>
             </tr>
           </tbody>
         </table>
@@ -315,44 +313,11 @@
         localStorage.setItem('vex_client_id', clientId);
       }
 
-      // Track & Fetch stats from Firestore (fully compatible with static GitHub Pages hosting)
+      // Fetch stats from Firestore (fully compatible with static GitHub Pages hosting)
       try {
         if (typeof firebase !== 'undefined' && firebase.firestore) {
           const db = firebase.firestore();
           const statsRef = db.collection('stats').doc('summary');
-
-          try {
-            await db.runTransaction(async (transaction) => {
-              const doc = await transaction.get(statsRef);
-              const now = Date.now();
-              if (!doc.exists) {
-                transaction.set(statsRef, {
-                  totalViews: 1,
-                  pages: { home: 0, ide: 0, translator: 0, stats: 1, tools: 0, team: 0, other: 0 },
-                  visitors: [{ timestamp: new Date().toISOString(), page: 'stats', ip: clientId.substring(0, 8) + '...', userAgent: navigator.userAgent }],
-                  updatedAt: now
-                });
-              } else {
-                const d = doc.data();
-                const totalViews = (d.totalViews || 0) + 1;
-                const pages = d.pages || { home: 0, ide: 0, translator: 0, stats: 0, tools: 0, team: 0, other: 0 };
-                pages.stats = (pages.stats || 0) + 1;
-                const visitors = d.visitors || [];
-                visitors.unshift({ timestamp: new Date().toISOString(), page: 'stats', ip: clientId.substring(0, 8) + '...', userAgent: navigator.userAgent });
-                if (visitors.length > 50) visitors.pop();
-
-                transaction.set(statsRef, {
-                  totalViews,
-                  pages,
-                  visitors,
-                  updatedAt: now
-                }, { merge: true });
-              }
-            });
-          } catch (txErr) {
-            console.warn("Firestore stat transaction write warning:", txErr);
-          }
-
           const snap = await statsRef.get();
           if (snap.exists) {
             data = snap.data();
@@ -415,7 +380,7 @@
         const tbody = document.getElementById('recentVisitsBody');
         const visitors = data.visitors || [];
         if (visitors.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--muted);">No visits recorded yet.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--muted);">No visits recorded yet.</td></tr>';
         } else {
           tbody.innerHTML = visitors.map(v => {
             const dateStr = new Date(v.timestamp).toLocaleString();
@@ -430,8 +395,6 @@
               <tr>
                 <td>${dateStr}</td>
                 <td><span class="badge ${badgeClass}">${pageLabel}</span></td>
-                <td style="font-family: monospace; color: var(--cyan);">${v.ip}</td>
-                <td style="color: var(--muted); font-size: 0.8rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${v.userAgent}">${v.userAgent}</td>
               </tr>
             `;
           }).join('');
