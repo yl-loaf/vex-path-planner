@@ -1,0 +1,36 @@
+{
+  "entities": {
+    "AnalyticsSummary": {
+      "title": "AnalyticsSummary",
+      "description": "Aggregated website visitor statistics and page view counts.",
+      "type": "object",
+      "properties": {
+        "totalViews": {
+          "type": "integer"
+        },
+        "uniqueVisitors": {
+          "type": "integer"
+        },
+        "pages": {
+          "type": "object"
+        },
+        "updatedAt": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "totalViews",
+        "uniqueVisitors",
+        "pages"
+      ]
+    }
+  },
+  "firestore": {
+    "/stats/{summaryId}": {
+      "schema": {
+        "$ref": "#/entities/AnalyticsSummary"
+      },
+      "description": "Aggregated global statistics document."
+    }
+  }
+}

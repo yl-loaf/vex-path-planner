@@ -16,7 +16,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261002.k6" />
+  <link rel="stylesheet" href="style.css?v=20261002.k9" />
+  <!-- Firebase SDK Compat CDN -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=20261002.k9"></script>
   <script>
     (function () {
       try {
@@ -315,29 +320,63 @@
         localStorage.setItem('vex_client_id', clientId);
       }
 
-      // Track hit
+      // Track & Fetch stats from Firestore (fully compatible with static GitHub Pages hosting)
       try {
-        const img = new Image();
-        img.src = GOOGLE_SHEET_URL + '?action=track&page=stats&clientId=' + clientId + '&ua=' + encodeURIComponent(navigator.userAgent);
-      } catch (e) {}
+        if (typeof firebase !== 'undefined' && firebase.firestore) {
+          const db = firebase.firestore();
+          const statsRef = db.collection('stats').doc('summary');
 
-      try {
-        data = await fetchJsonp(GOOGLE_SHEET_URL);
+          try {
+            await db.runTransaction(async (transaction) => {
+              const doc = await transaction.get(statsRef);
+              const now = Date.now();
+              if (!doc.exists) {
+                transaction.set(statsRef, {
+                  totalViews: 1,
+                  uniqueVisitors: 1,
+                  pages: { home: 0, ide: 0, translator: 0, stats: 1, tools: 0, team: 0, other: 0 },
+                  visitors: [{ timestamp: new Date().toISOString(), page: 'stats', ip: clientId.substring(0, 8) + '...', userAgent: navigator.userAgent }],
+                  clients: { [clientId]: true },
+                  updatedAt: now
+                });
+              } else {
+                const d = doc.data();
+                const totalViews = (d.totalViews || 0) + 1;
+                const pages = d.pages || { home: 0, ide: 0, translator: 0, stats: 0, tools: 0, team: 0, other: 0 };
+                pages.stats = (pages.stats || 0) + 1;
+                const clients = d.clients || {};
+                clients[clientId] = true;
+                const uniqueVisitors = Object.keys(clients).length;
+                const visitors = d.visitors || [];
+                visitors.unshift({ timestamp: new Date().toISOString(), page: 'stats', ip: clientId.substring(0, 8) + '...', userAgent: navigator.userAgent });
+                if (visitors.length > 50) visitors.pop();
+
+                transaction.set(statsRef, {
+                  totalViews,
+                  uniqueVisitors,
+                  pages,
+                  visitors,
+                  clients,
+                  updatedAt: now
+                }, { merge: true });
+              }
+            });
+          } catch (txErr) {
+            console.warn("Firestore stat transaction write warning:", txErr);
+          }
+
+          const snap = await statsRef.get();
+          if (snap.exists) {
+            data = snap.data();
+          }
+        }
       } catch (e) {
-        // Fall back to backend API if available, or local storage
+        console.warn("Firestore stats load warning:", e);
       }
 
+      // Fallback to local storage if Firestore is unavailable
       if (!data) {
         try {
-          const statsUrl = getApiUrl('/api/stats');
-          if (statsUrl) {
-            const res = await fetch(statsUrl);
-            if (!res.ok) throw new Error('Backend not available');
-            data = await res.json();
-          } else {
-            throw new Error('Static host - fallback to local analytics');
-          }
-        } catch (e) {
           let localViews = parseInt(localStorage.getItem('vex_total_views') || '128', 10) + 1;
           localStorage.setItem('vex_total_views', localViews);
           data = {
@@ -348,7 +387,7 @@
               { timestamp: new Date().toISOString(), page: 'stats', ip: 'Local Session', userAgent: navigator.userAgent }
             ]
           };
-        }
+        } catch (e) {}
       }
 
       if (data) {
