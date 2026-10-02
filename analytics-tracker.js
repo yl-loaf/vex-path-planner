@@ -11,17 +11,6 @@
   else if (path.includes('stats.html') || path.endsWith('/stats')) pageKey = 'stats';
   else if (path === '/' || path.endsWith('/vex-path-planner/') || path.endsWith('/vex-path-planner/index.html') || path.endsWith('/index.html')) pageKey = 'home';
 
-  let clientId = localStorage.getItem('vex_client_id');
-  if (!clientId) {
-    clientId = 'user_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
-    localStorage.setItem('vex_client_id', clientId);
-  }
-
-  // Ensure tracking happens once per page session
-  const sessionKey = 'tracked_' + pageKey;
-  if (sessionStorage.getItem(sessionKey)) return;
-  sessionStorage.setItem(sessionKey, 'true');
-
   window.addEventListener('DOMContentLoaded', async () => {
     try {
       if (typeof firebase !== 'undefined' && firebase.firestore) {
