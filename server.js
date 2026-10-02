@@ -419,11 +419,6 @@ app.use((req, res, next) => {
     stats.pages[pageKey] = (stats.pages[pageKey] || 0) + 1;
 
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-    if (!stats.ips) stats.ips = [];
-    if (!stats.ips.includes(clientIp)) {
-      stats.ips.push(clientIp);
-      stats.uniqueVisitors = stats.ips.length;
-    }
 
     if (!stats.visitors) stats.visitors = [];
     stats.visitors.unshift({

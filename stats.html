@@ -16,12 +16,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261002.k9" />
+  <link rel="stylesheet" href="style.css?v=20261002.k11" />
   <!-- Firebase SDK Compat CDN -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261002.k9"></script>
+  <script src="firebase-config.js?v=20261002.k11"></script>
   <script>
     (function () {
       try {
@@ -220,11 +220,6 @@
         <div class="stat-card-desc">Cumulative HTTP &amp; Session Ingests</div>
       </div>
       <div class="stat-card">
-        <div class="stat-card-title">[UNIQUE CLIENT SESSIONS]</div>
-        <div class="stat-card-value" id="valUniqueVisitors">--</div>
-        <div class="stat-card-desc">Unique Browser Fingerprints</div>
-      </div>
-      <div class="stat-card">
         <div class="stat-card-title">[PRIMARY TRAFFIC DESTINATION]</div>
         <div class="stat-card-value" id="valTopPage" style="font-size: 1.45rem; padding-top: 10px;">--</div>
         <div class="stat-card-desc">Highest Density Volume Target</div>
@@ -333,10 +328,8 @@
               if (!doc.exists) {
                 transaction.set(statsRef, {
                   totalViews: 1,
-                  uniqueVisitors: 1,
                   pages: { home: 0, ide: 0, translator: 0, stats: 1, tools: 0, team: 0, other: 0 },
                   visitors: [{ timestamp: new Date().toISOString(), page: 'stats', ip: clientId.substring(0, 8) + '...', userAgent: navigator.userAgent }],
-                  clients: { [clientId]: true },
                   updatedAt: now
                 });
               } else {
@@ -344,19 +337,14 @@
                 const totalViews = (d.totalViews || 0) + 1;
                 const pages = d.pages || { home: 0, ide: 0, translator: 0, stats: 0, tools: 0, team: 0, other: 0 };
                 pages.stats = (pages.stats || 0) + 1;
-                const clients = d.clients || {};
-                clients[clientId] = true;
-                const uniqueVisitors = Object.keys(clients).length;
                 const visitors = d.visitors || [];
                 visitors.unshift({ timestamp: new Date().toISOString(), page: 'stats', ip: clientId.substring(0, 8) + '...', userAgent: navigator.userAgent });
                 if (visitors.length > 50) visitors.pop();
 
                 transaction.set(statsRef, {
                   totalViews,
-                  uniqueVisitors,
                   pages,
                   visitors,
-                  clients,
                   updatedAt: now
                 }, { merge: true });
               }
@@ -381,7 +369,6 @@
           localStorage.setItem('vex_total_views', localViews);
           data = {
             totalViews: localViews,
-            uniqueVisitors: Math.max(1, Math.floor(localViews * 0.8)),
             pages: { home: Math.floor(localViews * 0.6), ide: Math.floor(localViews * 0.3), translator: Math.floor(localViews * 0.1), stats: Math.floor(localViews * 0.05), other: 0 },
             visitors: [
               { timestamp: new Date().toISOString(), page: 'stats', ip: 'Local Session', userAgent: navigator.userAgent }
@@ -392,7 +379,6 @@
 
       if (data) {
         document.getElementById('valTotalViews').textContent = (data.totalViews || 0).toLocaleString();
-        document.getElementById('valUniqueVisitors').textContent = (data.uniqueVisitors || 0).toLocaleString();
 
         const pages = data.pages || { home: 0, ide: 0, translator: 0, stats: 0, other: 0 };
         
