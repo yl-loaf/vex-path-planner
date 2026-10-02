@@ -126,49 +126,36 @@
       max-width: 760px;
       line-height: 1.6;
     }
-    /* Utilitarian Redirection Notice */
-    .redirect-banner {
+    /* Portal Launch Banner */
+    .portal-banner {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 16px 20px;
+      border-left: 4px solid var(--primary);
+      border-radius: 6px;
+      padding: 18px 22px;
       margin-bottom: 40px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .redirect-bar-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 16px;
     }
-    .redirect-title {
-      font-size: 0.88rem;
+    .portal-banner-content {
+      max-width: 660px;
+    }
+    .portal-banner-title {
+      font-size: 0.95rem;
       font-weight: 600;
       color: var(--text);
       display: flex;
       align-items: center;
       gap: 8px;
+      margin-bottom: 4px;
     }
-    .progress-bar-wrap {
-      width: 100%;
-      height: 4px;
-      background: var(--surface-subtle);
-      border-radius: 0;
-      overflow: hidden;
-    }
-    .progress-bar {
-      height: 100%;
-      width: 100%;
-      background: #38bdf8;
-      transform-origin: left;
-      animation: countdown 3s linear forwards;
-    }
-    @keyframes countdown {
-      from { transform: scaleX(1); }
-      to { transform: scaleX(0); }
+    .portal-banner-desc {
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      line-height: 1.5;
     }
     .actions {
       display: flex;
@@ -507,23 +494,23 @@
       <p class="lead">Autonomous path planning, PROS C++ source synchronization, and Web Serial USB CDC telemetry for VEX V5 robotics competition teams.</p>
     </header>
 
-    <!-- Utilitarian Automatic Redirection Banner -->
-    <div class="redirect-banner">
-      <div class="redirect-bar-top">
-        <div class="redirect-title">
-          Redirecting to visual path planner in <span id="countdownText" style="color: #38bdf8; font-family: var(--font-mono); font-weight: 700; margin: 0 4px;">3</span>s...
+    <!-- Portal Launch Action Callout -->
+    <div class="portal-banner">
+      <div class="portal-banner-content">
+        <div class="portal-banner-title">
+          <span>🚀</span> Ready to design autonomous routines? Launch the visual suite.
         </div>
-        <div class="actions">
-          <a href="https://yl-loaf.github.io/vex-path-planner/" class="btn btn-primary" id="btnLaunchNow">
-            Open Path Planner Now ➔
-          </a>
-          <button type="button" class="btn btn-outline" id="btnCancelRedirect">
-            Stay on Portal
-          </button>
+        <div class="portal-banner-desc">
+          Design, simulate, and export high-precision LemLib C++ paths with real-time odometry and Web Serial V5 Brain flashing.
         </div>
       </div>
-      <div class="progress-bar-wrap">
-        <div class="progress-bar" id="progressBar"></div>
+      <div class="actions">
+        <a href="https://yl-loaf.github.io/vex-path-planner/" class="btn btn-primary" id="btnLaunchNow">
+          Open Path Planner ➔
+        </a>
+        <a href="https://yl-loaf.github.io/vex-path-planner/ide.html" class="btn btn-outline">
+          PROS C++ IDE ↗
+        </a>
       </div>
     </div>
 
@@ -753,38 +740,5 @@
     </footer>
   </div>
 
-  <script>
-    (function() {
-      var targetUrl = 'https://yl-loaf.github.io/vex-path-planner/';
-      var secondsLeft = 3;
-      var countdownEl = document.getElementById('countdownText');
-      var progressBar = document.getElementById('progressBar');
-      var cancelled = false;
-
-      // Timer countdown for smooth automatic transition
-      var timer = setInterval(function() {
-        if (cancelled) return;
-        secondsLeft -= 1;
-        if (countdownEl) countdownEl.textContent = secondsLeft;
-        if (secondsLeft <= 0) {
-          clearInterval(timer);
-          window.location.replace(targetUrl);
-        }
-      }, 1000);
-
-      // Allow user to cancel auto-redirect to browse the hub
-      var cancelBtn = document.getElementById('btnCancelRedirect');
-      if (cancelBtn) {
-        cancelBtn.addEventListener('click', function() {
-          cancelled = true;
-          clearInterval(timer);
-          if (progressBar) progressBar.style.animation = 'none';
-          var redirectTitle = document.querySelector('.redirect-title');
-          if (redirectTitle) redirectTitle.innerHTML = '✨ Automatic redirect paused. Explore the suite below:';
-          cancelBtn.style.display = 'none';
-        });
-      }
-    })();
-  </script>
 </body>
 </html>
