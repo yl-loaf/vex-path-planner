@@ -2,13 +2,14 @@
 (function() {
   const path = window.location.pathname.toLowerCase();
   let pageKey = 'home';
-  if (path.includes('ide')) pageKey = 'ide';
-  else if (path.includes('translator')) pageKey = 'translator';
-  else if (path.includes('stats')) pageKey = 'stats';
-  else if (path.includes('tools')) pageKey = 'tools';
-  else if (path.includes('team')) pageKey = 'team';
-  else if (path.includes('admin')) pageKey = 'admin';
-  else if (path.includes('documentation') || path.includes('docs')) pageKey = 'documentation';
+  if (path.includes('ide.html') || path.endsWith('/ide')) pageKey = 'ide';
+  else if (path.includes('translator.html') || path.endsWith('/translator')) pageKey = 'translator';
+  else if (path.includes('tools.html') || path.endsWith('/tools')) pageKey = 'tools';
+  else if (path.includes('team.html') || path.endsWith('/team')) pageKey = 'team';
+  else if (path.includes('admin.html') || path.endsWith('/admin')) pageKey = 'admin';
+  else if (path.includes('documentation.html') || path.includes('docs.html') || path.includes('/docs')) pageKey = 'documentation';
+  else if (path.includes('stats.html') || path.endsWith('/stats')) pageKey = 'stats';
+  else if (path === '/' || path.endsWith('/vex-path-planner/') || path.endsWith('/vex-path-planner/index.html') || path.endsWith('/index.html')) pageKey = 'home';
 
   let clientId = localStorage.getItem('vex_client_id');
   if (!clientId) {
