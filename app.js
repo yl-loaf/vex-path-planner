@@ -17147,7 +17147,11 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (debugBrainDot) debugBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
       if (debugBrainStatusName) debugBrainStatusName.textContent = isConn ? `VEX V5 Brain: ${status.name}` : "VEX V5 Brain: Disconnected";
       if (btnDebugConnect) btnDebugConnect.textContent = isConn ? "Disconnect" : "🔌 Connect USB";
-      if (debugBrainBattVal) debugBrainBattVal.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : "--% (-- V)";
+      if (debugBrainBattVal) {
+        debugBrainBattVal.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : "--% (-- V)";
+        debugBrainBattVal.classList.toggle("text-green", Boolean(isConn && status.batteryPct !== null));
+        debugBrainBattVal.classList.toggle("text-muted", !isConn || status.batteryPct === null);
+      }
       if (debugBrainBattBar) debugBrainBattBar.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
       if (debugBrainTempVal) debugBrainTempVal.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
       if (debugBrainVexosVal) debugBrainVexosVal.textContent = isConn ? `v${status.vexosVersion}` : "--";
@@ -18443,10 +18447,13 @@ lemlib::ControllerSettings ${currentMode}_controller(
     });
 
     // From V5 Brain
-    document.getElementById("btnReplayFromBrain")?.addEventListener("click", () => {
+    document.getElementById("btnReplayFromBrain")?.addEventListener("click", async () => {
       if (window.V5BrainSerial) {
         if (!window.V5BrainSerial.isConnected) {
-          window.V5BrainSerial.connectSimulated();
+          if (confirm("VEX V5 Brain is not connected. Connect via USB Web Serial now?")) {
+            await window.V5BrainSerial.connect();
+          }
+          if (!window.V5BrainSerial.isConnected) return;
         }
         reloadAnalysis("slip");
         alert("Synced odometry stream from connected VEX V5 Brain USB CDC port!");

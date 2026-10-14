@@ -1,8 +1,8 @@
 {
-  "totalViews": 167,
+  "totalViews": 180,
   "uniqueVisitors": 5,
   "pages": {
-    "home": 102,
+    "home": 115,
     "ide": 17,
     "translator": 0,
     "stats": 2,
@@ -11,6 +11,84 @@
     "team": 6
   },
   "visitors": [
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-10-14T06:33:22.352Z",
+      "userAgent": "curl/7.88.1"
+    },
+    {
+      "ip": "129.126.36.134, 169.254.169.126",
+      "page": "home",
+      "timestamp": "2026-10-14T06:17:32.381Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+    },
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-10-14T06:17:28.421Z",
+      "userAgent": "Go-http-client/1.1"
+    },
+    {
+      "ip": "129.126.36.134, 169.254.169.126",
+      "page": "home",
+      "timestamp": "2026-10-14T05:56:45.121Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+    },
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-10-14T05:44:06.591Z",
+      "userAgent": "Go-http-client/1.1"
+    },
+    {
+      "ip": "129.126.36.134, 169.254.169.126",
+      "page": "home",
+      "timestamp": "2026-10-14T05:32:26.053Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+    },
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-10-14T05:32:22.500Z",
+      "userAgent": "Go-http-client/1.1"
+    },
+    {
+      "ip": "129.126.36.134, 169.254.169.126",
+      "page": "home",
+      "timestamp": "2026-10-14T05:28:37.979Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+    },
+    {
+      "ip": "129.126.36.134, 169.254.169.126",
+      "page": "home",
+      "timestamp": "2026-10-14T05:12:39.794Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+    },
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-10-14T05:12:36.125Z",
+      "userAgent": "Go-http-client/1.1"
+    },
+    {
+      "ip": "129.126.36.134, 169.254.169.126",
+      "page": "home",
+      "timestamp": "2026-10-14T05:06:00.678Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+    },
+    {
+      "ip": "127.0.0.1",
+      "page": "home",
+      "timestamp": "2026-10-14T05:05:55.557Z",
+      "userAgent": "Go-http-client/1.1"
+    },
+    {
+      "ip": "129.126.36.134, 169.254.169.126",
+      "page": "home",
+      "timestamp": "2026-10-14T05:03:14.737Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+    },
     {
       "ip": "127.0.0.1",
       "page": "other",
@@ -232,84 +310,6 @@
       "page": "home",
       "timestamp": "2026-09-28T00:50:51.873Z",
       "userAgent": "Go-http-client/1.1"
-    },
-    {
-      "ip": "129.126.36.134, 169.254.169.126",
-      "page": "home",
-      "timestamp": "2026-09-28T00:41:30.143Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
-    },
-    {
-      "ip": "127.0.0.1",
-      "page": "home",
-      "timestamp": "2026-09-28T00:41:26.389Z",
-      "userAgent": "Go-http-client/1.1"
-    },
-    {
-      "ip": "129.126.36.134, 169.254.169.126",
-      "page": "home",
-      "timestamp": "2026-09-28T00:32:27.133Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
-    },
-    {
-      "ip": "127.0.0.1",
-      "page": "home",
-      "timestamp": "2026-09-28T00:32:23.028Z",
-      "userAgent": "Go-http-client/1.1"
-    },
-    {
-      "ip": "129.126.36.134, 169.254.169.126",
-      "page": "home",
-      "timestamp": "2026-09-28T00:30:58.208Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
-    },
-    {
-      "ip": "127.0.0.1",
-      "page": "home",
-      "timestamp": "2026-09-28T00:30:54.314Z",
-      "userAgent": "Go-http-client/1.1"
-    },
-    {
-      "ip": "129.126.36.134, 169.254.169.126",
-      "page": "home",
-      "timestamp": "2026-09-28T00:27:57.122Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
-    },
-    {
-      "ip": "127.0.0.1",
-      "page": "home",
-      "timestamp": "2026-09-28T00:10:41.410Z",
-      "userAgent": "Go-http-client/1.1"
-    },
-    {
-      "ip": "129.126.36.134, 169.254.169.126",
-      "page": "home",
-      "timestamp": "2026-09-27T23:57:35.766Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
-    },
-    {
-      "ip": "127.0.0.1",
-      "page": "home",
-      "timestamp": "2026-09-27T23:57:32.063Z",
-      "userAgent": "Go-http-client/1.1"
-    },
-    {
-      "ip": "129.126.36.134, 169.254.169.126",
-      "page": "home",
-      "timestamp": "2026-09-27T23:49:15.288Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
-    },
-    {
-      "ip": "127.0.0.1",
-      "page": "home",
-      "timestamp": "2026-09-27T23:49:12.580Z",
-      "userAgent": "Go-http-client/1.1"
-    },
-    {
-      "ip": "129.126.36.134, 169.254.169.126",
-      "page": "home",
-      "timestamp": "2026-09-27T23:48:44.139Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
     }
   ],
   "ips": [

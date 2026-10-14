@@ -2405,7 +2405,13 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         }
 
         // 7. Statement Completion & Syntax Validation
-        const isControlStructure = /^(if|else|while|for|switch|case|default|try|catch|namespace|class|struct|enum|public|private|protected|typedef|using)\b/.test(codeWithoutStrings);
+        const isControlStructure = /^(if|else|while|for|switch|case|default|try|catch|namespace|class|struct|enum|public|private|protected|typedef|using|template)\b/.test(codeWithoutStrings);
+        const isFunctionOrLambda = /^[a-zA-Z0-9_:]+\s+[a-zA-Z0-9_:]+\s*\([^)]*\)\s*$/.test(codeWithoutStrings) ||
+                                   /^void\s+[a-zA-Z0-9_:]+\s*\([^)]*\)\s*$/.test(codeWithoutStrings) ||
+                                   /\[[^\]]*\]\s*\([^)]*\)\s*$/.test(codeWithoutStrings);
+        const isMacroOrDirective = /^[A-Z0-9_]+\s*\([^)]*\)$/.test(codeWithoutStrings) || codePart.startsWith("#");
+        const isChainedOrOperatorEnding = /[.+*\/=,&|!?:<>(^%~-]$/.test(codeWithoutStrings) || codeWithoutStrings.endsWith("::") || codeWithoutStrings.endsWith("->");
+
         const isLineEndingValid =
           codeWithoutStrings.endsWith(";") ||
           codeWithoutStrings.endsWith("{") ||
@@ -2415,20 +2421,19 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           codeWithoutStrings.endsWith("\\") ||
           codeWithoutStrings.endsWith("(") ||
           codeWithoutStrings.endsWith("[") ||
-          codeWithoutStrings.endsWith("+") ||
-          codeWithoutStrings.endsWith("-") ||
-          codeWithoutStrings.endsWith("*") ||
-          codeWithoutStrings.endsWith("/") ||
-          codeWithoutStrings.endsWith("=") ||
-          codeWithoutStrings.endsWith("&") ||
-          codeWithoutStrings.endsWith("|") ||
+          codeWithoutStrings.endsWith(")") ||
+          codeWithoutStrings.endsWith(">") ||
+          isChainedOrOperatorEnding ||
+          isControlStructure ||
+          isFunctionOrLambda ||
+          isMacroOrDirective ||
           isInsideParensOrBrackets;
 
-        if (!isControlStructure && !isLineEndingValid) {
-          errors.push({
+        if (!isControlStructure && !isLineEndingValid && !isFunctionOrLambda && !isMacroOrDirective) {
+          warnings.push({
             file: fileName,
             line: lineNum,
-            message: `SyntaxError: Expected ';' at end of statement: '${codePart}'`,
+            message: `Linter hint: Statement may be missing ';' or continuing on next line: '${codePart}'`,
           });
           statementBuffer = "";
           statementStartLine = 0;
@@ -2443,7 +2448,6 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         // When a statement finishes at ';' and we are not inside multi-line parens/brackets
         if (codeWithoutStrings.endsWith(";") && !isInsideParensOrBrackets) {
           const fullStmt = statementBuffer.replace(/;$/, "").trim();
-          const startLine = statementStartLine || lineNum;
           statementBuffer = "";
           statementStartLine = 0;
 
@@ -2451,34 +2455,16 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
             const isFunctionCall = /[a-zA-Z0-9_:]+\s*\([^)]*\)/.test(fullStmt);
             const isAssignmentOrOp = /=|\+=|-=|\*=|\/=|%=|\+\+|--|<<|>>/.test(fullStmt);
             const isReturnOrBreak = /^(return|break|continue|goto)\b/.test(fullStmt);
-            const isDeclaration = /^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+)*([a-zA-Z0-9_:]+)\s+([a-zA-Z0-9_]+)/.test(fullStmt);
+            const isDeclaration = /^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+|inline\s+|constexpr\s+)*([a-zA-Z0-9_:<>\*\&]+)\s+([a-zA-Z0-9_]+)/.test(fullStmt);
 
-            if (!isFunctionCall && !isAssignmentOrOp && !isReturnOrBreak) {
-              if (!isDeclaration) {
-                const shortStmt = fullStmt.length > 45 ? fullStmt.slice(0, 42) + "..." : fullStmt;
-                errors.push({
-                  file: fileName,
-                  line: startLine,
-                  message: `SyntaxError: Invalid C++ statement or unknown identifier '${shortStmt}'`,
-                });
-              } else {
-                const declMatch = fullStmt.match(/^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+)*([a-zA-Z0-9_:]+)\s+([a-zA-Z0-9_]+)/);
-                if (declMatch) {
-                  const typeToken = declMatch[1];
-                  const varToken = declMatch[2];
-                  const isKnownType = validTypesAndKeywords.has(typeToken) ||
-                                      typeToken.includes("::") ||
-                                      symbolSet.has(typeToken) ||
-                                      /^[A-Z][a-zA-Z0-9_]*$/.test(typeToken);
-                  if (!isKnownType) {
-                    errors.push({
-                      file: fileName,
-                      line: startLine,
-                      message: `SyntaxError: Unknown type or invalid statement '${typeToken} ${varToken}'`,
-                    });
-                  }
-                }
-              }
+            if (!isFunctionCall && !isAssignmentOrOp && !isReturnOrBreak && !isDeclaration) {
+              const shortStmt = fullStmt.length > 45 ? fullStmt.slice(0, 42) + "..." : fullStmt;
+              // Informational warning only; do not fail compilation for custom C++ templates/macros
+              warnings.push({
+                file: fileName,
+                line: lineNum,
+                message: `Linter notice: Could not deduce declaration signature for '${shortStmt}'`,
+              });
             }
           }
         } else if (codeWithoutStrings.endsWith("{") || codeWithoutStrings.endsWith("}")) {
@@ -2486,27 +2472,27 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           statementStartLine = 0;
         }
 
-        // 8. LemLib API Parameter Count Validation
+        // 8. LemLib API Parameter Count Validation (Informational warnings, non-blocking)
         const mtPoint = codeWithoutStrings.match(/chassis\.moveToPoint\s*\(([^)]*)\)/);
-        if (mtPoint) {
+        if (mtPoint && !mtPoint[1].includes("{")) {
           const args = mtPoint[1].split(",").map(a => a.trim()).filter(Boolean);
           if (args.length < 2) {
-            errors.push({
+            warnings.push({
               file: fileName,
               line: lineNum,
-              message: `SyntaxError: chassis.moveToPoint requires at least 2 arguments (x, y). Received ${args.length}`,
+              message: `Notice: chassis.moveToPoint expected at least 2 arguments (x, y). Received ${args.length}`,
             });
           }
         }
 
         const mtPose = codeWithoutStrings.match(/chassis\.moveToPose\s*\(([^)]*)\)/);
-        if (mtPose) {
+        if (mtPose && !mtPose[1].includes("{")) {
           const args = mtPose[1].split(",").map(a => a.trim()).filter(Boolean);
           if (args.length < 3) {
-            errors.push({
+            warnings.push({
               file: fileName,
               line: lineNum,
-              message: `SyntaxError: chassis.moveToPose requires at least 3 arguments (x, y, theta). Received ${args.length}`,
+              message: `Notice: chassis.moveToPose expected at least 3 arguments (x, y, theta). Received ${args.length}`,
             });
           }
         }
@@ -2671,6 +2657,18 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       logs.push("LINK bin/cold.package.elf");
       logs.push("STRIP bin/hot.package.bin (Dynamic user payload)");
       logs.push("Creating VEXos Monolithic Package bundle...");
+
+      // Append detailed compiler diagnostics into build output logs (GCC/Clang format)
+      if (errors.length > 0) {
+        errors.forEach(err => {
+          logs.push(`${err.file}:${err.line}:1: error: ${err.message}`);
+        });
+      }
+      if (warnings.length > 0) {
+        warnings.forEach(warn => {
+          logs.push(`${warn.file}:${warn.line}:1: warning: ${warn.message}`);
+        });
+      }
 
       const success = errors.length === 0;
       const elapsed = ((performance.now() - startTime) / 1000 + 0.35).toFixed(2);

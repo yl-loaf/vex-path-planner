@@ -55,6 +55,22 @@
           { slot: 8, name: "Empty", date: "-", sizeKb: 0 },
         ]
       };
+
+      // Listen for physical USB unplug/plug events at browser level
+      if (typeof navigator !== "undefined" && "serial" in navigator) {
+        try {
+          navigator.serial.addEventListener("disconnect", (event) => {
+            this.logDebug("WebSerial", "Physical USB disconnect event fired by browser.");
+            if (this.port === event.target || this.isConnected) {
+              this.logDebug("WebSerial", "VEX V5 device physically unplugged. Resetting status to Disconnected (--%).");
+              this.disconnect();
+            }
+          });
+          navigator.serial.addEventListener("connect", (event) => {
+            this.logDebug("WebSerial", "USB Serial device attached. Ready for user connection.");
+          });
+        } catch (_) {}
+      }
     }
 
     logDebug(category, msg, data = null) {
@@ -300,9 +316,16 @@
         let textBuffer = "";
 
         while (this.isConnected && this.reader) {
-          const { value, done } = await this.reader.read();
+          let readResult;
+          try {
+            readResult = await this.reader.read();
+          } catch (readErr) {
+            this.logDebug("WebSerial", `Device read error (physical unplug detected): ${readErr.message}`);
+            break;
+          }
+          const { value, done } = readResult;
           if (done) {
-            this.logDebug("WebSerial", "Serial reader stream closed by host/device.");
+            this.logDebug("WebSerial", "Serial reader stream finished/closed by host or device.");
             break;
           }
           if (value && value.length > 0) {
@@ -331,13 +354,16 @@
           }
         }
       } catch (err) {
-        if (this.isConnected) {
-          this.logDebug("WebSerial", `Serial stream read error: ${err.message}`, err);
-        }
+        this.logDebug("WebSerial", `Serial stream read failure: ${err.message}`, err);
       } finally {
         if (this.reader) {
           try { this.reader.releaseLock(); } catch (_) {}
           this.reader = null;
+        }
+        // When reading stops, if the device was physically lost, immediately force disconnect
+        if (this.isConnected) {
+          this.logDebug("WebSerial", "Read loop ended. Ensuring clean Disconnected (--%) state.");
+          await this.disconnect();
         }
       }
     }
@@ -354,17 +380,15 @@
             .join(" ");
           this.logDebug("V5 CDC RX", `Header [0xAA, 0x55] Packet ID: 0x${cmdId.toString(16).toUpperCase()} | Bytes: ${hexDump}`);
 
-          // If Query1 response (0x21): inspect payload for battery voltage or status
-          if (cmdId === 0x21 && bytes.length >= i + 6) {
-            // Some firmware sends battery voltage in mV as little-endian uint16 at payload offset
-            const low = bytes[i + 3];
-            const high = bytes[i + 4];
-            const rawVal = low | (high << 8);
+          // Inspect payload for battery voltage (mV) or percentage across offsets
+          for (let offset = i + 3; offset <= Math.min(bytes.length - 2, i + 20); offset++) {
+            const rawVal = bytes[offset] | (bytes[offset + 1] << 8);
             if (rawVal >= 9000 && rawVal <= 14500) {
               this.status.batteryMv = rawVal;
               this.status.batteryPct = this.calculateBatteryPct(rawVal);
-              this.logDebug("Battery CDC", `Decoded Query1 battery voltage: ${rawVal} mV (${this.status.batteryPct}%)`);
+              this.logDebug("Battery CDC", `Decoded CDC packet battery voltage: ${rawVal} mV (${this.status.batteryPct}%)`);
               this.emit("status", this.status);
+              break;
             }
           }
           break;
