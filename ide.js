@@ -2582,6 +2582,11 @@
   // Events & Compilation
   // -------------------------------------------------------------
   function wireEvents() {
+    const btnBuildAndUpload = document.getElementById("btnBuildAndUpload");
+    if (btnBuildAndUpload) {
+      btnBuildAndUpload.addEventListener("click", runBuildAndUpload);
+    }
+
     if (btnCompile) {
       btnCompile.addEventListener("click", runCompilation);
     }
@@ -3171,13 +3176,19 @@
 
     async function handleFlashUpload() {
       if (!window.V5BrainSerial) return;
+
+      // If brain not connected, prompt to connect
       if (!window.V5BrainSerial.isConnected) {
-        window.V5BrainSerial.connectSimulated();
+        if (window.V5BrainSerial.isWebSerialSupported()) {
+          const ok = await window.V5BrainSerial.connect();
+          if (!ok) window.V5BrainSerial.connectSimulated();
+        } else {
+          window.V5BrainSerial.connectSimulated();
+        }
       }
 
-      openBrainModal();
       const slot = parseInt(modalSlotSelect?.value || "1", 10);
-      const projName = window.ProjectManager?.project?.name || "Override_Project";
+      const projName = window.ProjectManager?.project?.name || "Override_Auton";
 
       if (modalUploadProgressWrap) modalUploadProgressWrap.style.display = "block";
       if (btnUploadToBrain) {
@@ -3192,16 +3203,106 @@
           if (modalUploadProgressBar) modalUploadProgressBar.style.width = `${pct}%`;
           if (btnUploadToBrain) btnUploadToBrain.textContent = `⏳ Flashing ${pct}%`;
         });
-        alert(`🚀 Successfully flashed code to VEX V5 Brain (Slot ${slot})!`);
+        if (typeof showToast === "function") {
+          showToast(`🚀 Successfully flashed '${projName}' to VEX V5 Brain (Slot ${slot})!`);
+        }
       } catch (e) {
-        alert(`❌ Flash failed: ${e.message}`);
+        console.error("Flash error:", e);
+        if (typeof showToast === "function") {
+          showToast(`❌ Flash failed: ${e.message}`);
+        }
       } finally {
         if (modalUploadProgressWrap) modalUploadProgressWrap.style.display = "none";
         if (btnUploadToBrain) {
           btnUploadToBrain.disabled = false;
-          btnUploadToBrain.textContent = "🚀 Flash to Brain";
+          btnUploadToBrain.textContent = "🚀 Flash";
         }
         if (btnModalUploadAuton) btnModalUploadAuton.disabled = false;
+      }
+    }
+
+    // Unified 1-Click: Build (pros make) and Upload directly to Brain slot
+    async function runBuildAndUpload() {
+      saveCurrentEditorState();
+      if (!elBuildConsole) return;
+
+      // Switch tab to build output
+      const buildTabBtn = document.querySelector('.ide-out-tab[data-tab="build"]');
+      if (buildTabBtn) buildTabBtn.click();
+
+      elBuildConsole.textContent = "⚡ Unified 1-Click Build & Upload (pros make && pros upload)\n";
+      elBuildConsole.textContent += "========================================================\n\n";
+
+      const btnBuildAndUpload = document.getElementById("btnBuildAndUpload");
+      if (btnBuildAndUpload) {
+        btnBuildAndUpload.disabled = true;
+        btnBuildAndUpload.textContent = "⏳ Building...";
+      }
+
+      try {
+        const pm = window.ProjectManager;
+        if (!pm) throw new Error("ProjectManager service is unavailable");
+
+        elBuildConsole.textContent += "Compiling workspace files...\n";
+        const res = pm.compileProject();
+        elBuildConsole.textContent += res.logs || "Compilation complete.\n";
+        updateDiagnosticsUI();
+
+        if (res.stats) {
+          const memFlashFill = document.getElementById("memFlashFill");
+          const memFlashText = document.getElementById("memFlashText");
+          const memRamFill = document.getElementById("memRamFill");
+          const memRamText = document.getElementById("memRamText");
+
+          const flashPct = res.stats.flashPct || 0;
+          const flashBytes = res.stats.flashBytes || 0;
+          const ramPct = res.stats.ramPct || 0;
+          const ramBytes = res.stats.ramBytes || 0;
+
+          if (memFlashFill) memFlashFill.style.width = `${Math.min(100, flashPct)}%`;
+          if (memFlashText) memFlashText.textContent = `${(flashBytes / 1024).toFixed(1)} KB / 32.0 MB (${flashPct.toFixed(2)}%)`;
+          if (memRamFill) memRamFill.style.width = `${Math.min(100, ramPct)}%`;
+          if (memRamText) memRamText.textContent = `${(ramBytes / 1024).toFixed(1)} KB / 32.0 MB (${ramPct.toFixed(2)}%)`;
+        }
+
+        if (!res.success) {
+          elBuildConsole.textContent += "\n❌ Build failed. Please resolve compilation errors before uploading to Brain.\n";
+          if (typeof showToast === "function") showToast("❌ Build failed! Check diagnostics tab.");
+          return;
+        }
+
+        elBuildConsole.textContent += "\n✅ Build successful (0 errors). Connecting to VEX V5 Brain...\n";
+        if (btnBuildAndUpload) btnBuildAndUpload.textContent = "⏳ Uploading...";
+
+        // Ensure Brain connection
+        if (!window.V5BrainSerial.isConnected) {
+          if (window.V5BrainSerial.isWebSerialSupported()) {
+            const ok = await window.V5BrainSerial.connect();
+            if (!ok) window.V5BrainSerial.connectSimulated();
+          } else {
+            window.V5BrainSerial.connectSimulated();
+          }
+        }
+
+        const slot = parseInt(modalSlotSelect?.value || "1", 10);
+        const projName = pm.project?.name || "Override_Auton";
+
+        await window.V5BrainSerial.uploadToSlot(slot, projName, (pct) => {
+          if (btnBuildAndUpload) btnBuildAndUpload.textContent = `⏳ Uploading ${pct}%`;
+        });
+
+        elBuildConsole.textContent += `\n🚀 Build & Upload Complete! Program '${projName}' flashed to Slot ${slot} on V5 Brain.\n`;
+        if (typeof showToast === "function") {
+          showToast(`🚀 Build & Upload Succeeded! Program flashed to Slot ${slot}.`);
+        }
+      } catch (err) {
+        elBuildConsole.textContent += `\n❌ Build & Upload Error: ${err.message || err}\n`;
+        if (typeof showToast === "function") showToast(`❌ Build & Upload Error: ${err.message}`);
+      } finally {
+        if (btnBuildAndUpload) {
+          btnBuildAndUpload.disabled = false;
+          btnBuildAndUpload.textContent = "⚡ Build & Upload";
+        }
       }
     }
 
@@ -3246,7 +3347,7 @@
       if (ideBrainText) ideBrainText.textContent = isConn ? `Brain: ${status.name} (Slot ${status.activeSlot})` : "Brain: Disconnected";
       if (ideBrainBatt) {
         ideBrainBatt.hidden = !isConn;
-        if (isConn) ideBrainBatt.textContent = `⚡ ${status.batteryPct}%`;
+        if (isConn) ideBrainBatt.textContent = `⚡ ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)`;
       }
 
       if (modalBrainDot) modalBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
@@ -3255,10 +3356,10 @@
       if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-block";
       if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-block" : "none";
 
-      if (modalBattPct) modalBattPct.textContent = `${status.batteryPct}%`;
-      if (modalBattFill) modalBattFill.style.width = `${status.batteryPct}%`;
-      if (modalBattMv) modalBattMv.textContent = `${(status.batteryMv / 1000).toFixed(2)} V`;
-      if (modalBattTemp) modalBattTemp.textContent = `${status.batteryTempC} °C`;
+      if (modalBattPct) modalBattPct.textContent = isConn ? `${status.batteryPct}%` : "--%";
+      if (modalBattFill) modalBattFill.style.width = isConn ? `${status.batteryPct}%` : "0%";
+      if (modalBattMv) modalBattMv.textContent = isConn ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
+      if (modalBattTemp) modalBattTemp.textContent = isConn ? `${status.batteryTempC} °C` : "-- °C";
 
       renderModalSmartports();
     }
@@ -3393,10 +3494,9 @@
         elBuildConsole.textContent = res.logs || "Compilation complete.";
 
         if (res.success) {
-          elBuildConsole.textContent += `\n📥 Compiled binary package ready (.hot.package.bin). Downloading binary & syncing to V5 build output...\n`;
-          pm.downloadCompiledBinary();
+          elBuildConsole.textContent += `\n📦 Binary package compiled successfully (.hot.package.bin).\nReady to flash to V5 Brain slot via '⚡ Build & Upload' or '🚀 Flash'.\n`;
           if (typeof showToast === "function") {
-            showToast("✅ Build succeeded! Compiled binary downloaded & ready for V5 Brain upload.");
+            showToast("✅ Build succeeded! Ready to flash to V5 Brain.");
           }
         }
 

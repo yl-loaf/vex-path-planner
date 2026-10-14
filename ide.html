@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20261014.k5" />
+  <link rel="stylesheet" href="style.css?v=20261014.k8" />
   <script>
     (function () {
       try {
@@ -60,17 +60,20 @@
         <div id="ideBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect USB" style="border-radius: 4px; font-family:var(--font-mono);">
           <span class="brain-status-dot disconnected" id="ideBrainDot"></span>
           <span class="brain-status-text" id="ideBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="ideBrainBatt" hidden>94%</span>
+          <span class="brain-battery-pill" id="ideBrainBatt" hidden>--%</span>
           <button type="button" id="btnConnectBrain" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC" style="border-radius: 4px;">Connect</button>
         </div>
 
         <!-- Build & Flash Primary Group -->
         <div class="ide-btn-group">
+          <button type="button" id="btnBuildAndUpload" class="btn-ide-upload" title="1-Click: Compile workspace with pros make and upload directly to VEX V5 Brain" style="background:#2563eb; border-color:#3b82f6; color:#ffffff; font-weight:700; border-radius: 4px; font-family:var(--font-mono);">
+            ⚡ Build &amp; Upload
+          </button>
           <button type="button" id="btnCompileProject" class="btn-ide-compile" title="Compile entire PROS LemLib project (pros make)" style="border-radius: 4px; font-family:var(--font-mono);">
-            Compile
+            🔨 Build
           </button>
           <button type="button" id="btnUploadToBrain" class="btn-ide-upload" title="Upload compiled PROS binary to VEX V5 Brain slot" style="border-radius: 4px; font-family:var(--font-mono);">
-            Flash
+            🚀 Flash
           </button>
         </div>
 
@@ -329,11 +332,11 @@
           <!-- Battery Gauge Card -->
           <div class="brain-gauge-card">
             <div class="gauge-card-title">🔋 Main 12.8V Battery</div>
-            <div class="gauge-card-hero" id="modalBattPct">94%</div>
-            <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalBattFill" style="width:94%;"></div></div>
+            <div class="gauge-card-hero" id="modalBattPct">--%</div>
+            <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalBattFill" style="width:0%;"></div></div>
             <div class="gauge-card-meta">
-              <span>Voltage: <strong id="modalBattMv">12.45 V</strong></span>
-              <span>Temp: <strong id="modalBattTemp">28 °C</strong></span>
+              <span>Voltage: <strong id="modalBattMv">-- V</strong></span>
+              <span>Temp: <strong id="modalBattTemp">-- °C</strong></span>
             </div>
           </div>
 
@@ -744,22 +747,22 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20261014.k5"></script>
+  <script src="version.js?v=20261014.k8"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261014.k5"></script>
+  <script src="firebase-config.js?v=20261014.k8"></script>
   <script src="analytics-tracker.js"></script>
   <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261014.k5"></script>
-  <script src="session-guard.js?v=20261014.k5"></script>
-  <script src="theme.js?v=20261014.k5"></script>
-  <script src="v5-brain-serial.js?v=20261014.k5"></script>
-  <script src="project-manager.js?v=20261014.k5"></script>
+  <script src="google-drive-sync.js?v=20261014.k8"></script>
+  <script src="session-guard.js?v=20261014.k8"></script>
+  <script src="theme.js?v=20261014.k8"></script>
+  <script src="v5-brain-serial.js?v=20261014.k8"></script>
+  <script src="project-manager.js?v=20261014.k8"></script>
   <!-- Monaco Editor (VS Code Engine) AMD Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="ide.js?v=20261014.k5"></script>
-  <script src="tutorial.js?v=20261014.k5"></script>
+  <script src="ide.js?v=20261014.k8"></script>
+  <script src="tutorial.js?v=20261014.k8"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {

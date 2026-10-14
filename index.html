@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261014.k5" />
+  <link rel="stylesheet" href="style.css?v=20261014.k8" />
   <script>
     (function () {
       try {
@@ -543,7 +543,7 @@
         <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB">
           <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
           <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>94%</span>
+          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>--%</span>
           <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">Connect</button>
           <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;">Upload &amp; Run</button>
         </div>
@@ -2927,11 +2927,11 @@ void autonomous() {
           <!-- Battery Gauge Card -->
           <div class="brain-gauge-card">
             <div class="gauge-card-title">🔋 Main 12.8V Battery</div>
-            <div class="gauge-card-hero" id="modalBattPct">94%</div>
-            <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalBattFill" style="width:94%;"></div></div>
+            <div class="gauge-card-hero" id="modalBattPct">--%</div>
+            <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalBattFill" style="width:0%;"></div></div>
             <div class="gauge-card-meta">
-              <span>Voltage: <strong id="modalBattMv">12.45 V</strong></span>
-              <span>Temp: <strong id="modalBattTemp">28 °C</strong></span>
+              <span>Voltage: <strong id="modalBattMv">-- V</strong></span>
+              <span>Temp: <strong id="modalBattTemp">-- °C</strong></span>
             </div>
           </div>
 
@@ -3526,25 +3526,25 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20261014.k5"></script>
+  <script src="version.js?v=20261014.k8"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261014.k5"></script>
+  <script src="firebase-config.js?v=20261014.k8"></script>
   <script src="analytics-tracker.js"></script>
   <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261014.k5"></script>
-  <script src="session-guard.js?v=20261014.k5"></script>
-  <script src="theme.js?v=20261014.k5"></script>
-  <script src="v5-brain-serial.js?v=20261014.k5"></script>
-  <script src="project-manager.js?v=20261014.k5"></script>
-  <script src="cpp-parser.js?v=20261014.k5"></script>
-  <script src="scoring-engine.js?v=20261014.k5"></script>
-  <script src="match-analysis-engine.js?v=20261014.k5"></script>
-  <script src="app.js?v=20261014.k5"></script>
-  <script src="tutorial.js?v=20261014.k5"></script>
+  <script src="google-drive-sync.js?v=20261014.k8"></script>
+  <script src="session-guard.js?v=20261014.k8"></script>
+  <script src="theme.js?v=20261014.k8"></script>
+  <script src="v5-brain-serial.js?v=20261014.k8"></script>
+  <script src="project-manager.js?v=20261014.k8"></script>
+  <script src="cpp-parser.js?v=20261014.k8"></script>
+  <script src="scoring-engine.js?v=20261014.k8"></script>
+  <script src="match-analysis-engine.js?v=20261014.k8"></script>
+  <script src="app.js?v=20261014.k8"></script>
+  <script src="tutorial.js?v=20261014.k8"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

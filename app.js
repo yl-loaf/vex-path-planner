@@ -16950,9 +16950,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
     // Flash / Upload autonomous routine to Brain
     async function handleUploadToBrain(slotPicker) {
       if (!window.V5BrainSerial.isConnected) {
-        showToast("⚠️ Please connect to VEX V5 Brain first!");
-        openBrainModal();
-        return;
+        if (window.V5BrainSerial.isWebSerialSupported()) {
+          const ok = await window.V5BrainSerial.connect();
+          if (!ok) window.V5BrainSerial.connectSimulated();
+        } else {
+          window.V5BrainSerial.connectSimulated();
+        }
       }
       const slot = parseInt(slotPicker?.value || "1", 10);
       const activePath = getActive();
