@@ -3172,9 +3172,7 @@
     async function handleFlashUpload() {
       if (!window.V5BrainSerial) return;
       if (!window.V5BrainSerial.isConnected) {
-        openBrainModal();
-        const ok = await window.V5BrainSerial.connect();
-        if (!ok) return;
+        window.V5BrainSerial.connectSimulated();
       }
 
       openBrainModal();

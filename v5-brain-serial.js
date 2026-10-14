@@ -25,8 +25,8 @@
         connected: false,
         name: "V5-Brain-Red1",
         vexosVersion: "1.1.4",
-        batteryMv: 12450,
-        batteryPct: 94,
+        batteryMv: 13150,
+        batteryPct: 98,
         batteryTempC: 28,
         activeSlot: 1,
         programRunning: false,
@@ -48,9 +48,9 @@
           15: { type: "Distance", name: "dist_sensor", status: "OK", distanceMm: 450 },
         },
         slots: [
-          { slot: 1, name: "Override_Auton", date: "2026-09-21 17:30", sizeKb: 146 },
-          { slot: 2, name: "Skills_60s_Run", date: "2026-09-20 14:15", sizeKb: 142 },
-          { slot: 3, name: "Solo_AWP_Blue", date: "2026-09-18 10:00", sizeKb: 138 },
+          { slot: 1, name: "Override_Auton", date: "2026-10-13 17:30", sizeKb: 146 },
+          { slot: 2, name: "Skills_60s_Run", date: "2026-10-13 14:15", sizeKb: 142 },
+          { slot: 3, name: "Solo_AWP_Blue", date: "2026-10-12 10:00", sizeKb: 138 },
           { slot: 4, name: "Empty", date: "-", sizeKb: 0 },
           { slot: 5, name: "Empty", date: "-", sizeKb: 0 },
           { slot: 6, name: "Empty", date: "-", sizeKb: 0 },
@@ -60,6 +60,13 @@
       };
     }
 
+    calculateBatteryPct(mv) {
+      // VEX V5 Battery (LiFePO4 4-series): 10500mV (0%) to 13200mV (100%)
+      const minMv = 10500;
+      const maxMv = 13200;
+      return Math.min(100, Math.max(0, Math.round(((mv - minMv) / (maxMv - minMv)) * 100)));
+    }
+
     isWebSerialSupported() {
       return typeof navigator !== "undefined" && "serial" in navigator;
     }
@@ -67,11 +74,8 @@
     // Connect to VEX V5 Brain via Web Serial API
     async connect() {
       if (!this.isWebSerialSupported()) {
-        alert("Web Serial API is not supported in this browser. Please use Chrome or Edge on desktop to connect to physical VEX V5 Brain.");
-        this.isConnected = false;
-        this.status.connected = false;
-        this.emit("disconnected", { status: this.status });
-        return false;
+        console.warn("Web Serial API not supported; falling back to simulated V5 Brain.");
+        return this.connectSimulated();
       }
 
       try {
@@ -87,11 +91,8 @@
         this.emit("connected", { simulated: false, status: this.status });
         return true;
       } catch (err) {
-        console.warn("Real serial connection cancelled or unavailable:", err);
-        this.isConnected = false;
-        this.status.connected = false;
-        this.emit("disconnected", { status: this.status });
-        return false;
+        console.warn("Real serial connection cancelled or unavailable, falling back to simulation:", err);
+        return this.connectSimulated();
       }
     }
 
@@ -100,6 +101,8 @@
       this.isConnected = true;
       this.isSimulated = true;
       this.status.connected = true;
+      this.status.batteryMv = 13150;
+      this.status.batteryPct = this.calculateBatteryPct(this.status.batteryMv);
       this.startTelemetryLoop();
       this.emit("connected", { simulated: true, status: this.status });
       this.emit("terminal", "[VEX V5 Brain Connected (Simulated Mode)]\n[VEXos 1.1.4 Kernel Active] Telemetry online.\n");
@@ -165,7 +168,7 @@
       const battMatch = text.match(/BATT:\s*([0-9.]+)\s*V/i);
       if (battMatch && battMatch[1]) {
         this.status.batteryMv = Math.round(parseFloat(battMatch[1]) * 1000);
-        this.status.batteryPct = Math.min(100, Math.max(0, Math.round(((parseFloat(battMatch[1]) - 11.0) / 1.8) * 100)));
+        this.status.batteryPct = this.calculateBatteryPct(this.status.batteryMv);
         this.emit("status", this.status);
       }
     }
@@ -178,8 +181,8 @@
         // Subtle realistic telemetry variations
         if (this.isSimulated) {
           const deltaMv = (Math.random() - 0.5) * 20;
-          this.status.batteryMv = Math.max(11200, Math.min(12800, this.status.batteryMv + deltaMv));
-          this.status.batteryPct = Math.round(((this.status.batteryMv - 11000) / 1800) * 100);
+          this.status.batteryMv = Math.max(11500, Math.min(13200, this.status.batteryMv + deltaMv));
+          this.status.batteryPct = this.calculateBatteryPct(this.status.batteryMv);
           this.status.batteryTempC = 28 + Math.floor(Math.sin(Date.now() / 10000) * 2);
         }
 
@@ -190,7 +193,7 @@
     // Upload compiled program binary to specified slot (1–8)
     async uploadToSlot(slot = 1, programName = "Override_LemLib_Auton", onProgress) {
       if (!this.isConnected) {
-        throw new Error("No VEX V5 Brain connected. Please connect via USB first.");
+        this.connectSimulated();
       }
 
       this.emit("terminal", `\n>> pros upload --slot ${slot} --name "${programName}"\nInitiating VEX CDC flashing protocol...\n`);
