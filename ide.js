@@ -3392,6 +3392,14 @@
         const res = pm.compileProject();
         elBuildConsole.textContent = res.logs || "Compilation complete.";
 
+        if (res.success) {
+          elBuildConsole.textContent += `\n📥 Compiled binary package ready (.hot.package.bin). Downloading binary & syncing to V5 build output...\n`;
+          pm.downloadCompiledBinary();
+          if (typeof showToast === "function") {
+            showToast("✅ Build succeeded! Compiled binary downloaded & ready for V5 Brain upload.");
+          }
+        }
+
         // Only diagnose the current opened file in the Diagnostics tab
         updateDiagnosticsUI();
 

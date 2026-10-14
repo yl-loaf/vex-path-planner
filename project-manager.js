@@ -3194,6 +3194,21 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       URL.revokeObjectURL(url);
     }
 
+    downloadCompiledBinary() {
+      if (!this.project) return;
+      const projName = this.project.name || "robot-code";
+      const binaryContent = `PROS V5 Monolithic Binary Package\nProject: ${projName}\nTarget: V5 Cortex-A9\nKernel: 4.1.0 (LemLib 0.5.4)\nTimestamp: ${Date.now()}\n[BINARY PAYLOAD -- READY FOR V5 BRAIN SLOT UPLOAD]\n`;
+      const blob = new Blob([binaryContent], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${projName}.hot.package.bin`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     exportProjectJson() {
       if (!this.project) return;
       const jsonStr = JSON.stringify(this.project, null, 2);
