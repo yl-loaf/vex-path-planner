@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20261014.k8" />
+  <link rel="stylesheet" href="style.css?v=20261014.k12" />
   <script>
     (function () {
       try {
@@ -60,7 +60,7 @@
         <div id="ideBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect USB" style="border-radius: 4px; font-family:var(--font-mono);">
           <span class="brain-status-dot disconnected" id="ideBrainDot"></span>
           <span class="brain-status-text" id="ideBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="ideBrainBatt" hidden>--%</span>
+          <span class="brain-battery-pill disconnected" id="ideBrainBatt">⚡ --%</span>
           <button type="button" id="btnConnectBrain" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC" style="border-radius: 4px;">Connect</button>
         </div>
 
@@ -388,6 +388,27 @@
           <div class="smartports-grid" id="modalSmartportsGrid">
             <!-- Dynamically populated from V5BrainSerial -->
           </div>
+        </div>
+
+        <!-- Hardware Serial CDC Protocol Debug Inspector -->
+        <div class="brain-debug-panel-section" style="margin-top:14px;background:#090d16;border:1px solid #1e293b;border-radius:6px;padding:10px 12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div style="font-size:0.78rem;font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:6px;">
+              <span>🐞 Web Serial &amp; CDC Telemetry Diagnostics</span>
+              <span id="modalSerialDebugBadge" style="font-size:0.65rem;background:#1e293b;color:#94a3b8;padding:1px 6px;border-radius:4px;">DISCONNECTED</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button type="button" id="btnTestSimBattery" class="btn-xs-clean" style="font-size:0.7rem;background:#1e293b;color:#cbd5e1;padding:3px 8px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Simulate V5 Battery at 12.8V">🧪 Test 12.8V</button>
+              <button type="button" id="btnClearSerialDebugLogs" class="btn-xs-clean" style="font-size:0.7rem;background:#1e293b;color:#94a3b8;padding:3px 8px;border-radius:4px;border:1px solid #334155;cursor:pointer;">Clear</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;margin-bottom:8px;font-size:0.72rem;background:#0f172a;padding:6px 8px;border-radius:4px;border:1px solid #1e293b;">
+            <div><span style="color:#64748b;">Serial API:</span> <strong id="debugApiStatus" style="color:#22c55e;">Available</strong></div>
+            <div><span style="color:#64748b;">Port State:</span> <strong id="debugPortState" style="color:#f59e0b;">Unplugged</strong></div>
+            <div><span style="color:#64748b;">Raw Battery:</span> <strong id="debugRawBattMv" style="color:#38bdf8;">0 mV (--%)</strong></div>
+            <div><span style="color:#64748b;">CDC Protocol:</span> <strong id="debugCdcState" style="color:#64748b;">Idle</strong></div>
+          </div>
+          <div id="modalSerialDebugConsole" style="height:70px;background:#020617;color:#a5f3fc;font-family:monospace;font-size:0.68rem;padding:6px;border-radius:4px;overflow-y:auto;border:1px solid #1e293b;white-space:pre-wrap;">[INIT] V5 Serial Driver initialized. Bot status: Unplugged / Disconnected (--%).</div>
         </div>
       </div>
 
@@ -747,22 +768,22 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20261014.k8"></script>
+  <script src="version.js?v=20261014.k12"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261014.k8"></script>
+  <script src="firebase-config.js?v=20261014.k12"></script>
   <script src="analytics-tracker.js"></script>
   <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261014.k8"></script>
-  <script src="session-guard.js?v=20261014.k8"></script>
-  <script src="theme.js?v=20261014.k8"></script>
-  <script src="v5-brain-serial.js?v=20261014.k8"></script>
-  <script src="project-manager.js?v=20261014.k8"></script>
+  <script src="google-drive-sync.js?v=20261014.k12"></script>
+  <script src="session-guard.js?v=20261014.k12"></script>
+  <script src="theme.js?v=20261014.k12"></script>
+  <script src="v5-brain-serial.js?v=20261014.k12"></script>
+  <script src="project-manager.js?v=20261014.k12"></script>
   <!-- Monaco Editor (VS Code Engine) AMD Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="ide.js?v=20261014.k8"></script>
-  <script src="tutorial.js?v=20261014.k8"></script>
+  <script src="ide.js?v=20261014.k12"></script>
+  <script src="tutorial.js?v=20261014.k12"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {

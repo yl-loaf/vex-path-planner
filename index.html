@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261014.k8" />
+  <link rel="stylesheet" href="style.css?v=20261014.k12" />
   <script>
     (function () {
       try {
@@ -91,7 +91,7 @@
         <div id="homeBrainPill" class="utilitarian-status-flag" title="VEX V5 Brain USB telemetry">
           <span class="brain-status-dot disconnected" id="homeBrainDot"></span>
           <span class="brain-status-text" id="homeBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill font-mono tabular-nums" id="homeBrainBatt" hidden>94%</span>
+          <span class="brain-battery-pill disconnected font-mono tabular-nums" id="homeBrainBatt">⚡ --%</span>
         </div>
         <button type="button" id="btnLaunchPlannerDirect" class="btn-utilitarian-primary">
           Launch Planner
@@ -543,7 +543,7 @@
         <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB">
           <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
           <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill" id="bannerBrainBatt" hidden>--%</span>
+          <span class="brain-battery-pill disconnected" id="bannerBrainBatt">⚡ --%</span>
           <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC">Connect</button>
           <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none;">Upload &amp; Run</button>
         </div>
@@ -2984,6 +2984,27 @@ void autonomous() {
             <!-- Dynamically populated from V5BrainSerial -->
           </div>
         </div>
+
+        <!-- Hardware Serial CDC Protocol Debug Inspector -->
+        <div class="brain-debug-panel-section" style="margin-top:14px;background:#090d16;border:1px solid #1e293b;border-radius:6px;padding:10px 12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div style="font-size:0.78rem;font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:6px;">
+              <span>🐞 Web Serial &amp; CDC Telemetry Diagnostics</span>
+              <span id="modalSerialDebugBadge" style="font-size:0.65rem;background:#1e293b;color:#94a3b8;padding:1px 6px;border-radius:4px;">DISCONNECTED</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button type="button" id="btnTestSimBattery" class="btn-xs-clean" style="font-size:0.7rem;background:#1e293b;color:#cbd5e1;padding:3px 8px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Simulate V5 Battery at 12.8V">🧪 Test 12.8V</button>
+              <button type="button" id="btnClearSerialDebugLogs" class="btn-xs-clean" style="font-size:0.7rem;background:#1e293b;color:#94a3b8;padding:3px 8px;border-radius:4px;border:1px solid #334155;cursor:pointer;">Clear</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;margin-bottom:8px;font-size:0.72rem;background:#0f172a;padding:6px 8px;border-radius:4px;border:1px solid #1e293b;">
+            <div><span style="color:#64748b;">Serial API:</span> <strong id="debugApiStatus" style="color:#22c55e;">Available</strong></div>
+            <div><span style="color:#64748b;">Port State:</span> <strong id="debugPortState" style="color:#f59e0b;">Unplugged</strong></div>
+            <div><span style="color:#64748b;">Raw Battery:</span> <strong id="debugRawBattMv" style="color:#38bdf8;">0 mV (--%)</strong></div>
+            <div><span style="color:#64748b;">CDC Protocol:</span> <strong id="debugCdcState" style="color:#64748b;">Idle</strong></div>
+          </div>
+          <div id="modalSerialDebugConsole" style="height:70px;background:#020617;color:#a5f3fc;font-family:monospace;font-size:0.68rem;padding:6px;border-radius:4px;overflow-y:auto;border:1px solid #1e293b;white-space:pre-wrap;">[INIT] V5 Serial Driver initialized. Bot status: Unplugged / Disconnected (--%).</div>
+        </div>
       </div>
 
       <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
@@ -3526,25 +3547,25 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20261014.k8"></script>
+  <script src="version.js?v=20261014.k12"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261014.k8"></script>
+  <script src="firebase-config.js?v=20261014.k12"></script>
   <script src="analytics-tracker.js"></script>
   <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261014.k8"></script>
-  <script src="session-guard.js?v=20261014.k8"></script>
-  <script src="theme.js?v=20261014.k8"></script>
-  <script src="v5-brain-serial.js?v=20261014.k8"></script>
-  <script src="project-manager.js?v=20261014.k8"></script>
-  <script src="cpp-parser.js?v=20261014.k8"></script>
-  <script src="scoring-engine.js?v=20261014.k8"></script>
-  <script src="match-analysis-engine.js?v=20261014.k8"></script>
-  <script src="app.js?v=20261014.k8"></script>
-  <script src="tutorial.js?v=20261014.k8"></script>
+  <script src="google-drive-sync.js?v=20261014.k12"></script>
+  <script src="session-guard.js?v=20261014.k12"></script>
+  <script src="theme.js?v=20261014.k12"></script>
+  <script src="v5-brain-serial.js?v=20261014.k12"></script>
+  <script src="project-manager.js?v=20261014.k12"></script>
+  <script src="cpp-parser.js?v=20261014.k12"></script>
+  <script src="scoring-engine.js?v=20261014.k12"></script>
+  <script src="match-analysis-engine.js?v=20261014.k12"></script>
+  <script src="app.js?v=20261014.k12"></script>
+  <script src="tutorial.js?v=20261014.k12"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

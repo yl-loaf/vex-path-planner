@@ -3346,8 +3346,14 @@
       if (ideBrainDot) ideBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
       if (ideBrainText) ideBrainText.textContent = isConn ? `Brain: ${status.name} (Slot ${status.activeSlot})` : "Brain: Disconnected";
       if (ideBrainBatt) {
-        ideBrainBatt.hidden = !isConn;
-        if (isConn) ideBrainBatt.textContent = `⚡ ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)`;
+        ideBrainBatt.hidden = false;
+        ideBrainBatt.classList.toggle("disconnected", !isConn);
+        ideBrainBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) 
+          ? `⚡ ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` 
+          : "⚡ --%";
+        ideBrainBatt.title = isConn 
+          ? `VEX V5 Battery: ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` 
+          : "VEX V5 Battery: Disconnected (--%)";
       }
 
       if (modalBrainDot) modalBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
@@ -3356,18 +3362,82 @@
       if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-block";
       if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-block" : "none";
 
-      if (modalBattPct) modalBattPct.textContent = isConn ? `${status.batteryPct}%` : "--%";
-      if (modalBattFill) modalBattFill.style.width = isConn ? `${status.batteryPct}%` : "0%";
-      if (modalBattMv) modalBattMv.textContent = isConn ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
-      if (modalBattTemp) modalBattTemp.textContent = isConn ? `${status.batteryTempC} °C` : "-- °C";
+      if (modalBattPct) modalBattPct.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "--%";
+      if (modalBattFill) modalBattFill.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
+      if (modalBattMv) modalBattMv.textContent = (isConn && status.batteryMv) ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
+      if (modalBattTemp) modalBattTemp.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
+
+      // Serial Debug Diagnostics
+      const debugApiStatus = document.getElementById("debugApiStatus");
+      const debugPortState = document.getElementById("debugPortState");
+      const debugRawBattMv = document.getElementById("debugRawBattMv");
+      const debugCdcState = document.getElementById("debugCdcState");
+      const modalSerialDebugBadge = document.getElementById("modalSerialDebugBadge");
+
+      if (debugApiStatus) {
+        const supported = window.V5BrainSerial && window.V5BrainSerial.isWebSerialSupported();
+        debugApiStatus.textContent = supported ? "Available" : "Unsupported";
+        debugApiStatus.style.color = supported ? "#22c55e" : "#f87171";
+      }
+      if (debugPortState) {
+        debugPortState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : "USB CDC Active") : "Unplugged";
+        debugPortState.style.color = isConn ? "#22c55e" : "#f59e0b";
+      }
+      if (debugRawBattMv) {
+        debugRawBattMv.textContent = (isConn && status.batteryPct !== null) ? `${status.batteryMv} mV (${status.batteryPct}%)` : "0 mV (--%)";
+      }
+      if (debugCdcState) {
+        debugCdcState.textContent = isConn ? "Synced (0xC9)" : "Idle";
+        debugCdcState.style.color = isConn ? "#38bdf8" : "#64748b";
+      }
+      if (modalSerialDebugBadge) {
+        modalSerialDebugBadge.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "SIMULATED" : "CONNECTED CDC") : "DISCONNECTED";
+        modalSerialDebugBadge.style.background = isConn ? "#15803d" : "#1e293b";
+        modalSerialDebugBadge.style.color = isConn ? "#ffffff" : "#94a3b8";
+      }
 
       renderModalSmartports();
     }
 
+    const serialDebugConsole = document.getElementById("modalSerialDebugConsole");
+    function appendSerialDebugLog(msg) {
+      if (serialDebugConsole) {
+        serialDebugConsole.textContent += `\n${msg}`;
+        serialDebugConsole.scrollTop = serialDebugConsole.scrollHeight;
+      }
+    }
+
+    const btnTestSimBattery = document.getElementById("btnTestSimBattery");
+    if (btnTestSimBattery) {
+      btnTestSimBattery.onclick = () => {
+        window.V5BrainSerial.status.batteryMv = 12850;
+        window.V5BrainSerial.status.batteryPct = 78;
+        window.V5BrainSerial.emit("status", window.V5BrainSerial.status);
+        appendSerialDebugLog("[TEST] Injected pulse: 12850 mV (78% nominal LiFePO4).");
+        if (typeof showToast === "function") showToast("🔋 Simulated Battery Test Pulse: 12.85V (78%)");
+      };
+    }
+
+    const btnClearSerialDebugLogs = document.getElementById("btnClearSerialDebugLogs");
+    if (btnClearSerialDebugLogs) {
+      btnClearSerialDebugLogs.onclick = () => {
+        if (serialDebugConsole) serialDebugConsole.textContent = "[LOGS CLEARED]";
+      };
+    }
+
     if (window.V5BrainSerial) {
       window.V5BrainSerial.addListener("status", updateIdeBrainUI);
-      window.V5BrainSerial.addListener("connected", (d) => updateIdeBrainUI(d.status));
-      window.V5BrainSerial.addListener("disconnected", (d) => updateIdeBrainUI(d.status));
+      window.V5BrainSerial.addListener("connected", (d) => {
+        appendSerialDebugLog(`[CONNECTED] Mode: ${d.simulated ? 'Simulated' : 'Physical Web Serial CDC'}.`);
+        updateIdeBrainUI(d.status);
+      });
+      window.V5BrainSerial.addListener("disconnected", (d) => {
+        appendSerialDebugLog(`[DISCONNECTED] Device unplugged. Battery reset to --%.`);
+        updateIdeBrainUI(d.status);
+      });
+      window.V5BrainSerial.addListener("debug", (entry) => {
+        appendSerialDebugLog(`[${entry.time}] [${entry.category}] ${entry.msg}`);
+      });
       window.V5BrainSerial.addListener("terminal", (line) => {
         if (elBuildConsole) {
           elBuildConsole.textContent += line;

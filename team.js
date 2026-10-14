@@ -8376,15 +8376,42 @@
     });
 
     // V5 Brain USB CDC Web Serial Connect & Upload
+    function updateTeamBrainUI(status) {
+      const isConn = Boolean(status && status.connected);
+      const bDot = document.getElementById("bannerBrainDot");
+      const bText = document.getElementById("bannerBrainText");
+      const bBatt = document.getElementById("bannerBrainBatt");
+      const bConnect = document.getElementById("btnConnectBrain");
+      const bUpload = document.getElementById("btnUploadAndRun");
+
+      if (bDot) bDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
+      if (bText) bText.textContent = isConn ? `Brain: ${status.name} (Slot ${status.activeSlot})` : "Brain: Disconnected";
+      if (bBatt) {
+        bBatt.hidden = false;
+        bBatt.classList.toggle("disconnected", !isConn);
+        bBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `⚡ ${status.batteryPct}%` : "⚡ --%";
+      }
+      if (bConnect) {
+        bConnect.classList.toggle("connected", isConn);
+        bConnect.textContent = isConn ? `🔌 ${status.name}` : "Connect";
+      }
+      if (bUpload) bUpload.style.display = isConn ? "inline-flex" : "none";
+    }
+
+    if (window.V5BrainSerial) {
+      window.V5BrainSerial.addListener("status", updateTeamBrainUI);
+      window.V5BrainSerial.addListener("connected", (d) => updateTeamBrainUI(d.status));
+      window.V5BrainSerial.addListener("disconnected", (d) => updateTeamBrainUI(d.status));
+      updateTeamBrainUI(window.V5BrainSerial.status);
+    }
+
     document.getElementById("btnConnectBrain")?.addEventListener("click", async () => {
       if (window.V5BrainSerial && typeof window.V5BrainSerial.connect === "function") {
         try {
           await window.V5BrainSerial.connect();
           showToast("🔌 Connected to VEX V5 Brain via USB Serial CDC!", "⚡");
-          const uploadBtn = document.getElementById("btnUploadAndRun");
-          if (uploadBtn) uploadBtn.style.display = "inline-flex";
         } catch (e) {
-          alert("V5 Brain connection error: " + e.message);
+          showToast("V5 Brain connection error: " + e.message, "⚠️");
         }
       } else {
         showToast("🔌 Connecting to VEX V5 Brain via Web Serial CDC...", "⚡");

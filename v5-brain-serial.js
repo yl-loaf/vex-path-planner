@@ -31,15 +31,15 @@
         connected: false,
         name: "V5-Brain-Red1",
         vexosVersion: "1.1.4",
-        batteryMv: 12850,
-        batteryPct: 78,
-        batteryTempC: 28,
+        batteryMv: 0,
+        batteryPct: null,
+        batteryTempC: null,
         activeSlot: 1,
         programRunning: false,
         programName: "Override_Auton_Skills",
         radioType: "VEXnet 2.0",
         radioSignalDbm: -58,
-        controllerConnected: true,
+        controllerConnected: false,
         smartPorts: {
           1: { type: "Motor 11W", name: "left_front", status: "OK", tempC: 32, rpm: 0 },
           2: { type: "Motor 11W", name: "left_middle", status: "OK", tempC: 31, rpm: 0 },
@@ -64,11 +64,41 @@
           { slot: 8, name: "Empty", date: "-", sizeKb: 0 },
         ]
       };
+      this.debugLogs = [];
+    }
+
+    logDebug(category, msg, data = null) {
+      const entry = {
+        time: new Date().toLocaleTimeString(),
+        category,
+        msg,
+        data
+      };
+      if (!this.debugLogs) this.debugLogs = [];
+      this.debugLogs.push(entry);
+      if (this.debugLogs.length > 200) this.debugLogs.shift();
+      console.log(`[V5 Serial Debug] [${category}] ${msg}`, data || "");
+      this.emit("debug", entry);
+    }
+
+    getBatteryDisplay() {
+      if (!this.isConnected || this.status.batteryPct === null || this.status.batteryPct === undefined) {
+        return "--%";
+      }
+      return `${this.status.batteryPct}%`;
+    }
+
+    getBatteryVoltageDisplay() {
+      if (!this.isConnected || !this.status.batteryMv) {
+        return "-- V";
+      }
+      return `${(this.status.batteryMv / 1000).toFixed(2)} V`;
     }
 
     // Accurate VEX V5 LiFePO4 (4-cell in series) state-of-charge calculation
     // Nominal: 12.8V (3.2V/cell). Full charge: 13.2V-13.4V. Cutoff: 10.5V.
     calculateBatteryPct(mv) {
+      if (!mv || mv < 9000) return null;
       if (mv >= 13200) return 100;
       if (mv >= 13000) return Math.round(90 + ((mv - 13000) / 200) * 10);
       if (mv >= 12800) return Math.round(75 + ((mv - 12800) / 200) * 15);
@@ -86,10 +116,11 @@
     // Connect to VEX V5 Brain via Web Serial API
     async connect(options = {}) {
       if (!this.isWebSerialSupported()) {
-        console.warn("Web Serial API not supported in this browser; using simulated V5 Brain.");
+        this.logDebug("WebSerial", "Web Serial API not supported in this browser; falling back to simulation.");
         return this.connectSimulated();
       }
 
+      this.logDebug("WebSerial", "Requesting serial port with VEX filters...");
       try {
         let port;
         try {
@@ -97,6 +128,7 @@
         } catch (filterErr) {
           // If filtered search was cancelled or empty, try unfiltered request
           if (filterErr.name === "NotFoundError" || options.allowAllPorts) {
+            this.logDebug("WebSerial", "Filtered search returned no devices; prompting unfiltered port selector.");
             port = await navigator.serial.requestPort();
           } else {
             throw filterErr;
@@ -117,15 +149,12 @@
         this.startTelemetryLoop();
         this.startSystemQueryLoop();
 
+        this.logDebug("WebSerial", "Hardware connected at 115200 baud CDC.");
         this.emit("connected", { simulated: false, status: this.status });
         this.emit("terminal", `[Web Serial CDC] Connected to VEX V5 Device at 115200 baud.\n[VEX CDC] Protocol Handshake initialized (Header: 0xC9 0x36 0xB8 0x47).\n`);
         return true;
       } catch (err) {
-        if (err.name === "AbortError" || err.name === "NotFoundError") {
-          console.log("Web serial selection cancelled by user. Connecting simulated Brain for seamless testing.");
-        } else {
-          console.warn("Web serial connection error:", err);
-        }
+        this.logDebug("WebSerial", `Connection cancelled or failed: ${err.message}`, err);
         return this.connectSimulated();
       }
     }
@@ -137,7 +166,10 @@
       this.status.connected = true;
       this.status.batteryMv = 12950;
       this.status.batteryPct = this.calculateBatteryPct(this.status.batteryMv);
+      this.status.batteryTempC = 28;
+      this.status.controllerConnected = true;
       this.startTelemetryLoop();
+      this.logDebug("Simulated", `Simulated V5 Brain active. Battery: ${this.status.batteryPct}% (${this.status.batteryMv}mV).`);
       this.emit("connected", { simulated: true, status: this.status });
       this.emit("terminal", "[VEX V5 Brain Connected (Simulated Mode)]\n[VEXos 1.1.4 Kernel Active] Telemetry & CDC 8-Slot Flasher ready.\n");
       return true;
@@ -146,6 +178,11 @@
     async disconnect() {
       this.isConnected = false;
       this.status.connected = false;
+      this.status.batteryMv = 0;
+      this.status.batteryPct = null;
+      this.status.batteryTempC = null;
+      this.status.controllerConnected = false;
+
       if (this.telemetryTimer) {
         clearInterval(this.telemetryTimer);
         this.telemetryTimer = null;
@@ -170,6 +207,7 @@
         this.port = null;
       }
 
+      this.logDebug("WebSerial", "Device disconnected. Battery set to --%.");
       this.emit("disconnected", { status: this.status });
       this.emit("terminal", "\n[Web Serial CDC] Port closed. V5 Brain disconnected.\n");
     }

@@ -17087,8 +17087,14 @@ lemlib::ControllerSettings ${currentMode}_controller(
         bannerText.textContent = isConn ? `Brain: ${status.name} (Slot ${status.activeSlot})` : "Brain: Disconnected";
       }
       if (bannerBatt) {
-        bannerBatt.hidden = !isConn;
-        if (isConn) bannerBatt.textContent = `⚡ ${status.batteryPct}%`;
+        bannerBatt.hidden = false;
+        bannerBatt.classList.toggle("disconnected", !isConn);
+        bannerBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) 
+          ? `⚡ ${status.batteryPct}%` 
+          : "⚡ --%";
+        bannerBatt.title = isConn 
+          ? `V5 Battery: ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` 
+          : "V5 Battery: Disconnected (--%)";
       }
 
       // Homepage Brain pill
@@ -17098,8 +17104,14 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (homeDot) homeDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
       if (homeText) homeText.textContent = isConn ? `Brain: ${status.name}` : "Brain: Disconnected";
       if (homeBatt) {
-        homeBatt.hidden = !isConn;
-        if (isConn) homeBatt.textContent = `⚡ ${status.batteryPct}%`;
+        homeBatt.hidden = false;
+        homeBatt.classList.toggle("disconnected", !isConn);
+        homeBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) 
+          ? `⚡ ${status.batteryPct}%` 
+          : "⚡ --%";
+        homeBatt.title = isConn 
+          ? `V5 Battery: ${status.batteryPct}%` 
+          : "V5 Battery: Disconnected (--%)";
       }
 
       // Modal elements
@@ -17113,10 +17125,10 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-flex";
       if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-flex" : "none";
 
-      if (modalBattPct) modalBattPct.textContent = isConn ? `${status.batteryPct}%` : "--%";
-      if (modalBattFill) modalBattFill.style.width = isConn ? `${status.batteryPct}%` : "0%";
-      if (modalBattMv) modalBattMv.textContent = isConn ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
-      if (modalBattTemp) modalBattTemp.textContent = isConn ? `${status.batteryTempC} °C` : "-- °C";
+      if (modalBattPct) modalBattPct.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "--%";
+      if (modalBattFill) modalBattFill.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
+      if (modalBattMv) modalBattMv.textContent = (isConn && status.batteryMv) ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
+      if (modalBattTemp) modalBattTemp.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
       if (modalFirmware) modalFirmware.textContent = isConn ? `VEXos ${status.vexosVersion}` : "--";
       if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm} dBm)` : "--";
 
@@ -17124,18 +17136,82 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (debugBrainDot) debugBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
       if (debugBrainStatusName) debugBrainStatusName.textContent = isConn ? `VEX V5 Brain: ${status.name}` : "VEX V5 Brain: Disconnected";
       if (btnDebugConnect) btnDebugConnect.textContent = isConn ? "Disconnect" : "🔌 Connect USB";
-      if (debugBrainBattVal) debugBrainBattVal.textContent = isConn ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : "--% (-- V)";
-      if (debugBrainBattBar) debugBrainBattBar.style.width = isConn ? `${status.batteryPct}%` : "0%";
-      if (debugBrainTempVal) debugBrainTempVal.textContent = isConn ? `${status.batteryTempC} °C` : "-- °C";
+      if (debugBrainBattVal) debugBrainBattVal.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : "--% (-- V)";
+      if (debugBrainBattBar) debugBrainBattBar.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
+      if (debugBrainTempVal) debugBrainTempVal.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
       if (debugBrainVexosVal) debugBrainVexosVal.textContent = isConn ? `v${status.vexosVersion}` : "--";
       if (debugBrainSlotVal) debugBrainSlotVal.textContent = isConn ? `Slot ${status.activeSlot} ${status.programRunning ? '(Running)' : ''}` : "--";
+
+      // Serial Debug Diagnostics
+      const debugApiStatus = document.getElementById("debugApiStatus");
+      const debugPortState = document.getElementById("debugPortState");
+      const debugRawBattMv = document.getElementById("debugRawBattMv");
+      const debugCdcState = document.getElementById("debugCdcState");
+      const modalSerialDebugBadge = document.getElementById("modalSerialDebugBadge");
+
+      if (debugApiStatus) {
+        const supported = window.V5BrainSerial && window.V5BrainSerial.isWebSerialSupported();
+        debugApiStatus.textContent = supported ? "Available" : "Unsupported";
+        debugApiStatus.style.color = supported ? "#22c55e" : "#f87171";
+      }
+      if (debugPortState) {
+        debugPortState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : "USB CDC Active") : "Unplugged";
+        debugPortState.style.color = isConn ? "#22c55e" : "#f59e0b";
+      }
+      if (debugRawBattMv) {
+        debugRawBattMv.textContent = (isConn && status.batteryPct !== null) ? `${status.batteryMv} mV (${status.batteryPct}%)` : "0 mV (--%)";
+      }
+      if (debugCdcState) {
+        debugCdcState.textContent = isConn ? "Synced (0xC9)" : "Idle";
+        debugCdcState.style.color = isConn ? "#38bdf8" : "#64748b";
+      }
+      if (modalSerialDebugBadge) {
+        modalSerialDebugBadge.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "SIMULATED" : "CONNECTED CDC") : "DISCONNECTED";
+        modalSerialDebugBadge.style.background = isConn ? "#15803d" : "#1e293b";
+        modalSerialDebugBadge.style.color = isConn ? "#ffffff" : "#94a3b8";
+      }
 
       renderSmartports();
     }
 
+    const serialDebugConsole = document.getElementById("modalSerialDebugConsole");
+    function appendSerialDebugLog(msg) {
+      if (serialDebugConsole) {
+        serialDebugConsole.textContent += `\n${msg}`;
+        serialDebugConsole.scrollTop = serialDebugConsole.scrollHeight;
+      }
+    }
+
+    const btnTestSimBattery = document.getElementById("btnTestSimBattery");
+    if (btnTestSimBattery) {
+      btnTestSimBattery.onclick = () => {
+        window.V5BrainSerial.status.batteryMv = 12850;
+        window.V5BrainSerial.status.batteryPct = 78;
+        window.V5BrainSerial.emit("status", window.V5BrainSerial.status);
+        appendSerialDebugLog("[TEST] Injected pulse: 12850 mV (78% nominal LiFePO4).");
+        showToast("🔋 Simulated Battery Test Pulse: 12.85V (78%)");
+      };
+    }
+
+    const btnClearSerialDebugLogs = document.getElementById("btnClearSerialDebugLogs");
+    if (btnClearSerialDebugLogs) {
+      btnClearSerialDebugLogs.onclick = () => {
+        if (serialDebugConsole) serialDebugConsole.textContent = "[LOGS CLEARED]";
+      };
+    }
+
     window.V5BrainSerial.addListener("status", updateStatusUI);
-    window.V5BrainSerial.addListener("connected", (d) => updateStatusUI(d.status));
-    window.V5BrainSerial.addListener("disconnected", (d) => updateStatusUI(d.status));
+    window.V5BrainSerial.addListener("connected", (d) => {
+      appendSerialDebugLog(`[CONNECTED] Mode: ${d.simulated ? 'Simulated' : 'Physical Web Serial CDC'}.`);
+      updateStatusUI(d.status);
+    });
+    window.V5BrainSerial.addListener("disconnected", (d) => {
+      appendSerialDebugLog(`[DISCONNECTED] Device unplugged. Battery reset to --%.`);
+      updateStatusUI(d.status);
+    });
+    window.V5BrainSerial.addListener("debug", (entry) => {
+      appendSerialDebugLog(`[${entry.time}] [${entry.category}] ${entry.msg}`);
+    });
     window.V5BrainSerial.addListener("terminal", (line) => {
       if (debugTerminalConsole) {
         debugTerminalConsole.textContent += line;
