@@ -3179,12 +3179,11 @@
 
       // If brain not connected, prompt to connect
       if (!window.V5BrainSerial.isConnected) {
-        if (window.V5BrainSerial.isWebSerialSupported()) {
-          const ok = await window.V5BrainSerial.connect();
-          if (!ok) window.V5BrainSerial.connectSimulated();
-        } else {
-          window.V5BrainSerial.connectSimulated();
+        if (typeof showToast === "function") {
+          showToast("⚠️ VEX V5 Brain is not connected via USB! Connect Brain first.");
         }
+        openBrainModal();
+        return;
       }
 
       const slot = parseInt(modalSlotSelect?.value || "1", 10);
@@ -3276,12 +3275,10 @@
 
         // Ensure Brain connection
         if (!window.V5BrainSerial.isConnected) {
-          if (window.V5BrainSerial.isWebSerialSupported()) {
-            const ok = await window.V5BrainSerial.connect();
-            if (!ok) window.V5BrainSerial.connectSimulated();
-          } else {
-            window.V5BrainSerial.connectSimulated();
-          }
+          elBuildConsole.textContent += "⚠️ Brain is not connected via USB. Please connect USB cable and click 'Connect Brain'.\n";
+          if (typeof showToast === "function") showToast("⚠️ Brain is not connected! Click 'Connect Brain' first.");
+          openBrainModal();
+          return;
         }
 
         const slot = parseInt(modalSlotSelect?.value || "1", 10);
@@ -3366,6 +3363,24 @@
       if (modalBattFill) modalBattFill.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
       if (modalBattMv) modalBattMv.textContent = (isConn && status.batteryMv) ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
       if (modalBattTemp) modalBattTemp.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
+      
+      const modalFirmware = document.getElementById("modalFirmware");
+      if (modalFirmware) modalFirmware.textContent = isConn ? `VEXos ${status.vexosVersion}` : "--";
+      
+      const modalRadio = document.getElementById("modalRadio");
+      if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm ? status.radioSignalDbm + ' dBm' : 'Link Active'})` : "--";
+
+      const modalController = document.getElementById("modalController");
+      if (modalController) {
+        modalController.textContent = isConn ? (status.controllerConnected ? "Paired & Active" : "Direct USB Link") : "--";
+        modalController.style.color = isConn ? "#22c55e" : "#94a3b8";
+      }
+
+      const modalSystemPort = document.getElementById("modalSystemPort");
+      if (modalSystemPort) {
+        modalSystemPort.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated Port" : "CDC 115200 Active") : "Unplugged";
+        modalSystemPort.style.color = isConn ? "#38bdf8" : "#94a3b8";
+      }
 
       // Serial Debug Diagnostics
       const debugApiStatus = document.getElementById("debugApiStatus");
@@ -3387,7 +3402,7 @@
         debugRawBattMv.textContent = (isConn && status.batteryPct !== null) ? `${status.batteryMv} mV (${status.batteryPct}%)` : "0 mV (--%)";
       }
       if (debugCdcState) {
-        debugCdcState.textContent = isConn ? "Synced (0xC9)" : "Idle";
+        debugCdcState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : "Synced (0xC9)") : "Idle";
         debugCdcState.style.color = isConn ? "#38bdf8" : "#64748b";
       }
       if (modalSerialDebugBadge) {
@@ -3407,14 +3422,61 @@
       }
     }
 
+    // Debug Action Buttons in IDE
+    const btnModalScanAllPorts = document.getElementById("btnModalScanAllPorts");
+    if (btnModalScanAllPorts) {
+      btnModalScanAllPorts.onclick = async () => {
+        if (!window.V5BrainSerial) return;
+        await window.V5BrainSerial.connect({ allowAllPorts: true });
+      };
+    }
+
+    const btnModalPingQuery1 = document.getElementById("btnModalPingQuery1");
+    if (btnModalPingQuery1) {
+      btnModalPingQuery1.onclick = () => {
+        if (!window.V5BrainSerial || !window.V5BrainSerial.isConnected) {
+          if (typeof showToast === "function") showToast("⚠️ Connect V5 Brain before sending Query1 packet.", "warning");
+          return;
+        }
+        window.V5BrainSerial.sendQuery1();
+        appendSerialDebugLog("[TX MANUAL] Query1 Packet (0xC9 0x36 0xB8 0x47 0x21) dispatched.");
+      };
+    }
+
     const btnTestSimBattery = document.getElementById("btnTestSimBattery");
     if (btnTestSimBattery) {
       btnTestSimBattery.onclick = () => {
-        window.V5BrainSerial.status.batteryMv = 12850;
-        window.V5BrainSerial.status.batteryPct = 78;
-        window.V5BrainSerial.emit("status", window.V5BrainSerial.status);
-        appendSerialDebugLog("[TEST] Injected pulse: 12850 mV (78% nominal LiFePO4).");
-        if (typeof showToast === "function") showToast("🔋 Simulated Battery Test Pulse: 12.85V (78%)");
+        if (!window.V5BrainSerial) return;
+        window.V5BrainSerial.injectTestBatteryPulse(12850);
+        appendSerialDebugLog("[TEST] Injected pulse: 12850 mV (75% LiFePO4 SoC).");
+        if (typeof showToast === "function") showToast("🔋 Simulated Battery Test Pulse: 12.85V (75%)");
+      };
+    }
+
+    const btnForceDisconnect = document.getElementById("btnForceDisconnect");
+    if (btnForceDisconnect) {
+      btnForceDisconnect.onclick = async () => {
+        if (!window.V5BrainSerial) return;
+        await window.V5BrainSerial.disconnect();
+        appendSerialDebugLog("[RESET] Forced disconnect. Battery strictly reset to --%.");
+        if (typeof showToast === "function") showToast("🔄 Disconnected & reset to --%");
+      };
+    }
+
+    const btnCopyDebugReport = document.getElementById("btnCopyDebugReport");
+    if (btnCopyDebugReport) {
+      btnCopyDebugReport.onclick = () => {
+        if (!window.V5BrainSerial) return;
+        const report = window.V5BrainSerial.getDebugReport();
+        const jsonStr = JSON.stringify(report, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(jsonStr).then(() => {
+            if (typeof showToast === "function") showToast("📋 Serial debug report copied to clipboard!");
+          });
+        } else {
+          appendSerialDebugLog(`\n[DEBUG REPORT]\n${jsonStr}`);
+          if (typeof showToast === "function") showToast("📋 Report output to debug console.");
+        }
       };
     }
 
@@ -3422,6 +3484,7 @@
     if (btnClearSerialDebugLogs) {
       btnClearSerialDebugLogs.onclick = () => {
         if (serialDebugConsole) serialDebugConsole.textContent = "[LOGS CLEARED]";
+        if (window.V5BrainSerial) window.V5BrainSerial.clearDebugLogs();
       };
     }
 

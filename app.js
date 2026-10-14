@@ -16929,33 +16929,32 @@ lemlib::ControllerSettings ${currentMode}_controller(
       });
     }
 
-    async function handleConnectToggle() {
+    async function handleConnectToggle(options = {}) {
       if (window.V5BrainSerial.isConnected) {
         await window.V5BrainSerial.disconnect();
-        showToast("🔌 VEX V5 Brain Disconnected");
+        showToast("🔌 VEX V5 Brain Disconnected (--%)");
       } else {
-        showToast("🔌 Connecting to VEX V5 Brain via USB CDC...");
-        const ok = await window.V5BrainSerial.connect();
+        showToast("🔌 Requesting VEX V5 Brain USB CDC connection...");
+        const ok = await window.V5BrainSerial.connect(options);
         if (ok) {
           showToast(`🧠 Connected to VEX V5 Brain (${window.V5BrainSerial.status.name})!`);
+        } else {
+          showToast("ℹ️ V5 Brain not connected. Status is Disconnected (--%).", "info");
         }
       }
     }
 
-    if (btnConnectNav) btnConnectNav.onclick = handleConnectToggle;
-    if (btnModalConnect) btnModalConnect.onclick = handleConnectToggle;
-    if (btnModalDisconnect) btnModalDisconnect.onclick = handleConnectToggle;
-    if (btnDebugConnect) btnDebugConnect.onclick = handleConnectToggle;
+    if (btnConnectNav) btnConnectNav.onclick = () => handleConnectToggle();
+    if (btnModalConnect) btnModalConnect.onclick = () => handleConnectToggle();
+    if (btnModalDisconnect) btnModalDisconnect.onclick = () => window.V5BrainSerial.disconnect();
+    if (btnDebugConnect) btnDebugConnect.onclick = () => handleConnectToggle();
 
     // Flash / Upload autonomous routine to Brain
     async function handleUploadToBrain(slotPicker) {
       if (!window.V5BrainSerial.isConnected) {
-        if (window.V5BrainSerial.isWebSerialSupported()) {
-          const ok = await window.V5BrainSerial.connect();
-          if (!ok) window.V5BrainSerial.connectSimulated();
-        } else {
-          window.V5BrainSerial.connectSimulated();
-        }
+        showToast("⚠️ VEX V5 Brain is not connected via USB! Please connect robot first.", "warning");
+        openBrainModal();
+        return;
       }
       const slot = parseInt(slotPicker?.value || "1", 10);
       const activePath = getActive();
@@ -17130,7 +17129,19 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (modalBattMv) modalBattMv.textContent = (isConn && status.batteryMv) ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
       if (modalBattTemp) modalBattTemp.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
       if (modalFirmware) modalFirmware.textContent = isConn ? `VEXos ${status.vexosVersion}` : "--";
-      if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm} dBm)` : "--";
+      if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm ? status.radioSignalDbm + ' dBm' : 'Link Active'})` : "--";
+
+      const modalController = document.getElementById("modalController");
+      if (modalController) {
+        modalController.textContent = isConn ? (status.controllerConnected ? "Paired & Active" : "Direct USB Link") : "--";
+        modalController.style.color = isConn ? "#22c55e" : "#94a3b8";
+      }
+
+      const modalSystemPort = document.getElementById("modalSystemPort");
+      if (modalSystemPort) {
+        modalSystemPort.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated Port" : "CDC 115200 Active") : "Unplugged";
+        modalSystemPort.style.color = isConn ? "#38bdf8" : "#94a3b8";
+      }
 
       // Debug pane
       if (debugBrainDot) debugBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
@@ -17162,7 +17173,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
         debugRawBattMv.textContent = (isConn && status.batteryPct !== null) ? `${status.batteryMv} mV (${status.batteryPct}%)` : "0 mV (--%)";
       }
       if (debugCdcState) {
-        debugCdcState.textContent = isConn ? "Synced (0xC9)" : "Idle";
+        debugCdcState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : "Synced (0xC9)") : "Idle";
         debugCdcState.style.color = isConn ? "#38bdf8" : "#64748b";
       }
       if (modalSerialDebugBadge) {
@@ -17182,14 +17193,55 @@ lemlib::ControllerSettings ${currentMode}_controller(
       }
     }
 
+    // Debug Action Buttons
+    const btnModalScanAllPorts = document.getElementById("btnModalScanAllPorts");
+    if (btnModalScanAllPorts) {
+      btnModalScanAllPorts.onclick = () => handleConnectToggle({ allowAllPorts: true });
+    }
+
+    const btnModalPingQuery1 = document.getElementById("btnModalPingQuery1");
+    if (btnModalPingQuery1) {
+      btnModalPingQuery1.onclick = () => {
+        if (!window.V5BrainSerial.isConnected) {
+          showToast("⚠️ Connect V5 Brain before sending Query1 packet.", "warning");
+          return;
+        }
+        window.V5BrainSerial.sendQuery1();
+        appendSerialDebugLog("[TX MANUAL] Query1 Packet (0xC9 0x36 0xB8 0x47 0x21) dispatched.");
+      };
+    }
+
     const btnTestSimBattery = document.getElementById("btnTestSimBattery");
     if (btnTestSimBattery) {
       btnTestSimBattery.onclick = () => {
-        window.V5BrainSerial.status.batteryMv = 12850;
-        window.V5BrainSerial.status.batteryPct = 78;
-        window.V5BrainSerial.emit("status", window.V5BrainSerial.status);
-        appendSerialDebugLog("[TEST] Injected pulse: 12850 mV (78% nominal LiFePO4).");
-        showToast("🔋 Simulated Battery Test Pulse: 12.85V (78%)");
+        window.V5BrainSerial.injectTestBatteryPulse(12850);
+        appendSerialDebugLog("[TEST] Injected pulse: 12850 mV (75% LiFePO4 SoC).");
+        showToast("🔋 Tested LiFePO4 Battery Pulse: 12.85V (75%)");
+      };
+    }
+
+    const btnForceDisconnect = document.getElementById("btnForceDisconnect");
+    if (btnForceDisconnect) {
+      btnForceDisconnect.onclick = async () => {
+        await window.V5BrainSerial.disconnect();
+        appendSerialDebugLog("[RESET] Forced disconnect. Battery strictly reset to --%.");
+        showToast("🔄 Disconnected & reset to --%");
+      };
+    }
+
+    const btnCopyDebugReport = document.getElementById("btnCopyDebugReport");
+    if (btnCopyDebugReport) {
+      btnCopyDebugReport.onclick = () => {
+        const report = window.V5BrainSerial.getDebugReport();
+        const jsonStr = JSON.stringify(report, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(jsonStr).then(() => {
+            showToast("📋 Serial debug report copied to clipboard!");
+          });
+        } else {
+          appendSerialDebugLog(`\n[DEBUG REPORT]\n${jsonStr}`);
+          showToast("📋 Report output to debug console.");
+        }
       };
     }
 
@@ -17197,6 +17249,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (btnClearSerialDebugLogs) {
       btnClearSerialDebugLogs.onclick = () => {
         if (serialDebugConsole) serialDebugConsole.textContent = "[LOGS CLEARED]";
+        window.V5BrainSerial.clearDebugLogs();
       };
     }
 

@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20261014.k12" />
+  <link rel="stylesheet" href="style.css?v=20261014.k15" />
   <script>
     (function () {
       try {
@@ -344,10 +344,10 @@
           <div class="brain-gauge-card">
             <div class="gauge-card-title">📡 Link &amp; VEXos Kernel</div>
             <div class="gauge-card-meta-list">
-              <div class="gauge-meta-row"><span>Firmware:</span><strong id="modalFirmware">VEXos 1.1.4</strong></div>
-              <div class="gauge-meta-row"><span>Radio:</span><strong id="modalRadio">VEXnet 2.0 (-58 dBm)</strong></div>
-              <div class="gauge-meta-row"><span>Controller:</span><strong id="modalController" style="color:#22c55e;">Paired &amp; Active</strong></div>
-              <div class="gauge-meta-row"><span>System Port:</span><strong style="color:#38bdf8;">CDC Port 1 (115200)</strong></div>
+              <div class="gauge-meta-row"><span>Firmware:</span><strong id="modalFirmware">--</strong></div>
+              <div class="gauge-meta-row"><span>Radio:</span><strong id="modalRadio">--</strong></div>
+              <div class="gauge-meta-row"><span>Controller:</span><strong id="modalController" style="color:#94a3b8;">--</strong></div>
+              <div class="gauge-meta-row"><span>System Port:</span><strong id="modalSystemPort" style="color:#94a3b8;">Unplugged</strong></div>
             </div>
           </div>
 
@@ -357,9 +357,9 @@
             <div style="margin-bottom:8px;">
               <label for="modalSlotSelect" style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:4px;">Target Memory Slot:</label>
               <select id="modalSlotSelect" class="debug-slot-select" style="width:100%;">
-                <option value="1">Slot 1: Override_Auton (146 KB)</option>
-                <option value="2">Slot 2: Skills_60s_Run (142 KB)</option>
-                <option value="3">Slot 3: Solo_AWP_Blue (138 KB)</option>
+                <option value="1">Slot 1: Override_Auton</option>
+                <option value="2">Slot 2: Skills_60s_Run</option>
+                <option value="3">Slot 3: Solo_AWP_Blue</option>
                 <option value="4">Slot 4: [Empty Slot]</option>
                 <option value="5">Slot 5: [Empty Slot]</option>
                 <option value="6">Slot 6: [Empty Slot]</option>
@@ -392,14 +392,18 @@
 
         <!-- Hardware Serial CDC Protocol Debug Inspector -->
         <div class="brain-debug-panel-section" style="margin-top:14px;background:#090d16;border:1px solid #1e293b;border-radius:6px;padding:10px 12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
             <div style="font-size:0.78rem;font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:6px;">
               <span>🐞 Web Serial &amp; CDC Telemetry Diagnostics</span>
               <span id="modalSerialDebugBadge" style="font-size:0.65rem;background:#1e293b;color:#94a3b8;padding:1px 6px;border-radius:4px;">DISCONNECTED</span>
             </div>
-            <div style="display:flex;gap:6px;">
-              <button type="button" id="btnTestSimBattery" class="btn-xs-clean" style="font-size:0.7rem;background:#1e293b;color:#cbd5e1;padding:3px 8px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Simulate V5 Battery at 12.8V">🧪 Test 12.8V</button>
-              <button type="button" id="btnClearSerialDebugLogs" class="btn-xs-clean" style="font-size:0.7rem;background:#1e293b;color:#94a3b8;padding:3px 8px;border-radius:4px;border:1px solid #334155;cursor:pointer;">Clear</button>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button type="button" id="btnModalScanAllPorts" class="btn-xs-clean" style="font-size:0.68rem;background:#0369a1;color:#fff;padding:2px 7px;border-radius:4px;border:none;cursor:pointer;" title="Scan unfiltered serial ports if VEX filters miss your device">🔍 All Ports</button>
+              <button type="button" id="btnModalPingQuery1" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#38bdf8;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Send V5 Protocol Query1 (0x21)">📤 Ping 0x21</button>
+              <button type="button" id="btnTestSimBattery" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#cbd5e1;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Simulate V5 Battery pulse at 12.8V">🧪 Test 12.8V</button>
+              <button type="button" id="btnForceDisconnect" class="btn-xs-clean" style="font-size:0.68rem;background:rgba(239,68,68,0.2);color:#fca5a5;padding:2px 7px;border-radius:4px;border:1px solid rgba(239,68,68,0.3);cursor:pointer;" title="Disconnect & force reset state to --%">🔄 Disconnect (--%)</button>
+              <button type="button" id="btnCopyDebugReport" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#38bdf8;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Copy serial debug report to clipboard">📋 Report</button>
+              <button type="button" id="btnClearSerialDebugLogs" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#94a3b8;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;">Clear</button>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;margin-bottom:8px;font-size:0.72rem;background:#0f172a;padding:6px 8px;border-radius:4px;border:1px solid #1e293b;">
@@ -408,7 +412,7 @@
             <div><span style="color:#64748b;">Raw Battery:</span> <strong id="debugRawBattMv" style="color:#38bdf8;">0 mV (--%)</strong></div>
             <div><span style="color:#64748b;">CDC Protocol:</span> <strong id="debugCdcState" style="color:#64748b;">Idle</strong></div>
           </div>
-          <div id="modalSerialDebugConsole" style="height:70px;background:#020617;color:#a5f3fc;font-family:monospace;font-size:0.68rem;padding:6px;border-radius:4px;overflow-y:auto;border:1px solid #1e293b;white-space:pre-wrap;">[INIT] V5 Serial Driver initialized. Bot status: Unplugged / Disconnected (--%).</div>
+          <div id="modalSerialDebugConsole" style="height:80px;background:#020617;color:#a5f3fc;font-family:monospace;font-size:0.68rem;padding:6px;border-radius:4px;overflow-y:auto;border:1px solid #1e293b;white-space:pre-wrap;">[INIT] V5 Serial Driver initialized. Bot status: Unplugged / Disconnected (--%).</div>
         </div>
       </div>
 
@@ -768,22 +772,22 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20261014.k12"></script>
+  <script src="version.js?v=20261014.k15"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261014.k12"></script>
+  <script src="firebase-config.js?v=20261014.k15"></script>
   <script src="analytics-tracker.js"></script>
   <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261014.k12"></script>
-  <script src="session-guard.js?v=20261014.k12"></script>
-  <script src="theme.js?v=20261014.k12"></script>
-  <script src="v5-brain-serial.js?v=20261014.k12"></script>
-  <script src="project-manager.js?v=20261014.k12"></script>
+  <script src="google-drive-sync.js?v=20261014.k15"></script>
+  <script src="session-guard.js?v=20261014.k15"></script>
+  <script src="theme.js?v=20261014.k15"></script>
+  <script src="v5-brain-serial.js?v=20261014.k15"></script>
+  <script src="project-manager.js?v=20261014.k15"></script>
   <!-- Monaco Editor (VS Code Engine) AMD Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="ide.js?v=20261014.k12"></script>
-  <script src="tutorial.js?v=20261014.k12"></script>
+  <script src="ide.js?v=20261014.k15"></script>
+  <script src="tutorial.js?v=20261014.k15"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {

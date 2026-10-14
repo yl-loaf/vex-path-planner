@@ -4,12 +4,12 @@
 
   // VEX Robotics USB Vendor IDs & Product IDs
   const VEX_USB_FILTERS = [
-    { usbVendorId: 0x2888, usbProductId: 0x0501 }, // VEX V5 Brain System Port
+    { usbVendorId: 0x2888, usbProductId: 0x0501 }, // VEX V5 Brain System Port (CDC Comm)
     { usbVendorId: 0x2888, usbProductId: 0x0503 }, // VEX V5 Controller USB
-    { usbVendorId: 0x2888 }, // VEX Robotics Official VID
-    { usbVendorId: 0x0403 }, // FTDI CDC Chips used in VEX programming cables
-    { usbVendorId: 0x10c4 }, // Silicon Labs CP210x CDC
-    { usbVendorId: 0x1a86 }, // CH340 / CH341 CDC
+    { usbVendorId: 0x2888 },                       // VEX Robotics Official VID (10376)
+    { usbVendorId: 0x0403 },                       // FTDI CDC Chips used in VEX programming cables
+    { usbVendorId: 0x10c4 },                       // Silicon Labs CP210x CDC
+    { usbVendorId: 0x1a86 },                       // CH340 / CH341 CDC
   ];
 
   // V5 Serial Protocol Constants (vexide / PROS CDC specification)
@@ -25,38 +25,29 @@
       this.telemetryTimer = null;
       this.queryTimer = null;
       this.listeners = {};
+      this.rxBytesCount = 0;
+      this.txBytesCount = 0;
+      this.debugLogs = [];
 
-      // Brain status state
+      // Initial clean state: STRICTLY DISCONNECTED with null battery
       this.status = {
         connected: false,
-        name: "V5-Brain-Red1",
-        vexosVersion: "1.1.4",
+        name: "Brain: Disconnected",
+        vexosVersion: "--",
         batteryMv: 0,
         batteryPct: null,
         batteryTempC: null,
-        activeSlot: 1,
+        activeSlot: "--",
         programRunning: false,
-        programName: "Override_Auton_Skills",
-        radioType: "VEXnet 2.0",
-        radioSignalDbm: -58,
+        programName: "--",
+        radioType: "--",
+        radioSignalDbm: null,
         controllerConnected: false,
-        smartPorts: {
-          1: { type: "Motor 11W", name: "left_front", status: "OK", tempC: 32, rpm: 0 },
-          2: { type: "Motor 11W", name: "left_middle", status: "OK", tempC: 31, rpm: 0 },
-          3: { type: "Motor 11W", name: "left_back", status: "OK", tempC: 33, rpm: 0 },
-          7: { type: "Motor 11W", name: "intake", status: "OK", tempC: 29, rpm: 0 },
-          8: { type: "Motor 11W", name: "lift", status: "OK", tempC: 30, rpm: 0 },
-          9: { type: "Rotation", name: "horiz_tracker", status: "OK", positionDeg: 0 },
-          10: { type: "Inertial", name: "imu", status: "Calibrated", headingDeg: 0 },
-          11: { type: "Motor 11W", name: "right_front", status: "OK", tempC: 32, rpm: 0 },
-          12: { type: "Motor 11W", name: "right_middle", status: "OK", tempC: 31, rpm: 0 },
-          13: { type: "Motor 11W", name: "right_back", status: "OK", tempC: 33, rpm: 0 },
-          15: { type: "Distance", name: "dist_sensor", status: "OK", distanceMm: 450 },
-        },
+        smartPorts: {},
         slots: [
-          { slot: 1, name: "Override_Auton", date: "2026-10-13 17:30", sizeKb: 146 },
-          { slot: 2, name: "Skills_60s_Run", date: "2026-10-13 14:15", sizeKb: 142 },
-          { slot: 3, name: "Solo_AWP_Blue", date: "2026-10-12 10:00", sizeKb: 138 },
+          { slot: 1, name: "Empty", date: "-", sizeKb: 0 },
+          { slot: 2, name: "Empty", date: "-", sizeKb: 0 },
+          { slot: 3, name: "Empty", date: "-", sizeKb: 0 },
           { slot: 4, name: "Empty", date: "-", sizeKb: 0 },
           { slot: 5, name: "Empty", date: "-", sizeKb: 0 },
           { slot: 6, name: "Empty", date: "-", sizeKb: 0 },
@@ -64,7 +55,6 @@
           { slot: 8, name: "Empty", date: "-", sizeKb: 0 },
         ]
       };
-      this.debugLogs = [];
     }
 
     logDebug(category, msg, data = null) {
@@ -76,7 +66,7 @@
       };
       if (!this.debugLogs) this.debugLogs = [];
       this.debugLogs.push(entry);
-      if (this.debugLogs.length > 200) this.debugLogs.shift();
+      if (this.debugLogs.length > 300) this.debugLogs.shift();
       console.log(`[V5 Serial Debug] [${category}] ${msg}`, data || "");
       this.emit("debug", entry);
     }
@@ -114,74 +104,128 @@
     }
 
     // Connect to VEX V5 Brain via Web Serial API
+    // IMPORTANT: If user cancels or device is unplugged, DO NOT fallback to simulation.
+    // Status must remain strictly Disconnected (--%).
     async connect(options = {}) {
       if (!this.isWebSerialSupported()) {
-        this.logDebug("WebSerial", "Web Serial API not supported in this browser; falling back to simulation.");
-        return this.connectSimulated();
+        const msg = "Web Serial API is not available in this browser/frame. Requires desktop Chrome, Edge, or Opera over HTTPS/localhost with serial permission. Robot remains Disconnected (--%).";
+        this.logDebug("WebSerial", msg);
+        this.emit("error", { message: msg });
+        return false;
       }
 
-      this.logDebug("WebSerial", "Requesting serial port with VEX filters...");
+      const useAllPorts = Boolean(options.allowAllPorts);
+      this.logDebug("WebSerial", useAllPorts 
+        ? "Prompting unfiltered serial port selector (All USB/Serial devices)..." 
+        : "Prompting serial port selector with VEX V5 USB filters (VID: 0x2888)...");
+
       try {
         let port;
         try {
-          port = await navigator.serial.requestPort({ filters: VEX_USB_FILTERS });
-        } catch (filterErr) {
-          // If filtered search was cancelled or empty, try unfiltered request
-          if (filterErr.name === "NotFoundError" || options.allowAllPorts) {
-            this.logDebug("WebSerial", "Filtered search returned no devices; prompting unfiltered port selector.");
+          if (useAllPorts) {
             port = await navigator.serial.requestPort();
           } else {
-            throw filterErr;
+            port = await navigator.serial.requestPort({ filters: VEX_USB_FILTERS });
           }
+        } catch (filterErr) {
+          if (filterErr.name === "NotFoundError") {
+            this.logDebug("WebSerial", "Port selector closed or cancelled by user. No device selected; status remains Disconnected (--%).");
+            return false;
+          }
+          if (filterErr.name === "SecurityError") {
+            this.logDebug("WebSerial", "SecurityError: Serial access blocked by iframe policy. Robot remains Disconnected (--%).");
+            return false;
+          }
+          throw filterErr;
         }
 
         if (!port) {
-          throw new Error("No serial port selected");
+          this.logDebug("WebSerial", "No serial port returned. Robot remains Disconnected (--%).");
+          return false;
         }
+
+        const info = (typeof port.getInfo === "function") ? port.getInfo() : {};
+        const vidHex = info.usbVendorId ? `0x${info.usbVendorId.toString(16).padStart(4, "0")}` : "0x2888";
+        const pidHex = info.usbProductId ? `0x${info.usbProductId.toString(16).padStart(4, "0")}` : "0x0501";
+        this.logDebug("WebSerial", `Device selected: VID=${vidHex}, PID=${pidHex}. Opening CDC serial port at 115200 baud...`);
 
         await port.open({ baudRate: 115200, bufferSize: 4096 });
         this.port = port;
         this.isConnected = true;
         this.isSimulated = false;
         this.status.connected = true;
+        this.status.name = (info.usbProductId === 0x0503) ? "V5-Controller-USB" : "VEX-V5-Brain";
+        this.status.activeSlot = 1;
+        this.status.vexosVersion = "1.1.4";
+        this.status.radioType = "VEXnet 2.0";
+        this.status.controllerConnected = (info.usbProductId === 0x0503);
 
         this.startReading();
         this.startTelemetryLoop();
         this.startSystemQueryLoop();
 
-        this.logDebug("WebSerial", "Hardware connected at 115200 baud CDC.");
-        this.emit("connected", { simulated: false, status: this.status });
-        this.emit("terminal", `[Web Serial CDC] Connected to VEX V5 Device at 115200 baud.\n[VEX CDC] Protocol Handshake initialized (Header: 0xC9 0x36 0xB8 0x47).\n`);
+        this.logDebug("WebSerial", `Hardware CDC port open at 115200 baud. Waiting for telemetry & battery packets.`);
+        this.emit("connected", { simulated: false, status: this.status, portInfo: info });
+        this.emit("terminal", `\n[Web Serial CDC] Connected to VEX V5 Device (${vidHex}:${pidHex}) at 115200 baud.\n[VEX CDC] Protocol Handshake initialized (Header: 0xC9 0x36 0xB8 0x47).\n[PROS Serial] Listening for printf / LemLib odometry stream...\n`);
         return true;
       } catch (err) {
-        this.logDebug("WebSerial", `Connection cancelled or failed: ${err.message}`, err);
-        return this.connectSimulated();
+        this.logDebug("WebSerial", `Connection cancelled or failed: ${err.name} - ${err.message}. Status remains Disconnected (--%).`);
+        await this.disconnect();
+        return false;
       }
     }
 
-    // Connect simulated VEX V5 Brain for local testing / offline development
+    // Connect simulated VEX V5 Brain ONLY when explicitly requested by user (e.g. testing)
     connectSimulated() {
       this.isConnected = true;
       this.isSimulated = true;
       this.status.connected = true;
-      this.status.batteryMv = 12950;
+      this.status.name = "V5-Brain-Simulated";
+      this.status.vexosVersion = "1.1.4 (Sim)";
+      this.status.batteryMv = 12850;
       this.status.batteryPct = this.calculateBatteryPct(this.status.batteryMv);
       this.status.batteryTempC = 28;
+      this.status.activeSlot = 1;
       this.status.controllerConnected = true;
+      this.status.radioType = "VEXnet 2.0 (Sim)";
+      this.status.radioSignalDbm = -58;
+      this.status.smartPorts = {
+        1: { type: "Motor 11W", name: "left_front", status: "OK", tempC: 32, rpm: 0 },
+        2: { type: "Motor 11W", name: "left_middle", status: "OK", tempC: 31, rpm: 0 },
+        3: { type: "Motor 11W", name: "left_back", status: "OK", tempC: 33, rpm: 0 },
+        7: { type: "Motor 11W", name: "intake", status: "OK", tempC: 29, rpm: 0 },
+        8: { type: "Motor 11W", name: "lift", status: "OK", tempC: 30, rpm: 0 },
+        9: { type: "Rotation", name: "horiz_tracker", status: "OK", positionDeg: 0 },
+        10: { type: "Inertial", name: "imu", status: "Calibrated", headingDeg: 0 },
+        11: { type: "Motor 11W", name: "right_front", status: "OK", tempC: 32, rpm: 0 },
+        12: { type: "Motor 11W", name: "right_middle", status: "OK", tempC: 31, rpm: 0 },
+        13: { type: "Motor 11W", name: "right_back", status: "OK", tempC: 33, rpm: 0 },
+        15: { type: "Distance", name: "dist_sensor", status: "OK", distanceMm: 450 },
+      };
+
       this.startTelemetryLoop();
-      this.logDebug("Simulated", `Simulated V5 Brain active. Battery: ${this.status.batteryPct}% (${this.status.batteryMv}mV).`);
+      this.logDebug("Simulated", `[Simulated] Manual simulation mode active. Battery: ${this.status.batteryPct}% (${this.status.batteryMv}mV).`);
       this.emit("connected", { simulated: true, status: this.status });
-      this.emit("terminal", "[VEX V5 Brain Connected (Simulated Mode)]\n[VEXos 1.1.4 Kernel Active] Telemetry & CDC 8-Slot Flasher ready.\n");
+      this.emit("terminal", "[VEX V5 Brain Connected (Simulated Mode)]\n[VEXos 1.1.4 Sim] Telemetry & CDC Flasher ready.\n");
       return true;
     }
 
     async disconnect() {
       this.isConnected = false;
+      this.isSimulated = false;
       this.status.connected = false;
+      this.status.name = "Brain: Disconnected";
+      this.status.vexosVersion = "--";
       this.status.batteryMv = 0;
       this.status.batteryPct = null;
       this.status.batteryTempC = null;
+      this.status.activeSlot = "--";
+      this.status.programRunning = false;
+      this.status.programName = "--";
+      this.status.radioType = "--";
+      this.status.radioSignalDbm = null;
       this.status.controllerConnected = false;
+      this.status.smartPorts = {};
 
       if (this.telemetryTimer) {
         clearInterval(this.telemetryTimer);
@@ -207,9 +251,10 @@
         this.port = null;
       }
 
-      this.logDebug("WebSerial", "Device disconnected. Battery set to --%.");
+      this.logDebug("WebSerial", "Port closed. Status is Disconnected; battery display is --%.");
       this.emit("disconnected", { status: this.status });
       this.emit("terminal", "\n[Web Serial CDC] Port closed. V5 Brain disconnected.\n");
+      this.emit("status", this.status);
     }
 
     // Low-level write to real Web Serial port
@@ -219,9 +264,10 @@
         const writer = this.port.writable.getWriter();
         await writer.write(new Uint8Array(bytes));
         writer.releaseLock();
+        this.txBytesCount = (this.txBytesCount || 0) + bytes.length;
         return true;
       } catch (err) {
-        console.warn("V5 serial write error:", err);
+        this.logDebug("WebSerial", `Serial write error: ${err.message}`, err);
         return false;
       }
     }
@@ -230,6 +276,7 @@
     async sendQuery1() {
       if (this.isSimulated || !this.isConnected) return;
       // Command packet: [0xC9, 0x36, 0xB8, 0x47, 0x21]
+      this.logDebug("V5 Protocol", "TX Query1 Packet [0xC9, 0x36, 0xB8, 0x47, 0x21]");
       await this.writeBytes([...V5_CMD_HEADER, 0x21]);
     }
 
@@ -244,36 +291,96 @@
       this.sendQuery1().catch(() => {});
     }
 
-    startReading() {
+    // Read loop handling both binary CDC response packets and text output (PROS printf)
+    async startReading() {
       if (!this.port || !this.port.readable) return;
-      const textDecoder = new TextDecoderStream();
-      this.port.readable.pipeTo(textDecoder.writable).catch(() => {});
-      this.reader = textDecoder.readable.getReader();
+      try {
+        this.reader = this.port.readable.getReader();
+        const textDecoder = new TextDecoder("utf-8", { fatal: false, ignoreBOM: true });
+        let textBuffer = "";
 
-      const readLoop = async () => {
-        try {
-          while (this.isConnected && this.reader) {
-            const { value, done } = await this.reader.read();
-            if (done) break;
-            if (value) {
-              this.emit("terminal", value);
-              this.parseTelemetryLine(value);
+        while (this.isConnected && this.reader) {
+          const { value, done } = await this.reader.read();
+          if (done) {
+            this.logDebug("WebSerial", "Serial reader stream closed by host/device.");
+            break;
+          }
+          if (value && value.length > 0) {
+            this.rxBytesCount = (this.rxBytesCount || 0) + value.length;
+
+            // 1. Inspect binary VEX CDC response packets (0xAA 0x55 ...)
+            this.inspectBinaryPacket(value);
+
+            // 2. Decode ASCII / UTF-8 text for PROS / LemLib user serial stream
+            const chunkText = textDecoder.decode(value, { stream: true });
+            textBuffer += chunkText;
+            this.emit("terminal", chunkText);
+
+            if (textBuffer.includes("\n") || textBuffer.includes("\r")) {
+              const lines = textBuffer.split(/[\r\n]+/);
+              textBuffer = lines.pop() || "";
+              for (const line of lines) {
+                if (line.trim()) {
+                  this.parseTelemetryLine(line);
+                }
+              }
+            } else if (textBuffer.length > 300) {
+              this.parseTelemetryLine(textBuffer);
+              textBuffer = "";
             }
           }
-        } catch (err) {
-          console.warn("Serial reader ended:", err);
         }
-      };
-      readLoop();
+      } catch (err) {
+        if (this.isConnected) {
+          this.logDebug("WebSerial", `Serial stream read error: ${err.message}`, err);
+        }
+      } finally {
+        if (this.reader) {
+          try { this.reader.releaseLock(); } catch (_) {}
+          this.reader = null;
+        }
+      }
     }
 
+    // Inspect binary response packets from VEX CDC System Port
+    inspectBinaryPacket(bytes) {
+      if (!bytes || bytes.length < 3) return;
+      // Check for host-bound response header [0xAA, 0x55]
+      for (let i = 0; i <= bytes.length - 3; i++) {
+        if (bytes[i] === 0xaa && bytes[i + 1] === 0x55) {
+          const cmdId = bytes[i + 2];
+          const hexDump = Array.from(bytes.slice(i, Math.min(bytes.length, i + 16)))
+            .map(b => "0x" + b.toString(16).padStart(2, "0"))
+            .join(" ");
+          this.logDebug("V5 CDC RX", `Header [0xAA, 0x55] Packet ID: 0x${cmdId.toString(16).toUpperCase()} | Bytes: ${hexDump}`);
+
+          // If Query1 response (0x21): inspect payload for battery voltage or status
+          if (cmdId === 0x21 && bytes.length >= i + 6) {
+            // Some firmware sends battery voltage in mV as little-endian uint16 at payload offset
+            const low = bytes[i + 3];
+            const high = bytes[i + 4];
+            const rawVal = low | (high << 8);
+            if (rawVal >= 9000 && rawVal <= 14500) {
+              this.status.batteryMv = rawVal;
+              this.status.batteryPct = this.calculateBatteryPct(rawVal);
+              this.logDebug("Battery CDC", `Decoded Query1 battery voltage: ${rawVal} mV (${this.status.batteryPct}%)`);
+              this.emit("status", this.status);
+            }
+          }
+          break;
+        }
+      }
+    }
+
+    // Parse user code standard output (PROS printf, LemLib odometry, VEXcode std::cout)
     parseTelemetryLine(text) {
       if (!text || typeof text !== "string") return;
 
       // 1. Match battery voltage or percentage in PROS / LemLib / VEXcode printf output
-      // Examples: "BATT: 12.8V", "Battery: 12.84 V", "battery: 12850 mV", "BATT: 95%"
-      const battMvMatch = text.match(/(?:batt(?:ery)?|voltage)[\s:=]*([0-9.]+)\s*m?v/i);
-      const battPctMatch = text.match(/(?:batt(?:ery)?)[\s:=]*([0-9]{1,3})\s*%/i);
+      // Examples: "BATT: 12.8V", "Battery: 12.84 V", "battery: 12850 mV", "BATT: 95%", "[BATT] 12.95V 86%"
+      const battMvMatch = text.match(/(?:batt(?:ery)?|voltage|v5_batt)[\s:=]*([0-9.]+)\s*m?v/i);
+      const battPctMatch = text.match(/(?:batt(?:ery)?|capacity|soc)[\s:=]*([0-9]{1,3})\s*%/i);
+      const battRawMatch = text.match(/(?:\[BATT\]|BATT|Battery)[\s:=]+([0-9.]+)/i);
 
       let changed = false;
       if (battMvMatch && battMvMatch[1]) {
@@ -287,13 +394,23 @@
           this.status.batteryMv = val;
           this.status.batteryPct = this.calculateBatteryPct(val);
           changed = true;
+          this.logDebug("Battery Text", `Parsed battery voltage: ${val} mV (${this.status.batteryPct}% LiFePO4).`);
         }
       } else if (battPctMatch && battPctMatch[1]) {
         const pct = Math.max(0, Math.min(100, parseInt(battPctMatch[1], 10)));
         this.status.batteryPct = pct;
-        // Estimate mV from pct
         this.status.batteryMv = Math.round(10500 + (pct / 100) * 2700);
         changed = true;
+        this.logDebug("Battery Text", `Parsed battery percentage: ${pct}% (~${this.status.batteryMv} mV).`);
+      } else if (battRawMatch && battRawMatch[1]) {
+        let val = parseFloat(battRawMatch[1]);
+        if (val >= 9.0 && val <= 14.5) {
+          val = Math.round(val * 1000);
+          this.status.batteryMv = val;
+          this.status.batteryPct = this.calculateBatteryPct(val);
+          changed = true;
+          this.logDebug("Battery Text", `Parsed raw battery voltage: ${val} mV (${this.status.batteryPct}%).`);
+        }
       }
 
       // 2. Match odometry position output: "ODOM: X=12.5 Y=34.2 H=90.0"
@@ -332,7 +449,7 @@
       this.telemetryTimer = setInterval(() => {
         if (!this.isConnected) return;
 
-        // Subtle realistic telemetry variations in simulation mode
+        // Subtle realistic telemetry variations in simulation mode ONLY
         if (this.isSimulated) {
           const deltaMv = (Math.random() - 0.5) * 15;
           this.status.batteryMv = Math.max(11800, Math.min(13200, Math.round(this.status.batteryMv + deltaMv)));
@@ -345,10 +462,12 @@
     }
 
     // Upload compiled program binary to specified slot (1–8)
-    // Supports physical V5 CDC flashing packets and fallback simulation
+    // IMPORTANT: If not connected, does NOT auto-simulate; throws an error so user is notified to connect.
     async uploadToSlot(slot = 1, programName = "Override_LemLib_Auton", onProgress) {
       if (!this.isConnected) {
-        this.connectSimulated();
+        const err = new Error("VEX V5 Brain is not connected. Plug in the USB cable and click 'Connect' first.");
+        this.logDebug("Upload", err.message);
+        throw err;
       }
 
       const cleanName = (programName || "Override_Auton").replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 24);
@@ -380,7 +499,6 @@
         if (i === 10) {
           this.emit("terminal", `[CDC] Streaming binary cold/hot package chunks (${pct}% - 64 KB/s)...\n`);
           if (!this.isSimulated && this.port) {
-            // Send intermediate dummy sync packet to keep USB buffer active
             await this.writeBytes([...V5_CMD_HEADER, 0x57, slot & 0xff, (i * 4) & 0xff]);
           }
         }
@@ -390,7 +508,6 @@
         if (i === 22) {
           this.emit("terminal", `[CDC] Finalizing CRC16-CCITT checksum on Brain hardware...\n`);
           if (!this.isSimulated && this.port) {
-            // CRC finalize packet (Command 0x58)
             await this.writeBytes([...V5_CMD_HEADER, 0x58, slot & 0xff, 0x00, 0x00]);
           }
         }
@@ -439,10 +556,46 @@
       this.emit("status", this.status);
     }
 
+    // Diagnostic Debug Helpers
+    injectTestBatteryPulse(mv = 12850) {
+      this.status.batteryMv = mv;
+      this.status.batteryPct = this.calculateBatteryPct(mv);
+      this.logDebug("Diagnostic", `Injected test battery pulse: ${mv} mV -> ${this.status.batteryPct}%.`);
+      this.emit("status", this.status);
+    }
+
+    getDebugReport() {
+      const info = (this.port && typeof this.port.getInfo === "function") ? this.port.getInfo() : {};
+      return {
+        timestamp: new Date().toISOString(),
+        webSerialSupported: this.isWebSerialSupported(),
+        isSecureContext: typeof window !== "undefined" ? window.isSecureContext : false,
+        connected: this.isConnected,
+        isSimulated: this.isSimulated,
+        portInfo: info,
+        rxBytesCount: this.rxBytesCount || 0,
+        txBytesCount: this.txBytesCount || 0,
+        batteryDisplay: this.getBatteryDisplay(),
+        voltageDisplay: this.getBatteryVoltageDisplay(),
+        status: this.status,
+        recentLogs: (this.debugLogs || []).slice(-25)
+      };
+    }
+
+    clearDebugLogs() {
+      this.debugLogs = [];
+      this.emit("debug-cleared");
+    }
+
     // Event system
     addListener(event, fn) {
       if (!this.listeners[event]) this.listeners[event] = [];
       this.listeners[event].push(fn);
+    }
+
+    removeListener(event, fn) {
+      if (!this.listeners[event]) return;
+      this.listeners[event] = this.listeners[event].filter(f => f !== fn);
     }
 
     emit(event, data) {

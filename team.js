@@ -8396,6 +8396,25 @@
         bConnect.textContent = isConn ? `🔌 ${status.name}` : "Connect";
       }
       if (bUpload) bUpload.style.display = isConn ? "inline-flex" : "none";
+
+      // Debug Pane on Team Page
+      const dDot = document.getElementById("debugBrainDot");
+      const dName = document.getElementById("debugBrainStatusName");
+      const dBatt = document.getElementById("debugBrainBattVal");
+      const dBar = document.getElementById("debugBrainBattBar");
+      const dTemp = document.getElementById("debugBrainTempVal");
+      const dVexos = document.getElementById("debugBrainVexosVal");
+      const dSlot = document.getElementById("debugBrainSlotVal");
+      const btnDebugConnect = document.getElementById("btnDebugConnectBrain");
+
+      if (dDot) dDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
+      if (dName) dName.textContent = isConn ? `VEX V5 Brain: ${status.name}` : "VEX V5 Brain: Disconnected";
+      if (btnDebugConnect) btnDebugConnect.textContent = isConn ? "Disconnect" : "🔌 Connect USB";
+      if (dBatt) dBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : "--% (-- V)";
+      if (dBar) dBar.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
+      if (dTemp) dTemp.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
+      if (dVexos) dVexos.textContent = isConn ? `v${status.vexosVersion}` : "--";
+      if (dSlot) dSlot.textContent = isConn ? `Slot ${status.activeSlot}` : "--";
     }
 
     if (window.V5BrainSerial) {
