@@ -321,6 +321,16 @@ void initialize() {
     pros::lcd::initialize();
     chassis.calibrate();
     pros::lcd::set_text(1, "LemLib Chassis Initialized");
+
+    // Standard PROS background task to stream robot battery & LemLib odometry over serial CDC
+    pros::Task telemetry_task([]{
+        while (true) {
+            printf("[BATT] %.2fV %d%%\n", pros::battery::get_voltage() / 1000.0, (int)pros::battery::get_capacity());
+            lemlib::Pose pose = chassis.getPose();
+            printf("ODOM: X=%.2f Y=%.2f H=%.2f\n", pose.x, pose.y, pose.theta);
+            pros::delay(2000);
+        }
+    });
 }
 
 void disabled() {}

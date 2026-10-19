@@ -17088,12 +17088,20 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (bannerBatt) {
         bannerBatt.hidden = false;
         bannerBatt.classList.toggle("disconnected", !isConn);
-        bannerBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) 
-          ? `⚡ ${status.batteryPct}%` 
-          : "⚡ --%";
-        bannerBatt.title = isConn 
-          ? `V5 Battery: ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` 
-          : "V5 Battery: Disconnected (--%)";
+        const hasBrainBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined && status.batteryPct > 0);
+        if (hasBrainBatt) {
+          bannerBatt.textContent = `⚡ ${status.batteryPct}%`;
+          bannerBatt.title = `V5 Robot Battery: ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)`;
+        } else if (isConn && status.controllerConnected && !status.brainLinked) {
+          bannerBatt.textContent = "⚡ 🎮 USB (Unlinked)";
+          bannerBatt.title = "VEX V5 Controller USB Connected • Awaiting VEXnet link to Brain (Power ON Brain)";
+        } else if (isConn && status.controllerConnected) {
+          bannerBatt.textContent = "⚡ 🎮 USB";
+          bannerBatt.title = "VEX V5 Controller USB Active";
+        } else {
+          bannerBatt.textContent = "⚡ --%";
+          bannerBatt.title = "V5 Battery: Disconnected (--%)";
+        }
       }
 
       // Homepage Brain pill
@@ -17105,12 +17113,20 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (homeBatt) {
         homeBatt.hidden = false;
         homeBatt.classList.toggle("disconnected", !isConn);
-        homeBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) 
-          ? `⚡ ${status.batteryPct}%` 
-          : "⚡ --%";
-        homeBatt.title = isConn 
-          ? `V5 Battery: ${status.batteryPct}%` 
-          : "V5 Battery: Disconnected (--%)";
+        const hasBrainBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined && status.batteryPct > 0);
+        if (hasBrainBatt) {
+          homeBatt.textContent = `⚡ ${status.batteryPct}%`;
+          homeBatt.title = `V5 Robot Battery: ${status.batteryPct}%`;
+        } else if (isConn && status.controllerConnected && !status.brainLinked) {
+          homeBatt.textContent = "⚡ 🎮 USB (Unlinked)";
+          homeBatt.title = "Controller USB Connected • Awaiting VEXnet link to Brain";
+        } else if (isConn && status.controllerConnected) {
+          homeBatt.textContent = "⚡ 🎮 USB";
+          homeBatt.title = "VEX V5 Controller USB Active";
+        } else {
+          homeBatt.textContent = "⚡ --%";
+          homeBatt.title = "V5 Battery: Disconnected (--%)";
+        }
       }
 
       // Modal elements
@@ -17138,10 +17154,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-flex";
       if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-flex" : "none";
 
-      const hasBrainBatt = (isConn && status.batteryPct !== null && status.batteryPct !== undefined && status.batteryPct > 0);
+      const hasBrainBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined && status.batteryPct > 0);
       if (modalBattPct) {
         if (hasBrainBatt) {
           modalBattPct.textContent = `${status.batteryPct}%`;
+        } else if (isConn && status.controllerConnected && !status.brainLinked) {
+          modalBattPct.textContent = "Unlinked";
         } else if (isConn && status.controllerConnected) {
           modalBattPct.textContent = "🎮 USB";
         } else {
@@ -17152,6 +17170,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
         if (hasBrainBatt) {
           modalBattFill.style.width = `${status.batteryPct}%`;
           modalBattFill.style.background = "#22c55e";
+        } else if (isConn && status.controllerConnected && !status.brainLinked) {
+          modalBattFill.style.width = "0%";
+          modalBattFill.style.background = "#64748b";
         } else if (isConn && status.controllerConnected) {
           modalBattFill.style.width = "100%";
           modalBattFill.style.background = "#38bdf8";
@@ -17160,10 +17181,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
         }
       }
       if (modalBattMv) {
-        if (isConn && status.batteryMv && status.batteryMv >= 9000) {
+        if (hasBrainBatt && status.batteryMv && status.batteryMv >= 9000) {
           modalBattMv.textContent = `${(status.batteryMv / 1000).toFixed(2)} V`;
+        } else if (isConn && status.controllerConnected && !status.brainLinked) {
+          modalBattMv.textContent = "-- V (Brain Offline)";
         } else if (isConn && status.controllerConnected) {
-          modalBattMv.textContent = "5.00 V (USB)";
+          modalBattMv.textContent = "5.00 V (Controller USB)";
         } else {
           modalBattMv.textContent = "-- V";
         }
@@ -17205,12 +17228,16 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (debugBrainStatusName) debugBrainStatusName.textContent = isConn ? `VEX V5 Brain: ${status.name}` : "VEX V5 Brain: Disconnected";
       if (btnDebugConnect) btnDebugConnect.textContent = isConn ? "Disconnect" : "🔌 Connect USB";
       if (debugBrainBattVal) {
-        debugBrainBattVal.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : "--% (-- V)";
-        debugBrainBattVal.classList.toggle("text-green", Boolean(isConn && status.batteryPct !== null));
-        debugBrainBattVal.classList.toggle("text-muted", !isConn || status.batteryPct === null);
+        const hasBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryMv >= 9000);
+        debugBrainBattVal.textContent = hasBatt ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : (isConn && status.controllerConnected && !status.brainLinked ? "Radio Unlinked (--%)" : "--% (-- V)");
+        debugBrainBattVal.classList.toggle("text-green", Boolean(hasBatt));
+        debugBrainBattVal.classList.toggle("text-muted", !hasBatt);
       }
-      if (debugBrainBattBar) debugBrainBattBar.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
-      if (debugBrainTempVal) debugBrainTempVal.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
+      if (debugBrainBattBar) {
+        const hasBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined);
+        debugBrainBattBar.style.width = hasBatt ? `${status.batteryPct}%` : "0%";
+      }
+      if (debugBrainTempVal) debugBrainTempVal.textContent = (isConn && status.brainLinked && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
       if (debugBrainVexosVal) debugBrainVexosVal.textContent = isConn ? `v${status.vexosVersion}` : "--";
       if (debugBrainSlotVal) debugBrainSlotVal.textContent = isConn ? `Slot ${status.activeSlot} ${status.programRunning ? '(Running)' : ''}` : "--";
 
@@ -17227,18 +17254,24 @@ lemlib::ControllerSettings ${currentMode}_controller(
         debugApiStatus.style.color = supported ? "#22c55e" : "#f87171";
       }
       if (debugPortState) {
-        debugPortState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : "USB CDC Active") : "Unplugged";
+        debugPortState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.controllerConnected ? "Controller USB (0x0503)" : "Brain USB (0x0501)")) : "Unplugged";
         debugPortState.style.color = isConn ? "#22c55e" : "#f59e0b";
       }
       if (debugRawBattMv) {
-        debugRawBattMv.textContent = (isConn && status.batteryPct !== null) ? `${status.batteryMv} mV (${status.batteryPct}%)` : "0 mV (--%)";
+        if (isConn && status.brainLinked && status.batteryPct !== null && status.batteryMv) {
+          debugRawBattMv.textContent = `${status.batteryMv} mV (${status.batteryPct}%)`;
+        } else if (isConn && status.controllerConnected && !status.brainLinked) {
+          debugRawBattMv.textContent = "Radio Unlinked (0 mV)";
+        } else {
+          debugRawBattMv.textContent = "0 mV (--%)";
+        }
       }
       if (debugCdcState) {
-        debugCdcState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : "Synced (0xC9)") : "Idle";
+        debugCdcState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.brainLinked ? "Linked (0xC9)" : "Searching Radio (0x21)")) : "Idle";
         debugCdcState.style.color = isConn ? "#38bdf8" : "#64748b";
       }
       if (modalSerialDebugBadge) {
-        modalSerialDebugBadge.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "SIMULATED" : "CONNECTED CDC") : "DISCONNECTED";
+        modalSerialDebugBadge.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "SIMULATED" : (status.brainLinked ? "CDC LINKED" : "CONTROLLER ACTIVE")) : "DISCONNECTED";
         modalSerialDebugBadge.style.background = isConn ? "#15803d" : "#1e293b";
         modalSerialDebugBadge.style.color = isConn ? "#ffffff" : "#94a3b8";
       }
@@ -17264,20 +17297,11 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (btnModalPingQuery1) {
       btnModalPingQuery1.onclick = () => {
         if (!window.V5BrainSerial.isConnected) {
-          showToast("⚠️ Connect V5 Brain before sending Query1 packet.", "warning");
+          showToast("⚠️ Connect V5 Device before sending Query1 packet.", "warning");
           return;
         }
         window.V5BrainSerial.sendQuery1();
         appendSerialDebugLog("[TX MANUAL] Query1 Packet (0xC9 0x36 0xB8 0x47 0x21) dispatched.");
-      };
-    }
-
-    const btnTestSimBattery = document.getElementById("btnTestSimBattery");
-    if (btnTestSimBattery) {
-      btnTestSimBattery.onclick = () => {
-        window.V5BrainSerial.injectTestBatteryPulse(12850);
-        appendSerialDebugLog("[TEST] Injected pulse: 12850 mV (75% LiFePO4 SoC).");
-        showToast("🔋 Tested LiFePO4 Battery Pulse: 12.85V (75%)");
       };
     }
 

@@ -8389,7 +8389,16 @@
       if (bBatt) {
         bBatt.hidden = false;
         bBatt.classList.toggle("disconnected", !isConn);
-        bBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `⚡ ${status.batteryPct}%` : "⚡ --%";
+        const hasBrainBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined && status.batteryPct > 0);
+        if (hasBrainBatt) {
+          bBatt.textContent = `⚡ ${status.batteryPct}%`;
+        } else if (isConn && status.controllerConnected && !status.brainLinked) {
+          bBatt.textContent = "⚡ 🎮 USB (Unlinked)";
+        } else if (isConn && status.controllerConnected) {
+          bBatt.textContent = "⚡ 🎮 USB";
+        } else {
+          bBatt.textContent = "⚡ --%";
+        }
       }
       if (bConnect) {
         bConnect.classList.toggle("connected", isConn);
@@ -8411,12 +8420,16 @@
       if (dName) dName.textContent = isConn ? `VEX V5 Brain: ${status.name}` : "VEX V5 Brain: Disconnected";
       if (btnDebugConnect) btnDebugConnect.textContent = isConn ? "Disconnect" : "🔌 Connect USB";
       if (dBatt) {
-        dBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : "--% (-- V)";
-        dBatt.classList.toggle("text-green", Boolean(isConn && status.batteryPct !== null));
-        dBatt.classList.toggle("text-muted", !isConn || status.batteryPct === null);
+        const hasBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryMv >= 9000);
+        dBatt.textContent = hasBatt ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : (isConn && status.controllerConnected && !status.brainLinked ? "Radio Unlinked (--%)" : "--% (-- V)");
+        dBatt.classList.toggle("text-green", Boolean(hasBatt));
+        dBatt.classList.toggle("text-muted", !hasBatt);
       }
-      if (dBar) dBar.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
-      if (dTemp) dTemp.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
+      if (dBar) {
+        const hasBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined);
+        dBar.style.width = hasBatt ? `${status.batteryPct}%` : "0%";
+      }
+      if (dTemp) dTemp.textContent = (isConn && status.brainLinked && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
       if (dVexos) dVexos.textContent = isConn ? `v${status.vexosVersion}` : "--";
       if (dSlot) dSlot.textContent = isConn ? `Slot ${status.activeSlot}` : "--";
     }

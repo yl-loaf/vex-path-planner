@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20261019.k2" />
+  <link rel="stylesheet" href="style.css?v=20261019.k4" />
   <script>
     (function () {
       try {
@@ -400,7 +400,6 @@
             <div style="display:flex;gap:4px;flex-wrap:wrap;">
               <button type="button" id="btnModalScanAllPorts" class="btn-xs-clean" style="font-size:0.68rem;background:#0369a1;color:#fff;padding:2px 7px;border-radius:4px;border:none;cursor:pointer;" title="Scan unfiltered serial ports if VEX filters miss your device">🔍 All Ports</button>
               <button type="button" id="btnModalPingQuery1" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#38bdf8;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Send V5 Protocol Query1 (0x21)">📤 Ping 0x21</button>
-              <button type="button" id="btnTestSimBattery" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#cbd5e1;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Simulate V5 Battery pulse at 12.8V">🧪 Test 12.8V</button>
               <button type="button" id="btnForceDisconnect" class="btn-xs-clean" style="font-size:0.68rem;background:rgba(239,68,68,0.2);color:#fca5a5;padding:2px 7px;border-radius:4px;border:1px solid rgba(239,68,68,0.3);cursor:pointer;" title="Disconnect & force reset state to --%">🔄 Disconnect (--%)</button>
               <button type="button" id="btnCopyDebugReport" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#38bdf8;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Copy serial debug report to clipboard">📋 Report</button>
               <button type="button" id="btnClearSerialDebugLogs" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#94a3b8;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;">Clear</button>
@@ -772,22 +771,22 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20261019.k2"></script>
+  <script src="version.js?v=20261019.k4"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261019.k2"></script>
+  <script src="firebase-config.js?v=20261019.k4"></script>
   <script src="analytics-tracker.js"></script>
   <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261019.k2"></script>
-  <script src="session-guard.js?v=20261019.k2"></script>
-  <script src="theme.js?v=20261019.k2"></script>
-  <script src="v5-brain-serial.js?v=20261019.k2"></script>
-  <script src="project-manager.js?v=20261019.k2"></script>
+  <script src="google-drive-sync.js?v=20261019.k4"></script>
+  <script src="session-guard.js?v=20261019.k4"></script>
+  <script src="theme.js?v=20261019.k4"></script>
+  <script src="v5-brain-serial.js?v=20261019.k4"></script>
+  <script src="project-manager.js?v=20261019.k4"></script>
   <!-- Monaco Editor (VS Code Engine) AMD Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="ide.js?v=20261019.k2"></script>
-  <script src="tutorial.js?v=20261019.k2"></script>
+  <script src="ide.js?v=20261019.k4"></script>
+  <script src="tutorial.js?v=20261019.k4"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {

@@ -34,7 +34,7 @@
         connected: false,
         name: "Brain: Disconnected",
         vexosVersion: "--",
-        batteryMv: 0,
+        batteryMv: null,
         batteryPct: null,
         batteryTempC: null,
         activeSlot: "--",
@@ -43,6 +43,7 @@
         radioType: "--",
         radioSignalDbm: null,
         controllerConnected: false,
+        brainLinked: false,
         smartPorts: {},
         slots: [
           { slot: 1, name: "Empty", date: "-", sizeKb: 0 },
@@ -91,6 +92,9 @@
       if (!this.isConnected) {
         return "--%";
       }
+      if (this.status.controllerConnected && !this.status.brainLinked) {
+        return "--% (Radio Unlinked)";
+      }
       if (this.status.batteryPct !== null && this.status.batteryPct !== undefined && this.status.batteryPct > 0) {
         return `${this.status.batteryPct}%`;
       }
@@ -104,11 +108,14 @@
       if (!this.isConnected) {
         return "-- V";
       }
+      if (this.status.controllerConnected && !this.status.brainLinked) {
+        return "-- V (Brain Offline)";
+      }
       if (this.status.batteryMv && this.status.batteryMv >= 9000) {
         return `${(this.status.batteryMv / 1000).toFixed(2)} V`;
       }
       if (this.status.controllerConnected) {
-        return "5.00 V (USB)";
+        return "5.00 V (Controller USB)";
       }
       return "-- V";
     }
@@ -182,19 +189,25 @@
         this.isConnected = true;
         this.isSimulated = false;
         this.status.connected = true;
-        this.status.name = (info.usbProductId === 0x0503) ? "V5-Controller-USB" : "VEX-V5-Brain";
+        const isController = (info.usbProductId === 0x0503);
+        this.status.name = isController ? "V5-Controller-USB" : "VEX-V5-Brain";
         this.status.activeSlot = 1;
         this.status.vexosVersion = "1.1.4";
-        this.status.radioType = "VEXnet 2.0";
-        this.status.controllerConnected = (info.usbProductId === 0x0503);
+        this.status.controllerConnected = isController;
+        this.status.brainLinked = !isController;
+        this.status.radioType = isController ? "VEXnet 3.0 (Searching)" : "Direct USB";
+        // STRICT: Clear any previous/stale battery values immediately upon physical connection
+        this.status.batteryMv = null;
+        this.status.batteryPct = null;
+        this.status.batteryTempC = null;
 
         this.startReading();
         this.startTelemetryLoop();
         this.startSystemQueryLoop();
 
-        this.logDebug("WebSerial", `Hardware CDC port open at 115200 baud. Waiting for telemetry & battery packets.`);
+        this.logDebug("WebSerial", `Hardware CDC port open at 115200 baud (${isController ? "V5 Controller USB" : "VEX V5 Brain USB"}). Waiting for live hardware packets.`);
         this.emit("connected", { simulated: false, status: this.status, portInfo: info });
-        this.emit("terminal", `\n[Web Serial CDC] Connected to VEX V5 Device (${vidHex}:${pidHex}) at 115200 baud.\n[VEX CDC] Protocol Handshake initialized (Header: 0xC9 0x36 0xB8 0x47).\n[PROS Serial] Listening for printf / LemLib odometry stream...\n`);
+        this.emit("terminal", `\n[Web Serial CDC] Connected to VEX V5 Device (${vidHex}:${pidHex}) at 115200 baud.\n[VEX CDC] Protocol Handshake initialized (Header: 0xC9 0x36 0xB8 0x47).\n${isController ? "[VEX Controller] Connected via Controller USB. Awaiting VEXnet 3.0 radio link to V5 Brain...\n" : ""}[PROS Serial] Listening for printf / LemLib odometry stream...\n`);
         return true;
       } catch (err) {
         this.logDebug("WebSerial", `Connection cancelled or failed: ${err.name} - ${err.message}. Status remains Disconnected (--%).`);
@@ -244,7 +257,7 @@
       this.status.connected = false;
       this.status.name = "Brain: Disconnected";
       this.status.vexosVersion = "--";
-      this.status.batteryMv = 0;
+      this.status.batteryMv = null;
       this.status.batteryPct = null;
       this.status.batteryTempC = null;
       this.status.activeSlot = "--";
@@ -253,6 +266,7 @@
       this.status.radioType = "--";
       this.status.radioSignalDbm = null;
       this.status.controllerConnected = false;
+      this.status.brainLinked = false;
       this.status.smartPorts = {};
 
       if (this.telemetryTimer) {
@@ -417,6 +431,9 @@
               this.status.radioType = "VEXnet 3.0 (Searching)";
               this.status.programRunning = false;
               this.status.brainLinked = false;
+              this.status.batteryMv = null;
+              this.status.batteryPct = null;
+              this.status.batteryTempC = null;
               this.logDebug("V5 Protocol", "Controller USB CDC active: Awaiting VEXnet 3.0 radio link to V5 Brain. (Power ON Brain & check Controller pairing)");
               this.emit("status", this.status);
             }
@@ -623,9 +640,13 @@
 
     // Diagnostic Debug Helpers
     injectTestBatteryPulse(mv = 12850) {
+      if (!this.isSimulated) {
+        this.logDebug("Diagnostic", "Refused test pulse: Real physical device connected. Battery telemetry must be received from hardware CDC packets.");
+        return;
+      }
       this.status.batteryMv = mv;
       this.status.batteryPct = this.calculateBatteryPct(mv);
-      this.logDebug("Diagnostic", `Injected test battery pulse: ${mv} mV -> ${this.status.batteryPct}%.`);
+      this.logDebug("Diagnostic", `[Simulated] Set battery: ${mv} mV -> ${this.status.batteryPct}%.`);
       this.emit("status", this.status);
     }
 
