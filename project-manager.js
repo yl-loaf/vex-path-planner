@@ -2406,9 +2406,11 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
         // 7. Statement Completion & Syntax Validation
         const isControlStructure = /^(if|else|while|for|switch|case|default|try|catch|namespace|class|struct|enum|public|private|protected|typedef|using|template)\b/.test(codeWithoutStrings);
-        const isFunctionOrLambda = /^[a-zA-Z0-9_:]+\s+[a-zA-Z0-9_:]+\s*\([^)]*\)\s*$/.test(codeWithoutStrings) ||
-                                   /^void\s+[a-zA-Z0-9_:]+\s*\([^)]*\)\s*$/.test(codeWithoutStrings) ||
-                                   /\[[^\]]*\]\s*\([^)]*\)\s*$/.test(codeWithoutStrings);
+        const isFunctionOrLambda =
+          /^(?:(?:inline|static|virtual|extern|explicit|friend|constexpr|consteval|constinit)\s+)*(?:[a-zA-Z0-9_:<>\*\&\s]+)\s+[a-zA-Z0-9_:<>]+\s*\([^)]*\)(?:\s*(?:const|override|final|noexcept))*\s*$/.test(codeWithoutStrings) ||
+          /^~?[a-zA-Z0-9_]+\s*\([^)]*\)\s*(?::\s*.*)?$/.test(codeWithoutStrings) || // Constructor / Destructor / Initializer
+          /\[[^\]]*\]\s*(?:\([^)]*\))?\s*(?:->\s*[a-zA-Z0-9_:<>\*\&]+)?\s*$/.test(codeWithoutStrings) || // Lambda
+          /^[a-zA-Z0-9_:]+\s*\([^)]*\)\s*$/.test(codeWithoutStrings); // Direct function or macro call header
         const isMacroOrDirective = /^[A-Z0-9_]+\s*\([^)]*\)$/.test(codeWithoutStrings) || codePart.startsWith("#");
         const isChainedOrOperatorEnding = /[.+*\/=,&|!?:<>(^%~-]$/.test(codeWithoutStrings) || codeWithoutStrings.endsWith("::") || codeWithoutStrings.endsWith("->");
 
@@ -2429,7 +2431,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           isMacroOrDirective ||
           isInsideParensOrBrackets;
 
-        if (!isControlStructure && !isLineEndingValid && !isFunctionOrLambda && !isMacroOrDirective) {
+        if (!isControlStructure && !isLineEndingValid && !isFunctionOrLambda && !isMacroOrDirective && globalBracketStack.length === 0) {
           warnings.push({
             file: fileName,
             line: lineNum,
@@ -2472,15 +2474,15 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           statementStartLine = 0;
         }
 
-        // 8. LemLib API Parameter Count Validation (Informational warnings, non-blocking)
+        // 8. LemLib API Parameter Validation (Supports Pose overloads & coordinates)
         const mtPoint = codeWithoutStrings.match(/chassis\.moveToPoint\s*\(([^)]*)\)/);
         if (mtPoint && !mtPoint[1].includes("{")) {
           const args = mtPoint[1].split(",").map(a => a.trim()).filter(Boolean);
-          if (args.length < 2) {
+          if (args.length === 0) {
             warnings.push({
               file: fileName,
               line: lineNum,
-              message: `Notice: chassis.moveToPoint expected at least 2 arguments (x, y). Received ${args.length}`,
+              message: `Notice: chassis.moveToPoint requires target coordinates (x, y) or a LemLib Pose.`,
             });
           }
         }
@@ -2488,11 +2490,11 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         const mtPose = codeWithoutStrings.match(/chassis\.moveToPose\s*\(([^)]*)\)/);
         if (mtPose && !mtPose[1].includes("{")) {
           const args = mtPose[1].split(",").map(a => a.trim()).filter(Boolean);
-          if (args.length < 3) {
+          if (args.length === 0) {
             warnings.push({
               file: fileName,
               line: lineNum,
-              message: `Notice: chassis.moveToPose expected at least 3 arguments (x, y, theta). Received ${args.length}`,
+              message: `Notice: chassis.moveToPose requires target pose (x, y, theta) or LemLib Pose object.`,
             });
           }
         }
@@ -2501,10 +2503,10 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         if (ttHeading) {
           const args = ttHeading[1].split(",").map(a => a.trim()).filter(Boolean);
           if (args.length < 1) {
-            errors.push({
+            warnings.push({
               file: fileName,
               line: lineNum,
-              message: `SyntaxError: chassis.turnToHeading requires heading angle argument theta`,
+              message: `Notice: chassis.turnToHeading expected heading angle argument theta.`,
             });
           }
         }
@@ -2512,11 +2514,11 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         const ttPoint = codeWithoutStrings.match(/chassis\.turnToPoint\s*\(([^)]*)\)/);
         if (ttPoint) {
           const args = ttPoint[1].split(",").map(a => a.trim()).filter(Boolean);
-          if (args.length < 2) {
-            errors.push({
+          if (args.length < 1) {
+            warnings.push({
               file: fileName,
               line: lineNum,
-              message: `SyntaxError: chassis.turnToPoint requires at least 2 arguments (x, y). Received ${args.length}`,
+              message: `Notice: chassis.turnToPoint expected target coordinates or Pose object.`,
             });
           }
         }
@@ -2524,11 +2526,12 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         const setPose = codeWithoutStrings.match(/chassis\.setPose\s*\(([^)]*)\)/);
         if (setPose) {
           const args = setPose[1].split(",").map(a => a.trim()).filter(Boolean);
-          if (args.length < 3) {
-            errors.push({
+          // LemLib supports: chassis.setPose(x, y, theta), chassis.setPose(pose), chassis.setPose({x, y, theta}), chassis.setPose(pose, radians)
+          if (args.length === 0) {
+            warnings.push({
               file: fileName,
               line: lineNum,
-              message: `SyntaxError: chassis.setPose requires at least 3 arguments (x, y, theta). Received ${args.length}`,
+              message: `Notice: chassis.setPose requires at least 1 argument (Pose object or x, y, theta coordinates).`,
             });
           }
         }
@@ -2616,17 +2619,23 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       logs.push(`Project Name: ${this.project?.name || "VEX_Bot"} | Kernel: 4.1.0 | LemLib: 0.5.4`);
       logs.push("----------------------------------------------------------------------");
 
-      // Verify essential files
-      const essential = ["include/main.h", "include/robot-config.h", "src/main.cpp", "src/autons.cpp"];
-      essential.forEach(req => {
-        if (!files[req]) {
-          warnings.push({
-            file: req,
-            line: 1,
-            message: `Essential file ${req} is missing from project workspace. Using fallback.`,
-          });
-        }
-      });
+      // Verify essential PROS files (Standard PROS from purduesigbots/pros requires headers and source files)
+      const hasHeaders = files["include/main.h"] || Object.keys(files).some(f => f.endsWith(".h") || f.endsWith(".hpp"));
+      const hasSrc = Object.keys(files).some(f => f.endsWith(".cpp") || f.endsWith(".c"));
+      if (!hasHeaders) {
+        warnings.push({
+          file: "include/main.h",
+          line: 1,
+          message: `Standard PROS include/main.h not found. Using standard PROS header environment.`,
+        });
+      }
+      if (!hasSrc) {
+        warnings.push({
+          file: "src/main.cpp",
+          line: 1,
+          message: `No C++ source files found in workspace. Add or import C++ source files.`,
+        });
+      }
 
       // Symbol references check across project
       this.indexVariables();
@@ -2636,7 +2645,13 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         ...(this.symbols?.sensors || []).map(s => s.name),
         ...(this.symbols?.chassis || []).map(c => c.name),
         ...(this.symbols?.functions || []).map(f => f.name),
-        "chassis", "pros", "lemlib", "delay", "printf"
+        "chassis", "pros", "lemlib", "delay", "millis", "printf", "lcd", "battery", "master",
+        "intake", "clamp", "doinker", "lift", "imu", "horiz_wheel", "vertical_wheel", "sensors",
+        "drivetrain", "lateral_controller", "angular_controller", "Pose", "AngularDirection", "DriveSide",
+        "Motor", "MotorGroup", "Controller", "Imu", "Rotation", "Distance", "Optical", "Gps", "Vision",
+        "ADIEncoder", "ADIDigitalOut", "ADIDigitalIn", "Pneumatics", "Task", "Mutex",
+        "E_CONTROLLER_MASTER", "E_CONTROLLER_ANALOG_LEFT_Y", "E_CONTROLLER_ANALOG_RIGHT_X",
+        "E_CONTROLLER_DIGITAL_R1", "E_CONTROLLER_DIGITAL_R2", "E_CONTROLLER_DIGITAL_L1", "E_CONTROLLER_DIGITAL_L2"
       ]);
 
       // Scan all project source and header files for diagnostics

@@ -88,17 +88,29 @@
     }
 
     getBatteryDisplay() {
-      if (!this.isConnected || this.status.batteryPct === null || this.status.batteryPct === undefined) {
+      if (!this.isConnected) {
         return "--%";
       }
-      return `${this.status.batteryPct}%`;
+      if (this.status.batteryPct !== null && this.status.batteryPct !== undefined && this.status.batteryPct > 0) {
+        return `${this.status.batteryPct}%`;
+      }
+      if (this.status.controllerConnected) {
+        return "🎮 USB";
+      }
+      return "--%";
     }
 
     getBatteryVoltageDisplay() {
-      if (!this.isConnected || !this.status.batteryMv) {
+      if (!this.isConnected) {
         return "-- V";
       }
-      return `${(this.status.batteryMv / 1000).toFixed(2)} V`;
+      if (this.status.batteryMv && this.status.batteryMv >= 9000) {
+        return `${(this.status.batteryMv / 1000).toFixed(2)} V`;
+      }
+      if (this.status.controllerConnected) {
+        return "5.00 V (USB)";
+      }
+      return "-- V";
     }
 
     // Accurate VEX V5 LiFePO4 (4-cell in series) state-of-charge calculation
@@ -375,20 +387,38 @@
       for (let i = 0; i <= bytes.length - 3; i++) {
         if (bytes[i] === 0xaa && bytes[i + 1] === 0x55) {
           const cmdId = bytes[i + 2];
+          const payloadLen = bytes[i + 3] !== undefined ? bytes[i + 3] : 0;
           const hexDump = Array.from(bytes.slice(i, Math.min(bytes.length, i + 16)))
             .map(b => "0x" + b.toString(16).padStart(2, "0"))
             .join(" ");
           this.logDebug("V5 CDC RX", `Header [0xAA, 0x55] Packet ID: 0x${cmdId.toString(16).toUpperCase()} | Bytes: ${hexDump}`);
 
+          let foundBattery = false;
           // Inspect payload for battery voltage (mV) or percentage across offsets
           for (let offset = i + 3; offset <= Math.min(bytes.length - 2, i + 20); offset++) {
             const rawVal = bytes[offset] | (bytes[offset + 1] << 8);
             if (rawVal >= 9000 && rawVal <= 14500) {
               this.status.batteryMv = rawVal;
               this.status.batteryPct = this.calculateBatteryPct(rawVal);
+              this.status.brainLinked = true;
+              this.status.radioType = "VEXnet 3.0 (Linked)";
               this.logDebug("Battery CDC", `Decoded CDC packet battery voltage: ${rawVal} mV (${this.status.batteryPct}%)`);
               this.emit("status", this.status);
+              foundBattery = true;
               break;
+            }
+          }
+
+          // If connected via Controller USB and query packet 0x21 payload is 0 (searching for brain)
+          if (!foundBattery && cmdId === 0x21) {
+            const payloadBytes = Array.from(bytes.slice(i + 4, Math.min(bytes.length, i + 4 + (payloadLen || 10))));
+            const isAllZero = payloadBytes.length > 0 && payloadBytes.every(b => b === 0);
+            if (isAllZero && this.status.controllerConnected) {
+              this.status.radioType = "VEXnet 3.0 (Searching)";
+              this.status.programRunning = false;
+              this.status.brainLinked = false;
+              this.logDebug("V5 Protocol", "Controller USB CDC active: Awaiting VEXnet 3.0 radio link to V5 Brain. (Power ON Brain & check Controller pairing)");
+              this.emit("status", this.status);
             }
           }
           break;
@@ -401,9 +431,10 @@
       if (!text || typeof text !== "string") return;
 
       // 1. Match battery voltage or percentage in PROS / LemLib / VEXcode printf output
-      // Examples: "BATT: 12.8V", "Battery: 12.84 V", "battery: 12850 mV", "BATT: 95%", "[BATT] 12.95V 86%"
+      // Examples: "BATT: 12.8V", "Battery: 12.84 V", "battery: 12850 mV", "BATT: 95%", "[BATT] 12.95V 86%", "Battery: 79%"
       const battMvMatch = text.match(/(?:batt(?:ery)?|voltage|v5_batt)[\s:=]*([0-9.]+)\s*m?v/i);
-      const battPctMatch = text.match(/(?:batt(?:ery)?|capacity|soc)[\s:=]*([0-9]{1,3})\s*%/i);
+      const battPctMatch = text.match(/(?:batt(?:ery)?|capacity|soc)[\s:=]*([0-9]{1,3})\s*%/i) ||
+                           text.match(/(?:batt(?:ery)?|capacity|soc)[\s:=]+([0-9]{1,3})\b/i);
       const battRawMatch = text.match(/(?:\[BATT\]|BATT|Battery)[\s:=]+([0-9.]+)/i);
 
       let changed = false;
@@ -417,6 +448,8 @@
         if (val >= 9000 && val <= 14500) {
           this.status.batteryMv = val;
           this.status.batteryPct = this.calculateBatteryPct(val);
+          this.status.brainLinked = true;
+          this.status.radioType = "VEXnet 3.0 (Linked)";
           changed = true;
           this.logDebug("Battery Text", `Parsed battery voltage: ${val} mV (${this.status.batteryPct}% LiFePO4).`);
         }
@@ -424,6 +457,8 @@
         const pct = Math.max(0, Math.min(100, parseInt(battPctMatch[1], 10)));
         this.status.batteryPct = pct;
         this.status.batteryMv = Math.round(10500 + (pct / 100) * 2700);
+        this.status.brainLinked = true;
+        this.status.radioType = "VEXnet 3.0 (Linked)";
         changed = true;
         this.logDebug("Battery Text", `Parsed battery percentage: ${pct}% (~${this.status.batteryMv} mV).`);
       } else if (battRawMatch && battRawMatch[1]) {
@@ -432,6 +467,8 @@
           val = Math.round(val * 1000);
           this.status.batteryMv = val;
           this.status.batteryPct = this.calculateBatteryPct(val);
+          this.status.brainLinked = true;
+          this.status.radioType = "VEXnet 3.0 (Linked)";
           changed = true;
           this.logDebug("Battery Text", `Parsed raw battery voltage: ${val} mV (${this.status.batteryPct}%).`);
         }
@@ -494,9 +531,13 @@
         throw err;
       }
 
-      const cleanName = (programName || "Override_Auton").replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 24);
+      const isController = this.status.controllerConnected;
       this.emit("terminal", `\n>> pros upload --slot ${slot} --name "${cleanName}"\n`);
-      this.emit("terminal", `[CDC] Initiating VEX V5 Serial Protocol Handshake...\n`);
+      if (isController) {
+        this.emit("terminal", `[CDC] Connected via V5 Controller USB (VID: 0x2888, PID: 0x0503).\n[VEXnet 3.0] Uploading LemLib Autonomous binary package over wireless radio link to V5 Brain...\n`);
+      } else {
+        this.emit("terminal", `[CDC] Initiating VEX V5 Serial Protocol Handshake...\n`);
+      }
 
       // If connected to a real serial port, send CDC upload initiation packet
       if (!this.isSimulated && this.port) {

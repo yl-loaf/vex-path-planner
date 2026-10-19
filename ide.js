@@ -3345,35 +3345,101 @@
       if (ideBrainBatt) {
         ideBrainBatt.hidden = false;
         ideBrainBatt.classList.toggle("disconnected", !isConn);
-        ideBrainBatt.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) 
-          ? `⚡ ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` 
-          : "⚡ --%";
-        ideBrainBatt.title = isConn 
-          ? `VEX V5 Battery: ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` 
-          : "VEX V5 Battery: Disconnected (--%)";
+        const hasBrainBatt = (isConn && status.batteryPct !== null && status.batteryPct !== undefined && status.batteryPct > 0);
+        if (hasBrainBatt) {
+          ideBrainBatt.textContent = `⚡ ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)`;
+          ideBrainBatt.title = `VEX V5 Battery: ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)`;
+        } else if (isConn && status.controllerConnected) {
+          ideBrainBatt.textContent = "⚡ 🎮 USB";
+          ideBrainBatt.title = "VEX V5 Controller USB Connected (Awaiting Brain Link)";
+        } else {
+          ideBrainBatt.textContent = "⚡ --%";
+          ideBrainBatt.title = "VEX V5 Battery: Disconnected (--%)";
+        }
       }
 
       if (modalBrainDot) modalBrainDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
-      if (modalBrainName) modalBrainName.textContent = isConn ? `Brain: ${status.name}` : "Brain: Disconnected";
-      if (modalBrainSubtext) modalBrainSubtext.textContent = isConn ? `Connected via USB CDC (Slot ${status.activeSlot} Active)` : "Plug in VEX V5 USB cable to connect Web Serial CDC port";
+      if (modalBrainName) {
+        if (!isConn) {
+          modalBrainName.textContent = "Brain: Disconnected";
+        } else if (status.controllerConnected) {
+          modalBrainName.textContent = status.brainLinked ? "Connected: V5 Controller (Linked to Brain)" : "Connected: V5 Controller (USB)";
+        } else {
+          modalBrainName.textContent = `Connected: ${status.name}`;
+        }
+      }
+      if (modalBrainSubtext) {
+        if (!isConn) {
+          modalBrainSubtext.textContent = "Plug in VEX V5 USB cable to connect Web Serial CDC port";
+        } else if (status.controllerConnected) {
+          modalBrainSubtext.textContent = status.brainLinked 
+            ? `VEXnet 3.0 Radio Linked • Controller USB Active • Serial CDC 115200`
+            : `Controller USB Active (PID: 0x0503) • Awaiting VEXnet link to Brain (Power ON Brain)`;
+        } else {
+          modalBrainSubtext.textContent = `Connected via USB CDC (Slot ${status.activeSlot} Active)`;
+        }
+      }
       if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-block";
       if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-block" : "none";
 
-      if (modalBattPct) modalBattPct.textContent = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "--%";
-      if (modalBattFill) modalBattFill.style.width = (isConn && status.batteryPct !== null && status.batteryPct !== undefined) ? `${status.batteryPct}%` : "0%";
-      if (modalBattMv) modalBattMv.textContent = (isConn && status.batteryMv) ? `${(status.batteryMv / 1000).toFixed(2)} V` : "-- V";
-      if (modalBattTemp) modalBattTemp.textContent = (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
+      const hasBrainBatt = (isConn && status.batteryPct !== null && status.batteryPct !== undefined && status.batteryPct > 0);
+      if (modalBattPct) {
+        if (hasBrainBatt) {
+          modalBattPct.textContent = `${status.batteryPct}%`;
+        } else if (isConn && status.controllerConnected) {
+          modalBattPct.textContent = "🎮 USB";
+        } else {
+          modalBattPct.textContent = "--%";
+        }
+      }
+      if (modalBattFill) {
+        if (hasBrainBatt) {
+          modalBattFill.style.width = `${status.batteryPct}%`;
+          modalBattFill.style.background = "#22c55e";
+        } else if (isConn && status.controllerConnected) {
+          modalBattFill.style.width = "100%";
+          modalBattFill.style.background = "#38bdf8";
+        } else {
+          modalBattFill.style.width = "0%";
+        }
+      }
+      if (modalBattMv) {
+        if (isConn && status.batteryMv && status.batteryMv >= 9000) {
+          modalBattMv.textContent = `${(status.batteryMv / 1000).toFixed(2)} V`;
+        } else if (isConn && status.controllerConnected) {
+          modalBattMv.textContent = "5.00 V (USB)";
+        } else {
+          modalBattMv.textContent = "-- V";
+        }
+      }
+      if (modalBattTemp) {
+        if (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) {
+          modalBattTemp.textContent = `${status.batteryTempC} °C`;
+        } else if (isConn && status.controllerConnected && !status.brainLinked) {
+          modalBattTemp.textContent = "Turn ON Brain";
+        } else {
+          modalBattTemp.textContent = "-- °C";
+        }
+      }
       
       const modalFirmware = document.getElementById("modalFirmware");
       if (modalFirmware) modalFirmware.textContent = isConn ? `VEXos ${status.vexosVersion}` : "--";
       
       const modalRadio = document.getElementById("modalRadio");
-      if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm ? status.radioSignalDbm + ' dBm' : 'Link Active'})` : "--";
+      if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm ? status.radioSignalDbm + ' dBm' : (status.brainLinked ? 'Linked' : 'Searching')})` : "--";
 
       const modalController = document.getElementById("modalController");
       if (modalController) {
-        modalController.textContent = isConn ? (status.controllerConnected ? "Paired & Active" : "Direct USB Link") : "--";
-        modalController.style.color = isConn ? "#22c55e" : "#94a3b8";
+        if (!isConn) {
+          modalController.textContent = "--";
+          modalController.style.color = "#94a3b8";
+        } else if (status.controllerConnected) {
+          modalController.textContent = status.brainLinked ? "Paired & Linked to Brain" : "Controller USB (Turn ON Brain)";
+          modalController.style.color = status.brainLinked ? "#22c55e" : "#f59e0b";
+        } else {
+          modalController.textContent = "Direct Brain USB";
+          modalController.style.color = "#38bdf8";
+        }
       }
 
       const modalSystemPort = document.getElementById("modalSystemPort");
