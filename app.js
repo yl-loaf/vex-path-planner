@@ -17020,23 +17020,58 @@ lemlib::ControllerSettings ${currentMode}_controller(
       };
     }
 
-    if (btnModalRun) btnModalRun.onclick = () => window.V5BrainSerial.startProgram(parseInt(modalSlotSelect?.value || "1", 10));
-    if (btnDebugRun) btnDebugRun.onclick = () => window.V5BrainSerial.startProgram(parseInt(debugSlotSelect?.value || "1", 10));
-    if (btnModalStop) btnModalStop.onclick = () => window.V5BrainSerial.stopProgram();
-    if (btnDebugStop) btnDebugStop.onclick = () => window.V5BrainSerial.stopProgram();
+    if (btnModalRun) {
+      btnModalRun.onclick = async () => {
+        if (!window.V5BrainSerial.isConnected) {
+          showToast("⚠️ Connect VEX device first.", "warning");
+          return;
+        }
+        const slot = parseInt(modalSlotSelect?.value || "1", 10);
+        const progName = window.V5BrainSerial.status.slots[slot - 1]?.name || "Override_Auton";
+        const ok = await window.V5BrainSerial.startProgram(slot);
+        if (ok) {
+          showToast(`▶ Running Slot ${slot} ('${progName}') on V5 Brain`, "success");
+        }
+      };
+    }
+    if (btnDebugRun) {
+      btnDebugRun.onclick = async () => {
+        if (!window.V5BrainSerial.isConnected) {
+          showToast("⚠️ Connect VEX device first.", "warning");
+          return;
+        }
+        const slot = parseInt(debugSlotSelect?.value || "1", 10);
+        await window.V5BrainSerial.startProgram(slot);
+        showToast(`▶ Running Slot ${slot} on V5 Brain`, "success");
+      };
+    }
+    if (btnModalStop) {
+      btnModalStop.onclick = async () => {
+        if (!window.V5BrainSerial.isConnected) return;
+        await window.V5BrainSerial.stopProgram();
+        showToast("⏹ Program Stopped on V5 Brain", "info");
+      };
+    }
+    if (btnDebugStop) {
+      btnDebugStop.onclick = async () => {
+        if (!window.V5BrainSerial.isConnected) return;
+        await window.V5BrainSerial.stopProgram();
+        showToast("⏹ Program Stopped on V5 Brain", "info");
+      };
+    }
 
     // Render smart ports in modal and debug panel
     function renderSmartports() {
-      const ports = window.V5BrainSerial.status.smartPorts;
+      const ports = window.V5BrainSerial.status.smartPorts || {};
       if (modalSmartportsGrid) {
         modalSmartportsGrid.innerHTML = "";
         for (let p = 1; p <= 21; p++) {
           const dev = ports[p];
           const card = document.createElement("div");
-          card.className = "smartport-item-card";
+          card.className = `smartport-item-card ${dev ? "active" : ""}`;
           if (dev) {
             card.innerHTML = `
-              <div class="smartport-item-top"><span>PORT ${p}</span><span style="color:#22c55e;">${escapeHtml(dev.status)}</span></div>
+              <div class="smartport-item-top"><span>PORT ${p}</span><span style="color:#22c55e;">● ${escapeHtml(dev.status)}</span></div>
               <div class="smartport-item-name">${escapeHtml(dev.name)}</div>
               <div class="smartport-item-type">${escapeHtml(dev.type)} ${dev.tempC ? `(${dev.tempC}°C)` : ''}</div>
             `;
@@ -17235,8 +17270,26 @@ lemlib::ControllerSettings ${currentMode}_controller(
         debugBrainBattBar.style.width = hasBatt ? `${status.batteryPct}%` : (isConn && status.controllerConnected ? "100%" : "0%");
       }
       if (debugBrainTempVal) debugBrainTempVal.textContent = (isConn && status.brainLinked && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
-      if (debugBrainVexosVal) debugBrainVexosVal.textContent = isConn ? `v${status.vexosVersion}` : "--";
-      if (debugBrainSlotVal) debugBrainSlotVal.textContent = isConn ? `Slot ${status.activeSlot} ${status.programRunning ? '(Running)' : ''}` : "--";
+      if (debugBrainSlotVal) debugBrainSlotVal.textContent = isConn ? `Slot ${status.activeSlot} ${status.programRunning ? '(Running)' : '(Idle)'}` : "--";
+      if (btnModalRun) {
+        if (status.programRunning) {
+          btnModalRun.innerHTML = `▶ Running (Slot ${status.activeSlot})`;
+          btnModalRun.style.background = "#15803d";
+          btnModalRun.style.boxShadow = "0 0 10px rgba(34,197,94,0.45)";
+        } else {
+          btnModalRun.innerHTML = "▶ Run";
+          btnModalRun.style.background = "#16a34a";
+          btnModalRun.style.boxShadow = "";
+        }
+      }
+      if (btnModalStop) {
+        btnModalStop.style.opacity = status.programRunning ? "1" : "0.75";
+      }
+      if (btnDebugRun) {
+        btnDebugRun.innerHTML = status.programRunning ? `▶ Running (${status.activeSlot})` : "▶ Run";
+        btnDebugRun.style.background = status.programRunning ? "#15803d" : "#16a34a";
+      }
+      renderSmartports();
 
       // Serial Debug Diagnostics
       const debugApiStatus = document.getElementById("debugApiStatus");

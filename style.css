@@ -6728,6 +6728,12 @@ body > .monaco-hover {
   border: 1px solid #1e293b;
   border-radius: 8px;
   padding: 6px 8px;
+  transition: all 0.2s ease;
+}
+.smartport-item-card.active {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.06);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.10);
 }
 .smartport-item-top {
   display: flex;
