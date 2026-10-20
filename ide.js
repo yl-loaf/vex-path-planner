@@ -3381,6 +3381,14 @@
       if (modalControllerBridgeNotice) {
         modalControllerBridgeNotice.style.display = (isConn && status.controllerConnected) ? "block" : "none";
       }
+      const modalControllerBattInputWrap = document.getElementById("modalControllerBattInputWrap");
+      if (modalControllerBattInputWrap) {
+        modalControllerBattInputWrap.style.display = (isConn && status.controllerConnected) ? "block" : "none";
+        const inputControllerBattPct = document.getElementById("inputControllerBattPct");
+        if (inputControllerBattPct && status.batteryPct && !inputControllerBattPct.matches(":focus")) {
+          inputControllerBattPct.value = status.batteryPct;
+        }
+      }
       if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-block";
       if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-block" : "none";
 
@@ -3526,6 +3534,31 @@
         if (typeof showToast === "function") showToast("🔄 Disconnected & reset to --%");
       };
     }
+
+    const btnApplyControllerBatt = document.getElementById("btnApplyControllerBatt");
+    if (btnApplyControllerBatt) {
+      btnApplyControllerBatt.onclick = () => {
+        const input = document.getElementById("inputControllerBattPct");
+        const val = parseInt(input?.value, 10);
+        if (val && val >= 5 && val <= 100) {
+          window.V5BrainSerial.setControllerBatteryLevel(val);
+          if (typeof showToast === "function") showToast(`🔋 Robot battery synced from Controller LCD: ${val}%`, "success");
+        } else {
+          if (typeof showToast === "function") showToast("⚠️ Please enter a battery percentage between 5% and 100%", "warning");
+        }
+      };
+    }
+    document.querySelectorAll(".btn-quick-batt").forEach(btn => {
+      btn.onclick = () => {
+        const val = parseInt(btn.getAttribute("data-pct"), 10);
+        if (val) {
+          const input = document.getElementById("inputControllerBattPct");
+          if (input) input.value = val;
+          window.V5BrainSerial.setControllerBatteryLevel(val);
+          if (typeof showToast === "function") showToast(`🔋 Robot battery synced: ${val}%`, "success");
+        }
+      };
+    });
 
     const btnCopyDebugReport = document.getElementById("btnCopyDebugReport");
     if (btnCopyDebugReport) {

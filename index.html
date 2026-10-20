@@ -47,7 +47,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261020.k2" />
+  <link rel="stylesheet" href="style.css?v=20261020.k3" />
   <script>
     (function () {
       try {
@@ -2942,6 +2942,19 @@ void autonomous() {
               <span>Voltage: <strong id="modalBattMv">-- V</strong></span>
               <span>Temp: <strong id="modalBattTemp">-- °C</strong></span>
             </div>
+            <!-- Sync from Controller LCD option (available when connected via Controller USB) -->
+            <div id="modalControllerBattInputWrap" style="display:none;margin-top:10px;padding-top:8px;border-top:1px solid #334155;">
+              <div style="font-size:0.70rem;color:#94a3b8;margin-bottom:5px;">Sync % from Controller LCD screen:</div>
+              <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                <input type="number" id="inputControllerBattPct" min="10" max="100" placeholder="e.g. 85" style="width:65px;padding:3px 6px;font-size:0.75rem;background:#0f172a;border:1px solid #475569;border-radius:4px;color:#f8fafc;" />
+                <button type="button" id="btnApplyControllerBatt" class="primary" style="padding:3px 8px;font-size:0.72rem;">Set</button>
+                <div style="display:flex;gap:3px;margin-left:auto;">
+                  <button type="button" class="btn-quick-batt" data-pct="100" style="padding:2px 6px;font-size:0.70rem;background:#1e293b;border:1px solid #475569;color:#cbd5e1;border-radius:3px;cursor:pointer;">100%</button>
+                  <button type="button" class="btn-quick-batt" data-pct="85" style="padding:2px 6px;font-size:0.70rem;background:#1e293b;border:1px solid #475569;color:#cbd5e1;border-radius:3px;cursor:pointer;">85%</button>
+                  <button type="button" class="btn-quick-batt" data-pct="70" style="padding:2px 6px;font-size:0.70rem;background:#1e293b;border:1px solid #475569;color:#cbd5e1;border-radius:3px;cursor:pointer;">70%</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Kernel & Radio Card -->
@@ -3559,25 +3572,25 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20261020.k2"></script>
+  <script src="version.js?v=20261020.k3"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261020.k2"></script>
+  <script src="firebase-config.js?v=20261020.k3"></script>
   <script src="analytics-tracker.js"></script>
   <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261020.k2"></script>
-  <script src="session-guard.js?v=20261020.k2"></script>
-  <script src="theme.js?v=20261020.k2"></script>
-  <script src="v5-brain-serial.js?v=20261020.k2"></script>
-  <script src="project-manager.js?v=20261020.k2"></script>
-  <script src="cpp-parser.js?v=20261020.k2"></script>
-  <script src="scoring-engine.js?v=20261020.k2"></script>
-  <script src="match-analysis-engine.js?v=20261020.k2"></script>
-  <script src="app.js?v=20261020.k2"></script>
-  <script src="tutorial.js?v=20261020.k2"></script>
+  <script src="google-drive-sync.js?v=20261020.k3"></script>
+  <script src="session-guard.js?v=20261020.k3"></script>
+  <script src="theme.js?v=20261020.k3"></script>
+  <script src="v5-brain-serial.js?v=20261020.k3"></script>
+  <script src="project-manager.js?v=20261020.k3"></script>
+  <script src="cpp-parser.js?v=20261020.k3"></script>
+  <script src="scoring-engine.js?v=20261020.k3"></script>
+  <script src="match-analysis-engine.js?v=20261020.k3"></script>
+  <script src="app.js?v=20261020.k3"></script>
+  <script src="tutorial.js?v=20261020.k3"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

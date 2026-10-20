@@ -636,6 +636,17 @@
       this.emit("status", this.status);
     }
 
+    // Allow user to sync the robot battery percentage read directly from their physical Controller LCD
+    setControllerBatteryLevel(pct) {
+      if (!this.isConnected) return;
+      const cleanPct = Math.max(5, Math.min(100, parseInt(pct, 10) || 100));
+      this.status.batteryPct = cleanPct;
+      this.status.batteryMv = Math.round(10500 + (cleanPct / 100) * 2700);
+      this.status.brainLinked = true;
+      this.logDebug("Controller Bridge", `Robot battery level synced from physical Controller LCD: ${cleanPct}% (~${this.status.batteryMv} mV).`);
+      this.emit("status", this.status);
+    }
+
     // Diagnostic Debug Helpers
     injectTestBatteryPulse(mv = 12850) {
       if (!this.isSimulated) {
