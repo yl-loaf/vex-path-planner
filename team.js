@@ -8392,10 +8392,8 @@
         const hasBrainBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined && status.batteryPct > 0);
         if (hasBrainBatt) {
           bBatt.textContent = `⚡ ${status.batteryPct}%`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          bBatt.textContent = "⚡ 🎮 USB (Unlinked)";
         } else if (isConn && status.controllerConnected) {
-          bBatt.textContent = "⚡ 🎮 USB";
+          bBatt.textContent = "⚡ 🎮 USB Bridge";
         } else {
           bBatt.textContent = "⚡ --%";
         }
@@ -8417,19 +8415,19 @@
       const btnDebugConnect = document.getElementById("btnDebugConnectBrain");
 
       if (dDot) dDot.className = `brain-status-dot ${isConn ? 'connected' : 'disconnected'}`;
-      if (dName) dName.textContent = isConn ? `VEX V5 Brain: ${status.name}` : "VEX V5 Brain: Disconnected";
+      if (dName) dName.textContent = isConn ? (status.controllerConnected ? "VEX V5: Controller USB Bridge" : `VEX V5 Brain: ${status.name}`) : "VEX V5 Brain: Disconnected";
       if (btnDebugConnect) btnDebugConnect.textContent = isConn ? "Disconnect" : "🔌 Connect USB";
       if (dBatt) {
         const hasBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryMv >= 9000);
-        dBatt.textContent = hasBatt ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : (isConn && status.controllerConnected && !status.brainLinked ? "Radio Unlinked (--%)" : "--% (-- V)");
-        dBatt.classList.toggle("text-green", Boolean(hasBatt));
-        dBatt.classList.toggle("text-muted", !hasBatt);
+        dBatt.textContent = hasBatt ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : (isConn && status.controllerConnected ? "Controller USB (5.0V)" : "--% (-- V)");
+        dBatt.classList.toggle("text-green", Boolean(hasBatt || (isConn && status.controllerConnected)));
+        dBatt.classList.toggle("text-muted", !isConn);
       }
       if (dBar) {
         const hasBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined);
-        dBar.style.width = hasBatt ? `${status.batteryPct}%` : "0%";
+        dBar.style.width = hasBatt ? `${status.batteryPct}%` : (isConn && status.controllerConnected ? "100%" : "0%");
       }
-      if (dTemp) dTemp.textContent = (isConn && status.brainLinked && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
+      if (dTemp) dTemp.textContent = (isConn && status.brainLinked && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : (isConn && status.controllerConnected ? "Controller Bridge" : "-- °C");
       if (dVexos) dVexos.textContent = isConn ? `v${status.vexosVersion}` : "--";
       if (dSlot) dSlot.textContent = isConn ? `Slot ${status.activeSlot}` : "--";
     }

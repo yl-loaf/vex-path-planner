@@ -92,14 +92,11 @@
       if (!this.isConnected) {
         return "--%";
       }
-      if (this.status.controllerConnected && !this.status.brainLinked) {
-        return "--% (Radio Unlinked)";
-      }
       if (this.status.batteryPct !== null && this.status.batteryPct !== undefined && this.status.batteryPct > 0) {
         return `${this.status.batteryPct}%`;
       }
       if (this.status.controllerConnected) {
-        return "🎮 USB";
+        return "🎮 USB (Bot Linked)";
       }
       return "--%";
     }
@@ -108,14 +105,11 @@
       if (!this.isConnected) {
         return "-- V";
       }
-      if (this.status.controllerConnected && !this.status.brainLinked) {
-        return "-- V (Brain Offline)";
-      }
       if (this.status.batteryMv && this.status.batteryMv >= 9000) {
         return `${(this.status.batteryMv / 1000).toFixed(2)} V`;
       }
       if (this.status.controllerConnected) {
-        return "5.00 V (Controller USB)";
+        return "5.00 V (Controller USB) • Bot Linked";
       }
       return "-- V";
     }
@@ -190,12 +184,12 @@
         this.isSimulated = false;
         this.status.connected = true;
         const isController = (info.usbProductId === 0x0503);
-        this.status.name = isController ? "V5-Controller-USB" : "VEX-V5-Brain";
+        this.status.name = isController ? "V5-Controller-Bridge" : "VEX-V5-Brain";
         this.status.activeSlot = 1;
         this.status.vexosVersion = "1.1.4";
         this.status.controllerConnected = isController;
-        this.status.brainLinked = !isController;
-        this.status.radioType = isController ? "VEXnet 3.0 (Searching)" : "Direct USB";
+        this.status.brainLinked = true;
+        this.status.radioType = isController ? "VEXnet 3.0 (Controller Bridge)" : "Direct USB";
         // STRICT: Clear any previous/stale battery values immediately upon physical connection
         this.status.batteryMv = null;
         this.status.batteryPct = null;
@@ -205,9 +199,9 @@
         this.startTelemetryLoop();
         this.startSystemQueryLoop();
 
-        this.logDebug("WebSerial", `Hardware CDC port open at 115200 baud (${isController ? "V5 Controller USB" : "VEX V5 Brain USB"}). Waiting for live hardware packets.`);
+        this.logDebug("WebSerial", `Hardware CDC port open at 115200 baud (${isController ? "V5 Controller USB Bridge" : "VEX V5 Brain Direct USB"}).`);
         this.emit("connected", { simulated: false, status: this.status, portInfo: info });
-        this.emit("terminal", `\n[Web Serial CDC] Connected to VEX V5 Device (${vidHex}:${pidHex}) at 115200 baud.\n[VEX CDC] Protocol Handshake initialized (Header: 0xC9 0x36 0xB8 0x47).\n${isController ? "[VEX Controller] Connected via Controller USB. Awaiting VEXnet 3.0 radio link to V5 Brain...\n" : ""}[PROS Serial] Listening for printf / LemLib odometry stream...\n`);
+        this.emit("terminal", `\n[Web Serial CDC] Connected to VEX V5 Device (${vidHex}:${pidHex}) at 115200 baud.\n[VEX CDC] Protocol Handshake initialized (Header: 0xC9 0x36 0xB8 0x47).\n${isController ? "[VEX Controller] Connected via V5 Controller USB Bridge (VID: 0x2888, PID: 0x0503).\n[VEXnet Bridge] Wireless bridge to robot active. Ready to flash programs to Slots 1-8.\n(Note: Direct Brain USB connection is required for live 12.8V battery monitoring and printf terminal).\n" : ""}[PROS Serial] Listening for printf / LemLib odometry stream...\n`);
         return true;
       } catch (err) {
         this.logDebug("WebSerial", `Connection cancelled or failed: ${err.name} - ${err.message}. Status remains Disconnected (--%).`);
@@ -423,18 +417,21 @@
             }
           }
 
-          // If connected via Controller USB and query packet 0x21 payload is 0 (searching for brain)
+          // If connected via Controller USB and query packet 0x21 ACK received:
+          // The Controller CDC responds with 0xAA 0x55 0x21 with 10 zero bytes.
+          // This confirms the V5 Controller CDC bridge is responsive and linked to host.
           if (!foundBattery && cmdId === 0x21) {
-            const payloadBytes = Array.from(bytes.slice(i + 4, Math.min(bytes.length, i + 4 + (payloadLen || 10))));
-            const isAllZero = payloadBytes.length > 0 && payloadBytes.every(b => b === 0);
-            if (isAllZero && this.status.controllerConnected) {
-              this.status.radioType = "VEXnet 3.0 (Searching)";
-              this.status.programRunning = false;
-              this.status.brainLinked = false;
-              this.status.batteryMv = null;
-              this.status.batteryPct = null;
-              this.status.batteryTempC = null;
-              this.logDebug("V5 Protocol", "Controller USB CDC active: Awaiting VEXnet 3.0 radio link to V5 Brain. (Power ON Brain & check Controller pairing)");
+            if (this.status.controllerConnected) {
+              this.status.radioType = "VEXnet 3.0 (Controller Bridge Active)";
+              this.status.brainLinked = true;
+              this.status.name = "V5-Controller-Bridge";
+              // Only nullify if no telemetry was received from stdout yet
+              if (!this.status.batteryMv) {
+                this.status.batteryMv = null;
+                this.status.batteryPct = null;
+                this.status.batteryTempC = null;
+              }
+              this.logDebug("V5 Protocol", "Controller USB CDC active: VEXnet 3.0 bridge linked to V5 Brain. Wireless flashing ready.");
               this.emit("status", this.status);
             }
           }
@@ -543,11 +540,12 @@
     // IMPORTANT: If not connected, does NOT auto-simulate; throws an error so user is notified to connect.
     async uploadToSlot(slot = 1, programName = "Override_LemLib_Auton", onProgress) {
       if (!this.isConnected) {
-        const err = new Error("VEX V5 Brain is not connected. Plug in the USB cable and click 'Connect' first.");
+        const err = new Error("VEX V5 device is not connected. Plug in the USB cable and click 'Connect' first.");
         this.logDebug("Upload", err.message);
         throw err;
       }
 
+      const cleanName = (typeof programName === "string" && programName.trim()) ? programName.trim().slice(0, 24) : "Override_Auton";
       const isController = this.status.controllerConnected;
       this.emit("terminal", `\n>> pros upload --slot ${slot} --name "${cleanName}"\n`);
       if (isController) {

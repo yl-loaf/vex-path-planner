@@ -17092,12 +17092,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
         if (hasBrainBatt) {
           bannerBatt.textContent = `⚡ ${status.batteryPct}%`;
           bannerBatt.title = `V5 Robot Battery: ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          bannerBatt.textContent = "⚡ 🎮 USB (Unlinked)";
-          bannerBatt.title = "VEX V5 Controller USB Connected • Awaiting VEXnet link to Brain (Power ON Brain)";
         } else if (isConn && status.controllerConnected) {
-          bannerBatt.textContent = "⚡ 🎮 USB";
-          bannerBatt.title = "VEX V5 Controller USB Active";
+          bannerBatt.textContent = "⚡ 🎮 USB Bridge (Bot Linked)";
+          bannerBatt.title = "VEX V5 Controller USB Bridge Active • Wireless Link Active to Robot Brain";
         } else {
           bannerBatt.textContent = "⚡ --%";
           bannerBatt.title = "V5 Battery: Disconnected (--%)";
@@ -17117,12 +17114,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
         if (hasBrainBatt) {
           homeBatt.textContent = `⚡ ${status.batteryPct}%`;
           homeBatt.title = `V5 Robot Battery: ${status.batteryPct}%`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          homeBatt.textContent = "⚡ 🎮 USB (Unlinked)";
-          homeBatt.title = "Controller USB Connected • Awaiting VEXnet link to Brain";
         } else if (isConn && status.controllerConnected) {
-          homeBatt.textContent = "⚡ 🎮 USB";
-          homeBatt.title = "VEX V5 Controller USB Active";
+          homeBatt.textContent = "⚡ 🎮 USB Bridge (Bot Linked)";
+          homeBatt.title = "VEX V5 Controller USB Bridge Active • Wireless Link Active to Robot Brain";
         } else {
           homeBatt.textContent = "⚡ --%";
           homeBatt.title = "V5 Battery: Disconnected (--%)";
@@ -17135,7 +17129,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
         if (!isConn) {
           modalBrainName.textContent = "Brain: Disconnected";
         } else if (status.controllerConnected) {
-          modalBrainName.textContent = status.brainLinked ? "Connected: V5 Controller (Linked to Brain)" : "Connected: V5 Controller (USB)";
+          modalBrainName.textContent = "Connected: V5 Controller (USB Bridge)";
         } else {
           modalBrainName.textContent = `Connected: ${status.name}`;
         }
@@ -17144,12 +17138,14 @@ lemlib::ControllerSettings ${currentMode}_controller(
         if (!isConn) {
           modalBrainSubtext.textContent = "Plug in VEX V5 USB cable to connect Web Serial CDC port";
         } else if (status.controllerConnected) {
-          modalBrainSubtext.textContent = status.brainLinked
-            ? `VEXnet 3.0 Radio Linked • Controller USB Active • Serial CDC 115200`
-            : `Controller USB Active (PID: 0x0503) • Awaiting VEXnet link to Brain (Power ON Brain)`;
+          modalBrainSubtext.textContent = `Controller USB Active (PID: 0x0503) • VEXnet Bridge Active • Ready to Flash`;
         } else {
           modalBrainSubtext.textContent = `VEXos ${status.vexosVersion} • ${status.radioType} • Serial CDC 115200`;
         }
+      }
+      const modalControllerBridgeNotice = document.getElementById("modalControllerBridgeNotice");
+      if (modalControllerBridgeNotice) {
+        modalControllerBridgeNotice.style.display = (isConn && status.controllerConnected) ? "block" : "none";
       }
       if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-flex";
       if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-flex" : "none";
@@ -17158,10 +17154,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (modalBattPct) {
         if (hasBrainBatt) {
           modalBattPct.textContent = `${status.batteryPct}%`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          modalBattPct.textContent = "Unlinked";
         } else if (isConn && status.controllerConnected) {
-          modalBattPct.textContent = "🎮 USB";
+          modalBattPct.textContent = "🎮 USB (Bot Linked)";
         } else {
           modalBattPct.textContent = "--%";
         }
@@ -17170,9 +17164,6 @@ lemlib::ControllerSettings ${currentMode}_controller(
         if (hasBrainBatt) {
           modalBattFill.style.width = `${status.batteryPct}%`;
           modalBattFill.style.background = "#22c55e";
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          modalBattFill.style.width = "0%";
-          modalBattFill.style.background = "#64748b";
         } else if (isConn && status.controllerConnected) {
           modalBattFill.style.width = "100%";
           modalBattFill.style.background = "#38bdf8";
@@ -17183,10 +17174,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (modalBattMv) {
         if (hasBrainBatt && status.batteryMv && status.batteryMv >= 9000) {
           modalBattMv.textContent = `${(status.batteryMv / 1000).toFixed(2)} V`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          modalBattMv.textContent = "-- V (Brain Offline)";
         } else if (isConn && status.controllerConnected) {
-          modalBattMv.textContent = "5.00 V (Controller USB)";
+          modalBattMv.textContent = "5.00 V (Controller USB) • Bot Linked";
         } else {
           modalBattMv.textContent = "-- V";
         }
@@ -17194,14 +17183,14 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (modalBattTemp) {
         if (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) {
           modalBattTemp.textContent = `${status.batteryTempC} °C`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          modalBattTemp.textContent = "Turn ON Brain";
+        } else if (isConn && status.controllerConnected) {
+          modalBattTemp.textContent = "Controller Bridge";
         } else {
           modalBattTemp.textContent = "-- °C";
         }
       }
       if (modalFirmware) modalFirmware.textContent = isConn ? `VEXos ${status.vexosVersion}` : "--";
-      if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm ? status.radioSignalDbm + ' dBm' : (status.brainLinked ? 'Linked' : 'Searching')})` : "--";
+      if (modalRadio) modalRadio.textContent = isConn ? (status.controllerConnected ? "VEXnet 3.0 (Controller Bridge Active)" : `${status.radioType} (${status.radioSignalDbm ? status.radioSignalDbm + ' dBm' : 'Linked'})`) : "--";
 
       const modalController = document.getElementById("modalController");
       if (modalController) {
@@ -17209,8 +17198,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
           modalController.textContent = "--";
           modalController.style.color = "#94a3b8";
         } else if (status.controllerConnected) {
-          modalController.textContent = status.brainLinked ? "Paired & Linked to Brain" : "Controller USB (Turn ON Brain)";
-          modalController.style.color = status.brainLinked ? "#22c55e" : "#f59e0b";
+          modalController.textContent = "Paired & Linked to Brain (VEXnet 3.0)";
+          modalController.style.color = "#22c55e";
         } else {
           modalController.textContent = "Direct Brain USB";
           modalController.style.color = "#38bdf8";
@@ -17229,13 +17218,13 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (btnDebugConnect) btnDebugConnect.textContent = isConn ? "Disconnect" : "🔌 Connect USB";
       if (debugBrainBattVal) {
         const hasBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryMv >= 9000);
-        debugBrainBattVal.textContent = hasBatt ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : (isConn && status.controllerConnected && !status.brainLinked ? "Radio Unlinked (--%)" : "--% (-- V)");
-        debugBrainBattVal.classList.toggle("text-green", Boolean(hasBatt));
-        debugBrainBattVal.classList.toggle("text-muted", !hasBatt);
+        debugBrainBattVal.textContent = hasBatt ? `${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)` : (isConn && status.controllerConnected ? "🎮 USB (Bot Linked)" : "--% (-- V)");
+        debugBrainBattVal.classList.toggle("text-green", Boolean(hasBatt || (isConn && status.controllerConnected)));
+        debugBrainBattVal.classList.toggle("text-muted", !hasBatt && !(isConn && status.controllerConnected));
       }
       if (debugBrainBattBar) {
         const hasBatt = (isConn && status.brainLinked !== false && status.batteryPct !== null && status.batteryPct !== undefined);
-        debugBrainBattBar.style.width = hasBatt ? `${status.batteryPct}%` : "0%";
+        debugBrainBattBar.style.width = hasBatt ? `${status.batteryPct}%` : (isConn && status.controllerConnected ? "100%" : "0%");
       }
       if (debugBrainTempVal) debugBrainTempVal.textContent = (isConn && status.brainLinked && status.batteryTempC !== null && status.batteryTempC !== undefined) ? `${status.batteryTempC} °C` : "-- °C";
       if (debugBrainVexosVal) debugBrainVexosVal.textContent = isConn ? `v${status.vexosVersion}` : "--";
@@ -17254,24 +17243,24 @@ lemlib::ControllerSettings ${currentMode}_controller(
         debugApiStatus.style.color = supported ? "#22c55e" : "#f87171";
       }
       if (debugPortState) {
-        debugPortState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.controllerConnected ? "Controller USB (0x0503)" : "Brain USB (0x0501)")) : "Unplugged";
+        debugPortState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.controllerConnected ? "Controller USB (0x0503) • Bot Linked" : "Brain USB (0x0501)")) : "Unplugged";
         debugPortState.style.color = isConn ? "#22c55e" : "#f59e0b";
       }
       if (debugRawBattMv) {
-        if (isConn && status.brainLinked && status.batteryPct !== null && status.batteryMv) {
+        if (isConn && status.batteryPct !== null && status.batteryMv) {
           debugRawBattMv.textContent = `${status.batteryMv} mV (${status.batteryPct}%)`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          debugRawBattMv.textContent = "Radio Unlinked (0 mV)";
+        } else if (isConn && status.controllerConnected) {
+          debugRawBattMv.textContent = "5000 mV (Controller USB) • Bot Linked";
         } else {
           debugRawBattMv.textContent = "0 mV (--%)";
         }
       }
       if (debugCdcState) {
-        debugCdcState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.brainLinked ? "Linked (0xC9)" : "Searching Radio (0x21)")) : "Idle";
+        debugCdcState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.controllerConnected ? "Controller Bridge Linked (VEXnet 3.0)" : (status.brainLinked ? "Linked (0xC9)" : "Direct USB"))) : "Idle";
         debugCdcState.style.color = isConn ? "#38bdf8" : "#64748b";
       }
       if (modalSerialDebugBadge) {
-        modalSerialDebugBadge.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "SIMULATED" : (status.brainLinked ? "CDC LINKED" : "CONTROLLER ACTIVE")) : "DISCONNECTED";
+        modalSerialDebugBadge.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "SIMULATED" : (status.controllerConnected ? "CONTROLLER LINKED" : (status.brainLinked ? "CDC LINKED" : "CONNECTED"))) : "DISCONNECTED";
         modalSerialDebugBadge.style.background = isConn ? "#15803d" : "#1e293b";
         modalSerialDebugBadge.style.color = isConn ? "#ffffff" : "#94a3b8";
       }

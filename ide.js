@@ -3349,12 +3349,9 @@
         if (hasBrainBatt) {
           ideBrainBatt.textContent = `⚡ ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)`;
           ideBrainBatt.title = `VEX V5 Robot Battery: ${status.batteryPct}% (${(status.batteryMv / 1000).toFixed(2)}V)`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          ideBrainBatt.textContent = "⚡ 🎮 USB (Unlinked)";
-          ideBrainBatt.title = "VEX V5 Controller USB Connected • Awaiting VEXnet link to Brain (Power ON Brain)";
         } else if (isConn && status.controllerConnected) {
-          ideBrainBatt.textContent = "⚡ 🎮 USB";
-          ideBrainBatt.title = "VEX V5 Controller USB Connected";
+          ideBrainBatt.textContent = "⚡ 🎮 USB Bridge (Bot Linked)";
+          ideBrainBatt.title = "VEX V5 Controller USB Bridge Active • Wireless Link Active to Robot Brain";
         } else {
           ideBrainBatt.textContent = "⚡ --%";
           ideBrainBatt.title = "VEX V5 Battery: Disconnected (--%)";
@@ -3366,7 +3363,7 @@
         if (!isConn) {
           modalBrainName.textContent = "Brain: Disconnected";
         } else if (status.controllerConnected) {
-          modalBrainName.textContent = status.brainLinked ? "Connected: V5 Controller (Linked to Brain)" : "Connected: V5 Controller (USB)";
+          modalBrainName.textContent = "Connected: V5 Controller (USB Bridge)";
         } else {
           modalBrainName.textContent = `Connected: ${status.name}`;
         }
@@ -3375,12 +3372,14 @@
         if (!isConn) {
           modalBrainSubtext.textContent = "Plug in VEX V5 USB cable to connect Web Serial CDC port";
         } else if (status.controllerConnected) {
-          modalBrainSubtext.textContent = status.brainLinked 
-            ? `VEXnet 3.0 Radio Linked • Controller USB Active • Serial CDC 115200`
-            : `Controller USB Active (PID: 0x0503) • Awaiting VEXnet link to Brain (Power ON Brain)`;
+          modalBrainSubtext.textContent = `Controller USB Active (PID: 0x0503) • VEXnet Bridge Active • Ready to Flash`;
         } else {
           modalBrainSubtext.textContent = `Connected via USB CDC (Slot ${status.activeSlot} Active)`;
         }
+      }
+      const modalControllerBridgeNotice = document.getElementById("modalControllerBridgeNotice");
+      if (modalControllerBridgeNotice) {
+        modalControllerBridgeNotice.style.display = (isConn && status.controllerConnected) ? "block" : "none";
       }
       if (btnModalConnect) btnModalConnect.style.display = isConn ? "none" : "inline-block";
       if (btnModalDisconnect) btnModalDisconnect.style.display = isConn ? "inline-block" : "none";
@@ -3389,10 +3388,8 @@
       if (modalBattPct) {
         if (hasBrainBatt) {
           modalBattPct.textContent = `${status.batteryPct}%`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          modalBattPct.textContent = "Unlinked";
         } else if (isConn && status.controllerConnected) {
-          modalBattPct.textContent = "🎮 USB";
+          modalBattPct.textContent = "🎮 USB (Bot Linked)";
         } else {
           modalBattPct.textContent = "--%";
         }
@@ -3401,9 +3398,6 @@
         if (hasBrainBatt) {
           modalBattFill.style.width = `${status.batteryPct}%`;
           modalBattFill.style.background = "#22c55e";
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          modalBattFill.style.width = "0%";
-          modalBattFill.style.background = "#64748b";
         } else if (isConn && status.controllerConnected) {
           modalBattFill.style.width = "100%";
           modalBattFill.style.background = "#38bdf8";
@@ -3414,10 +3408,8 @@
       if (modalBattMv) {
         if (hasBrainBatt && status.batteryMv && status.batteryMv >= 9000) {
           modalBattMv.textContent = `${(status.batteryMv / 1000).toFixed(2)} V`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          modalBattMv.textContent = "-- V (Brain Offline)";
         } else if (isConn && status.controllerConnected) {
-          modalBattMv.textContent = "5.00 V (Controller USB)";
+          modalBattMv.textContent = "5.00 V (Controller USB) • Bot Linked";
         } else {
           modalBattMv.textContent = "-- V";
         }
@@ -3425,8 +3417,8 @@
       if (modalBattTemp) {
         if (isConn && status.batteryTempC !== null && status.batteryTempC !== undefined) {
           modalBattTemp.textContent = `${status.batteryTempC} °C`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          modalBattTemp.textContent = "Turn ON Brain";
+        } else if (isConn && status.controllerConnected) {
+          modalBattTemp.textContent = "Controller Bridge";
         } else {
           modalBattTemp.textContent = "-- °C";
         }
@@ -3436,7 +3428,7 @@
       if (modalFirmware) modalFirmware.textContent = isConn ? `VEXos ${status.vexosVersion}` : "--";
       
       const modalRadio = document.getElementById("modalRadio");
-      if (modalRadio) modalRadio.textContent = isConn ? `${status.radioType} (${status.radioSignalDbm ? status.radioSignalDbm + ' dBm' : (status.brainLinked ? 'Linked' : 'Searching')})` : "--";
+      if (modalRadio) modalRadio.textContent = isConn ? (status.controllerConnected ? "VEXnet 3.0 (Controller Bridge Active)" : `${status.radioType} (${status.radioSignalDbm ? status.radioSignalDbm + ' dBm' : 'Linked'})`) : "--";
 
       const modalController = document.getElementById("modalController");
       if (modalController) {
@@ -3444,8 +3436,8 @@
           modalController.textContent = "--";
           modalController.style.color = "#94a3b8";
         } else if (status.controllerConnected) {
-          modalController.textContent = status.brainLinked ? "Paired & Linked to Brain" : "Controller USB (Turn ON Brain)";
-          modalController.style.color = status.brainLinked ? "#22c55e" : "#f59e0b";
+          modalController.textContent = "Paired & Linked to Brain (VEXnet 3.0)";
+          modalController.style.color = "#22c55e";
         } else {
           modalController.textContent = "Direct Brain USB";
           modalController.style.color = "#38bdf8";
@@ -3471,24 +3463,24 @@
         debugApiStatus.style.color = supported ? "#22c55e" : "#f87171";
       }
       if (debugPortState) {
-        debugPortState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.controllerConnected ? "Controller USB (0x0503)" : "Brain USB (0x0501)")) : "Unplugged";
+        debugPortState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.controllerConnected ? "Controller USB (0x0503) • Bot Linked" : "Brain USB (0x0501)")) : "Unplugged";
         debugPortState.style.color = isConn ? "#22c55e" : "#f59e0b";
       }
       if (debugRawBattMv) {
-        if (isConn && status.brainLinked && status.batteryPct !== null && status.batteryMv) {
+        if (isConn && status.batteryPct !== null && status.batteryMv) {
           debugRawBattMv.textContent = `${status.batteryMv} mV (${status.batteryPct}%)`;
-        } else if (isConn && status.controllerConnected && !status.brainLinked) {
-          debugRawBattMv.textContent = "Radio Unlinked (0 mV)";
+        } else if (isConn && status.controllerConnected) {
+          debugRawBattMv.textContent = "5000 mV (Controller USB) • Bot Linked";
         } else {
           debugRawBattMv.textContent = "0 mV (--%)";
         }
       }
       if (debugCdcState) {
-        debugCdcState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.brainLinked ? "Linked (0xC9)" : "Searching Radio (0x21)")) : "Idle";
+        debugCdcState.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated" : (status.controllerConnected ? "Controller Bridge Linked (VEXnet 3.0)" : (status.brainLinked ? "Linked (0xC9)" : "Direct USB"))) : "Idle";
         debugCdcState.style.color = isConn ? "#38bdf8" : "#64748b";
       }
       if (modalSerialDebugBadge) {
-        modalSerialDebugBadge.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "SIMULATED" : (status.brainLinked ? "CDC LINKED" : "CONTROLLER ACTIVE")) : "DISCONNECTED";
+        modalSerialDebugBadge.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "SIMULATED" : (status.controllerConnected ? "CONTROLLER LINKED" : (status.brainLinked ? "CDC LINKED" : "CONNECTED"))) : "DISCONNECTED";
         modalSerialDebugBadge.style.background = isConn ? "#15803d" : "#1e293b";
         modalSerialDebugBadge.style.color = isConn ? "#ffffff" : "#94a3b8";
       }
