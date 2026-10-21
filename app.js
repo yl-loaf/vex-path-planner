@@ -17060,28 +17060,174 @@ lemlib::ControllerSettings ${currentMode}_controller(
       };
     }
 
+    // Smart ports action buttons
+    const btnSmartportsSyncCode = document.getElementById("btnSmartportsSyncCode");
+    if (btnSmartportsSyncCode) {
+      btnSmartportsSyncCode.onclick = () => {
+        if (!window.V5BrainSerial) return;
+        const count = window.V5BrainSerial.loadConfiguredSmartPorts(false);
+        if (count > 0) {
+          showToast(`🔄 Loaded ${count} port definitions from project code`, "success");
+        } else {
+          showToast("ℹ️ No port definitions found in project files.", "info");
+        }
+        renderSmartports();
+      };
+    }
+    const btnSmartportsClear = document.getElementById("btnSmartportsClear");
+    if (btnSmartportsClear) {
+      btnSmartportsClear.onclick = () => {
+        if (!window.V5BrainSerial) return;
+        window.V5BrainSerial.clearSmartPorts();
+        showToast("🗑️ Smart ports list cleared to empty", "info");
+        renderSmartports();
+      };
+    }
+    const btnSmartportsAdd = document.getElementById("btnSmartportsAdd");
+    if (btnSmartportsAdd) {
+      btnSmartportsAdd.onclick = () => {
+        if (!window.V5BrainSerial) return;
+        const portStr = prompt("Enter Smart Port number (1-21):", "1");
+        if (!portStr) return;
+        const portNum = parseInt(portStr, 10);
+        if (isNaN(portNum) || portNum < 1 || portNum > 21) {
+          showToast("⚠️ Port must be between 1 and 21", "warning");
+          return;
+        }
+        const name = prompt("Enter device name (e.g. left_front, intake, imu):", `port_${portNum}`);
+        if (!name) return;
+        const type = prompt("Enter device type (Motor 11W, Motor 5.5W, Inertial, Rotation, Distance):", "Motor 11W") || "Motor 11W";
+        window.V5BrainSerial.setSmartPortDevice(portNum, {
+          type,
+          name,
+          status: "User Configured",
+          live: false,
+          tempC: null,
+          rpm: null
+        });
+        showToast(`✅ Port ${portNum} mapped to ${name}`, "success");
+        renderSmartports();
+      };
+    }
+
     // Render smart ports in modal and debug panel
     function renderSmartports() {
-      const ports = window.V5BrainSerial.status.smartPorts || {};
+      const serial = window.V5BrainSerial;
+      const status = serial ? serial.status : {};
+      const ports = status.smartPorts || {};
+      const modalSmartportsBadge = document.getElementById("modalSmartportsBadge");
+      const modalSmartportsNotice = document.getElementById("modalSmartportsNotice");
+
+      let liveCount = 0;
+      let codeCount = 0;
+      Object.values(ports).forEach(d => {
+        if (d && d.live) liveCount++;
+        else if (d && (d.status === "Configured in Code" || d.status === "User Configured")) codeCount++;
+      });
+
+      if (modalSmartportsBadge) {
+        if (serial.isSimulated) {
+          modalSmartportsBadge.textContent = "⚡ Simulated Mode";
+          modalSmartportsBadge.style.background = "#f59e0b22";
+          modalSmartportsBadge.style.color = "#f59e0b";
+        } else if (liveCount > 0) {
+          modalSmartportsBadge.textContent = `● ${liveCount} Live Telemetry`;
+          modalSmartportsBadge.style.background = "#22c55e22";
+          modalSmartportsBadge.style.color = "#22c55e";
+        } else if (codeCount > 0) {
+          modalSmartportsBadge.textContent = `○ ${codeCount} in Code (0 Live)`;
+          modalSmartportsBadge.style.background = "#0284c722";
+          modalSmartportsBadge.style.color = "#38bdf8";
+        } else {
+          modalSmartportsBadge.textContent = "0 Live Ports";
+          modalSmartportsBadge.style.background = "#1e293b";
+          modalSmartportsBadge.style.color = "#94a3b8";
+        }
+      }
+
+      if (modalSmartportsNotice) {
+        if (!serial.isConnected) {
+          modalSmartportsNotice.innerHTML = `🔌 <strong>Disconnected:</strong> Connect your VEX V5 device to view hardware diagnostics.`;
+          modalSmartportsNotice.style.borderColor = "#334155";
+        } else if (serial.isSimulated) {
+          modalSmartportsNotice.innerHTML = `⚡ <strong>Simulated Mode:</strong> Port telemetry is simulated for offline testing.`;
+          modalSmartportsNotice.style.borderColor = "#f59e0b44";
+        } else if (status.controllerConnected) {
+          if (liveCount > 0) {
+            modalSmartportsNotice.innerHTML = `🎮 <strong>Controller Bridge:</strong> Receiving live telemetry from running robot program for <strong>${liveCount}</strong> ports.`;
+            modalSmartportsNotice.style.borderColor = "#22c55e44";
+          } else {
+            modalSmartportsNotice.innerHTML = `🎮 <strong>V5 Controller USB Bridge Active:</strong> The bridge does not poll idle ports automatically. Live motor temps &amp; RPM appear while your LemLib/PROS program runs. Click <em>'Sync Code'</em> to load C++ definitions or <em>'➕ Port'</em> to map them manually.`;
+            modalSmartportsNotice.style.borderColor = "#38bdf844";
+          }
+        } else {
+          if (liveCount > 0) {
+            modalSmartportsNotice.innerHTML = `⚡ <strong>Direct Brain USB:</strong> Streaming live telemetry for <strong>${liveCount}</strong> ports.`;
+            modalSmartportsNotice.style.borderColor = "#22c55e44";
+          } else {
+            modalSmartportsNotice.innerHTML = `⚡ <strong>Direct Brain USB:</strong> No active port telemetry stream. Start your robot program to stream live motor telemetry.`;
+            modalSmartportsNotice.style.borderColor = "#334155";
+          }
+        }
+      }
+
       if (modalSmartportsGrid) {
         modalSmartportsGrid.innerHTML = "";
         for (let p = 1; p <= 21; p++) {
           const dev = ports[p];
           const card = document.createElement("div");
-          card.className = `smartport-item-card ${dev ? "active" : ""}`;
+          card.className = `smartport-item-card ${dev ? (dev.live ? "active live" : "active") : ""}`;
           if (dev) {
+            const isLive = Boolean(dev.live);
+            const isSim = Boolean(dev.simulated);
+            const badgeColor = isLive ? "#22c55e" : (isSim ? "#f59e0b" : "#38bdf8");
+            const badgeLabel = isLive 
+              ? `● Live${dev.tempC !== null && dev.tempC !== undefined ? ` (${dev.tempC}°C)` : ''}`
+              : (isSim ? `⚡ Sim (${dev.tempC}°C)` : `○ ${escapeHtml(dev.status || "In Code")}`);
+
             card.innerHTML = `
-              <div class="smartport-item-top"><span>PORT ${p}</span><span style="color:#22c55e;">● ${escapeHtml(dev.status)}</span></div>
+              <div class="smartport-item-top">
+                <span>PORT ${p}</span>
+                <span style="color:${badgeColor};font-weight:600;">${badgeLabel}</span>
+              </div>
               <div class="smartport-item-name">${escapeHtml(dev.name)}</div>
-              <div class="smartport-item-type">${escapeHtml(dev.type)} ${dev.tempC ? `(${dev.tempC}°C)` : ''}</div>
+              <div class="smartport-item-type" style="color:#94a3b8;">
+                ${escapeHtml(dev.type)}
+                ${dev.rpm !== null && dev.rpm !== undefined ? ` • ${dev.rpm} RPM` : ''}
+                ${!isLive && !isSim ? '<span style="color:#64748b;font-size:0.65rem;"> (Awaiting stream)</span>' : ''}
+              </div>
             `;
+            card.style.cursor = "pointer";
+            card.title = `Click to edit or remove Port ${p}`;
+            card.onclick = () => {
+              if (confirm(`Remove device '${dev.name}' from Port ${p}?`)) {
+                serial.setSmartPortDevice(p, null);
+                renderSmartports();
+              }
+            };
           } else {
             card.style.opacity = "0.45";
             card.innerHTML = `
               <div class="smartport-item-top" style="color:#64748b;"><span>PORT ${p}</span><span>--</span></div>
               <div class="smartport-item-name" style="color:#64748b;">Empty</div>
-              <div class="smartport-item-type">No device</div>
+              <div class="smartport-item-type">No device detected</div>
             `;
+            card.style.cursor = "pointer";
+            card.title = `Click to assign device to Port ${p}`;
+            card.onclick = () => {
+              const name = prompt(`Assign device name to Port ${p} (e.g. left_front, intake, imu):`, `port_${p}`);
+              if (!name) return;
+              const type = prompt("Enter device type (Motor 11W, Motor 5.5W, Inertial, Rotation, Distance):", "Motor 11W") || "Motor 11W";
+              serial.setSmartPortDevice(p, {
+                type,
+                name,
+                status: "User Configured",
+                live: false,
+                tempC: null,
+                rpm: null
+              });
+              renderSmartports();
+            };
           }
           modalSmartportsGrid.appendChild(card);
         }
@@ -17089,17 +17235,30 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
       if (debugSmartportsList) {
         debugSmartportsList.innerHTML = "";
-        Object.keys(ports).forEach((p) => {
-          const dev = ports[p];
-          const row = document.createElement("div");
-          row.className = "debug-port-row";
-          row.innerHTML = `
-            <span class="debug-port-num">P${p}</span>
-            <span class="debug-port-name">${escapeHtml(dev.name)} <small style="color:#94a3b8;">(${escapeHtml(dev.type)})</small></span>
-            <span class="debug-port-status">${dev.tempC ? `${dev.tempC}°C • ` : ''}${escapeHtml(dev.status)}</span>
+        const portKeys = Object.keys(ports);
+        if (portKeys.length === 0) {
+          debugSmartportsList.innerHTML = `
+            <div style="font-size:0.75rem;color:#64748b;padding:6px 0;font-style:italic;">
+              No smart port devices active. Live telemetry appears when robot program runs, or click 'Sync Code' in Brain modal.
+            </div>
           `;
-          debugSmartportsList.appendChild(row);
-        });
+        } else {
+          portKeys.forEach((p) => {
+            const dev = ports[p];
+            const isLive = Boolean(dev.live);
+            const row = document.createElement("div");
+            row.className = "debug-port-row";
+            const statusColor = isLive ? "#22c55e" : (dev.simulated ? "#f59e0b" : "#38bdf8");
+            row.innerHTML = `
+              <span class="debug-port-num">P${p}</span>
+              <span class="debug-port-name">${escapeHtml(dev.name)} <small style="color:#94a3b8;">(${escapeHtml(dev.type)})</small></span>
+              <span class="debug-port-status" style="color:${statusColor};">
+                ${dev.tempC !== null && dev.tempC !== undefined ? `${dev.tempC}°C • ` : ''}${escapeHtml(dev.status)}
+              </span>
+            `;
+            debugSmartportsList.appendChild(row);
+          });
+        }
       }
     }
 

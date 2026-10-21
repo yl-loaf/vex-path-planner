@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20261020.k5" />
+  <link rel="stylesheet" href="style.css?v=20261020.k6" />
   <script>
     (function () {
       try {
@@ -403,9 +403,19 @@
 
         <!-- Smart Port Telemetry Section -->
         <div class="brain-smartports-section">
-          <div class="smartports-header">
-            <h4>🔌 Smart Ports &amp; Device Bus Scanner (21 Ports)</h4>
-            <span style="font-size:0.72rem;color:#94a3b8;">Live hardware diagnostics &amp; motor temps</span>
+          <div class="smartports-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <h4 style="margin:0;">🔌 Smart Ports &amp; Device Bus Scanner (21 Ports)</h4>
+              <span id="modalSmartportsBadge" style="font-size:0.68rem;background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:999px;font-weight:600;">0 Live Ports</span>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button type="button" id="btnSmartportsSyncCode" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#38bdf8;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Read declared ports from robot-config.cpp">🔄 Sync Code</button>
+              <button type="button" id="btnSmartportsClear" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#fca5a5;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Clear smart ports list">🗑️ Clear</button>
+              <button type="button" id="btnSmartportsAdd" class="btn-xs-clean" style="font-size:0.68rem;background:#1e293b;color:#4ade80;padding:2px 7px;border-radius:4px;border:1px solid #334155;cursor:pointer;" title="Assign device to port">➕ Port</button>
+            </div>
+          </div>
+          <div id="modalSmartportsNotice" style="margin-top:6px;margin-bottom:8px;font-size:0.72rem;color:#94a3b8;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius:4px;padding:5px 8px;line-height:1.4;">
+            No live telemetry streams detected. Run a PROS/LemLib program with telemetry or click 'Sync Code' to view project declarations.
           </div>
           <div class="smartports-grid" id="modalSmartportsGrid">
             <!-- Dynamically populated from V5BrainSerial -->
@@ -793,22 +803,22 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20261020.k5"></script>
+  <script src="version.js?v=20261020.k6"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261020.k5"></script>
+  <script src="firebase-config.js?v=20261020.k6"></script>
   <script src="analytics-tracker.js"></script>
   <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261020.k5"></script>
-  <script src="session-guard.js?v=20261020.k5"></script>
-  <script src="theme.js?v=20261020.k5"></script>
-  <script src="v5-brain-serial.js?v=20261020.k5"></script>
-  <script src="project-manager.js?v=20261020.k5"></script>
+  <script src="google-drive-sync.js?v=20261020.k6"></script>
+  <script src="session-guard.js?v=20261020.k6"></script>
+  <script src="theme.js?v=20261020.k6"></script>
+  <script src="v5-brain-serial.js?v=20261020.k6"></script>
+  <script src="project-manager.js?v=20261020.k6"></script>
   <!-- Monaco Editor (VS Code Engine) AMD Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="ide.js?v=20261020.k5"></script>
-  <script src="tutorial.js?v=20261020.k5"></script>
+  <script src="ide.js?v=20261020.k6"></script>
+  <script src="tutorial.js?v=20261020.k6"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {

@@ -194,8 +194,9 @@
         this.status.batteryMv = null;
         this.status.batteryPct = null;
         this.status.batteryTempC = null;
-        // Load robot smart ports from hardware configuration so connected devices are immediately active
-        this.loadConfiguredSmartPorts();
+        // Physical smart ports are strictly empty until live telemetry is received from the bot
+        this.status.smartPorts = {};
+        this.logDebug("SmartPorts", "Physical connection active. Smart ports initialized empty (awaiting live robot telemetry).");
 
         this.startReading();
         this.startTelemetryLoop();
@@ -227,17 +228,17 @@
       this.status.radioType = "VEXnet 2.0 (Sim)";
       this.status.radioSignalDbm = -58;
       this.status.smartPorts = {
-        1: { type: "Motor 11W", name: "left_front", status: "OK", tempC: 32, rpm: 0 },
-        2: { type: "Motor 11W", name: "left_middle", status: "OK", tempC: 31, rpm: 0 },
-        3: { type: "Motor 11W", name: "left_back", status: "OK", tempC: 33, rpm: 0 },
-        7: { type: "Motor 11W", name: "intake", status: "OK", tempC: 29, rpm: 0 },
-        8: { type: "Motor 11W", name: "lift", status: "OK", tempC: 30, rpm: 0 },
-        9: { type: "Rotation", name: "horiz_tracker", status: "OK", positionDeg: 0 },
-        10: { type: "Inertial", name: "imu", status: "Calibrated", headingDeg: 0 },
-        11: { type: "Motor 11W", name: "right_front", status: "OK", tempC: 32, rpm: 0 },
-        12: { type: "Motor 11W", name: "right_middle", status: "OK", tempC: 31, rpm: 0 },
-        13: { type: "Motor 11W", name: "right_back", status: "OK", tempC: 33, rpm: 0 },
-        15: { type: "Distance", name: "dist_sensor", status: "OK", distanceMm: 450 },
+        1: { type: "Motor 11W", name: "left_front (Sim)", status: "Simulated Demo", tempC: 32, rpm: 0, simulated: true, live: false },
+        2: { type: "Motor 11W", name: "left_middle (Sim)", status: "Simulated Demo", tempC: 31, rpm: 0, simulated: true, live: false },
+        3: { type: "Motor 11W", name: "left_back (Sim)", status: "Simulated Demo", tempC: 33, rpm: 0, simulated: true, live: false },
+        7: { type: "Motor 11W", name: "intake (Sim)", status: "Simulated Demo", tempC: 29, rpm: 0, simulated: true, live: false },
+        8: { type: "Motor 11W", name: "lift (Sim)", status: "Simulated Demo", tempC: 30, rpm: 0, simulated: true, live: false },
+        9: { type: "Rotation", name: "horiz_tracker (Sim)", status: "Simulated Demo", positionDeg: 0, simulated: true, live: false },
+        10: { type: "Inertial", name: "imu (Sim)", status: "Simulated Demo", headingDeg: 0, simulated: true, live: false },
+        11: { type: "Motor 11W", name: "right_front (Sim)", status: "Simulated Demo", tempC: 32, rpm: 0, simulated: true, live: false },
+        12: { type: "Motor 11W", name: "right_middle (Sim)", status: "Simulated Demo", tempC: 31, rpm: 0, simulated: true, live: false },
+        13: { type: "Motor 11W", name: "right_back (Sim)", status: "Simulated Demo", tempC: 33, rpm: 0, simulated: true, live: false },
+        15: { type: "Distance", name: "dist_sensor (Sim)", status: "Simulated Demo", distanceMm: 450, simulated: true, live: false },
       };
 
       this.startTelemetryLoop();
@@ -500,19 +501,48 @@
         });
       }
 
-      // 3. Match smart port motor temperatures: "PORT 1: Motor 11W 34C"
-      const portMatch = text.match(/PORT\s*(\d{1,2})[\s:=]+([a-zA-Z0-9_\s]+?)\s*(\d{2})C/i);
-      if (portMatch) {
-        const portNum = parseInt(portMatch[1], 10);
-        const name = portMatch[2].trim();
-        const temp = parseInt(portMatch[3], 10);
-        if (portNum >= 1 && portNum <= 21) {
+      // 3. Match smart port motor temperatures and stats:
+      // Examples: "PORT 1: Motor 11W 34C", "PORT 1: 34C", "Motor 1: 34C", "Port 1 temp: 34C", "Port 1: 150 RPM"
+      const portTempMatch = text.match(/(?:PORT|Motor|MTR|SmartPort)\s*(\d{1,2})[^\d\n]*?(\d{1,3})\s*(?:°?C|deg\s*C)/i) ||
+                            text.match(/PORT\s*(\d{1,2})[\s:=]+([a-zA-Z0-9_\s]+?)\s*(\d{2})C/i);
+      const portRpmMatch = text.match(/(?:PORT|Motor|MTR|SmartPort)\s*(\d{1,2})[^\d\n]*?(\d{1,4})\s*(?:rpm|RPM)/i);
+
+      if (portTempMatch) {
+        const portNum = parseInt(portTempMatch[1], 10);
+        const temp = parseInt(portTempMatch[2] && !isNaN(portTempMatch[2]) ? portTempMatch[2] : (portTempMatch[3] || 0), 10);
+        if (portNum >= 1 && portNum <= 21 && temp >= 0 && temp <= 100) {
           if (!this.status.smartPorts[portNum]) {
-            this.status.smartPorts[portNum] = { type: "Motor 11W", name, status: "OK", tempC: temp, rpm: 0 };
+            this.status.smartPorts[portNum] = {
+              type: "Motor 11W",
+              name: `port_${portNum}`,
+              status: "Live Telemetry",
+              live: true,
+              tempC: temp,
+              rpm: null,
+              lastSeen: Date.now()
+            };
           } else {
+            this.status.smartPorts[portNum].live = true;
+            this.status.smartPorts[portNum].status = "Live Telemetry";
             this.status.smartPorts[portNum].tempC = temp;
+            this.status.smartPorts[portNum].lastSeen = Date.now();
           }
           changed = true;
+          this.logDebug("SmartPort Live", `Port ${portNum} live telemetry received: ${temp}°C`);
+        }
+      }
+
+      if (portRpmMatch) {
+        const portNum = parseInt(portRpmMatch[1], 10);
+        const rpm = parseInt(portRpmMatch[2], 10);
+        if (portNum >= 1 && portNum <= 21) {
+          if (this.status.smartPorts[portNum]) {
+            this.status.smartPorts[portNum].rpm = rpm;
+            this.status.smartPorts[portNum].live = true;
+            this.status.smartPorts[portNum].status = "Live Telemetry";
+            this.status.smartPorts[portNum].lastSeen = Date.now();
+            changed = true;
+          }
         }
       }
 
@@ -610,13 +640,15 @@
       return true;
     }
 
-    // Load configured smart ports from project code or standard hardware mapping
-    loadConfiguredSmartPorts() {
+    // Parse smart ports declared in project code (robot-config.cpp / robot-config.h / main.cpp)
+    // NEVER injects fake fallback devices or fake temperatures.
+    loadConfiguredSmartPorts(silent = false) {
       const detectedPorts = {};
       let code = "";
       if (typeof window !== "undefined" && window.ProjectManager && window.ProjectManager.project && window.ProjectManager.project.files) {
         code = (window.ProjectManager.project.files["src/robot-config.cpp"] || "") + "\n" +
-               (window.ProjectManager.project.files["include/robot-config.h"] || "");
+               (window.ProjectManager.project.files["include/robot-config.h"] || "") + "\n" +
+               (window.ProjectManager.project.files["src/main.cpp"] || "");
       }
 
       if (code) {
@@ -630,9 +662,10 @@
             detectedPorts[portNum] = {
               type: "Motor 11W",
               name: name,
-              status: "Connected (OK)",
-              tempC: 28 + (portNum % 4),
-              rpm: 0
+              status: "Configured in Code",
+              live: false,
+              tempC: null,
+              rpm: null
             };
           }
         }
@@ -645,8 +678,9 @@
             detectedPorts[portNum] = {
               type: "Inertial (IMU)",
               name: m[1],
-              status: "Calibrated (OK)",
-              headingDeg: 0
+              status: "Configured in Code",
+              live: false,
+              headingDeg: null
             };
           }
         }
@@ -658,8 +692,9 @@
             detectedPorts[portNum] = {
               type: "Rotation",
               name: m[1],
-              status: "Connected (OK)",
-              positionDeg: 0
+              status: "Configured in Code",
+              live: false,
+              positionDeg: null
             };
           }
         }
@@ -671,40 +706,44 @@
             detectedPorts[portNum] = {
               type: "Distance",
               name: m[1],
-              status: "Connected (OK)",
-              distanceMm: 450
+              status: "Configured in Code",
+              live: false,
+              distanceMm: null
             };
           }
         }
       }
 
-      // If at least one port was detected from code, use that mapping
-      if (Object.keys(detectedPorts).length > 0) {
-        this.status.smartPorts = detectedPorts;
+      // NO FAKE FALLBACK!
+      // Only merge detected code ports into smartPorts; never overwrite active live ports
+      const count = Object.keys(detectedPorts).length;
+      if (count > 0) {
+        Object.entries(detectedPorts).forEach(([p, dev]) => {
+          if (!this.status.smartPorts[p] || !this.status.smartPorts[p].live) {
+            this.status.smartPorts[p] = dev;
+          }
+        });
+        if (!silent) this.logDebug("SmartPorts", `Loaded ${count} configured port definitions from project code.`);
       } else {
-        // Fallback to standard 6-motor drive + intake + lift + tracker + imu + distance mapping
-        this.status.smartPorts = {
-          1: { type: "Motor 11W", name: "left_front", status: "Connected (OK)", tempC: 30, rpm: 0 },
-          2: { type: "Motor 11W", name: "left_middle", status: "Connected (OK)", tempC: 29, rpm: 0 },
-          3: { type: "Motor 11W", name: "left_back", status: "Connected (OK)", tempC: 31, rpm: 0 },
-          7: { type: "Motor 11W", name: "intake", status: "Connected (OK)", tempC: 28, rpm: 0 },
-          8: { type: "Motor 11W", name: "lift", status: "Connected (OK)", tempC: 29, rpm: 0 },
-          9: { type: "Rotation", name: "horiz_tracker", status: "Connected (OK)", positionDeg: 0 },
-          10: { type: "Inertial", name: "imu", status: "Calibrated (OK)", headingDeg: 0 },
-          11: { type: "Motor 11W", name: "right_front", status: "Connected (OK)", tempC: 30, rpm: 0 },
-          12: { type: "Motor 11W", name: "right_middle", status: "Connected (OK)", tempC: 29, rpm: 0 },
-          13: { type: "Motor 11W", name: "right_back", status: "Connected (OK)", tempC: 31, rpm: 0 },
-          15: { type: "Distance", name: "dist_sensor", status: "Connected (OK)", distanceMm: 450 }
-        };
+        if (!silent) this.logDebug("SmartPorts", "No port declarations found in project code. Smart ports remain empty (awaiting live robot telemetry).");
       }
-      this.logDebug("SmartPorts", `Loaded ${Object.keys(this.status.smartPorts).length} smart ports from hardware configuration.`);
+      this.emit("status", this.status);
+      return count;
+    }
+
+    clearSmartPorts() {
+      this.status.smartPorts = {};
+      this.logDebug("SmartPorts", "Smart ports list cleared to empty.");
       this.emit("status", this.status);
     }
 
     setSmartPortDevice(portNum, device) {
       if (!this.status.smartPorts) this.status.smartPorts = {};
       if (device) {
-        this.status.smartPorts[portNum] = device;
+        this.status.smartPorts[portNum] = {
+          ...device,
+          live: Boolean(device.live)
+        };
       } else {
         delete this.status.smartPorts[portNum];
       }
