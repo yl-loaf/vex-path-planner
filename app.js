@@ -16472,6 +16472,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
                 data.updatedAt = Date.now();
                 data.isDefault = false;
                 data.cloudSynced = false;
+                data.importedProject = true;
+                data.lastAutonEditor = "ide";
+                data.rawCppPreserved = true;
+                if (window.ProjectManager.normalizeFiles) {
+                  data.files = window.ProjectManager.normalizeFiles(data.files);
+                }
                 window.ProjectManager.project = data;
                 if (window.ImportProgressModal) {
                   window.ImportProgressModal.update({
@@ -17755,8 +17761,10 @@ lemlib::ControllerSettings ${currentMode}_controller(
           loadProjectAutonsIntoPlanner(false, false);
         }
       } else if (paths && paths.length > 0) {
-        // Planner has routines, but src/autons.cpp is empty: safely sync planner into autons.cpp
-        syncPlannerIntoProjectManager({ ask: false, force: true });
+        // Planner has routines, but src/autons.cpp is empty: only sync if not imported or raw C++ preserved
+        if (!proj.importedProject && proj.lastAutonEditor !== "ide" && !proj.rawCppPreserved) {
+          syncPlannerIntoProjectManager({ ask: false, force: true });
+        }
       }
 
       updateProjectBanner();

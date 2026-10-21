@@ -5,6 +5,8 @@
   let activeFile = "src/autons.cpp";
   let openTabs = ["src/autons.cpp", "include/robot-config.h", "src/main.cpp"];
   let pendingNavigationUrl = null;
+  let isImportingProject = false;
+  window.isImportingProject = false;
 
   // DOM Elements
   const elProjectName = document.getElementById("ideProjectName");
@@ -91,10 +93,18 @@
 
   function applyNewImportedProject(projName, filesMap) {
     // Clean up common root prefix if files are double-nested like "MyProject/src/main.cpp"
+    // CRITICAL: NEVER strip "src", "include", or "firmware" as a root folder!
     const paths = Object.keys(filesMap || {});
     if (paths.length > 0) {
       const firstSegment = paths[0].split("/")[0];
-      if (firstSegment && paths.length > 1 && paths.every(p => p.startsWith(firstSegment + "/"))) {
+      if (
+        firstSegment &&
+        firstSegment !== "src" &&
+        firstSegment !== "include" &&
+        firstSegment !== "firmware" &&
+        paths.length > 1 &&
+        paths.every(p => p.startsWith(firstSegment + "/"))
+      ) {
         const cleanedMap = {};
         const prefix = firstSegment + "/";
         for (const [k, v] of Object.entries(filesMap)) {
@@ -114,7 +124,15 @@
     const isDifferentName = !currentProjectName || (projName && currentProjectName.trim().toLowerCase() !== projName.trim().toLowerCase());
 
     window.promptWipeChallenge(`${projName} (${fileCount} files)`, async () => {
-      const totalBytes = Object.values(filesMap).reduce((sum, content) => sum + (typeof content === "string" ? content.length : 0), 0);
+      isImportingProject = true;
+      window.isImportingProject = true;
+
+      // Normalize files through ProjectManager to ensure canonical aliases (src/autons.cpp etc.) are always present
+      const normalizedFiles = window.ProjectManager && typeof window.ProjectManager.normalizeFiles === "function"
+        ? window.ProjectManager.normalizeFiles(filesMap)
+        : filesMap;
+
+      const totalBytes = Object.values(normalizedFiles).reduce((sum, content) => sum + (typeof content === "string" ? content.length : 0), 0);
 
       if (window.ImportProgressModal) {
         window.ImportProgressModal.show({
@@ -124,6 +142,17 @@
           totalFiles: fileCount
         });
       }
+
+      // Detach Monaco editor before wipe to avoid setting disposed model or empty value
+      if (isMonacoReady && monacoEditor) {
+        try {
+          monacoEditor.setModel(null);
+        } catch (_) {}
+      }
+      monacoModels.forEach(m => {
+        try { if (!m.isDisposed()) m.dispose(); } catch (_) {}
+      });
+      monacoModels.clear();
 
       if (window.ProjectManager) {
         window.ProjectManager.wipeProject();
@@ -135,12 +164,21 @@
           lemlibVersion: "0.5.4",
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          files: filesMap,
+          files: normalizedFiles,
           activeAuton: "red_rush_auton",
           cloudSynced: false,
-          isDefault: false
+          isDefault: false,
+          importedProject: true,
+          lastAutonEditor: "ide",
+          rawCppPreserved: true
         };
         window.ProjectManager._hasUserEdited = true;
+
+        // Guarantee snapshot of imported autons.cpp in version history
+        const autonsCode = window.ProjectManager.getFile("src/autons.cpp");
+        if (autonsCode && autonsCode.trim().length > 0) {
+          window.ProjectManager.createVersionSnapshot("src/autons.cpp", "imported", "Imported Project Original C++ Autons", autonsCode);
+        }
       }
 
       if (window.ImportProgressModal) {
@@ -198,18 +236,32 @@
 
       const finalStr = window.ProjectManager ? window.ProjectManager.formatSavingProgress(totalBytes, totalBytes) : `${(totalBytes / 1024).toFixed(1)} KB`;
       updateAutosaveUI("ready", `✓ Saved ${finalStr}`, finalStr);
+
+      const activeProjectFiles = window.ProjectManager?.project?.files || normalizedFiles;
+      const fileList = Object.keys(activeProjectFiles);
+
+      // Prioritize src/autons.cpp as the primary file to open
+      const mainAuton = fileList.find(f => f === "src/autons.cpp") ||
+                        fileList.find(f => f === "autons.cpp" || f === "src/auton.cpp" || f === "auton.cpp") ||
+                        fileList.find(f => f.toLowerCase().includes("auton") && f.endsWith(".cpp")) ||
+                        fileList.find(f => f === "src/main.cpp" || f === "main.cpp") ||
+                        fileList[0] || "src/autons.cpp";
+
+      const mainCpp = fileList.find(f => f === "src/main.cpp" || f === "main.cpp");
+      const configH = fileList.find(f => f === "include/robot-config.h" || f === "robot-config.h" || f === "include/main.h");
+
+      openTabs = [mainAuton, configH, mainCpp].filter(Boolean).filter(f => activeProjectFiles[f] !== undefined);
+      if (openTabs.length === 0) openTabs = [mainAuton];
+
+      activeFile = mainAuton;
       renderProjectHeader();
       renderFileTree();
       renderTabs();
-
-      const fileList = Object.keys(filesMap);
-      const mainCpp = fileList.find(f => f === "src/autons.cpp" || f === "src/main.cpp") ||
-                      fileList.find(f => f.startsWith("src/") && f.endsWith(".cpp")) ||
-                      fileList.find(f => f.endsWith(".cpp") || f.endsWith(".hpp") || f.endsWith(".h")) ||
-                      fileList[0];
-
-      if (mainCpp) loadFile(mainCpp);
+      loadFile(activeFile);
       renderSymbols();
+
+      isImportingProject = false;
+      window.isImportingProject = false;
 
       if (window.ImportProgressModal) {
         window.ImportProgressModal.finish({
@@ -283,14 +335,29 @@
     const cleanPath = filename.replace(/^[\/\\]+/, "");
     const uri = monacoInstance.Uri.parse("inmemory://pros/" + encodeURIComponent(cleanPath));
     let model = monacoInstance.editor.getModel(uri);
-    if (!model || model.isDisposed()) {
-      const fileData = content !== undefined ? content : (window.ProjectManager ? window.ProjectManager.getFile(filename) : "");
-      model = monacoInstance.editor.createModel(fileData || "", lang, uri);
+    const fileData = content !== undefined ? content : (window.ProjectManager ? window.ProjectManager.getFile(filename) : "");
+
+    if (model && !model.isDisposed()) {
+      if (model.getValue() !== fileData) {
+        model.setValue(fileData);
+      }
+    } else {
+      try {
+        if (model && model.isDisposed()) {
+          try { model.dispose(); } catch (_) {}
+          model = monacoInstance.editor.createModel(fileData || "", lang);
+        } else {
+          model = monacoInstance.editor.createModel(fileData || "", lang, uri);
+        }
+      } catch (err) {
+        console.warn("[Monaco] createModel notice, falling back without URI:", err);
+        model = monacoInstance.editor.createModel(fileData || "", lang);
+      }
       model.onDidChangeContent(() => {
-        onEditorChange();
+        if (!isImportingProject && !window.isImportingProject) {
+          onEditorChange();
+        }
       });
-    } else if (content !== undefined && model.getValue() !== content) {
-      model.setValue(content);
     }
     monacoModels.set(cleanPath, model);
     return model;
@@ -630,6 +697,7 @@
     }
 
     ProjectManager.addListener((pm, reason) => {
+      if (isImportingProject || window.isImportingProject) return;
       renderProjectHeader();
       if (reason !== "dirty") {
         renderSymbols();
@@ -2274,6 +2342,7 @@
   }
 
   function onEditorChange() {
+    if (isImportingProject || window.isImportingProject) return;
     const val = (isMonacoReady && monacoEditor) ? monacoEditor.getValue() : (elCodeEditor ? elCodeEditor.value : "");
     if (elCodeEditor && isMonacoReady) elCodeEditor.value = val;
     ProjectManager.setFile(activeFile, val, false);
@@ -2682,11 +2751,22 @@
       }
 
       let rootFolder = "";
-      for (const f of validFiles) {
-        const pathStr = f.webkitRelativePath || f.name;
-        const parts = pathStr.split(/[\/\\]/);
-        if (parts.length > 1 && !rootFolder) {
-          rootFolder = parts[0];
+      // Only treat the first segment as a root project folder wrapper if:
+      // 1. It is NOT "src", "include", or "firmware"
+      // 2. ALL valid files start with that candidate + "/"
+      if (validFiles.length > 0) {
+        const firstParts = (validFiles[0].webkitRelativePath || validFiles[0].name).replace(/\\/g, "/").split("/");
+        if (firstParts.length > 1) {
+          const candidate = firstParts[0];
+          if (candidate !== "src" && candidate !== "include" && candidate !== "firmware") {
+            const allMatch = validFiles.every(f => {
+              const p = (f.webkitRelativePath || f.name).replace(/\\/g, "/");
+              return p.startsWith(candidate + "/");
+            });
+            if (allMatch) {
+              rootFolder = candidate;
+            }
+          }
         }
       }
 
@@ -2780,7 +2860,13 @@
 
         let commonPrefix = "";
         const firstPart = entryPaths[0].split(/[\/\\]/)[0];
-        if (firstPart && entryPaths.every(p => p.startsWith(firstPart + "/") || p.startsWith(firstPart + "\\"))) {
+        if (
+          firstPart &&
+          firstPart !== "src" &&
+          firstPart !== "include" &&
+          firstPart !== "firmware" &&
+          entryPaths.every(p => p.startsWith(firstPart + "/") || p.startsWith(firstPart + "\\"))
+        ) {
           commonPrefix = firstPart + "/";
         }
 

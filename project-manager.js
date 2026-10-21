@@ -911,8 +911,161 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.notifyListeners("dirty");
     }
 
+    // Normalizes file structures from imported folder trees, ZIP archives, and JSON dumps
+    normalizeFiles(filesMap) {
+      if (!filesMap || typeof filesMap !== "object") return {};
+      const normalized = {};
+
+      // 1. Sanitize keys: backslashes to slashes, strip leading ./ and /, trim
+      for (const [rawKey, rawContent] of Object.entries(filesMap)) {
+        if (!rawKey) continue;
+        const cleanKey = rawKey.replace(/\\/g, "/").replace(/^(\.\/|\/)+/, "").trim();
+        const content = typeof rawContent === "string" ? rawContent : String(rawContent || "");
+        normalized[cleanKey] = content;
+      }
+
+      // 2. Canonical autonomous routine discovery & synchronization
+      // Matches src/autons.cpp, autons.cpp, src/auton.cpp, auton.cpp, src/autonomous.cpp, autonomous.cpp
+      const autonCandidates = [
+        "src/autons.cpp",
+        "autons.cpp",
+        "src/auton.cpp",
+        "auton.cpp",
+        "src/autonomous.cpp",
+        "autonomous.cpp"
+      ];
+
+      // Find first candidate key that has non-empty content
+      let foundAutonKey = autonCandidates.find(k => normalized[k] && typeof normalized[k] === "string" && normalized[k].trim().length > 0);
+      
+      // Fallback: check any file with 'auton' in name ending in .cpp
+      if (!foundAutonKey) {
+        foundAutonKey = Object.keys(normalized).find(k => {
+          const lk = k.toLowerCase();
+          return lk.includes("auton") && lk.endsWith(".cpp") && normalized[k] && normalized[k].trim().length > 0;
+        });
+      }
+
+      if (foundAutonKey) {
+        const autonCode = normalized[foundAutonKey];
+        // Ensure BOTH "src/autons.cpp" AND "autons.cpp" contain the imported routine
+        normalized["src/autons.cpp"] = autonCode;
+        normalized["autons.cpp"] = autonCode;
+        console.log(`[ProjectManager] Successfully mapped imported autonomous code from "${foundAutonKey}" to "src/autons.cpp" (${autonCode.length} characters)`);
+      }
+
+      // 3. Canonical main.cpp discovery
+      const mainKey = Object.keys(normalized).find(k => k === "src/main.cpp" || k === "main.cpp");
+      if (mainKey && normalized[mainKey]) {
+        normalized["src/main.cpp"] = normalized[mainKey];
+        normalized["main.cpp"] = normalized[mainKey];
+      }
+
+      // 4. Canonical headers discovery
+      const mainHKey = Object.keys(normalized).find(k => k === "include/main.h" || k === "main.h");
+      if (mainHKey && normalized[mainHKey]) {
+        normalized["include/main.h"] = normalized[mainHKey];
+        normalized["main.h"] = normalized[mainHKey];
+      }
+
+      const robotConfigHKey = Object.keys(normalized).find(k => k === "include/robot-config.h" || k === "robot-config.h");
+      if (robotConfigHKey && normalized[robotConfigHKey]) {
+        normalized["include/robot-config.h"] = normalized[robotConfigHKey];
+        normalized["robot-config.h"] = normalized[robotConfigHKey];
+      }
+
+      const robotConfigCppKey = Object.keys(normalized).find(k => k === "src/robot-config.cpp" || k === "robot-config.cpp");
+      if (robotConfigCppKey && normalized[robotConfigCppKey]) {
+        normalized["src/robot-config.cpp"] = normalized[robotConfigCppKey];
+        normalized["robot-config.cpp"] = normalized[robotConfigCppKey];
+      }
+
+      return normalized;
+    }
+
     getFile(filename) {
-      return this.project?.files?.[filename] || "";
+      if (!this.project || !this.project.files) return "";
+      if (!filename || typeof filename !== "string") return "";
+
+      // 1. Direct match
+      const direct = this.project.files[filename];
+      if (direct !== undefined && typeof direct === "string") {
+        return direct;
+      }
+
+      // 2. Cleaned match
+      const clean = filename.replace(/\\/g, "/").replace(/^(\.\/|\/)+/, "").trim();
+      if (this.project.files[clean] !== undefined && typeof this.project.files[clean] === "string") {
+        return this.project.files[clean];
+      }
+
+      // 3. Robust alias resolution for autonomous C++ routines
+      if (
+        clean === "src/autons.cpp" ||
+        clean === "autons.cpp" ||
+        clean === "src/auton.cpp" ||
+        clean === "auton.cpp" ||
+        clean === "src/autonomous.cpp" ||
+        clean === "autonomous.cpp"
+      ) {
+        const autonCandidates = [
+          "src/autons.cpp",
+          "autons.cpp",
+          "src/auton.cpp",
+          "auton.cpp",
+          "src/autonomous.cpp",
+          "autonomous.cpp"
+        ];
+        for (const candidate of autonCandidates) {
+          const val = this.project.files[candidate];
+          if (val !== undefined && typeof val === "string" && val.length > 0) {
+            // Keep canonical primary keys in sync
+            this.project.files["src/autons.cpp"] = val;
+            this.project.files["autons.cpp"] = val;
+            return val;
+          }
+        }
+      }
+
+      // 4. Robust alias resolution for main.cpp
+      if (clean === "src/main.cpp" || clean === "main.cpp") {
+        const val = this.project.files["src/main.cpp"] ?? this.project.files["main.cpp"];
+        if (val !== undefined && typeof val === "string") {
+          return val;
+        }
+      }
+
+      // 5. Robust alias resolution for include/main.h
+      if (clean === "include/main.h" || clean === "main.h") {
+        const val = this.project.files["include/main.h"] ?? this.project.files["main.h"];
+        if (val !== undefined && typeof val === "string") {
+          return val;
+        }
+      }
+
+      // 6. Robust alias resolution for robot-config
+      if (clean === "include/robot-config.h" || clean === "robot-config.h") {
+        const val = this.project.files["include/robot-config.h"] ?? this.project.files["robot-config.h"];
+        if (val !== undefined && typeof val === "string") {
+          return val;
+        }
+      }
+      if (clean === "src/robot-config.cpp" || clean === "robot-config.cpp") {
+        const val = this.project.files["src/robot-config.cpp"] ?? this.project.files["robot-config.cpp"];
+        if (val !== undefined && typeof val === "string") {
+          return val;
+        }
+      }
+
+      // 7. Prefix fallbacks
+      if (!clean.startsWith("src/") && this.project.files["src/" + clean] !== undefined) {
+        return this.project.files["src/" + clean];
+      }
+      if (!clean.startsWith("include/") && this.project.files["include/" + clean] !== undefined) {
+        return this.project.files["include/" + clean];
+      }
+
+      return "";
     }
 
     setFile(filename, content, immediate = false) {
@@ -921,16 +1074,30 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       this.project.isDefault = false;
       this.project.updatedAt = Date.now();
       
-      const baseline = this.lastSavedFileHashes.get(filename);
-      this.project.files[filename] = content;
+      const clean = filename ? filename.replace(/\\/g, "/").replace(/^(\.\/|\/)+/, "").trim() : filename;
+      const baseline = this.lastSavedFileHashes.get(clean) ?? this.lastSavedFileHashes.get(filename);
+      this.project.files[clean] = content;
+
+      // Keep canonical aliases in sync
+      if (clean === "src/autons.cpp" || clean === "autons.cpp") {
+        this.project.files["src/autons.cpp"] = content;
+        if (this.project.files["autons.cpp"] !== undefined) {
+          this.project.files["autons.cpp"] = content;
+        }
+      } else if (clean === "src/main.cpp" || clean === "main.cpp") {
+        this.project.files["src/main.cpp"] = content;
+        if (this.project.files["main.cpp"] !== undefined) {
+          this.project.files["main.cpp"] = content;
+        }
+      }
 
       if (baseline !== undefined && baseline === content) {
-        this.changedFiles.delete(filename);
+        this.changedFiles.delete(clean);
         if (this.changedFiles.size === 0) {
           this.markDirty(false);
         }
       } else {
-        this.changedFiles.add(filename);
+        this.changedFiles.add(clean);
         this.markDirty(true);
       }
 
