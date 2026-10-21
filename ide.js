@@ -3160,17 +3160,62 @@
     }
 
     if (btnModalRunProgram) {
-      btnModalRunProgram.addEventListener("click", () => {
-        if (!window.V5BrainSerial) return;
+      btnModalRunProgram.addEventListener("click", async () => {
+        if (!window.V5BrainSerial || !window.V5BrainSerial.isConnected) {
+          if (typeof showToast === "function") showToast("⚠️ Connect VEX device first.");
+          return;
+        }
         const slot = parseInt(modalSlotSelect?.value || "1", 10);
-        window.V5BrainSerial.startProgram(slot);
+        await window.V5BrainSerial.startProgram(slot, { mode: "autonomous" });
+        if (typeof showToast === "function") showToast(`▶ Running Slot ${slot} on V5 Brain`);
       });
     }
 
     if (btnModalStopProgram) {
-      btnModalStopProgram.addEventListener("click", () => {
-        if (!window.V5BrainSerial) return;
-        window.V5BrainSerial.stopProgram();
+      btnModalStopProgram.addEventListener("click", async () => {
+        if (!window.V5BrainSerial || !window.V5BrainSerial.isConnected) {
+          if (typeof showToast === "function") showToast("⚠️ Connect VEX device first.");
+          return;
+        }
+        await window.V5BrainSerial.stopProgram();
+        if (typeof showToast === "function") showToast("⏹ Program Stopped & Robot Disabled on V5 Brain");
+      });
+    }
+
+    const ideBtnCompAuton = document.getElementById("btnModalCompAuton");
+    const ideBtnCompDriver = document.getElementById("btnModalCompDriver");
+    const ideBtnAttachBin = document.getElementById("btnModalAttachBin");
+    const ideBinInput = document.getElementById("modalBinFileInput");
+    const ideBinStatus = document.getElementById("modalCustomBinStatus");
+
+    if (ideBtnCompAuton) {
+      ideBtnCompAuton.addEventListener("click", async () => {
+        if (!window.V5BrainSerial?.isConnected) return;
+        const slot = parseInt(modalSlotSelect?.value || "1", 10);
+        await window.V5BrainSerial.startProgram(slot, { mode: "autonomous", triggerCompetition: true });
+        if (typeof showToast === "function") showToast(`🤖 Triggered 15s Autonomous in Slot ${slot}`);
+      });
+    }
+    if (ideBtnCompDriver) {
+      ideBtnCompDriver.addEventListener("click", async () => {
+        if (!window.V5BrainSerial?.isConnected) return;
+        const slot = parseInt(modalSlotSelect?.value || "1", 10);
+        await window.V5BrainSerial.startProgram(slot, { mode: "driver", triggerCompetition: true });
+        if (typeof showToast === "function") showToast(`🎮 Triggered Driver Control in Slot ${slot}`);
+      });
+    }
+    if (ideBtnAttachBin && ideBinInput) {
+      ideBtnAttachBin.addEventListener("click", () => ideBinInput.click());
+      ideBinInput.addEventListener("change", async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file || !window.V5BrainSerial) return;
+        const buf = await file.arrayBuffer();
+        window.V5BrainSerial.setCustomBinary(new Uint8Array(buf), file.name);
+        if (ideBinStatus) {
+          ideBinStatus.style.display = "block";
+          ideBinStatus.textContent = `✅ Attached binary: ${file.name} (${(buf.byteLength / 1024).toFixed(1)} KB)`;
+        }
+        if (typeof showToast === "function") showToast(`📂 Loaded compiled V5 binary '${file.name}'`);
       });
     }
 

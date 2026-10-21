@@ -16950,15 +16950,23 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (btnDebugConnect) btnDebugConnect.onclick = () => handleConnectToggle();
 
     // Flash / Upload autonomous routine to Brain
-    async function handleUploadToBrain(slotPicker) {
+    async function handleUploadToBrain(slotPicker, runAfter = false) {
       if (!window.V5BrainSerial.isConnected) {
         showToast("⚠️ VEX V5 Brain is not connected via USB! Please connect robot first.", "warning");
         openBrainModal();
-        return;
+        return false;
       }
       const slot = parseInt(slotPicker?.value || "1", 10);
       const activePath = getActive();
       const routineName = activePath?.name ? activePath.name.replace(/\s+/g, "_") : "Override_Auton";
+
+      // Ensure latest path waypoints & generated C++ code are synced to ProjectManager before flashing
+      try {
+        if (typeof buildGeneratedCpp === "function" && window.ProjectManager && typeof window.ProjectManager.syncAutonomousFromPlanner === "function") {
+          const cpp = buildGeneratedCpp();
+          window.ProjectManager.syncAutonomousFromPlanner(cpp, routineName);
+        }
+      } catch (_) {}
 
       try {
         if (uploadProgressWrap) uploadProgressWrap.style.display = "block";
@@ -16967,12 +16975,14 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
         await window.V5BrainSerial.uploadToSlot(slot, routineName, (pct) => {
           if (uploadProgressBar) uploadProgressBar.style.width = `${pct}%`;
-          if (uploadProgressLabel) uploadProgressLabel.textContent = `Flashing to Slot ${slot}... ${pct}%`;
-        });
+          if (uploadProgressLabel) uploadProgressLabel.textContent = `Flashing '${routineName}' to Slot ${slot}... ${pct}%`;
+        }, { runAfterUpload: runAfter });
 
-        showToast(`🚀 Autonomous routine successfully flashed to Slot ${slot} on Brain!`);
+        showToast(`🚀 Flashed '${routineName}' to Slot ${slot} on VEX V5 Brain!`);
+        return true;
       } catch (err) {
         showToast(`❌ Flashing failed: ${err.message}`);
+        return false;
       } finally {
         if (btnModalUpload) btnModalUpload.disabled = false;
         if (btnDebugUpload) btnDebugUpload.disabled = false;
@@ -16982,8 +16992,27 @@ lemlib::ControllerSettings ${currentMode}_controller(
       }
     }
 
-    if (btnModalUpload) btnModalUpload.onclick = () => handleUploadToBrain(modalSlotSelect);
-    if (btnDebugUpload) btnDebugUpload.onclick = () => handleUploadToBrain(debugSlotSelect);
+    if (btnModalUpload) btnModalUpload.onclick = () => handleUploadToBrain(modalSlotSelect, false);
+    if (btnDebugUpload) btnDebugUpload.onclick = () => handleUploadToBrain(debugSlotSelect, false);
+
+    // Optional .bin attachment for hardware flashing
+    const btnModalAttachBin = document.getElementById("btnModalAttachBin");
+    const modalBinFileInput = document.getElementById("modalBinFileInput");
+    const modalCustomBinStatus = document.getElementById("modalCustomBinStatus");
+    if (btnModalAttachBin && modalBinFileInput) {
+      btnModalAttachBin.onclick = () => modalBinFileInput.click();
+      modalBinFileInput.onchange = async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const buf = await file.arrayBuffer();
+        window.V5BrainSerial.setCustomBinary(new Uint8Array(buf), file.name);
+        if (modalCustomBinStatus) {
+          modalCustomBinStatus.style.display = "block";
+          modalCustomBinStatus.textContent = `✅ Attached binary: ${file.name} (${(buf.byteLength / 1024).toFixed(1)} KB)`;
+        }
+        showToast(`📂 Loaded compiled V5 binary '${file.name}' for hardware flashing`, "success");
+      };
+    }
 
     const btnUploadAndRun = document.getElementById("btnUploadAndRun");
     if (btnUploadAndRun) {
@@ -17003,13 +17032,13 @@ lemlib::ControllerSettings ${currentMode}_controller(
         const slot = parseInt(debugSlotSelect?.value || "1", 10);
         
         try {
-          // Upload to slot
-          await handleUploadToBrain(debugSlotSelect);
-          // Wait 350ms, then trigger execution
-          await new Promise((resolve) => setTimeout(resolve, 350));
-          showToast(`🚀 Program updated! Starting routine in Slot ${slot}...`);
-          await window.V5BrainSerial.startProgram(slot);
-          showToast("🟢 Robot running autonomously!");
+          const uploaded = await handleUploadToBrain(debugSlotSelect, true);
+          if (uploaded) {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            showToast(`🚀 Starting routine in Slot ${slot}...`);
+            await window.V5BrainSerial.startProgram(slot, { mode: "autonomous" });
+            showToast("🟢 Robot running autonomously!");
+          }
         } catch (err) {
           showToast(`❌ 1-Click failed: ${err.message}`);
         } finally {
@@ -17027,8 +17056,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
           return;
         }
         const slot = parseInt(modalSlotSelect?.value || "1", 10);
-        const progName = window.V5BrainSerial.status.slots[slot - 1]?.name || "Override_Auton";
-        const ok = await window.V5BrainSerial.startProgram(slot);
+        const progName = window.V5BrainSerial.status.slots[slot - 1]?.name || `slot_${slot}.bin`;
+        const ok = await window.V5BrainSerial.startProgram(slot, { mode: "autonomous" });
         if (ok) {
           showToast(`▶ Running Slot ${slot} ('${progName}') on V5 Brain`, "success");
         }
@@ -17041,24 +17070,51 @@ lemlib::ControllerSettings ${currentMode}_controller(
           return;
         }
         const slot = parseInt(debugSlotSelect?.value || "1", 10);
-        await window.V5BrainSerial.startProgram(slot);
+        await window.V5BrainSerial.startProgram(slot, { mode: "autonomous" });
         showToast(`▶ Running Slot ${slot} on V5 Brain`, "success");
       };
     }
     if (btnModalStop) {
       btnModalStop.onclick = async () => {
-        if (!window.V5BrainSerial.isConnected) return;
+        if (!window.V5BrainSerial.isConnected) {
+          showToast("⚠️ Connect VEX device first.", "warning");
+          return;
+        }
         await window.V5BrainSerial.stopProgram();
-        showToast("⏹ Program Stopped on V5 Brain", "info");
+        showToast("⏹ Program Stopped & Robot Disabled on V5 Brain", "info");
       };
     }
     if (btnDebugStop) {
       btnDebugStop.onclick = async () => {
-        if (!window.V5BrainSerial.isConnected) return;
+        if (!window.V5BrainSerial.isConnected) {
+          showToast("⚠️ Connect VEX device first.", "warning");
+          return;
+        }
         await window.V5BrainSerial.stopProgram();
-        showToast("⏹ Program Stopped on V5 Brain", "info");
+        showToast("⏹ Program Stopped & Robot Disabled on V5 Brain", "info");
       };
     }
+
+    // Competition Mode triggers (Autonomous 15s / Driver 105s)
+    const btnModalCompAuton = document.getElementById("btnModalCompAuton");
+    const btnModalCompDriver = document.getElementById("btnModalCompDriver");
+    const btnDebugCompAuton = document.getElementById("btnDebugCompAuton");
+    const btnDebugCompDriver = document.getElementById("btnDebugCompDriver");
+
+    const triggerCompMode = async (mode, secs, slotEl) => {
+      if (!window.V5BrainSerial.isConnected) {
+        showToast("⚠️ Connect VEX device first.", "warning");
+        return;
+      }
+      const slot = parseInt(slotEl?.value || "1", 10);
+      await window.V5BrainSerial.startProgram(slot, { mode, triggerCompetition: true });
+      showToast(mode === "autonomous" ? `🤖 Triggered 15s Autonomous in Slot ${slot}` : `🎮 Triggered Driver Control in Slot ${slot}`, "success");
+    };
+
+    if (btnModalCompAuton) btnModalCompAuton.onclick = () => triggerCompMode("autonomous", 15, modalSlotSelect);
+    if (btnModalCompDriver) btnModalCompDriver.onclick = () => triggerCompMode("driver", 105, modalSlotSelect);
+    if (btnDebugCompAuton) btnDebugCompAuton.onclick = () => triggerCompMode("autonomous", 15, debugSlotSelect);
+    if (btnDebugCompDriver) btnDebugCompDriver.onclick = () => triggerCompMode("driver", 105, debugSlotSelect);
 
     // Smart ports action buttons
     const btnSmartportsSyncCode = document.getElementById("btnSmartportsSyncCode");

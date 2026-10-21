@@ -9,7 +9,6 @@
   <link rel="shortcut icon" href="favicon.ico" />
   <link rel="icon" href="https://yl-loaf.github.io/vex-path-planner/favicon.ico" type="image/x-icon" />
   <link rel="canonical" href="https://yl-loaf.github.io/vex-path-planner/" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3909547099822622" crossorigin="anonymous"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
@@ -20,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20261020.k6" />
+  <link rel="stylesheet" href="style.css?v=20261021.k3" />
   <script>
     (function () {
       try {
@@ -391,9 +390,16 @@
             </div>
             <div style="display:flex;gap:6px;">
               <button type="button" id="btnModalUploadAuton" class="primary" style="flex:1;font-size:0.78rem;padding:7px;">⚡ Flash Current Code</button>
-              <button type="button" id="btnModalRunProgram" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius: 4px;font-size:0.78rem;font-weight:600;cursor:pointer;">▶ Run</button>
-              <button type="button" id="btnModalStopProgram" style="background:#dc2626;color:#fff;border:none;padding:7px 12px;border-radius: 4px;font-size:0.78rem;font-weight:600;cursor:pointer;">⏹ Stop</button>
+              <button type="button" id="btnModalRunProgram" style="background:#16a34a;color:#fff;border:none;padding:7px 12px;border-radius: 4px;font-size:0.78rem;font-weight:600;cursor:pointer;" title="Start selected slot &amp; run autonomous">▶ Run</button>
+              <button type="button" id="btnModalStopProgram" style="background:#dc2626;color:#fff;border:none;padding:7px 12px;border-radius: 4px;font-size:0.78rem;font-weight:600;cursor:pointer;" title="Stop running program &amp; disable robot">⏹ Stop</button>
             </div>
+            <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;">
+              <button type="button" id="btnModalCompAuton" style="flex:1;background:#0284c7;color:#fff;border:none;padding:5px 8px;border-radius:4px;font-size:0.71rem;font-weight:600;cursor:pointer;" title="Trigger 15s Autonomous mode via Controller">🤖 Auton (15s)</button>
+              <button type="button" id="btnModalCompDriver" style="flex:1;background:#4f46e5;color:#fff;border:none;padding:5px 8px;border-radius:4px;font-size:0.71rem;font-weight:600;cursor:pointer;" title="Trigger 105s Driver mode via Controller">🎮 Driver (105s)</button>
+              <button type="button" id="btnModalAttachBin" style="background:#1e293b;color:#38bdf8;border:1px solid #334155;padding:5px 8px;border-radius:4px;font-size:0.71rem;font-weight:600;cursor:pointer;" title="Attach compiled PROS/VEXcode .bin binary for hardware flashing">📂 .bin</button>
+              <input type="file" id="modalBinFileInput" accept=".bin" style="display:none;" />
+            </div>
+            <div id="modalCustomBinStatus" style="font-size:0.68rem;color:#4ade80;margin-top:4px;display:none;"></div>
             <div id="modalUploadProgressWrap" style="margin-top:6px;display:none;">
               <div style="font-size:0.70rem;color:#38bdf8;margin-bottom:2px;" id="modalUploadProgressLabel">Uploading... 0%</div>
               <div class="brain-batt-bar"><div class="brain-batt-fill" id="modalUploadProgressBar" style="width:0%;background:#38bdf8;"></div></div>
@@ -803,22 +809,21 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20261020.k6"></script>
+  <script src="version.js?v=20261021.k3"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261020.k6"></script>
+  <script src="firebase-config.js?v=20261021.k3"></script>
   <script src="analytics-tracker.js"></script>
-  <script src="ads-inject.js"></script>
-  <script src="google-drive-sync.js?v=20261020.k6"></script>
-  <script src="session-guard.js?v=20261020.k6"></script>
-  <script src="theme.js?v=20261020.k6"></script>
-  <script src="v5-brain-serial.js?v=20261020.k6"></script>
-  <script src="project-manager.js?v=20261020.k6"></script>
+  <script src="google-drive-sync.js?v=20261021.k3"></script>
+  <script src="session-guard.js?v=20261021.k3"></script>
+  <script src="theme.js?v=20261021.k3"></script>
+  <script src="v5-brain-serial.js?v=20261021.k3"></script>
+  <script src="project-manager.js?v=20261021.k3"></script>
   <!-- Monaco Editor (VS Code Engine) AMD Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="ide.js?v=20261020.k6"></script>
-  <script src="tutorial.js?v=20261020.k6"></script>
+  <script src="ide.js?v=20261021.k3"></script>
+  <script src="tutorial.js?v=20261021.k3"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {
