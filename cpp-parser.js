@@ -112,8 +112,8 @@
   }
 
   // Parse multiple statements or code block into an array of actions
-  function parseStatementsToList(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
-    if (!codeStr || typeof codeStr !== "string") return [];
+  function parseStatementsToList(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0, recursionDepth = 0, visitedFns = null, customFnsMap = null) {
+    if (!codeStr || typeof codeStr !== "string" || recursionDepth > 3) return [];
     const trimmed = codeStr.trim();
     if (!trimmed) return [];
 
@@ -166,7 +166,7 @@
 
     const result = [];
     statements.forEach((stmt) => {
-      const act = parseStatementToAction(stmt, defaultMaxSpeed, defaultMinSpeed);
+      const act = parseStatementToAction(stmt, defaultMaxSpeed, defaultMinSpeed, recursionDepth, visitedFns, customFnsMap);
       if (act) result.push(act);
     });
 
@@ -174,34 +174,34 @@
   }
 
   // Parse a single C++ statement line into a LemLib action object or custom action
-  function parseStatementToAction(stmtStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
-    if (!stmtStr) return null;
+  function parseStatementToAction(stmtStr, defaultMaxSpeed = 127, defaultMinSpeed = 0, recursionDepth = 0, visitedFns = null, customFnsMap = null) {
+    if (!stmtStr || recursionDepth > 4) return null;
     const line = stmtStr.trim().replace(/;$/, "").trim();
     if (!line) return null;
 
+    const activeFnsMap = customFnsMap || getActiveCustomFunctionsMap();
+
     // Check if statement contains an if-else loop or ternary
-    if (/^if\s*\(/i.test(line) || tryParseTernary(line)) {
-      const ifElseAct = parseIfElseFromCode(line, defaultMaxSpeed, defaultMinSpeed);
+    if (recursionDepth <= 2 && (/^if\s*\(/i.test(line) || tryParseTernary(line))) {
+      const ifElseAct = parseIfElseFromCode(line, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, activeFnsMap);
       if (ifElseAct) {
         return ifElseAct;
       }
     }
 
     // Check if statement contains a while or for loop
-    if (/^(while|for)\s*\(/i.test(line)) {
-      const loopAct = parseLoopFromCode(line, defaultMaxSpeed, defaultMinSpeed);
+    if (recursionDepth <= 2 && /^(while|for)\s*\(/i.test(line)) {
+      const loopAct = parseLoopFromCode(line, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, activeFnsMap);
       if (loopAct) {
         return loopAct;
       }
     }
 
-    const customFnsMap = getActiveCustomFunctionsMap();
-
     // moveToPoint (supports both chassis.moveToPoint and custom moveToPoint(x, y, theta))
     const mtPointMatch = line.match(/(?:([a-zA-Z0-9_]+)\.)?moveToPoint\s*\(([^;]+)\)/i);
     if (mtPointMatch) {
       const hasChassisPrefix = !!mtPointMatch[1];
-      return buildMoveToPointOrThetaAction(mtPointMatch[2], hasChassisPrefix, defaultMaxSpeed, defaultMinSpeed, customFnsMap);
+      return buildMoveToPointOrThetaAction(mtPointMatch[2], hasChassisPrefix, defaultMaxSpeed, defaultMinSpeed, activeFnsMap);
     }
 
     // moveToPose (supports both chassis.moveToPose and custom moveToPose(x, y, theta))
@@ -229,10 +229,12 @@
     }
 
     // Check if statement is a call to a user-defined custom function with inferred motion
-    const expandedFromFn = expandCustomFunctionCall(line, customFnsMap, defaultMaxSpeed, defaultMinSpeed, 0);
-    if (expandedFromFn && expandedFromFn.length > 0) {
-      const motionAct = expandedFromFn.find((a) => a.type !== "custom") || expandedFromFn[0];
-      if (motionAct) return motionAct;
+    if (recursionDepth <= 2) {
+      const expandedFromFn = expandCustomFunctionCall(line, activeFnsMap, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, null, visitedFns);
+      if (expandedFromFn && expandedFromFn.length > 0) {
+        const motionAct = expandedFromFn.find((a) => a && REAL_MOTION_TYPES.has(a.type));
+        if (motionAct) return motionAct;
+      }
     }
 
     // chassis.followCurve or spline
@@ -338,9 +340,11 @@
     }
 
     // Auto-detect if-loop or ternary in custom code statement
-    const ifElseAct = parseIfElseFromCode(line, defaultMaxSpeed, defaultMinSpeed);
-    if (ifElseAct) {
-      return ifElseAct;
+    if (recursionDepth <= 2) {
+      const ifElseAct = parseIfElseFromCode(line, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, activeFnsMap);
+      if (ifElseAct) {
+        return ifElseAct;
+      }
     }
 
     // Default custom action
@@ -400,8 +404,8 @@
   }
 
   // Comprehensive C++ if-else loop & ternary detector for custom code
-  function parseIfElseFromCode(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
-    if (!codeStr || typeof codeStr !== "string") return null;
+  function parseIfElseFromCode(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0, recursionDepth = 0, visitedFns = null, customFnsMap = null) {
+    if (!codeStr || typeof codeStr !== "string" || recursionDepth > 3) return null;
     const trimmed = codeStr.trim();
     if (!trimmed) return null;
 
@@ -412,10 +416,10 @@
       act.condition = ternary.condition;
       act.thenCode = ternary.thenExpr + (ternary.thenExpr.endsWith(";") ? "" : ";");
       act.elseCode = ternary.elseExpr + (ternary.elseExpr.endsWith(";") ? "" : ";");
-      act.thenAction = parseStatementToAction(ternary.thenExpr, defaultMaxSpeed, defaultMinSpeed);
-      act.elseAction = parseStatementToAction(ternary.elseExpr, defaultMaxSpeed, defaultMinSpeed);
-      act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
-      act.elseChildren = parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed);
+      act.thenAction = parseStatementToAction(ternary.thenExpr, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+      act.elseAction = parseStatementToAction(ternary.elseExpr, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+      act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+      act.elseChildren = parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
       act.thenLabel = getActionHumanLabel(act.thenAction, ternary.thenExpr);
       act.elseLabel = getActionHumanLabel(act.elseAction, ternary.elseExpr);
       act.isTernary = true;
@@ -514,10 +518,10 @@
     if (act.thenCode && !act.thenCode.endsWith(";") && !act.thenCode.endsWith("}")) act.thenCode += ";";
     if (act.elseCode && !act.elseCode.endsWith(";") && !act.elseCode.endsWith("}")) act.elseCode += ";";
 
-    act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
-    act.elseAction = act.elseCode ? parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed) : null;
-    act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
-    act.elseChildren = act.elseCode ? parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed) : [];
+    act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+    act.elseAction = act.elseCode ? parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap) : null;
+    act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+    act.elseChildren = act.elseCode ? parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap) : [];
     act.thenLabel = getActionHumanLabel(act.thenAction, act.thenCode);
     act.elseLabel = act.elseAction ? getActionHumanLabel(act.elseAction, act.elseCode) : (act.elseCode ? "Custom Action" : "No Action");
     act.isTernary = false;
@@ -525,8 +529,8 @@
   }
 
   // Comprehensive C++ loop detector for custom code
-  function parseLoopFromCode(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0) {
-    if (!codeStr || typeof codeStr !== "string") return null;
+  function parseLoopFromCode(codeStr, defaultMaxSpeed = 127, defaultMinSpeed = 0, recursionDepth = 0, visitedFns = null, customFnsMap = null) {
+    if (!codeStr || typeof codeStr !== "string" || recursionDepth > 3) return null;
     const trimmed = codeStr.trim();
     if (!trimmed) return null;
 
@@ -594,7 +598,7 @@
           act.times = 5;
           act.loopCode = loopCode || "chassis.moveToPoint(24, 24, 2000);";
           if (act.loopCode && !act.loopCode.endsWith(";") && !act.loopCode.endsWith("}")) act.loopCode += ";";
-          act.loopAction = parseStatementToAction(act.loopCode, defaultMaxSpeed, defaultMinSpeed);
+          act.loopAction = parseStatementToAction(act.loopCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
           act.loopLabel = getActionHumanLabel(act.loopAction, act.loopCode);
           return act;
         }
@@ -656,7 +660,7 @@
           act.times = tVal;
           act.loopCode = loopCode || "chassis.moveToPoint(24, 24, 2000);";
           if (act.loopCode && !act.loopCode.endsWith(";") && !act.loopCode.endsWith("}")) act.loopCode += ";";
-          act.loopAction = parseStatementToAction(act.loopCode, defaultMaxSpeed, defaultMinSpeed);
+          act.loopAction = parseStatementToAction(act.loopCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
           act.loopLabel = getActionHumanLabel(act.loopAction, act.loopCode);
           return act;
         }
@@ -791,8 +795,21 @@
     "followCurve", "followSpline", "delay", "Task", "move", "move_velocity",
     "move_absolute", "set_value", "printf", "print"
   ]);
+  const REAL_MOTION_TYPES = new Set([
+    "moveToPoint",
+    "moveToPose",
+    "turnToHeading",
+    "turnToPoint",
+    "swingToHeading",
+    "swingToPoint",
+    "bezierCurve",
+    "wait"
+  ]);
 
   let cachedCustomFunctions = new Map();
+  let cachedProjectFunctionsMap = new Map();
+  let cachedProjectFingerprint = "";
+  const inferredCustomCodeCache = new Map();
 
   function evaluateNumericArg(exprStr, env = {}) {
     if (exprStr == null) return NaN;
@@ -801,6 +818,7 @@
     // Substitute known parameter values from env
     if (env && typeof env === "object") {
       for (const [k, v] of Object.entries(env)) {
+        if (k.startsWith("__")) continue;
         if (v != null && !isNaN(Number(v))) {
           const re = new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
           s = s.replace(re, `(${Number(v)})`);
@@ -844,14 +862,77 @@
     return params;
   }
 
+  // Replace comments with spaces (preserving newlines and character indices) so commented-out functions are ignored
+  function stripCommentsPreserveLength(codeStr) {
+    const chars = codeStr.split("");
+    let inString = false;
+    let strQuote = "";
+    let inSingle = false;
+    let inMulti = false;
+    for (let i = 0; i < chars.length; i++) {
+      const c = chars[i];
+      const prev = i > 0 ? codeStr[i - 1] : "";
+      const next = i < chars.length - 1 ? chars[i + 1] : "";
+      if (inSingle) {
+        if (c === "\n") {
+          inSingle = false;
+        } else {
+          chars[i] = " ";
+        }
+        continue;
+      }
+      if (inMulti) {
+        if (c === "*" && next === "/") {
+          chars[i] = " ";
+          chars[i + 1] = " ";
+          inMulti = false;
+          i++;
+        } else if (c !== "\n") {
+          chars[i] = " ";
+        }
+        continue;
+      }
+      if (inString) {
+        if (c === strQuote && prev !== "\\") inString = false;
+        continue;
+      }
+      if (c === '"' || c === "'") {
+        inString = true;
+        strQuote = c;
+        continue;
+      }
+      if (c === "/" && next === "/") {
+        chars[i] = " ";
+        chars[i + 1] = " ";
+        inSingle = true;
+        i++;
+        continue;
+      }
+      if (c === "/" && next === "*") {
+        chars[i] = " ";
+        chars[i + 1] = " ";
+        inMulti = true;
+        i++;
+        continue;
+      }
+    }
+    return chars.join("");
+  }
+
   function extractFunctionsFromCodeString(codeStr, sourceFile = "inline") {
     const fnMap = new Map();
-    if (!codeStr || typeof codeStr !== "string") return fnMap;
+    const fnList = [];
+    fnMap._orderedList = fnList;
+    if (!codeStr || typeof codeStr !== "string" || codeStr.length > 120000) return fnMap;
 
-    const fnHeaderRegex = /(?:^|[\n;{}])\s*(?:inline\s+|static\s+)?(?:void|int|bool|double|float|auto)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)\s*\{/g;
+    const cleanCode = stripCommentsPreserveLength(codeStr);
+    const fnHeaderRegex = /(?:^|[\n;{}])\s*(?:inline\s+|static\s+)?(?:void|int|bool|double|float|auto)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^);{}]*)\)\s*\{/g;
     let match;
-    while ((match = fnHeaderRegex.exec(codeStr)) !== null) {
+    while ((match = fnHeaderRegex.exec(cleanCode)) !== null) {
       const fnName = match[1];
+      if (RESERVED_CPP_CALLS.has(fnName) && fnName !== "moveToPoint" && fnName !== "moveToPose") {
+        continue;
+      }
       const paramsRaw = match[2] || "";
       const startBodyIdx = fnHeaderRegex.lastIndex;
 
@@ -859,34 +940,13 @@
       let endBodyIdx = startBodyIdx;
       let inString = false;
       let strQuote = "";
-      let inSingleLineComment = false;
-      let inMultiLineComment = false;
 
-      for (let i = startBodyIdx; i < codeStr.length; i++) {
-        const char = codeStr[i];
-        const prevChar = i > startBodyIdx ? codeStr[i - 1] : "";
-        const nextChar = i < codeStr.length - 1 ? codeStr[i + 1] : "";
+      for (let i = startBodyIdx; i < cleanCode.length; i++) {
+        const char = cleanCode[i];
+        const prevChar = i > startBodyIdx ? cleanCode[i - 1] : "";
 
-        if (inSingleLineComment) {
-          if (char === "\n") inSingleLineComment = false;
-          continue;
-        }
-        if (inMultiLineComment) {
-          if (char === "/" && prevChar === "*") inMultiLineComment = false;
-          continue;
-        }
         if (inString) {
           if (char === strQuote && prevChar !== "\\") inString = false;
-          continue;
-        }
-        if (char === "/" && nextChar === "/") {
-          inSingleLineComment = true;
-          i++;
-          continue;
-        }
-        if (char === "/" && nextChar === "*") {
-          inMultiLineComment = true;
-          i++;
           continue;
         }
         if (char === '"' || char === "'") {
@@ -906,13 +966,20 @@
         }
       }
 
+      // Ignore unclosed / malformed function blocks
+      if (depth !== 0) {
+        continue;
+      }
+
       const body = codeStr.substring(startBodyIdx, endBodyIdx);
-      const headerStartIdx = match.index + (match[0].match(/^\s*[\n;{}]/) ? match[0].match(/^\s*[\n;{}]/)[0].length : 0);
+      const prefixMatch = match[0].match(/^\s*[\n;{}]/);
+      const headerStartIdx = match.index + (prefixMatch ? prefixMatch[0].length : 0);
       const params = parseFunctionParamsList(paramsRaw);
+      const isThreeCoordThetaSignature = Boolean(params.length >= 3 && params[2].isThetaLike);
 
       // Check if body contains moveToPoint(x, y, theta) or other LemLib movements
       const mtpInBodyMatch = body.match(/(?:[a-zA-Z0-9_]+\.)?moveToPoint\s*\(([^;)]+)\)/i);
-      let hasMoveToPointTheta = false;
+      let hasMoveToPointTheta = isThreeCoordThetaSignature && fnName === "moveToPoint";
       if (mtpInBodyMatch) {
         const bodyMtpArgs = splitCppArgsSafe(mtpInBodyMatch[1]).filter((a) => {
           const t = a.trim();
@@ -934,7 +1001,7 @@
       const hasMoveToPoint3 = !!mtpInBodyMatch;
       const hasAnyMotion = /(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline)/i.test(body);
 
-      fnMap.set(fnName, {
+      const fnDef = {
         name: fnName,
         params,
         paramsRaw: paramsRaw.trim(),
@@ -945,20 +1012,44 @@
         hasMoveToPoint3,
         hasMoveToPointTheta,
         hasAnyMotion,
-      });
+        isThreeCoordThetaSignature,
+      };
+      fnMap.set(fnName, fnDef);
+      fnList.push(fnDef);
     }
     return fnMap;
   }
 
-  function extractCustomFunctions(rawCode = "", extraFiles = null) {
-    const combined = new Map(cachedCustomFunctions);
+  function shouldScanProjectFile(fileName, content) {
+    if (!fileName || typeof content !== "string") return false;
+    if (content.length > 100000) return false;
+    if (!/\.(cpp|cc|cxx|c|hpp|hh|h)$/i.test(fileName)) return false;
+    // Skip vendor/SDK headers and build artifacts (liblvgl, pros, lemlib, okapi, firmware, etc.)
+    if (/(?:^|\/)(?:include\/(?:liblvgl|pros|lemlib|okapi|display|Eigen)|firmware|bin|build|\.cache|\.d\b)/i.test(fileName)) {
+      return false;
+    }
+    return true;
+  }
 
-    // 1. Collect from project files if available in browser or passed via options
+  function computeProjectFingerprint(filesObj) {
+    if (!filesObj || typeof filesObj !== "object") return "";
+    const parts = [];
+    const keys = Object.keys(filesObj).sort();
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      const v = filesObj[k];
+      if (!shouldScanProjectFile(k, v)) continue;
+      parts.push(`${k}:${v.length}:${v.slice(0, 48)}:${v.slice(-48)}`);
+    }
+    return parts.join("|");
+  }
+
+  function extractCustomFunctions(rawCode = "", extraFiles = null) {
     let filesObj = extraFiles || (typeof window !== "undefined" && window.ProjectManager && window.ProjectManager.project && window.ProjectManager.project.files
       ? window.ProjectManager.project.files
       : null);
 
-    if (!filesObj && typeof localStorage !== "undefined") {
+    if (!filesObj && cachedProjectFunctionsMap.size === 0 && typeof localStorage !== "undefined") {
       try {
         const savedProj = localStorage.getItem("vex_pros_project_v1");
         if (savedProj) {
@@ -971,14 +1062,23 @@
     }
 
     if (filesObj && typeof filesObj === "object") {
-      Object.entries(filesObj).forEach(([fileName, content]) => {
-        if (typeof content !== "string") return;
-        const fileFns = extractFunctionsFromCodeString(content, fileName);
-        fileFns.forEach((def, name) => {
-          combined.set(name, def);
+      const fp = computeProjectFingerprint(filesObj);
+      if (fp !== cachedProjectFingerprint) {
+        const nextProjMap = new Map();
+        Object.entries(filesObj).forEach(([fileName, content]) => {
+          if (!shouldScanProjectFile(fileName, content)) return;
+          const fileFns = extractFunctionsFromCodeString(content, fileName);
+          fileFns.forEach((def, name) => {
+            nextProjMap.set(name, def);
+          });
         });
-      });
+        cachedProjectFunctionsMap = nextProjMap;
+        cachedProjectFingerprint = fp;
+        inferredCustomCodeCache.clear();
+      }
     }
+
+    const combined = new Map(cachedProjectFunctionsMap);
 
     // 2. Collect from current rawCode (overrides project files if redefined locally)
     if (rawCode && typeof rawCode === "string") {
@@ -996,7 +1096,6 @@
     if (rawCode || extraFiles || cachedCustomFunctions.size === 0) {
       return extractCustomFunctions(rawCode, extraFiles);
     }
-    // Refresh from ProjectManager if available
     if (typeof window !== "undefined" && window.ProjectManager && window.ProjectManager.project && window.ProjectManager.project.files) {
       return extractCustomFunctions("", window.ProjectManager.project.files);
     }
@@ -1034,28 +1133,25 @@
     } else if (scalarArgs.length === 3) {
       const rawArg3 = scalarArgs[2].trim();
       const val3 = evaluateNumericArg(rawArg3, paramEnv);
-      const arg3IsThetaIdent =
-        Boolean(paramEnv && paramEnv.__forceMoveToPointTheta) ||
-        THETA_PARAM_REGEX.test(rawArg3) ||
-        (paramEnv && paramEnv.__thetaParams && paramEnv.__thetaParams.has(rawArg3)) ||
-        (customMoveToPointDef && (customMoveToPointDef.hasMoveToPointTheta || (customMoveToPointDef.params.length >= 3 && customMoveToPointDef.params[2].isThetaLike)));
 
-      if (arg3IsThetaIdent) {
-        hasThetaArg = true;
-        inferredTheta = isNaN(val3) ? 0 : val3;
-        inferredTimeout = 2000;
-      } else if (!hasChassisPrefix && !isNaN(val3) && Math.abs(val3) <= 360) {
-        // Bare moveToPoint(x, y, theta) where 3rd arg is an angle in [-360, 360]
-        hasThetaArg = true;
-        inferredTheta = val3;
-        inferredTimeout = 2000;
-      } else if (!isNaN(val3) && Math.abs(val3) <= 360) {
-        // Even with chassis.moveToPoint(x, y, theta), any 3rd arg in [-360, 360] is a heading angle (timeouts in ms are >= 400)
-        hasThetaArg = true;
-        inferredTheta = val3;
-        inferredTimeout = 2000;
-      } else {
+      // Numeric values > 360 are always timeouts in milliseconds (e.g., 2000ms), never heading angles
+      if (!isNaN(val3) && Math.abs(val3) > 360) {
+        hasThetaArg = false;
         inferredTimeout = parseInt(val3, 10) || 2000;
+      } else {
+        const arg3IsThetaIdent =
+          Boolean(paramEnv && paramEnv.__forceMoveToPointTheta) ||
+          THETA_PARAM_REGEX.test(rawArg3) ||
+          (paramEnv && paramEnv.__thetaParams && paramEnv.__thetaParams.has(rawArg3)) ||
+          (customMoveToPointDef && (customMoveToPointDef.hasMoveToPointTheta || customMoveToPointDef.isThreeCoordThetaSignature || (customMoveToPointDef.params.length >= 3 && customMoveToPointDef.params[2].isThetaLike)));
+
+        if (arg3IsThetaIdent || (!isNaN(val3) && Math.abs(val3) <= 360)) {
+          hasThetaArg = true;
+          inferredTheta = isNaN(val3) ? 0 : val3;
+          inferredTimeout = 2000;
+        } else {
+          inferredTimeout = parseInt(val3, 10) || 2000;
+        }
       }
     }
 
@@ -1102,7 +1198,7 @@
         env.__forceMoveToPointTheta = true;
       }
     }
-    if (fnDef && fnDef.hasMoveToPointTheta) {
+    if (fnDef && (fnDef.hasMoveToPointTheta || fnDef.isThreeCoordThetaSignature)) {
       env.__forceMoveToPointTheta = true;
     }
 
@@ -1133,8 +1229,8 @@
     return { substituted, env };
   }
 
-  function expandCustomFunctionCall(stmtStr, customFnsMap = null, defaultMaxSpeed = 127, defaultMinSpeed = 0, depth = 0, parentEnv = null) {
-    if (!stmtStr || depth > 4) return null;
+  function expandCustomFunctionCall(stmtStr, customFnsMap = null, defaultMaxSpeed = 127, defaultMinSpeed = 0, depth = 0, parentEnv = null, visitedFns = null) {
+    if (!stmtStr || depth > 3) return null;
     const clean = stmtStr.trim().replace(/;$/, "").trim();
     if (!clean) return null;
 
@@ -1144,6 +1240,12 @@
 
     const fnName = callMatch[1];
     if (RESERVED_CPP_CALLS.has(fnName)) return null;
+
+    const activeVisited = visitedFns ? new Set(visitedFns) : new Set();
+    if (activeVisited.has(fnName)) {
+      return null; // Prevent direct or mutual recursion cycles
+    }
+    activeVisited.add(fnName);
 
     const rawArgsStr = callMatch[2].trim();
     const callArgs = rawArgsStr ? splitCppArgsSafe(rawArgsStr) : [];
@@ -1158,23 +1260,33 @@
         customFunctionsMap: fns,
         paramEnv: env,
         _recursionDepth: depth + 1,
+        _visitedFns: activeVisited,
       });
 
+      const callSig = `${fnName}(${callArgs.map((a) => {
+        const v = evaluateNumericArg(a, parentEnv);
+        return !isNaN(v) ? v : a;
+      }).join(", ")})`;
+
       if (subResult && Array.isArray(subResult.actions) && subResult.actions.length > 0) {
-        const hasInferredMotion = subResult.actions.some((a) => a.type !== "custom");
-        if (hasInferredMotion) {
-          const callSig = `${fnName}(${callArgs.map((a) => {
-            const v = evaluateNumericArg(a, parentEnv);
-            return !isNaN(v) ? v : a;
-          }).join(", ")})`;
-          subResult.actions.forEach((a) => {
+        const realMotionActions = subResult.actions.filter((a) => a && REAL_MOTION_TYPES.has(a.type));
+        if (realMotionActions.length > 0) {
+          realMotionActions.forEach((a) => {
             a.inferredFromCustomFn = callSig;
             if (!a.label) {
               a.label = `via ${callSig}`;
             }
           });
-          return subResult.actions;
+          return realMotionActions;
         }
+      }
+
+      // If function definition has a (x, y, theta) signature (e.g. custom PID body without LemLib calls), infer moveToPose directly
+      if (fnDef.isThreeCoordThetaSignature && callArgs.length >= 3) {
+        const act = buildMoveToPointOrThetaAction(rawArgsStr, false, defaultMaxSpeed, defaultMinSpeed, fns, env);
+        act.inferredFromCustomFn = callSig;
+        act.label = `via ${callSig}`;
+        return [act];
       }
     }
 
@@ -1210,9 +1322,10 @@
     const defaultMaxSpeed = options.defaultMaxSpeed || 127;
     const defaultMinSpeed = options.defaultMinSpeed || 0;
     const recursionDepth = options._recursionDepth || 0;
+    const visitedFns = options._visitedFns || null;
     let paramEnv = options.paramEnv || null;
 
-    if (!rawCode || !rawCode.trim()) {
+    if (!rawCode || !rawCode.trim() || recursionDepth > 4) {
       return {
         success: false,
         routineName: "Imported Auton",
@@ -1228,12 +1341,15 @@
 
     // Build custom functions map from project files + rawCode
     const customFnsMap = options.customFunctionsMap || extractCustomFunctions(rawCode, options.projectFiles);
-    const localFnsMap = extractFunctionsFromCodeString(rawCode, "snippet");
+    const localFnsMap = recursionDepth === 0 ? extractFunctionsFromCodeString(rawCode, "snippet") : new Map();
 
     // Determine which function in rawCode is the primary autonomous routine vs helper functions
     let targetCodeToParse = rawCode;
+    let standaloneThreeCoordFn = null;
+    let standaloneSampleArgs = null;
+
     if (localFnsMap.size > 0 && recursionDepth === 0) {
-      const fnList = Array.from(localFnsMap.values());
+      const fnList = localFnsMap._orderedList || Array.from(localFnsMap.values());
       // Find which functions are called by other functions in this snippet
       const calledFnNames = new Set();
       fnList.forEach((f) => {
@@ -1269,8 +1385,10 @@
         let outsideCode = "";
         let lastIdx = 0;
         fnList.forEach((f) => {
-          outsideCode += rawCode.slice(lastIdx, f.headerStartIdx) + "\n";
-          lastIdx = f.fullEndIdx;
+          if (f.headerStartIdx >= lastIdx) {
+            outsideCode += rawCode.slice(lastIdx, f.headerStartIdx) + "\n";
+            lastIdx = f.fullEndIdx;
+          }
         });
         outsideCode += rawCode.slice(lastIdx);
         const hasOutsideExecutable = outsideCode
@@ -1294,6 +1412,10 @@
           const sub = substituteParamsInBody(mainFn.body, mainFn.params, sampleArgs, paramEnv, mainFn);
           paramEnv = sub.env;
           targetCodeToParse = sub.substituted;
+          if (mainFn.isThreeCoordThetaSignature || mainFn.name === "moveToPoint") {
+            standaloneThreeCoordFn = mainFn;
+            standaloneSampleArgs = sampleArgs;
+          }
           log.push(`Inferred motion blocks from parameterized function definition: ${mainFn.name}(${mainFn.paramsRaw})`);
         } else {
           targetCodeToParse = mainFn.body + (hasOutsideExecutable ? "\n" + outsideCode : "");
@@ -1333,40 +1455,42 @@
         return;
       }
 
-      // Check if custom code block contains an if-else loop or ternary
-      const detectedIf = parseIfElseFromCode(fullCode, defaultMaxSpeed, defaultMinSpeed);
-      if (detectedIf) {
-        if (pendingComments.length > 0) {
-          detectedIf.label = pendingComments.join(" · ").trim();
-          pendingComments = [];
-        } else {
-          const cMatch = fullCode.match(/\/\/\s*(.+)$/m);
-          if (cMatch) {
-            detectedIf.label = cleanCommentText(cMatch[1]);
+      // Check if custom code block contains an if-else loop or ternary (only at top level or shallow depth)
+      if (recursionDepth <= 1) {
+        const detectedIf = parseIfElseFromCode(fullCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+        if (detectedIf) {
+          if (pendingComments.length > 0) {
+            detectedIf.label = pendingComments.join(" · ").trim();
+            pendingComments = [];
+          } else {
+            const cMatch = fullCode.match(/\/\/\s*(.+)$/m);
+            if (cMatch) {
+              detectedIf.label = cleanCommentText(cMatch[1]);
+            }
           }
+          actions.push(detectedIf);
+          log.push(`Auto-detected if loop in custom code block: if (${detectedIf.condition}) then "${detectedIf.thenLabel}" else "${detectedIf.elseLabel}"`);
+          pendingCustomLines = [];
+          return;
         }
-        actions.push(detectedIf);
-        log.push(`Auto-detected if loop in custom code block: if (${detectedIf.condition}) then "${detectedIf.thenLabel}" else "${detectedIf.elseLabel}"`);
-        pendingCustomLines = [];
-        return;
-      }
 
-      // Check if custom code block contains a while or for loop
-      const detectedLoop = parseLoopFromCode(fullCode, defaultMaxSpeed, defaultMinSpeed);
-      if (detectedLoop) {
-        if (pendingComments.length > 0) {
-          detectedLoop.label = pendingComments.join(" · ").trim();
-          pendingComments = [];
-        } else {
-          const cMatch = fullCode.match(/\/\/\s*(.+)$/m);
-          if (cMatch) {
-            detectedLoop.label = cleanCommentText(cMatch[1]);
+        // Check if custom code block contains a while or for loop
+        const detectedLoop = parseLoopFromCode(fullCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+        if (detectedLoop) {
+          if (pendingComments.length > 0) {
+            detectedLoop.label = pendingComments.join(" · ").trim();
+            pendingComments = [];
+          } else {
+            const cMatch = fullCode.match(/\/\/\s*(.+)$/m);
+            if (cMatch) {
+              detectedLoop.label = cleanCommentText(cMatch[1]);
+            }
           }
+          actions.push(detectedLoop);
+          log.push(`Auto-detected loop in custom code block: mode ${detectedLoop.loopMode}, condition ${detectedLoop.condition}`);
+          pendingCustomLines = [];
+          return;
         }
-        actions.push(detectedLoop);
-        log.push(`Auto-detected loop in custom code block: mode ${detectedLoop.loopMode}, condition ${detectedLoop.condition}`);
-        pendingCustomLines = [];
-        return;
       }
 
       const customAct = createDefaultAction("custom", defaultMaxSpeed, defaultMinSpeed);
@@ -1451,15 +1575,15 @@
       }
 
       // Check for C++ ternary conditional: condition ? expression_if_true : expression_if_false;
-      const ternary = tryParseTernary(line);
+      const ternary = recursionDepth <= 2 ? tryParseTernary(line) : null;
       if (ternary) {
         flushCustomBlock();
         const act = createDefaultAction("ifElse", defaultMaxSpeed, defaultMinSpeed);
         act.condition = ternary.condition;
         act.thenCode = ternary.thenExpr + (!ternary.thenExpr.endsWith(";") ? ";" : "");
         act.elseCode = ternary.elseExpr + (!ternary.elseExpr.endsWith(";") ? ";" : "");
-        act.thenAction = parseStatementToAction(ternary.thenExpr, defaultMaxSpeed, defaultMinSpeed);
-        act.elseAction = parseStatementToAction(ternary.elseExpr, defaultMaxSpeed, defaultMinSpeed);
+        act.thenAction = parseStatementToAction(ternary.thenExpr, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+        act.elseAction = parseStatementToAction(ternary.elseExpr, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
         act.thenLabel = getActionHumanLabel(act.thenAction, ternary.thenExpr);
         act.elseLabel = getActionHumanLabel(act.elseAction, ternary.elseExpr);
         if (inlineComment) act.label = inlineComment;
@@ -1473,7 +1597,7 @@
       }
 
       // Check for C++ if (...) loops / conditionals
-      if (/^if\s*\(/i.test(line)) {
+      if (recursionDepth <= 2 && /^if\s*\(/i.test(line)) {
         flushCustomBlock();
         // Extract condition between if ( and matching )
         const openParenIdx = line.indexOf("(");
@@ -1654,10 +1778,10 @@
         act.condition = condition;
         act.thenCode = thenLines.filter(Boolean).join("\n").trim() || "chassis.moveToPoint(24, 24, 2000);";
         act.elseCode = elseLines.filter(Boolean).join("\n").trim() || "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});";
-        act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
-        act.elseAction = parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed);
-        act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed);
-        act.elseChildren = act.elseCode ? parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed) : [];
+        act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+        act.elseAction = parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+        act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+        act.elseChildren = act.elseCode ? parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap) : [];
         act.thenLabel = getActionHumanLabel(act.thenAction, act.thenCode);
         act.elseLabel = getActionHumanLabel(act.elseAction, act.elseCode);
 
@@ -1875,7 +1999,8 @@
         defaultMaxSpeed,
         defaultMinSpeed,
         recursionDepth,
-        paramEnv
+        paramEnv,
+        visitedFns
       );
       if (expandedActs && expandedActs.length > 0) {
         flushCustomBlock();
@@ -1944,6 +2069,23 @@
     }
 
     flushCustomBlock();
+
+    // If a standalone (x, y, theta) function definition was parsed (e.g. void moveToPoint(double x, double y, double theta) { /* custom PID */ })
+    // and its body had no direct LemLib motion calls, synthesize the inferred moveToPose action from its signature
+    if (standaloneThreeCoordFn && standaloneSampleArgs && !actions.some((a) => REAL_MOTION_TYPES.has(a.type))) {
+      const synthAct = buildMoveToPointOrThetaAction(
+        standaloneSampleArgs.join(", "),
+        false,
+        defaultMaxSpeed,
+        defaultMinSpeed,
+        customFnsMap,
+        paramEnv
+      );
+      synthAct.inferredFromCustomFn = `${standaloneThreeCoordFn.name}(${standaloneThreeCoordFn.paramsRaw})`;
+      synthAct.label = `via ${standaloneThreeCoordFn.name}(${standaloneSampleArgs.join(", ")})`;
+      actions.unshift(synthAct);
+      log.push(`Synthesized moveToPose block from custom ${standaloneThreeCoordFn.name}(x, y, theta) definition`);
+    }
 
     // Contextual Multitask Post-processing
     for (let i = 0; i < actions.length - 1; i++) {
@@ -2150,25 +2292,46 @@ void autonomous() {
 
   // Infer LemLib motion/control actions from a custom C++ snippet or custom function call
   function inferActionsFromCustomCode(customCode, options = {}) {
-    if (!customCode || typeof customCode !== "string" || !customCode.trim()) {
+    if (!customCode || typeof customCode !== "string" || !customCode.trim() || customCode.length > 20000) {
       return { hasMotion: false, motionActions: [], allActions: [], summaryLabel: "" };
     }
     const defaultMaxSpeed = options.defaultMaxSpeed || 127;
     const defaultMinSpeed = options.defaultMinSpeed || 0;
+
+    // Ensure project functions cache is fresh before computing cache key
+    if (!options.projectFiles) {
+      getActiveCustomFunctionsMap();
+    }
+    const cacheKey = !options.projectFiles
+      ? `${defaultMaxSpeed}|${defaultMinSpeed}|${cachedProjectFingerprint}|${customCode}`
+      : null;
+
+    if (cacheKey && inferredCustomCodeCache.has(cacheKey)) {
+      return inferredCustomCodeCache.get(cacheKey);
+    }
+
     const parsed = parseCppAuton(customCode, {
       defaultMaxSpeed,
       defaultMinSpeed,
       projectFiles: options.projectFiles || null,
     });
     const allActions = (parsed && Array.isArray(parsed.actions)) ? parsed.actions : [];
-    const motionActions = allActions.filter((a) => a && a.type !== "custom");
+    const motionActions = allActions.filter((a) => a && REAL_MOTION_TYPES.has(a.type));
     const summaryParts = motionActions.map((a) => getActionHumanLabel(a, ""));
-    return {
+    const result = {
       hasMotion: motionActions.length > 0,
       motionActions,
       allActions,
       summaryLabel: summaryParts.join(" → "),
     };
+
+    if (cacheKey) {
+      if (inferredCustomCodeCache.size > 250) {
+        inferredCustomCodeCache.clear();
+      }
+      inferredCustomCodeCache.set(cacheKey, result);
+    }
+    return result;
   }
 
   return {

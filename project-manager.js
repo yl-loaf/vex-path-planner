@@ -1801,7 +1801,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
 
       if (typeof window !== "undefined" && window.CppTranslator && typeof window.CppTranslator.extractCustomFunctions === "function") {
         try {
-          window.CppTranslator.extractCustomFunctions("", files);
+          window.CppTranslator.extractCustomFunctions("", this.project.files);
         } catch (_) {}
       }
 

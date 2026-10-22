@@ -7416,6 +7416,7 @@
   function buildSimPath() {
     if (!isSimPathDirty && simSegments.length > 0) return;
     const wasDirty = isSimPathDirty;
+    isSimPathDirty = false;
     simSegments = [];
     simPath = [];
     let cur = { x: pose.x, y: pose.y, theta: pose.theta };
@@ -7423,49 +7424,52 @@
     const initPhys = calculateStepPhysics(0, 0, 0, 0.01, getRobotPhysicsProps(bot), bot);
     simPath.push({ ...cur, t: 0, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
 
-    for (let aIdx = 0; aIdx < actions.length; aIdx++) {
-      const a = actions[aIdx];
-      const seg = simulateAction(a, cur, bot);
-      simSegments.push({
-        action: a,
-        points: seg.path,
-        endPose: seg.endPose,
-        duration: seg.duration,
-        carrot: seg.carrot,
-        inferredMotion: !!seg.inferredMotion,
-        inferredActions: seg.inferredActions || null,
-        inferredSummary: seg.inferredSummary || "",
-      });
-
-      const segPts = seg.path;
-      for (let i = 1; i < segPts.length; i++) {
-        const pt = segPts[i];
-        simPath.push({
-          x: pt.x,
-          y: pt.y,
-          theta: pt.theta,
-          t: t + pt.t,
-          vLin: pt.vLin,
-          omegaDeg: pt.omegaDeg,
-          targetVLin: pt.targetVLin != null ? pt.targetVLin : 0,
-          targetOmega: pt.targetOmega != null ? pt.targetOmega : 0,
-          aLin: pt.aLin != null ? pt.aLin : 0,
-          gLin: pt.gLin != null ? pt.gLin : 0,
-          gLateral: pt.gLateral != null ? pt.gLateral : 0,
-          gTotal: pt.gTotal != null ? pt.gTotal : 0,
-          isSlipping: !!pt.isSlipping,
-          gripMargin: pt.gripMargin != null ? pt.gripMargin : 100,
-          voltage: pt.voltage != null ? pt.voltage : (bot.batteryVolts || 12.8),
-          current: pt.current != null ? pt.current : 0,
-          watts: pt.watts != null ? pt.watts : 0,
-          actionIdx: aIdx,
+    try {
+      for (let aIdx = 0; aIdx < actions.length; aIdx++) {
+        const a = actions[aIdx];
+        const seg = simulateAction(a, cur, bot);
+        simSegments.push({
           action: a,
+          points: seg.path,
+          endPose: seg.endPose,
+          duration: seg.duration,
+          carrot: seg.carrot,
+          inferredMotion: !!seg.inferredMotion,
+          inferredActions: seg.inferredActions || null,
+          inferredSummary: seg.inferredSummary || "",
         });
+
+        const segPts = seg.path;
+        for (let i = 1; i < segPts.length; i++) {
+          const pt = segPts[i];
+          simPath.push({
+            x: pt.x,
+            y: pt.y,
+            theta: pt.theta,
+            t: t + pt.t,
+            vLin: pt.vLin,
+            omegaDeg: pt.omegaDeg,
+            targetVLin: pt.targetVLin != null ? pt.targetVLin : 0,
+            targetOmega: pt.targetOmega != null ? pt.targetOmega : 0,
+            aLin: pt.aLin != null ? pt.aLin : 0,
+            gLin: pt.gLin != null ? pt.gLin : 0,
+            gLateral: pt.gLateral != null ? pt.gLateral : 0,
+            gTotal: pt.gTotal != null ? pt.gTotal : 0,
+            isSlipping: !!pt.isSlipping,
+            gripMargin: pt.gripMargin != null ? pt.gripMargin : 100,
+            voltage: pt.voltage != null ? pt.voltage : (bot.batteryVolts || 12.8),
+            current: pt.current != null ? pt.current : 0,
+            watts: pt.watts != null ? pt.watts : 0,
+            actionIdx: aIdx,
+            action: a,
+          });
+        }
+        t += seg.duration;
+        cur = { ...seg.endPose };
       }
-      t += seg.duration;
-      cur = { ...seg.endPose };
+    } catch (err) {
+      console.warn("buildSimPath error:", err);
     }
-    isSimPathDirty = false;
 
     if (wasDirty && (typeof drag === "undefined" || drag == null) && !simRunning && !isPathAnimating) {
       triggerPathAnimation();
