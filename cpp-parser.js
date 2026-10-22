@@ -195,37 +195,25 @@
       }
     }
 
-    // moveToPoint
-    const mtPointMatch = line.match(/chassis\.moveToPoint\s*\(([^;]+)\)/i);
+    const customFnsMap = getActiveCustomFunctionsMap();
+
+    // moveToPoint (supports both chassis.moveToPoint and custom moveToPoint(x, y, theta))
+    const mtPointMatch = line.match(/(?:([a-zA-Z0-9_]+)\.)?moveToPoint\s*\(([^;]+)\)/i);
     if (mtPointMatch) {
-      const args = splitCppArgsSafe(mtPointMatch[1]);
-      const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
-      act.x = parseFloat(args[0]) || 0;
-      act.y = parseFloat(args[1]) || 0;
-      act.timeout = parseInt(args[2], 10) || 2000;
-      let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
-      if (structParamStr) {
-        const p = parseLemlibStructParams(structParamStr);
-        act.forwards = p.forwards;
-        if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
-        if (p.minSpeed != null) act.minSpeed = p.minSpeed;
-        if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
-        if (p.async) act.async = true;
-      }
-      if (args[args.length - 1]?.trim().toLowerCase() === "true") act.async = true;
-      return act;
+      const hasChassisPrefix = !!mtPointMatch[1];
+      return buildMoveToPointOrThetaAction(mtPointMatch[2], hasChassisPrefix, defaultMaxSpeed, defaultMinSpeed, customFnsMap);
     }
 
-    // moveToPose
-    const mtPoseMatch = line.match(/chassis\.moveToPose\s*\(([^;]+)\)/i);
+    // moveToPose (supports both chassis.moveToPose and custom moveToPose(x, y, theta))
+    const mtPoseMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?moveToPose\s*\(([^;]+)\)/i);
     if (mtPoseMatch) {
       const isBezier = /bezier|spline/i.test(line);
       const args = splitCppArgsSafe(mtPoseMatch[1]);
       const act = createDefaultAction(isBezier ? "bezierCurve" : "moveToPose", defaultMaxSpeed, defaultMinSpeed);
-      act.x = parseFloat(args[0]) || 0;
-      act.y = parseFloat(args[1]) || 0;
-      act.theta = parseFloat(args[2]) || 0;
-      act.timeout = parseInt(args[3], 10) || 2500;
+      act.x = evaluateNumericArg(args[0]) || 0;
+      act.y = evaluateNumericArg(args[1]) || 0;
+      act.theta = evaluateNumericArg(args[2]) || 0;
+      act.timeout = parseInt(evaluateNumericArg(args[3]), 10) || 2500;
       let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
       if (structParamStr) {
         const p = parseLemlibStructParams(structParamStr);
@@ -238,6 +226,13 @@
       }
       if (args[args.length - 1]?.trim().toLowerCase() === "true") act.async = true;
       return act;
+    }
+
+    // Check if statement is a call to a user-defined custom function with inferred motion
+    const expandedFromFn = expandCustomFunctionCall(line, customFnsMap, defaultMaxSpeed, defaultMinSpeed, 0);
+    if (expandedFromFn && expandedFromFn.length > 0) {
+      const motionAct = expandedFromFn.find((a) => a.type !== "custom") || expandedFromFn[0];
+      if (motionAct) return motionAct;
     }
 
     // chassis.followCurve or spline
@@ -785,10 +780,437 @@
     };
   }
 
+  // -------------------------------------------------------------
+  // Custom Function Definition Extraction & Motion Inference
+  // -------------------------------------------------------------
+  const THETA_PARAM_REGEX = /^(theta|heading|angle|deg|degrees|dir|h|th|yaw|target_?theta|target_?heading|end_?theta|final_?heading)$/i;
+  const RESERVED_CPP_CALLS = new Set([
+    "if", "else", "while", "for", "switch", "case", "return", "sizeof", "alignof",
+    "setPose", "moveToPoint", "moveToPose", "turnToPoint", "turnToHeading",
+    "swingToPoint", "swingToHeading", "waitUntil", "waitUntilDone", "follow",
+    "followCurve", "followSpline", "delay", "Task", "move", "move_velocity",
+    "move_absolute", "set_value", "printf", "print"
+  ]);
+
+  let cachedCustomFunctions = new Map();
+
+  function evaluateNumericArg(exprStr, env = {}) {
+    if (exprStr == null) return NaN;
+    let s = String(exprStr).trim();
+    if (!s) return NaN;
+    // Substitute known parameter values from env
+    if (env && typeof env === "object") {
+      for (const [k, v] of Object.entries(env)) {
+        if (v != null && !isNaN(Number(v))) {
+          const re = new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
+          s = s.replace(re, `(${Number(v)})`);
+        }
+      }
+    }
+    // Strip trailing float suffixes like 24.0f
+    s = s.replace(/(\d)f\b/gi, "$1");
+    // Only evaluate if expression consists purely of numbers, arithmetic operators, and parens
+    if (/^[0-9.+\-*/()\s]+$/.test(s)) {
+      try {
+        const val = Function(`"use strict"; return (${s});`)();
+        if (typeof val === "number" && isFinite(val)) {
+          return Number(val.toFixed(3));
+        }
+      } catch (_) {}
+    }
+    const direct = parseFloat(s);
+    return isNaN(direct) ? NaN : direct;
+  }
+
+  function parseFunctionParamsList(paramsStr) {
+    if (!paramsStr || !paramsStr.trim() || paramsStr.trim() === "void") return [];
+    const parts = splitCppArgsSafe(paramsStr);
+    const params = [];
+    parts.forEach((part, idx) => {
+      let clean = part.replace(/\/\*.*?\*\//g, "").trim();
+      if (!clean) return;
+      let defaultVal = null;
+      const eqIdx = clean.indexOf("=");
+      if (eqIdx !== -1) {
+        defaultVal = clean.slice(eqIdx + 1).trim();
+        clean = clean.slice(0, eqIdx).trim();
+      }
+      const tokens = clean.replace(/[&*]+/g, " ").trim().split(/\s+/);
+      const name = tokens[tokens.length - 1] || `param${idx}`;
+      const type = tokens.slice(0, -1).join(" ") || "double";
+      const isThetaLike = THETA_PARAM_REGEX.test(name) || (idx === 2 && /^(x|target_?x|px)$/i.test(params[0]?.name || "") && /^(y|target_?y|py)$/i.test(params[1]?.name || ""));
+      params.push({ name, type, defaultVal, index: idx, isThetaLike });
+    });
+    return params;
+  }
+
+  function extractFunctionsFromCodeString(codeStr, sourceFile = "inline") {
+    const fnMap = new Map();
+    if (!codeStr || typeof codeStr !== "string") return fnMap;
+
+    const fnHeaderRegex = /(?:^|[\n;{}])\s*(?:inline\s+|static\s+)?(?:void|int|bool|double|float|auto)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)\s*\{/g;
+    let match;
+    while ((match = fnHeaderRegex.exec(codeStr)) !== null) {
+      const fnName = match[1];
+      const paramsRaw = match[2] || "";
+      const startBodyIdx = fnHeaderRegex.lastIndex;
+
+      let depth = 1;
+      let endBodyIdx = startBodyIdx;
+      let inString = false;
+      let strQuote = "";
+      let inSingleLineComment = false;
+      let inMultiLineComment = false;
+
+      for (let i = startBodyIdx; i < codeStr.length; i++) {
+        const char = codeStr[i];
+        const prevChar = i > startBodyIdx ? codeStr[i - 1] : "";
+        const nextChar = i < codeStr.length - 1 ? codeStr[i + 1] : "";
+
+        if (inSingleLineComment) {
+          if (char === "\n") inSingleLineComment = false;
+          continue;
+        }
+        if (inMultiLineComment) {
+          if (char === "/" && prevChar === "*") inMultiLineComment = false;
+          continue;
+        }
+        if (inString) {
+          if (char === strQuote && prevChar !== "\\") inString = false;
+          continue;
+        }
+        if (char === "/" && nextChar === "/") {
+          inSingleLineComment = true;
+          i++;
+          continue;
+        }
+        if (char === "/" && nextChar === "*") {
+          inMultiLineComment = true;
+          i++;
+          continue;
+        }
+        if (char === '"' || char === "'") {
+          inString = true;
+          strQuote = char;
+          continue;
+        }
+        if (char === "{") {
+          depth++;
+        } else if (char === "}") {
+          depth--;
+          if (depth === 0) {
+            endBodyIdx = i;
+            fnHeaderRegex.lastIndex = i + 1;
+            break;
+          }
+        }
+      }
+
+      const body = codeStr.substring(startBodyIdx, endBodyIdx);
+      const headerStartIdx = match.index + (match[0].match(/^\s*[\n;{}]/) ? match[0].match(/^\s*[\n;{}]/)[0].length : 0);
+      const params = parseFunctionParamsList(paramsRaw);
+
+      // Check if body contains moveToPoint(x, y, theta) or other LemLib movements
+      const mtpInBodyMatch = body.match(/(?:[a-zA-Z0-9_]+\.)?moveToPoint\s*\(([^;)]+)\)/i);
+      let hasMoveToPointTheta = false;
+      if (mtpInBodyMatch) {
+        const bodyMtpArgs = splitCppArgsSafe(mtpInBodyMatch[1]).filter((a) => {
+          const t = a.trim();
+          return !(t.startsWith("{") && t.endsWith("}"));
+        });
+        if (bodyMtpArgs.length >= 3) {
+          const thirdArg = bodyMtpArgs[2].trim();
+          const matchedParam = params.find((p) => p.name === thirdArg);
+          if (matchedParam && !/^(timeout|time|ms|duration)$/i.test(matchedParam.name)) {
+            matchedParam.isThetaLike = true;
+            hasMoveToPointTheta = true;
+          } else if (THETA_PARAM_REGEX.test(thirdArg) || bodyMtpArgs.length >= 4) {
+            hasMoveToPointTheta = true;
+          } else if (!isNaN(parseFloat(thirdArg)) && Math.abs(parseFloat(thirdArg)) <= 360) {
+            hasMoveToPointTheta = true;
+          }
+        }
+      }
+      const hasMoveToPoint3 = !!mtpInBodyMatch;
+      const hasAnyMotion = /(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline)/i.test(body);
+
+      fnMap.set(fnName, {
+        name: fnName,
+        params,
+        paramsRaw: paramsRaw.trim(),
+        body,
+        sourceFile,
+        headerStartIdx,
+        fullEndIdx: endBodyIdx + 1,
+        hasMoveToPoint3,
+        hasMoveToPointTheta,
+        hasAnyMotion,
+      });
+    }
+    return fnMap;
+  }
+
+  function extractCustomFunctions(rawCode = "", extraFiles = null) {
+    const combined = new Map(cachedCustomFunctions);
+
+    // 1. Collect from project files if available in browser or passed via options
+    let filesObj = extraFiles || (typeof window !== "undefined" && window.ProjectManager && window.ProjectManager.project && window.ProjectManager.project.files
+      ? window.ProjectManager.project.files
+      : null);
+
+    if (!filesObj && typeof localStorage !== "undefined") {
+      try {
+        const savedProj = localStorage.getItem("vex_pros_project_v1");
+        if (savedProj) {
+          const parsedProj = JSON.parse(savedProj);
+          if (parsedProj && parsedProj.files && typeof parsedProj.files === "object") {
+            filesObj = parsedProj.files;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (filesObj && typeof filesObj === "object") {
+      Object.entries(filesObj).forEach(([fileName, content]) => {
+        if (typeof content !== "string") return;
+        const fileFns = extractFunctionsFromCodeString(content, fileName);
+        fileFns.forEach((def, name) => {
+          combined.set(name, def);
+        });
+      });
+    }
+
+    // 2. Collect from current rawCode (overrides project files if redefined locally)
+    if (rawCode && typeof rawCode === "string") {
+      const localFns = extractFunctionsFromCodeString(rawCode, "local");
+      localFns.forEach((def, name) => {
+        combined.set(name, def);
+      });
+    }
+
+    cachedCustomFunctions = combined;
+    return combined;
+  }
+
+  function getActiveCustomFunctionsMap(rawCode = "", extraFiles = null) {
+    if (rawCode || extraFiles || cachedCustomFunctions.size === 0) {
+      return extractCustomFunctions(rawCode, extraFiles);
+    }
+    // Refresh from ProjectManager if available
+    if (typeof window !== "undefined" && window.ProjectManager && window.ProjectManager.project && window.ProjectManager.project.files) {
+      return extractCustomFunctions("", window.ProjectManager.project.files);
+    }
+    return cachedCustomFunctions;
+  }
+
+  // Build either a moveToPoint or moveToPose action, inferring theta when moveToPoint(x, y, theta) is used
+  function buildMoveToPointOrThetaAction(rawArgsStr, hasChassisPrefix, defaultMaxSpeed = 127, defaultMinSpeed = 0, customFnsMap = null, paramEnv = null) {
+    const args = splitCppArgsSafe(rawArgsStr);
+    const structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
+    const lastArg = args[args.length - 1]?.trim().toLowerCase();
+    const hasExplicitAsyncBool = lastArg === "true" || lastArg === "false";
+
+    // Extract scalar positional arguments (excluding {...} struct and trailing async bool)
+    const scalarArgs = args.filter((a, idx) => {
+      const t = a.trim();
+      if (t.startsWith("{") && t.endsWith("}")) return false;
+      if (idx === args.length - 1 && (t.toLowerCase() === "true" || t.toLowerCase() === "false") && idx >= 3) return false;
+      return true;
+    });
+
+    // Determine if moveToPoint is being called with (x, y, theta, [timeout])
+    let hasThetaArg = false;
+    let inferredTheta = 0;
+    let inferredTimeout = 2000;
+
+    const customMoveToPointDef = customFnsMap && customFnsMap.get("moveToPoint");
+
+    if (scalarArgs.length >= 4) {
+      // 4 scalar args: moveToPoint(x, y, theta, timeout)
+      hasThetaArg = true;
+      inferredTheta = evaluateNumericArg(scalarArgs[2], paramEnv);
+      if (isNaN(inferredTheta)) inferredTheta = 0;
+      inferredTimeout = parseInt(evaluateNumericArg(scalarArgs[3], paramEnv), 10) || 2000;
+    } else if (scalarArgs.length === 3) {
+      const rawArg3 = scalarArgs[2].trim();
+      const val3 = evaluateNumericArg(rawArg3, paramEnv);
+      const arg3IsThetaIdent =
+        Boolean(paramEnv && paramEnv.__forceMoveToPointTheta) ||
+        THETA_PARAM_REGEX.test(rawArg3) ||
+        (paramEnv && paramEnv.__thetaParams && paramEnv.__thetaParams.has(rawArg3)) ||
+        (customMoveToPointDef && (customMoveToPointDef.hasMoveToPointTheta || (customMoveToPointDef.params.length >= 3 && customMoveToPointDef.params[2].isThetaLike)));
+
+      if (arg3IsThetaIdent) {
+        hasThetaArg = true;
+        inferredTheta = isNaN(val3) ? 0 : val3;
+        inferredTimeout = 2000;
+      } else if (!hasChassisPrefix && !isNaN(val3) && Math.abs(val3) <= 360) {
+        // Bare moveToPoint(x, y, theta) where 3rd arg is an angle in [-360, 360]
+        hasThetaArg = true;
+        inferredTheta = val3;
+        inferredTimeout = 2000;
+      } else if (!isNaN(val3) && Math.abs(val3) <= 360) {
+        // Even with chassis.moveToPoint(x, y, theta), any 3rd arg in [-360, 360] is a heading angle (timeouts in ms are >= 400)
+        hasThetaArg = true;
+        inferredTheta = val3;
+        inferredTimeout = 2000;
+      } else {
+        inferredTimeout = parseInt(val3, 10) || 2000;
+      }
+    }
+
+    const actType = hasThetaArg ? "moveToPose" : "moveToPoint";
+    const act = createDefaultAction(actType, defaultMaxSpeed, defaultMinSpeed);
+    act.x = evaluateNumericArg(scalarArgs[0], paramEnv);
+    if (isNaN(act.x)) act.x = 0;
+    act.y = evaluateNumericArg(scalarArgs[1], paramEnv);
+    if (isNaN(act.y)) act.y = 0;
+
+    if (hasThetaArg) {
+      act.theta = inferredTheta;
+      act.timeout = inferredTimeout;
+      act.lead = 0.4;
+      act.inferredFromMoveToPointTheta = true;
+    } else {
+      act.timeout = inferredTimeout;
+    }
+
+    if (structParamStr) {
+      const p = parseLemlibStructParams(structParamStr);
+      act.forwards = p.forwards;
+      if (p.lead != null) act.lead = p.lead;
+      if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
+      if (p.minSpeed != null) act.minSpeed = p.minSpeed;
+      if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
+      if (p.async) act.async = true;
+    }
+    if (hasExplicitAsyncBool && lastArg === "true") act.async = true;
+    return act;
+  }
+
+  function substituteParamsInBody(bodyStr, params, callArgs, parentEnv = null, fnDef = null) {
+    const env = {};
+    const thetaParams = new Set();
+    if (parentEnv) {
+      Object.entries(parentEnv).forEach(([k, v]) => {
+        if (k !== "__thetaParams" && k !== "__forceMoveToPointTheta") env[k] = v;
+      });
+      if (parentEnv.__thetaParams) {
+        parentEnv.__thetaParams.forEach((p) => thetaParams.add(p));
+      }
+      if (parentEnv.__forceMoveToPointTheta) {
+        env.__forceMoveToPointTheta = true;
+      }
+    }
+    if (fnDef && fnDef.hasMoveToPointTheta) {
+      env.__forceMoveToPointTheta = true;
+    }
+
+    params.forEach((p, idx) => {
+      const rawArg = idx < callArgs.length ? callArgs[idx] : p.defaultVal;
+      if (rawArg != null && String(rawArg).trim() !== "") {
+        const evalNum = evaluateNumericArg(rawArg, env);
+        env[p.name] = !isNaN(evalNum) ? evalNum : String(rawArg).trim();
+      } else {
+        env[p.name] = 0;
+      }
+      if (p.isThetaLike) {
+        thetaParams.add(p.name);
+        env.__forceMoveToPointTheta = true;
+      }
+    });
+    env.__thetaParams = thetaParams;
+
+    // Substitute parameter identifiers outside comments/strings
+    let substituted = bodyStr;
+    params.forEach((p) => {
+      const val = env[p.name];
+      if (val == null) return;
+      const re = new RegExp(`\\b${p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
+      substituted = substituted.replace(re, String(val));
+    });
+
+    return { substituted, env };
+  }
+
+  function expandCustomFunctionCall(stmtStr, customFnsMap = null, defaultMaxSpeed = 127, defaultMinSpeed = 0, depth = 0, parentEnv = null) {
+    if (!stmtStr || depth > 4) return null;
+    const clean = stmtStr.trim().replace(/;$/, "").trim();
+    if (!clean) return null;
+
+    // Match standalone function call: fnName(args...)
+    const callMatch = clean.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)$/s);
+    if (!callMatch) return null;
+
+    const fnName = callMatch[1];
+    if (RESERVED_CPP_CALLS.has(fnName)) return null;
+
+    const rawArgsStr = callMatch[2].trim();
+    const callArgs = rawArgsStr ? splitCppArgsSafe(rawArgsStr) : [];
+    const fns = customFnsMap || getActiveCustomFunctionsMap();
+
+    if (fns && fns.has(fnName)) {
+      const fnDef = fns.get(fnName);
+      const { substituted, env } = substituteParamsInBody(fnDef.body, fnDef.params, callArgs, parentEnv, fnDef);
+      const subResult = parseCppAuton(substituted, {
+        defaultMaxSpeed,
+        defaultMinSpeed,
+        customFunctionsMap: fns,
+        paramEnv: env,
+        _recursionDepth: depth + 1,
+      });
+
+      if (subResult && Array.isArray(subResult.actions) && subResult.actions.length > 0) {
+        const hasInferredMotion = subResult.actions.some((a) => a.type !== "custom");
+        if (hasInferredMotion) {
+          const callSig = `${fnName}(${callArgs.map((a) => {
+            const v = evaluateNumericArg(a, parentEnv);
+            return !isNaN(v) ? v : a;
+          }).join(", ")})`;
+          subResult.actions.forEach((a) => {
+            a.inferredFromCustomFn = callSig;
+            if (!a.label) {
+              a.label = `via ${callSig}`;
+            }
+          });
+          return subResult.actions;
+        }
+      }
+    }
+
+    // Fallback: if function name is a custom motion wrapper (e.g. driveToPoint, moveTo, customMoveToPoint)
+    // or declared in ProjectManager.symbols.functions with (x, y, theta) parameters
+    if (callArgs.length >= 3) {
+      const v0 = evaluateNumericArg(callArgs[0], parentEnv);
+      const v1 = evaluateNumericArg(callArgs[1], parentEnv);
+      const v2 = evaluateNumericArg(callArgs[2], parentEnv);
+      if (!isNaN(v0) && !isNaN(v1) && !isNaN(v2)) {
+        let isThreeCoordWrapper = /^(?:drive|move|go|rush|pid)[a-zA-Z0-9_]*(?:Point|Pose|To|Coord|Target)?$/i.test(fnName);
+        if (!isThreeCoordWrapper && typeof window !== "undefined" && window.ProjectManager?.symbols?.functions) {
+          const sym = window.ProjectManager.symbols.functions.find((f) => f.name === fnName);
+          if (sym && sym.signature && /\b(theta|heading|angle|deg)\b/i.test(sym.signature)) {
+            isThreeCoordWrapper = true;
+          }
+        }
+        if (isThreeCoordWrapper) {
+          const act = buildMoveToPointOrThetaAction(rawArgsStr, false, defaultMaxSpeed, defaultMinSpeed, fns, parentEnv);
+          const callSig = `${fnName}(${v0}, ${v1}, ${v2})`;
+          act.inferredFromCustomFn = callSig;
+          act.label = `via ${callSig}`;
+          return [act];
+        }
+      }
+    }
+
+    return null;
+  }
+
   // Comprehensive C++ Autonomous Parser
   function parseCppAuton(rawCode, options = {}) {
     const defaultMaxSpeed = options.defaultMaxSpeed || 127;
     const defaultMinSpeed = options.defaultMinSpeed || 0;
+    const recursionDepth = options._recursionDepth || 0;
+    let paramEnv = options.paramEnv || null;
 
     if (!rawCode || !rawCode.trim()) {
       return {
@@ -804,23 +1226,82 @@
     const log = [];
     let routineName = "Imported Auton";
 
-    // Detect function signature e.g. void autonomous() or void redLeftAuton()
-    const fnMatch = rawCode.match(/void\s+([a-zA-Z0-9_]+)\s*\([^)]*\)\s*\{/i);
-    if (fnMatch && fnMatch[1]) {
-      const rawFn = fnMatch[1];
-      if (rawFn.toLowerCase() === "autonomous") {
-        routineName = "Autonomous";
-      } else {
-        const formatted = rawFn
-          .replace(/_/g, " ")
-          .replace(/([a-z])([A-Z])/g, "$1 $2")
-          .replace(/\b\w/g, (c) => c.toUpperCase());
-        routineName = formatted || "Imported Auton";
+    // Build custom functions map from project files + rawCode
+    const customFnsMap = options.customFunctionsMap || extractCustomFunctions(rawCode, options.projectFiles);
+    const localFnsMap = extractFunctionsFromCodeString(rawCode, "snippet");
+
+    // Determine which function in rawCode is the primary autonomous routine vs helper functions
+    let targetCodeToParse = rawCode;
+    if (localFnsMap.size > 0 && recursionDepth === 0) {
+      const fnList = Array.from(localFnsMap.values());
+      // Find which functions are called by other functions in this snippet
+      const calledFnNames = new Set();
+      fnList.forEach((f) => {
+        fnList.forEach((other) => {
+          if (f.name !== other.name) {
+            const callRe = new RegExp(`\\b${other.name}\\s*\\(`, "g");
+            if (callRe.test(f.body)) calledFnNames.add(other.name);
+          }
+        });
+      });
+
+      // Main routine candidate: prefer "autonomous", else a 0-param function not called by others, else last 0-param function
+      let mainFn =
+        fnList.find((f) => f.name.toLowerCase() === "autonomous") ||
+        fnList.find((f) => f.params.length === 0 && !calledFnNames.has(f.name)) ||
+        fnList.find((f) => !calledFnNames.has(f.name)) ||
+        fnList[fnList.length - 1];
+
+      if (mainFn) {
+        const rawFn = mainFn.name;
+        if (rawFn.toLowerCase() === "autonomous") {
+          routineName = "Autonomous";
+        } else {
+          const formatted = rawFn
+            .replace(/_/g, " ")
+            .replace(/([a-z])([A-Z])/g, "$1 $2")
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+          routineName = formatted || "Imported Auton";
+        }
+        log.push(`Detected autonomous routine function: ${mainFn.name} -> "${routineName}"`);
+
+        // Also check if there are top-level statements outside all function definitions
+        let outsideCode = "";
+        let lastIdx = 0;
+        fnList.forEach((f) => {
+          outsideCode += rawCode.slice(lastIdx, f.headerStartIdx) + "\n";
+          lastIdx = f.fullEndIdx;
+        });
+        outsideCode += rawCode.slice(lastIdx);
+        const hasOutsideExecutable = outsideCode
+          .split("\n")
+          .some((l) => {
+            const t = l.trim();
+            return t && !t.startsWith("//") && !t.startsWith("/*") && !t.startsWith("#") && !t.startsWith("using ");
+          });
+
+        if (fnList.length === 1 && mainFn.params.length > 0 && hasOutsideExecutable) {
+          // Helper function defined at top of snippet + calls to it below!
+          targetCodeToParse = outsideCode;
+        } else if (fnList.length === 1 && mainFn.params.length > 0 && !hasOutsideExecutable) {
+          // Only a parameterized custom function definition was provided (e.g. void driveTo(x, y, theta) { moveToPoint(x, y, theta); })
+          // Bind parameters to defaults or sample preview values so its body still infers blocks & simulation
+          const sampleArgs = mainFn.params.map((p, idx) => {
+            if (p.defaultVal != null) return p.defaultVal;
+            if (p.isThetaLike) return "90";
+            return idx === 0 ? "24" : idx === 1 ? "24" : "0";
+          });
+          const sub = substituteParamsInBody(mainFn.body, mainFn.params, sampleArgs, paramEnv, mainFn);
+          paramEnv = sub.env;
+          targetCodeToParse = sub.substituted;
+          log.push(`Inferred motion blocks from parameterized function definition: ${mainFn.name}(${mainFn.paramsRaw})`);
+        } else {
+          targetCodeToParse = mainFn.body + (hasOutsideExecutable ? "\n" + outsideCode : "");
+        }
       }
-      log.push(`Detected autonomous routine function: ${fnMatch[1]} -> "${routineName}"`);
     }
 
-    const rawLines = rawCode.replace(/\r\n/g, "\n").split("\n");
+    const rawLines = targetCodeToParse.replace(/\r\n/g, "\n").split("\n");
     const cleanedLines = [];
     let insideFn = false;
 
@@ -828,7 +1309,7 @@
       let l = rawLines[i].trim();
       if (!l) continue;
 
-      if (/^void\s+[a-zA-Z0-9_]+\s*\([^)]*\)\s*\{/i.test(l)) {
+      if (/^(?:void|int|bool|double|float)\s+[a-zA-Z0-9_]+\s*\([^)]*\)\s*\{/i.test(l)) {
         insideFn = true;
         continue;
       }
@@ -1191,27 +1672,19 @@
         continue;
       }
 
-      // LemLib Movements
-      const mtPointMatch = line.match(/chassis\.moveToPoint\s*\(([^;]+)\)/i);
+      // LemLib Movements (supporting both chassis.moveToPoint and custom moveToPoint(x, y, theta))
+      const mtPointMatch = line.match(/(?:([a-zA-Z0-9_]+)\.)?moveToPoint\s*\(([^;]+)\)/i);
       if (mtPointMatch) {
         flushCustomBlock();
-        const args = splitCppArgsSafe(mtPointMatch[1]);
-        const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
-        act.x = parseFloat(args[0]) || 0;
-        act.y = parseFloat(args[1]) || 0;
-        act.timeout = parseInt(args[2], 10) || 2000;
-
-        let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
-        if (structParamStr) {
-          const p = parseLemlibStructParams(structParamStr);
-          act.forwards = p.forwards;
-          if (p.maxSpeed != null) act.maxSpeed = p.maxSpeed;
-          if (p.minSpeed != null) act.minSpeed = p.minSpeed;
-          if (p.earlyExitRange) act.earlyExitRange = p.earlyExitRange;
-          if (p.async) act.async = true;
-        }
-        const lastArg = args[args.length - 1]?.trim().toLowerCase();
-        if (lastArg === "true") act.async = true;
+        const hasChassisPrefix = !!mtPointMatch[1];
+        const act = buildMoveToPointOrThetaAction(
+          mtPointMatch[2],
+          hasChassisPrefix,
+          defaultMaxSpeed,
+          defaultMinSpeed,
+          customFnsMap,
+          paramEnv
+        );
 
         if (inlineComment) act.label = inlineComment;
         else if (pendingComments.length > 0) {
@@ -1221,19 +1694,23 @@
 
         if (act.async) act.showFlowchart = true;
         actions.push(act);
-        log.push(`Parsed moveToPoint(${act.x}, ${act.y}) timeout: ${act.timeout}ms, async: ${act.async}`);
+        if (act.type === "moveToPose" && act.inferredFromMoveToPointTheta) {
+          log.push(`Inferred moveToPoint(${act.x}, ${act.y}, ${act.theta}°) with heading -> moveToPose block`);
+        } else {
+          log.push(`Parsed moveToPoint(${act.x}, ${act.y}) timeout: ${act.timeout}ms, async: ${act.async}`);
+        }
         continue;
       }
 
-      const mtPoseMatch = line.match(/chassis\.moveToPose\s*\(([^;]+)\)/i);
+      const mtPoseMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?moveToPose\s*\(([^;]+)\)/i);
       if (mtPoseMatch) {
         flushCustomBlock();
         const args = splitCppArgsSafe(mtPoseMatch[1]);
         const act = createDefaultAction("moveToPose", defaultMaxSpeed, defaultMinSpeed);
-        act.x = parseFloat(args[0]) || 0;
-        act.y = parseFloat(args[1]) || 0;
-        act.theta = parseFloat(args[2]) || 0;
-        act.timeout = parseInt(args[3], 10) || 2500;
+        act.x = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.y = evaluateNumericArg(args[1], paramEnv) || 0;
+        act.theta = evaluateNumericArg(args[2], paramEnv) || 0;
+        act.timeout = parseInt(evaluateNumericArg(args[3], paramEnv), 10) || 2500;
 
         let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
         if (structParamStr) {
@@ -1260,14 +1737,14 @@
         continue;
       }
 
-      const ttPointMatch = line.match(/chassis\.turnToPoint\s*\(([^;]+)\)/i);
+      const ttPointMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?turnToPoint\s*\(([^;]+)\)/i);
       if (ttPointMatch) {
         flushCustomBlock();
         const args = splitCppArgsSafe(ttPointMatch[1]);
         const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
-        act.x = parseFloat(args[0]) || 0;
-        act.y = parseFloat(args[1]) || 0;
-        act.timeout = parseInt(args[2], 10) || 1500;
+        act.x = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.y = evaluateNumericArg(args[1], paramEnv) || 0;
+        act.timeout = parseInt(evaluateNumericArg(args[2], paramEnv), 10) || 1500;
 
         let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
         if (structParamStr) {
@@ -1293,13 +1770,13 @@
         continue;
       }
 
-      const ttHeadingMatch = line.match(/chassis\.turnToHeading\s*\(([^;]+)\)/i);
+      const ttHeadingMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?turnToHeading\s*\(([^;]+)\)/i);
       if (ttHeadingMatch) {
         flushCustomBlock();
         const args = splitCppArgsSafe(ttHeadingMatch[1]);
         const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
-        act.theta = parseFloat(args[0]) || 0;
-        act.timeout = parseInt(args[1], 10) || 1500;
+        act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.timeout = parseInt(evaluateNumericArg(args[1], paramEnv), 10) || 1500;
 
         let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
         if (structParamStr) {
@@ -1324,15 +1801,15 @@
         continue;
       }
 
-      const swPointMatch = line.match(/chassis\.swingToPoint\s*\(([^;]+)\)/i);
+      const swPointMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?swingToPoint\s*\(([^;]+)\)/i);
       if (swPointMatch) {
         flushCustomBlock();
         const args = splitCppArgsSafe(swPointMatch[1]);
         const act = createDefaultAction("swingToPoint", defaultMaxSpeed, defaultMinSpeed);
-        act.x = parseFloat(args[0]) || 0;
-        act.y = parseFloat(args[1]) || 0;
+        act.x = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.y = evaluateNumericArg(args[1], paramEnv) || 0;
         act.lockedSide = parseDriveSideEnum(args[2]);
-        act.timeout = parseInt(args[3], 10) || 2000;
+        act.timeout = parseInt(evaluateNumericArg(args[3], paramEnv), 10) || 2000;
 
         let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
         if (structParamStr) {
@@ -1358,14 +1835,14 @@
         continue;
       }
 
-      const swHeadingMatch = line.match(/chassis\.swingToHeading\s*\(([^;]+)\)/i);
+      const swHeadingMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?swingToHeading\s*\(([^;]+)\)/i);
       if (swHeadingMatch) {
         flushCustomBlock();
         const args = splitCppArgsSafe(swHeadingMatch[1]);
         const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
-        act.theta = parseFloat(args[0]) || 0;
+        act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
         act.lockedSide = parseDriveSideEnum(args[1]);
-        act.timeout = parseInt(args[2], 10) || 2000;
+        act.timeout = parseInt(evaluateNumericArg(args[2], paramEnv), 10) || 2000;
 
         let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
         if (structParamStr) {
@@ -1388,6 +1865,31 @@
         if (act.async) act.showFlowchart = true;
         actions.push(act);
         log.push(`Parsed swingToHeading(${act.theta}°, ${act.lockedSide}) timeout: ${act.timeout}ms`);
+        continue;
+      }
+
+      // Check if line is a call to a custom function whose definition has moveToPoint(x, y, theta) or other motion
+      const expandedActs = expandCustomFunctionCall(
+        line,
+        customFnsMap,
+        defaultMaxSpeed,
+        defaultMinSpeed,
+        recursionDepth,
+        paramEnv
+      );
+      if (expandedActs && expandedActs.length > 0) {
+        flushCustomBlock();
+        expandedActs.forEach((ea, eaIdx) => {
+          if (eaIdx === 0) {
+            if (inlineComment) ea.label = inlineComment;
+            else if (pendingComments.length > 0) {
+              ea.label = pendingComments.join(" · ").trim();
+              pendingComments = [];
+            }
+          }
+          actions.push(ea);
+        });
+        log.push(`Inferred ${expandedActs.length} action(s) from custom function call: ${line}`);
         continue;
       }
 
@@ -1646,6 +2148,29 @@ void autonomous() {
 }`,
   };
 
+  // Infer LemLib motion/control actions from a custom C++ snippet or custom function call
+  function inferActionsFromCustomCode(customCode, options = {}) {
+    if (!customCode || typeof customCode !== "string" || !customCode.trim()) {
+      return { hasMotion: false, motionActions: [], allActions: [], summaryLabel: "" };
+    }
+    const defaultMaxSpeed = options.defaultMaxSpeed || 127;
+    const defaultMinSpeed = options.defaultMinSpeed || 0;
+    const parsed = parseCppAuton(customCode, {
+      defaultMaxSpeed,
+      defaultMinSpeed,
+      projectFiles: options.projectFiles || null,
+    });
+    const allActions = (parsed && Array.isArray(parsed.actions)) ? parsed.actions : [];
+    const motionActions = allActions.filter((a) => a && a.type !== "custom");
+    const summaryParts = motionActions.map((a) => getActionHumanLabel(a, ""));
+    return {
+      hasMotion: motionActions.length > 0,
+      motionActions,
+      allActions,
+      summaryLabel: summaryParts.join(" → "),
+    };
+  }
+
   return {
     splitCppArgsSafe,
     parseLemlibStructParams,
@@ -1659,6 +2184,9 @@ void autonomous() {
     tryParseTernary,
     parseIfElseFromCode,
     parseLoopFromCode,
+    extractCustomFunctions,
+    expandCustomFunctionCall,
+    inferActionsFromCustomCode,
     SAMPLE_ROUTINES,
   };
 });

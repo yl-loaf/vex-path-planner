@@ -1773,25 +1773,37 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           }
 
           // 5. Functions & Subsystem Helpers
-          // e.g. void setIntake(int speed); or void red_rush_auton()
-          const fnMatch = trimmed.match(/(?:void|int|bool|double)\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*(?:\{|;)/);
+          // e.g. void setIntake(int speed); or void driveTo(double x, double y, double theta)
+          const fnMatch = trimmed.match(/(?:void|int|bool|double|float)\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*(?:\{|;)/);
           if (fnMatch && fnMatch[1]) {
             const fnName = fnMatch[1];
             const params = fnMatch[2];
             if (!isIgnoredSymbol(fnName) && !["initialize", "disabled", "competition_initialize", "autonomous", "opcontrol"].includes(fnName)) {
               if (!symbols.functions.some(f => f.name === fnName)) {
+                const paramParts = params.trim() && params.trim() !== "void" ? params.split(",").map(p => p.trim()).filter(Boolean) : [];
+                let defaultSnippet = `${fnName}();`;
+                if (paramParts.length === 1) defaultSnippet = `${fnName}(127);`;
+                else if (paramParts.length === 2) defaultSnippet = `${fnName}(24, 24);`;
+                else if (paramParts.length >= 3) defaultSnippet = `${fnName}(24, 36, 90);`;
                 symbols.functions.push({
                   name: fnName,
                   signature: `${fnName}(${params})`,
                   file: fileName,
                   line: lineIdx + 1,
-                  snippet: params.trim() ? `${fnName}(127);` : `${fnName}();`,
+                  paramCount: paramParts.length,
+                  snippet: defaultSnippet,
                 });
               }
             }
           }
         });
       });
+
+      if (typeof window !== "undefined" && window.CppTranslator && typeof window.CppTranslator.extractCustomFunctions === "function") {
+        try {
+          window.CppTranslator.extractCustomFunctions("", files);
+        } catch (_) {}
+      }
 
       this.symbols = symbols;
       this.extractLemLibConfig();
@@ -2080,12 +2092,14 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       const code = this.getFile("src/autons.cpp") || this.getFile("autons.cpp");
       if (!code || !code.trim()) return [{ name: "autonomous", body: "" }];
 
-      const routines = [];
-      const fnHeaderRegex = /void\s+([a-zA-Z0-9_]+)\s*\([^)]*\)\s*\{/g;
+      const allFunctions = [];
+      const fnHeaderRegex = /void\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*\{/g;
       let match;
 
       while ((match = fnHeaderRegex.exec(code)) !== null) {
         const name = match[1];
+        const paramsRaw = (match[2] || "").trim();
+        const hasParams = paramsRaw.length > 0 && paramsRaw !== "void";
         const startBodyIdx = fnHeaderRegex.lastIndex;
         
         let depth = 1;
@@ -2142,8 +2156,16 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         }
 
         const body = code.substring(startBodyIdx, endBodyIdx);
-        routines.push({ name, body });
+        allFunctions.push({ name, paramsRaw, hasParams, body });
       }
+
+      // If there are 0-parameter autonomous routines, exclude parameterized helper functions
+      // (e.g. void driveTo(double x, double y, double theta)) from routine tabs so they act as helpers
+      const zeroParamRoutines = allFunctions.filter((fn) => !fn.hasParams);
+      const routines = (zeroParamRoutines.length > 0 ? zeroParamRoutines : allFunctions).map((fn) => ({
+        name: fn.name,
+        body: fn.body,
+      }));
 
       if (routines.length === 0) {
         routines.push({

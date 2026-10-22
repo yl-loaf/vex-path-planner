@@ -2214,6 +2214,45 @@
 
     if (action.type === "custom") {
       const dur = action.customDuration != null ? Math.max(0, Number(action.customDuration)) : 0;
+      if (action.customCode && window.CppTranslator && typeof window.CppTranslator.inferActionsFromCustomCode === "function") {
+        const inferred = window.CppTranslator.inferActionsFromCustomCode(action.customCode, {
+          defaultMaxSpeed: b.defaultMaxSpeed || 127,
+          defaultMinSpeed: b.defaultMinSpeed || 0,
+        });
+        if (inferred && inferred.hasMotion && inferred.motionActions.length > 0) {
+          let curPose = { x: pose.x, y: pose.y, theta: pose.theta };
+          let totalDur = 0;
+          let lastCarrot = null;
+          for (const subAct of inferred.motionActions) {
+            const subSim = simulateAction(subAct, curPose, b);
+            if (subSim && Array.isArray(subSim.path)) {
+              for (let pi = 1; pi < subSim.path.length; pi++) {
+                const pt = subSim.path[pi];
+                points.push({
+                  ...pt,
+                  t: totalDur + pt.t,
+                });
+              }
+              totalDur += subSim.duration || 0;
+              curPose = { ...subSim.endPose };
+              if (subSim.carrot) lastCarrot = subSim.carrot;
+            }
+          }
+          if (dur > 0) {
+            totalDur += dur;
+            points.push({ x: curPose.x, y: curPose.y, theta: curPose.theta, t: totalDur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
+          }
+          return {
+            endPose: curPose,
+            path: points,
+            duration: Math.max(totalDur, 0.1),
+            carrot: lastCarrot,
+            inferredMotion: true,
+            inferredActions: inferred.motionActions,
+            inferredSummary: inferred.summaryLabel,
+          };
+        }
+      }
       if (dur > 0) {
         points.push({ x: pose.x, y: pose.y, theta: pose.theta, t: dur, vLin: 0, omegaDeg: 0, targetVLin: 0, targetOmega: 0, ...initPhys });
       }
@@ -3664,7 +3703,7 @@
     // Calculate total points across all segments for progressive drawing animation
     let allTrajectoryPoints = [];
     for (const seg of simSegments) {
-      if (!seg.action || seg.action.type === "custom") continue;
+      if (!seg.action || (seg.action.type === "custom" && !seg.inferredMotion)) continue;
       if (seg.points && seg.points.length) {
         for (let pi = 0; pi < seg.points.length; pi++) {
           allTrajectoryPoints.push({
@@ -3692,7 +3731,7 @@
     let pointCounter = 0;
 
     for (const seg of simSegments) {
-      if (!seg.action || seg.action.type === "custom") continue;
+      if (!seg.action || (seg.action.type === "custom" && !seg.inferredMotion)) continue;
       if (!seg.points) continue;
       for (const pt of seg.points) {
         if (pointCounter >= activePointLimit) break;
@@ -3708,7 +3747,7 @@
     // Render Bezier Spline Curves with vibrant cyan arc highlight up to activePointLimit
     pointCounter = 0;
     for (const seg of simSegments) {
-      if (!seg.action || seg.action.type === "custom") continue;
+      if (!seg.action || (seg.action.type === "custom" && !seg.inferredMotion)) continue;
       const isBezier = seg.action.type === "bezierCurve";
       if (isBezier && seg.points && seg.points.length >= 2) {
         ctx.save();
@@ -3737,7 +3776,7 @@
     // Visual feedback for multitasking (async) motions along path
     pointCounter = 0;
     for (const seg of simSegments) {
-      if (!seg.action || seg.action.type === "custom") continue;
+      if (!seg.action || (seg.action.type === "custom" && !seg.inferredMotion)) continue;
       if (seg.action.async && seg.points && seg.points.length >= 2) {
         ctx.save();
         ctx.strokeStyle = "#c084fc";
@@ -4006,8 +4045,9 @@
 
     for (let i = 1; i < poses.length; i++) {
       const a = actions[i - 1];
-      if (a.type === "custom") continue;
-      if (!needsPoint(a.type) && !isMove(a.type)) continue;
+      const seg = simSegments[i - 1];
+      if (a.type === "custom" && (!seg || !seg.inferredMotion)) continue;
+      if (a.type !== "custom" && !needsPoint(a.type) && !isMove(a.type)) continue;
       const p = fieldToCanvas(poses[i].x, poses[i].y);
       const sel = a.id === selectedId;
       const isRev = a.forwards === false;
@@ -5364,6 +5404,12 @@
         const detectedIf = window.CppTranslator && typeof window.CppTranslator.parseIfElseFromCode === "function"
           ? window.CppTranslator.parseIfElseFromCode(a.customCode, bot.defaultMaxSpeed || 127, bot.defaultMinSpeed || 0)
           : null;
+        const detectedMotion = (!detectedIf && window.CppTranslator && typeof window.CppTranslator.inferActionsFromCustomCode === "function")
+          ? window.CppTranslator.inferActionsFromCustomCode(a.customCode, {
+              defaultMaxSpeed: bot.defaultMaxSpeed || 127,
+              defaultMinSpeed: bot.defaultMinSpeed || 0,
+            })
+          : null;
         body = `
           ${detectedIf ? `
           <div class="custom-if-detected-banner" id="banner-if-detect-${idx}">
@@ -5383,7 +5429,24 @@
             <button type="button" class="btn-convert-to-scratch" data-act="convert-custom-to-if" data-idx="${idx}" title="Convert this custom code block into a visual Scratch If-Else block">
               ⚡ Convert to Scratch Block
             </button>
-          </div>` : ""}
+          </div>` : (detectedMotion && detectedMotion.hasMotion ? `
+          <div class="custom-if-detected-banner" id="banner-if-detect-${idx}">
+            <div class="if-detected-info">
+              <span class="if-detected-icon">🧭</span>
+              <div class="if-detected-text">
+                <div class="if-detected-title-row">
+                  <span class="if-detected-title" style="color: #38bdf8;">Inferred Motion Active in Sim!</span>
+                  <span class="if-detected-cond-badge" style="background: rgba(56,189,248,0.18); border-color: #38bdf8; color: #7dd3fc;">${detectedMotion.motionActions.length} motion${detectedMotion.motionActions.length > 1 ? "s" : ""}</span>
+                </div>
+                <div class="if-detected-branches">
+                  <span class="if-detected-branch-item">📍 Trajectory: <strong>${escapeHtml(detectedMotion.summaryLabel)}</strong></span>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn-convert-to-scratch" data-act="convert-custom-to-motion" data-idx="${idx}" title="Expand inferred motion into visual movement block(s)">
+              ⚡ Expand to Block${detectedMotion.motionActions.length > 1 ? "s" : ""}
+            </button>
+          </div>` : "")}
           <label class="wide">Custom C++ / Comment (injected as-is)
             <textarea data-f="customCode" rows="3" placeholder="// e.g. // pin collected, // turn toggle CW, or intake.move(127);">${escapeHtml(a.customCode)}</textarea>
           </label>
@@ -6038,9 +6101,61 @@
                     showToast("✨ Converted custom C++ code to Scratch Loop block!");
                   };
                 }
-              } else if (bannerEl) {
-                bannerEl.remove();
+              } else {
+                const detectedMotion = window.CppTranslator && typeof window.CppTranslator.inferActionsFromCustomCode === "function"
+                  ? window.CppTranslator.inferActionsFromCustomCode(el.value, {
+                      defaultMaxSpeed: bot.defaultMaxSpeed || 127,
+                      defaultMinSpeed: bot.defaultMinSpeed || 0,
+                    })
+                  : null;
+                if (detectedMotion && detectedMotion.hasMotion) {
+                  if (!bannerEl) {
+                    bannerEl = document.createElement("div");
+                    bannerEl.className = "custom-if-detected-banner";
+                    const labelWide = card.querySelector("label.wide");
+                    if (labelWide) labelWide.parentNode.insertBefore(bannerEl, labelWide);
+                  }
+                  bannerEl.innerHTML = `
+                    <div class="if-detected-info">
+                      <span class="if-detected-icon">🧭</span>
+                      <div class="if-detected-text">
+                        <div class="if-detected-title-row">
+                          <span class="if-detected-title" style="color: #38bdf8;">Inferred Motion Active in Sim!</span>
+                          <span class="if-detected-cond-badge" style="background: rgba(56,189,248,0.18); border-color: #38bdf8; color: #7dd3fc;">${detectedMotion.motionActions.length} motion${detectedMotion.motionActions.length > 1 ? "s" : ""}</span>
+                        </div>
+                        <div class="if-detected-branches">
+                          <span class="if-detected-branch-item">📍 Trajectory: <strong>${escapeHtml(detectedMotion.summaryLabel)}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                    <button type="button" class="btn-convert-to-scratch" data-act="convert-custom-to-motion" data-idx="${idx}" title="Expand inferred motion into visual movement block(s)">
+                      ⚡ Expand to Block${detectedMotion.motionActions.length > 1 ? "s" : ""}
+                    </button>
+                  `;
+                  const btnConv = bannerEl.querySelector('[data-act="convert-custom-to-motion"]');
+                  if (btnConv) {
+                    btnConv.onclick = (e) => {
+                      e.stopPropagation();
+                      const newBlocks = detectedMotion.allActions.map((ma) => ({
+                        ...ma,
+                        id: uid(),
+                      }));
+                      actions.splice(idx, 1, ...newBlocks);
+                      selectedId = newBlocks[0]?.id || null;
+                      markDirty();
+                      renderFlow();
+                      draw();
+                      generateCode();
+                      showToast(`✨ Expanded custom function into ${newBlocks.length} visual block(s)!`);
+                    };
+                  }
+                } else if (bannerEl) {
+                  bannerEl.remove();
+                }
               }
+              isSimPathDirty = true;
+              draw();
+              updateTimeDisplay();
             }
           }
         });
@@ -6089,6 +6204,28 @@
               draw();
               generateCode();
               showToast("✨ Converted custom C++ code to Scratch Loop block!");
+            }
+            return;
+          }
+          if (act === "convert-custom-to-motion") {
+            const detectedMotion = window.CppTranslator && typeof window.CppTranslator.inferActionsFromCustomCode === "function"
+              ? window.CppTranslator.inferActionsFromCustomCode(a.customCode, {
+                  defaultMaxSpeed: bot.defaultMaxSpeed || 127,
+                  defaultMinSpeed: bot.defaultMinSpeed || 0,
+                })
+              : null;
+            if (detectedMotion && detectedMotion.hasMotion && detectedMotion.allActions.length > 0) {
+              const newBlocks = detectedMotion.allActions.map((ma) => ({
+                ...ma,
+                id: uid(),
+              }));
+              actions.splice(idx, 1, ...newBlocks);
+              selectedId = newBlocks[0]?.id || null;
+              markDirty();
+              renderFlow();
+              draw();
+              generateCode();
+              showToast(`✨ Expanded custom function into ${newBlocks.length} visual block(s)!`);
             }
             return;
           }
@@ -7072,9 +7209,6 @@
 
   function estimateActionTime(a, fromPose) {
     if (!a) return 0;
-    if (a.type === "custom") {
-      return a.customDuration != null ? Math.max(0, Number(a.customDuration)) : 0;
-    }
     const res = simulateAction(a, fromPose || { x: 0, y: 0, theta: 0 }, bot);
     return res.duration;
   }
@@ -7298,6 +7432,9 @@
         endPose: seg.endPose,
         duration: seg.duration,
         carrot: seg.carrot,
+        inferredMotion: !!seg.inferredMotion,
+        inferredActions: seg.inferredActions || null,
+        inferredSummary: seg.inferredSummary || "",
       });
 
       const segPts = seg.path;
