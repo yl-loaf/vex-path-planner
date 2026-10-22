@@ -14,17 +14,17 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>VEX V5 LemLib Path Planner</title>
-  <meta name="description" content="Supercharge your VEX Robotics Competition (VRC) autonomous routines. Design, simulate, and export high-precision LemLib & PROS C++ paths with advanced motion profiling, visual block translations, and cloud sync for VEX V5 teams." />
-  <meta name="keywords" content="VEX Robotics, VRC, VRC High Stakes, LemLib, PROS C++, Path Planner, VEX V5, Pure Pursuit, Boomerang Controller, PID Tuning, Odometry Simulation, Robotics Simulator, V5 Brain, Autonomous Coding, Autonomous Path Planning, VEX C++, Motion Profiling, LemLib Path, VRC Autonomous, VEX U, VEX Robotics Competition" />
+  <meta name="description" content="Plan, simulate, and export VEX V5 autonomous routines for LemLib and PROS C++. Draw 2D odometry paths, tune PID gains, translate raw C++ into visual blocks, and flash directly to your V5 Brain over USB." />
+  <meta name="keywords" content="VEX Robotics, VRC, VRC Override, LemLib, PROS C++, Path Planner, VEX V5, Pure Pursuit, Boomerang Controller, PID Tuning, Odometry Simulation, V5 Brain, Autonomous Coding" />
   <meta name="robots" content="index, follow" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://yl-loaf.github.io/vex-path-planner/" />
   <meta property="og:title" content="VEX V5 LemLib Path Planner" />
-  <meta property="og:description" content="Supercharge your VEX Robotics Competition (VRC) autonomous routines. Design, simulate, and export high-precision LemLib & PROS C++ paths with advanced motion profiling, visual block translations, and cloud sync for VEX V5 teams." />
+  <meta property="og:description" content="Plan, simulate, and export VEX V5 autonomous routines for LemLib and PROS C++. Draw 2D odometry paths, tune PID gains, translate raw C++ into visual blocks, and flash directly to your V5 Brain over USB." />
   <meta property="og:site_name" content="VEX V5 LemLib Suite" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="VEX V5 LemLib Path Planner" />
-  <meta name="twitter:description" content="Supercharge your VEX Robotics Competition (VRC) autonomous routines. Design, simulate, and export high-precision LemLib & PROS C++ paths with advanced motion profiling, visual block translations, and cloud sync for VEX V5 teams." />
+  <meta name="twitter:description" content="Plan, simulate, and export VEX V5 autonomous routines for LemLib and PROS C++. Draw 2D odometry paths, tune PID gains, translate raw C++ into visual blocks, and flash directly to your V5 Brain over USB." />
 
   <!-- Structured Data (JSON-LD) for Search Engine Rich Snippets -->
   <script type="application/ld+json">
@@ -46,7 +46,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261021.k4" />
+  <link rel="stylesheet" href="style.css?v=20261021.k6" />
   <script>
     (function () {
       try {
@@ -101,16 +101,16 @@
       <section class="editorial-masthead">
         <div class="masthead-grid">
           <div class="masthead-lead">
-            <h1 class="editorial-hero-headline">Deterministic trajectory design and motion control for LemLib.</h1>
+            <h1 class="editorial-hero-headline">Build and test VEX V5 autonomous paths before you touch the field.</h1>
             <p class="editorial-hero-desc">
-              Engineered for VEX V5 teams programming autonomous routines in PROS. Generate 2D odometry paths, calibrate settling tolerances, inspect sensor telemetries, and flash routines directly via Web Serial USB CDC.
+              Built for teams running LemLib and PROS C++. Map out your 15-second match and 60-second skills routines on an exact 144" field, tune PID gains against real drivetrain physics, and flash directly to your V5 Brain over USB.
             </p>
             <div class="masthead-actions">
               <button type="button" id="btnHeroOpenPlanner" class="btn-utilitarian-primary">
-                Launch Visual Path Planner
+                Launch Path Planner
               </button>
               <a href="ide.html" class="btn-utilitarian-secondary">
-                Open PROS C++ IDE
+                Open C++ IDE
               </a>
               <button type="button" id="btnHeroConnectBrain" class="btn-utilitarian-secondary">
                 Connect V5 Brain
@@ -362,30 +362,28 @@
       <!-- About Us & Engineering Background Section -->
       <section class="editorial-workbench-section" id="homeAbout" style="margin-top: 48px;">
         <div class="section-editorial-header">
-          <h2 class="editorial-section-title">👤 About Us &amp; Author Qualifications</h2>
-          <p class="section-meta-text">VEX Coder background, LemLib engineering expertise, and why this suite was built.</p>
+          <h2 class="editorial-section-title">Built by VEX Programmers</h2>
+          <p class="section-meta-text">Why we made this tool and how it fits into a real competition workflow.</p>
         </div>
 
-        <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; line-height:1.65; color:var(--text-muted); font-size:0.9rem;">
-          <p style="margin-bottom:12px;">
-            <strong>Who We Are:</strong> The VEX V5 LemLib Suite was founded and developed by dedicated <strong>VEX Robotics coders and autonomous systems developers</strong> with extensive first-hand experience in the VEX Robotics Competition (VRC).
-          </p>
-          <p style="margin-bottom:12px;">
-            <strong>Autonomous Coder Background:</strong> As competitive VEX programmers who have built tournament-winning robots across multiple VRC seasons (including Over Under, High Stakes, and Override), our software architecture is grounded in real-world robotics engineering: sub-millimeter wheel odometry integration, Pure Pursuit lookahead algorithms, Boomerang target pursuit, and discrete lateral/angular PID tuning on PROS C++.
-          </p>
-          <p style="margin-bottom:16px;">
-            <strong>Why We Built This Suite:</strong> In competitive robotics, programming consistent autonomous routines traditionally required endless trial-and-error testing on field tiles. We created this suite to provide mathematical certainty through 2D kinematics simulation, bidirectional AST C++ translation, and direct USB V5 Brain flashing—empowering student teams worldwide to develop autonomous routines with speed and precision.
-          </p>
-
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px; margin-top:16px;">
-            <div style="background:var(--card-inner); border:1px solid var(--border); border-radius:6px; padding:16px;">
-              <div style="font-weight:700; color:var(--text); margin-bottom:6px;">🏆 Competitive Pedagogy</div>
-              <div style="font-size:0.82rem; color:var(--text-muted);">Crafted specifically to address real match hurdles: alliance line clearing, autonomous win point (AWP) timings, ring stacking geometry, and defensive collision avoidance.</div>
-            </div>
-            <div style="background:var(--card-inner); border:1px solid var(--border); border-radius:6px; padding:16px;">
-              <div style="font-weight:700; color:var(--text); margin-bottom:6px;">💻 Open-Source &amp; Free</div>
-              <div style="font-size:0.82rem; color:var(--text-muted);">Committed to open robotics education. All trajectory generation, IDE editing, and AST parsing tools are completely free for student teams and educators globally.</div>
-            </div>
+        <div class="editorial-prose-grid">
+          <div class="editorial-prose-block">
+            <h3 class="editorial-subhead">Who We Are</h3>
+            <p>
+              We are VEX Robotics Competition (VRC) programmers who spent too many late nights debugging autonomous drift on foam tiles. Across seasons from Over Under and High Stakes to Override (2026–27), we built this workbench to solve the exact problems our own drive and programming teams hit at tournaments.
+            </p>
+          </div>
+          <div class="editorial-prose-block">
+            <h3 class="editorial-subhead">Why This Exists</h3>
+            <p>
+              Writing autonomous routines by guessing coordinates, compiling, walking to the field, and watching the robot miss a goal wastes hours of practice time. This planner lets you lay out waypoints visually, test your exact LemLib PID and drivetrain settings in a 10ms physics loop, and convert between visual blocks and raw C++ without losing your hand-written code.
+            </p>
+          </div>
+          <div class="editorial-prose-block">
+            <h3 class="editorial-subhead">Free &amp; Open for Teams</h3>
+            <p>
+              Every tool in this suite—path generation, two-way C++ AST parsing, multi-file IDE editing, and USB V5 Brain flashing—is free for student teams, coaches, and mentors.
+            </p>
           </div>
         </div>
       </section>
@@ -393,93 +391,58 @@
       <!-- Explicit Privacy Policy & Ad Tracking Disclosures -->
       <section class="editorial-workbench-section" id="homePrivacy" style="margin-top: 48px;">
         <div class="section-editorial-header">
-          <h2 class="editorial-section-title">🛡️ Privacy Policy &amp; Data Handling Disclosures</h2>
-          <p class="section-meta-text">Transparent disclosures regarding user data, cookies, ad tracking networks, and local storage.</p>
+          <h2 class="editorial-section-title">Privacy &amp; Data Handling</h2>
+          <p class="section-meta-text">Plain-English summary of where your code lives and how site data works.</p>
         </div>
 
-        <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; line-height:1.65; color:var(--text-muted); font-size:0.9rem;">
-          <p style="margin-bottom:14px;">
-            We are committed to user transparency and strict data privacy compliance. Below is an explicit breakdown of how data is stored, processed, and tracked across our services and partner ad networks:
-          </p>
-
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin:16px 0 20px;">
-            <!-- Ad Networks & Cookies -->
-            <div style="background:var(--card-inner); border:1px solid var(--border); border-radius:6px; padding:16px;">
-              <div style="font-weight:700; color:#38bdf8; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
-                <span>🍪</span> Advertising Networks &amp; Cookies
-              </div>
-              <div style="font-size:0.82rem; line-height:1.5;">
-                We partner with <strong>Google AdSense</strong> and authorized advertising networks to display ads. Google uses cookies (including the DoubleClick DART cookie) to serve ads based on prior visits to this website and other internet domains.<br/><br/>
-                You can opt out of personalized ad targeting anytime via <a href="https://adssettings.google.com/" target="_blank" rel="noopener" style="color:#38bdf8;">Google Ads Settings</a> or through the <a href="https://optout.networkadvertising.org/" target="_blank" rel="noopener" style="color:#38bdf8;">Network Advertising Initiative Opt-Out</a>.
-              </div>
-            </div>
-
-            <!-- Client-Side Storage -->
-            <div style="background:var(--card-inner); border:1px solid var(--border); border-radius:6px; padding:16px;">
-              <div style="font-weight:700; color:#4ade80; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
-                <span>💾</span> Local Browser Storage
-              </div>
-              <div style="font-size:0.82rem; line-height:1.5;">
-                Your autonomous routines, waypoint coordinates, custom PID gains, robot dimensions, and C++ source files are stored <strong>locally in your browser sandbox</strong> (HTML5 LocalStorage &amp; IndexedDB). We never sell, monetize, or transmit your robot source code to advertisers.
-              </div>
-            </div>
-
-            <!-- Google Authentication & Sync -->
-            <div style="background:var(--card-inner); border:1px solid var(--border); border-radius:6px; padding:16px;">
-              <div style="font-weight:700; color:#a78bfa; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
-                <span>🔐</span> Google Sign-In &amp; Cloud Sync
-              </div>
-              <div style="font-size:0.82rem; line-height:1.5;">
-                If you sign in using Google Auth, your email, display name, and unique user ID are authenticated through Google Firebase solely to synchronize your autonomous routines and team rosters across your own devices.
-              </div>
-            </div>
-
-            <!-- Hardware Web Serial Link -->
-            <div style="background:var(--card-inner); border:1px solid var(--border); border-radius:6px; padding:16px;">
-              <div style="font-weight:700; color:#fb923c; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
-                <span>🔌</span> Web Serial Hardware Link
-              </div>
-              <div style="font-size:0.82rem; line-height:1.5;">
-                Communication with the VEX V5 Brain via Web Serial USB CDC runs 100% locally on your computer. No hardware serial payloads, motor diagnostics, or flashed program binaries are uploaded to external analytics or ad servers.
-              </div>
+        <div class="editorial-ledger-list">
+          <div class="editorial-ledger-item">
+            <div class="ledger-item-label">Local Browser Storage</div>
+            <div class="ledger-item-body">
+              Your autonomous paths, waypoint coordinates, PID constants, and C++ files are saved directly in your browser (LocalStorage and IndexedDB). We never read, sell, or share your team's autonomous code.
             </div>
           </div>
-
-          <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:0;">
-            <strong>No Data Monetization:</strong> We do not sell personal information to data brokers. Aggregated, non-personally identifiable metrics (e.g. daily active sessions and browser user-agents) are monitored solely for system uptime and performance improvements.
-          </p>
+          <div class="editorial-ledger-item">
+            <div class="ledger-item-label">USB Web Serial Hardware Link</div>
+            <div class="ledger-item-body">
+              When you plug in a VEX V5 Brain or Controller, serial communication runs 100% locally between your browser and your hardware. No firmware, telemetry logs, or compiled binaries leave your machine.
+            </div>
+          </div>
+          <div class="editorial-ledger-item">
+            <div class="ledger-item-label">Google Sign-In &amp; Cloud Sync</div>
+            <div class="ledger-item-body">
+              If you choose to sign in with Google, your account ID and email are used through Firebase and Google Drive strictly to sync your project files across your own devices and authorized teammates.
+            </div>
+          </div>
+          <div class="editorial-ledger-item">
+            <div class="ledger-item-label">Advertising &amp; Cookies</div>
+            <div class="ledger-item-body">
+              Third-party ad partners (such as Google AdSense) may use cookies to display ads based on prior visits. You can opt out of personalized advertising at any time through <a href="https://adssettings.google.com/" target="_blank" rel="noopener" style="color:#38bdf8;">Google Ads Settings</a> or the <a href="https://optout.networkadvertising.org/" target="_blank" rel="noopener" style="color:#38bdf8;">Network Advertising Initiative</a>.
+            </div>
+          </div>
         </div>
       </section>
 
       <!-- Contact Us Section -->
       <section class="editorial-workbench-section" id="homeContact" style="margin-top: 48px; margin-bottom: 40px;">
         <div class="section-editorial-header">
-          <h2 class="editorial-section-title">📬 Contact Us &amp; Developer Support</h2>
-          <p class="section-meta-text">A genuine direct channel to reach our lead VEX coder and engineering team.</p>
+          <h2 class="editorial-section-title">Contact &amp; Bug Reports</h2>
+          <p class="section-meta-text">Found a parser bug or need help with a LemLib configuration? Email us directly.</p>
         </div>
 
-        <div style="background:var(--surface); border:1px solid var(--border); border-left:4px solid #38bdf8; border-radius:8px; padding:24px; line-height:1.6; color:var(--text-muted); font-size:0.9rem;">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:14px;">
-            <div>
-              <h3 style="color:var(--text); margin:0 0 4px 0; font-size:1.05rem;">Direct Developer Email</h3>
-              <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">Send questions on LemLib math, bug reports, feature requests, or competition team partnerships directly to:</p>
-              <a href="mailto:smashyblocks7@gmail.com" style="display:inline-block; margin-top:8px; font-family:var(--font-mono); font-size:1rem; color:#38bdf8; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.3); padding:6px 14px; border-radius:6px; text-decoration:none; font-weight:700;">
-                ✉️ smashyblocks7@gmail.com
-              </a>
-            </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              <a href="mailto:smashyblocks7@gmail.com?subject=VEX%20LemLib%20Planner%20Inquiry" class="btn-utilitarian-primary" style="text-decoration:none; padding:8px 18px; font-size:0.85rem;">
-                Email Lead Developer ➔
-              </a>
-              <a href="https://github.com/yl-loaf/vex-path-planner/issues" target="_blank" rel="noopener" class="btn-utilitarian-secondary" style="text-decoration:none; padding:8px 18px; font-size:0.85rem;">
-                GitHub Issue Tracker ↗
-              </a>
-            </div>
+        <div class="editorial-contact-strip">
+          <div class="contact-strip-main">
+            <div class="contact-strip-label">Direct Developer Contact</div>
+            <a href="mailto:smashyblocks7@gmail.com" class="contact-strip-email font-mono">smashyblocks7@gmail.com</a>
+            <span class="contact-strip-meta">We typically reply within 24–48 hours.</span>
           </div>
-
-          <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.82rem; color:var(--muted);">
-            <span>⏱️ <strong>Response Commitment:</strong> Inquiries are typically answered within 24–48 business hours.</span>
-            <span>📍 Hosted at: <a href="https://yl-loaf.github.io/vex-path-planner/" style="color:#38bdf8; text-decoration:none;">yl-loaf.github.io/vex-path-planner/</a></span>
+          <div class="contact-strip-actions">
+            <a href="mailto:smashyblocks7@gmail.com?subject=VEX%20LemLib%20Planner%20Inquiry" class="btn-utilitarian-primary" style="text-decoration:none;">
+              Send Email →
+            </a>
+            <a href="https://github.com/yl-loaf/vex-path-planner/issues" target="_blank" rel="noopener" class="btn-utilitarian-secondary" style="text-decoration:none;">
+              GitHub Issues ↗
+            </a>
           </div>
         </div>
       </section>
@@ -548,51 +511,51 @@
         <!-- Consolidated Tools & Project Menu -->
         <div class="tools-dropdown-wrap">
           <button type="button" id="btnToolsDropdown" class="btn-nav-tools" title="Project, Engineering Tools &amp; Guides">
-            Workspace Tools ▾
+            Workspace ▾
           </button>
           <div class="tools-dropdown-menu" id="toolsDropdownMenu" hidden>
-            <a href="tools.html" style="display:flex;align-items:center;justify-content:space-between;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);padding:9px 12px;border-radius: 8px;color:#38bdf8;font-weight:700;text-decoration:none;margin-bottom:8px;font-size:0.82rem;">
-              <span>🛠️ Open Engineering Tools Suite</span>
-              <span style="font-size:0.7rem;background:#0284c7;color:#fff;padding:2px 7px;border-radius: 4px;">20 Tools →</span>
+            <a href="tools.html" class="tools-suite-cta-link">
+              <span>Engineering Tools Suite</span>
+              <span class="tools-suite-cta-count">20 Tools →</span>
             </a>
 
-            <div class="tools-menu-header">📁 Project &amp; Workspace</div>
-            <button type="button" id="btnLoadProject" class="tools-menu-item">📁 Project Manager</button>
-            <button type="button" id="btnSyncProjectToCloud" class="tools-menu-item">☁️ Sync Cloud Workspace</button>
-            <button type="button" id="btnVersionHistoryBanner" class="tools-menu-item">📜 Version History (<span id="bannerVersionCount">0</span>)</button>
-            <button type="button" id="btnCompileProjectBanner" class="tools-menu-item">⚡ Compile Project (pros make)</button>
-            <button type="button" id="btnOpenCommandPalette" class="tools-menu-item">🔍 Command Palette (<span class="cmd-kbd">Ctrl+K</span>)</button>
-            <button type="button" id="btnStartQuickTour" class="tools-menu-item">🎓 Guided Quick Tour</button>
+            <div class="tools-menu-header">Project &amp; Workspace</div>
+            <button type="button" id="btnLoadProject" class="tools-menu-item">Project Manager</button>
+            <button type="button" id="btnSyncProjectToCloud" class="tools-menu-item">Sync Cloud Workspace</button>
+            <button type="button" id="btnVersionHistoryBanner" class="tools-menu-item">Version History (<span id="bannerVersionCount">0</span>)</button>
+            <button type="button" id="btnCompileProjectBanner" class="tools-menu-item">Compile Project (pros make)</button>
+            <button type="button" id="btnOpenCommandPalette" class="tools-menu-item">Command Palette (<span class="cmd-kbd">Ctrl+K</span>)</button>
+            <button type="button" id="btnStartQuickTour" class="tools-menu-item">Quick Tour</button>
 
             <div class="tools-menu-divider"></div>
-            <div class="tools-menu-header">🛠️ Engineering Analysis (<a href="tools.html" style="color:#38bdf8;text-decoration:none;">View all 20 on Tools page</a>)</div>
-            <button type="button" id="btnToolsSuiteDropdown" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">🛠️ All Tools Suite (Fullscreen) ⛶</button>
-            <button type="button" id="btnOpenMatchReplay" class="tools-menu-item" style="color:#f59e0b; font-weight:700;">📊 Match Replay &amp; Log Analysis (ALPHA)</button>
-            <button type="button" id="btnToggleDebug" class="tools-menu-item">🐞 Live Debugger &amp; Inspector</button>
-            <button type="button" id="btnToolsAllianceMirror" class="tools-menu-item">🪞 Alliance Routine Mirror</button>
-            <button type="button" id="btnToolsDrivePhysics" class="tools-menu-item">⚡ Real-Time Drive Dyno &amp; Physics</button>
-            <button type="button" id="btnToolsSharpTurns" class="tools-menu-item">⚡ Sharp Turn Velocity Analyzer</button>
-            <button type="button" id="btnPidTuner" class="tools-menu-item">🎛️ PID Gain Tuner</button>
-            <button type="button" id="btnExportVideo" class="tools-menu-item">🎥 Export .mp4 Video</button>
+            <div class="tools-menu-header">Analysis &amp; Tuning (<a href="tools.html" style="color:#38bdf8;text-decoration:none;">All 20</a>)</div>
+            <button type="button" id="btnToolsSuiteDropdown" class="tools-menu-item">All Tools Suite (Fullscreen)</button>
+            <button type="button" id="btnOpenMatchReplay" class="tools-menu-item">Match Replay &amp; Log Analysis</button>
+            <button type="button" id="btnToggleDebug" class="tools-menu-item">Telemetry &amp; Step Inspector</button>
+            <button type="button" id="btnToolsAllianceMirror" class="tools-menu-item">Alliance Routine Mirror</button>
+            <button type="button" id="btnToolsDrivePhysics" class="tools-menu-item">Drive Dyno &amp; Physics</button>
+            <button type="button" id="btnToolsSharpTurns" class="tools-menu-item">Sharp Turn Velocity Analyzer</button>
+            <button type="button" id="btnPidTuner" class="tools-menu-item">PID Gain Tuner</button>
+            <button type="button" id="btnExportVideo" class="tools-menu-item">Export .mp4 Video</button>
 
             <div class="tools-menu-divider"></div>
-            <div class="tools-menu-header">📂 Import / Export</div>
-            <button type="button" id="btnImport" class="tools-menu-item">📂 Import .vpath</button>
-            <button type="button" id="btnExport" class="tools-menu-item">💾 Export .vpath</button>
-            <a href="translator.html" class="tools-menu-item">📥 C++ Code Translator</a>
-            <button type="button" id="btnClear" class="tools-menu-item danger-item">🗑️ Clear Current Routine</button>
+            <div class="tools-menu-header">Import / Export</div>
+            <button type="button" id="btnImport" class="tools-menu-item">Import .vpath</button>
+            <button type="button" id="btnExport" class="tools-menu-item">Export .vpath</button>
+            <a href="translator.html" class="tools-menu-item">C++ Code Translator</a>
+            <button type="button" id="btnClear" class="tools-menu-item danger-item">Clear Current Routine</button>
 
             <div class="tools-menu-divider"></div>
-            <div class="tools-menu-header">📖 Guides, Team &amp; Info</div>
-            <a href="documentation.html" class="tools-menu-item" style="color:#38bdf8;font-weight:700;">📖 Documentation &amp; API Guide</a>
-            <a href="team.html" class="tools-menu-item" style="color:#38bdf8;font-weight:700;">👥 Team Collaboration (BETA)</a>
-            <a href="admin.html" class="tools-menu-item" style="color:#f59e0b;font-weight:700;">🛡️ Team Admin &amp; Permissions</a>
-            <button type="button" id="btnOpenTutorial" class="tools-menu-item">🎓 Interactive LemLib Tutorial</button>
-            <a href="stats.html" class="tools-menu-item">📊 Site &amp; User Stats</a>
-            <button type="button" id="btnMenuAboutUs" class="tools-menu-item">👤 About Us &amp; Qualifications</button>
-            <button type="button" id="btnMenuPrivacyPolicy" class="tools-menu-item">🛡️ Privacy Policy &amp; Ad Tracking</button>
-            <button type="button" id="btnMenuContactUs" class="tools-menu-item">📬 Contact Developer (smashyblocks7@gmail.com)</button>
-            <button type="button" id="btnHelp" class="tools-menu-item">❓ Help &amp; Guides</button>
+            <div class="tools-menu-header">Reference &amp; Info</div>
+            <a href="documentation.html" class="tools-menu-item">Documentation &amp; API Reference</a>
+            <a href="team.html" class="tools-menu-item">Team Collaboration</a>
+            <a href="admin.html" class="tools-menu-item">Team Admin &amp; Permissions</a>
+            <button type="button" id="btnOpenTutorial" class="tools-menu-item">Interactive LemLib Tutorial</button>
+            <a href="stats.html" class="tools-menu-item">Visitor Stats</a>
+            <button type="button" id="btnMenuAboutUs" class="tools-menu-item">About Us</button>
+            <button type="button" id="btnMenuPrivacyPolicy" class="tools-menu-item">Privacy &amp; Data Policy</button>
+            <button type="button" id="btnMenuContactUs" class="tools-menu-item">Contact Developer</button>
+            <button type="button" id="btnHelp" class="tools-menu-item">Help &amp; Shortcuts</button>
           </div>
         </div>
 
@@ -617,10 +580,12 @@
     <!-- Streamlined Project Status Ribbon -->
     <div class="project-banner" id="projectBanner">
       <div class="project-banner-left">
-        <strong class="project-name-label" id="bannerProjectName">Override_LemLib_Bot</strong>
-        <span class="project-file-label">Synced File: <code>src/autons.cpp</code></span>
-        <span class="project-variable-pill" id="bannerVariableCount" title="Variables and devices indexed across robot-config.h and other project files">0 devices indexed</span>
-        <span class="project-raw-badge" id="bannerRawBadge" style="display:none;" title="Raw C++ code preserved from IDE. Click to view versions.">🛡️ Raw C++ Preserved</span>
+        <strong class="project-name-label font-mono" id="bannerProjectName">Override_LemLib_Bot</strong>
+        <span class="banner-sep" aria-hidden="true">·</span>
+        <span class="project-file-label">Target: <code>src/autons.cpp</code></span>
+        <span class="banner-sep" aria-hidden="true">·</span>
+        <span class="project-variable-pill font-mono tabular-nums" id="bannerVariableCount" title="Variables and devices indexed across robot-config.h and other project files">0 devices indexed</span>
+        <span class="project-raw-badge font-mono" id="bannerRawBadge" style="display:none;" title="Raw C++ code preserved from IDE. Click to view versions.">Raw C++ Preserved</span>
       </div>
       <div class="project-banner-right" style="display:none;">
         <button type="button" id="btnProjectActionsDropdown" hidden></button>
@@ -634,25 +599,25 @@
         <!-- Modern Segmented Tabs for Clean, Uncluttered Navigation -->
         <div class="planner-tab-bar" id="plannerTabBar" role="tablist">
           <button type="button" class="planner-tab-btn active" data-tab="flowchart" id="tabBtnFlowchart">
-            <span class="tab-icon">🎯</span> Routine (<span id="tabActionCount">0</span>)
+            Routine (<span id="tabActionCount" class="tabular-nums">0</span>)
           </button>
           <button type="button" class="planner-tab-btn" data-tab="conditions" id="tabBtnConditions" title="Manage boolean variables and flags for If/Else and Loop blocks">
-            <span class="tab-icon">🔀</span> Conditions (<span id="tabConditionCount">5</span>)
+            Conditions (<span id="tabConditionCount" class="tabular-nums">5</span>)
           </button>
           <button type="button" class="planner-tab-btn" data-tab="bot" id="tabBtnBot">
-            <span class="tab-icon">🤖</span> Bot &amp; PID
+            Bot &amp; PID
           </button>
           <button type="button" class="planner-tab-btn" data-tab="code" id="tabBtnCode">
-            <span class="tab-icon">💻</span> C++ Code
+            C++ Code
           </button>
         </div>
 
         <!-- TAB PANE 1: Flowchart & Actions -->
         <div class="planner-tab-pane active" id="paneTabFlowchart">
           <div class="panel-header" style="margin-top:6px;">
-            <h2>Auton Action Flow</h2>
-            <div style="display:flex;align-items:center;gap:4px;">
-              <button type="button" id="btnOpenRoutineFlowchart" class="btn-flowchart-routine" title="View interactive seamless multitask flowchart for full routine">⚡ Flowchart</button>
+            <h2>Autonomous Sequence</h2>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <button type="button" id="btnOpenRoutineFlowchart" class="btn-flowchart-routine" title="View parallel task diagram for this routine">Task Graph</button>
               <span id="saveStatus" class="save-status">Saved</span>
             </div>
           </div>
@@ -666,12 +631,12 @@
               <div class="compact-dropdown-wrap">
                 <button type="button" id="btnRoutineMenuDropdown" class="btn-routine-more" title="More routine actions (Rename, Duplicate, Mirror, Delete)">⋯</button>
                 <div class="compact-dropdown-menu" id="routineActionsMenu" hidden>
-                  <button type="button" id="btnPathRename">✏️ Rename Routine</button>
-                  <button type="button" id="btnPathDup">📋 Duplicate Routine</button>
-                  <button type="button" id="btnOpenAllianceMirror">🪞 Alliance Mirroring...</button>
-                  <button type="button" id="btnPathMirror" style="display:none;">🪞 Mirroring</button>
+                  <button type="button" id="btnPathRename">Rename Routine</button>
+                  <button type="button" id="btnPathDup">Duplicate Routine</button>
+                  <button type="button" id="btnOpenAllianceMirror">Alliance Mirroring...</button>
+                  <button type="button" id="btnPathMirror" style="display:none;">Mirroring</button>
                   <div class="compact-dropdown-divider"></div>
-                  <button type="button" id="btnPathDel" class="danger-item">🗑️ Delete Routine</button>
+                  <button type="button" id="btnPathDel" class="danger-item">Delete Routine</button>
                 </div>
               </div>
             </div>
@@ -681,37 +646,35 @@
           <div class="palette-bar">
             <div class="palette-header">
               <div class="palette-title-group">
-                <span class="palette-title">
-                  <span>🧩</span> Block Palette
-                </span>
-                <span class="palette-drag-hint" title="Drag any block directly into the action flow below, or click to append">✨ Drag blocks into flow or click</span>
+                <span class="palette-title">Command Palette</span>
+                <span class="palette-drag-hint" title="Drag any block directly into the action flow below, or click to append">Drag into sequence or click to append</span>
               </div>
               <div class="category-chips">
-                <button type="button" class="cat-chip cat-all active" data-cat="all">✨ All</button>
-                <button type="button" class="cat-chip cat-motion" data-cat="motion">🔵 Motion</button>
-                <button type="button" class="cat-chip cat-turn" data-cat="turn">🟣 Turns</button>
-                <button type="button" class="cat-chip cat-control" data-cat="control">🟡 Control</button>
-                <button type="button" class="cat-chip cat-subsystem" data-cat="subsystem">🟢 Subsystems</button>
-                <button type="button" class="cat-chip cat-custom" data-cat="custom">🔴 C++ Code</button>
+                <button type="button" class="cat-chip cat-all active" data-cat="all">All</button>
+                <button type="button" class="cat-chip cat-motion" data-cat="motion">Motion</button>
+                <button type="button" class="cat-chip cat-turn" data-cat="turn">Turns</button>
+                <button type="button" class="cat-chip cat-control" data-cat="control">Control</button>
+                <button type="button" class="cat-chip cat-subsystem" data-cat="subsystem">Subsystems</button>
+                <button type="button" class="cat-chip cat-custom" data-cat="custom">C++</button>
               </div>
             </div>
             <div class="palette-search-container">
-              <input type="text" id="paletteSearchInput" placeholder="🔍 Search blocks (e.g. moveTo, clamp, intake, turn, loop)..." autocomplete="off" />
+              <input type="text" id="paletteSearchInput" placeholder="Filter commands (moveTo, clamp, intake, turn, loop)..." autocomplete="off" />
               <button type="button" id="paletteSearchClear" title="Clear search" style="display: none;">✕</button>
             </div>
             <div class="palette-block-list">
-              <button type="button" class="palette-block-btn btn-motion" draggable="true" data-act-type="moveToPoint" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point" title="Drag into action flow or click to add">🔵 moveToPoint(x, y)</button>
-              <button type="button" class="palette-block-btn btn-motion" draggable="true" data-act-type="moveToPose" data-category="motion" data-keywords="movetopose moveToPose x y theta heading motion pose" title="Drag into action flow or click to add">🔵 moveToPose(x, y, θ)</button>
-              <button type="button" class="palette-block-btn btn-bezier" draggable="true" data-act-type="bezierCurve" data-category="motion" data-keywords="bezier curve spline arc control point smooth curved trajectory" style="background:rgba(14,116,144,0.35),rgba(8,145,178,0.35));border-color:#06b6d4;color:#cffafe;" title="Drag into action flow or click to add">🌊 bezierCurve(x, y, θ)</button>
-              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="turnToHeading" data-category="turn" data-keywords="turntoheading turnToHeading theta heading turn rotate" title="Drag into action flow or click to add">🟣 turnToHeading(θ)</button>
-              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="turnToPoint" data-category="turn" data-keywords="turntopoint turnToPoint x y turn rotate point" title="Drag into action flow or click to add">🟣 turnToPoint(x, y)</button>
-              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="swingToHeading" data-category="turn" data-keywords="swingtoheading swingToHeading theta swing rotate" title="Drag into action flow or click to add">🟣 swingToHeading(θ)</button>
-              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="wait" data-category="control" data-keywords="wait delay pause timer" title="Drag into action flow or click to add">🟡 wait / delay</button>
-              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="ifElse" data-category="control" data-keywords="ifelse if else scratch condition branch" title="Drag into action flow or click to add">🟡 If / Else (Scratch)</button>
-              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="loop" data-category="control" data-keywords="loop for until forever repeat" title="Drag into action flow or click to add">🔁 Loop (for/until/forever)</button>
-              <button type="button" class="palette-block-btn btn-subsystem" draggable="true" data-category="subsystem" data-keywords="clamp goal pneumatic pneumatics set_value" data-snip-add="clamp.set_value(true);" title="Drag into action flow or click to add">🟢 clamp goal</button>
-              <button type="button" class="palette-block-btn btn-subsystem" draggable="true" data-category="subsystem" data-keywords="intake move motor rollers" data-snip-add="intake.move(127);" title="Drag into action flow or click to add">🟢 intake on</button>
-              <button type="button" class="palette-block-btn btn-custom" draggable="true" data-category="custom" data-keywords="custom cpp code snippet" data-act-type="custom" title="Drag into action flow or click to add">🔴 custom C++</button>
+              <button type="button" class="palette-block-btn btn-motion" draggable="true" data-act-type="moveToPoint" data-category="motion" data-keywords="movetopoint moveToPoint x y motion drive point" title="Drag into action flow or click to add">moveToPoint(x, y)</button>
+              <button type="button" class="palette-block-btn btn-motion" draggable="true" data-act-type="moveToPose" data-category="motion" data-keywords="movetopose moveToPose x y theta heading motion pose" title="Drag into action flow or click to add">moveToPose(x, y, θ)</button>
+              <button type="button" class="palette-block-btn btn-bezier" draggable="true" data-act-type="bezierCurve" data-category="motion" data-keywords="bezier curve spline arc control point smooth curved trajectory" title="Drag into action flow or click to add">bezierCurve(x, y, θ)</button>
+              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="turnToHeading" data-category="turn" data-keywords="turntoheading turnToHeading theta heading turn rotate" title="Drag into action flow or click to add">turnToHeading(θ)</button>
+              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="turnToPoint" data-category="turn" data-keywords="turntopoint turnToPoint x y turn rotate point" title="Drag into action flow or click to add">turnToPoint(x, y)</button>
+              <button type="button" class="palette-block-btn btn-turn" draggable="true" data-act-type="swingToHeading" data-category="turn" data-keywords="swingtoheading swingToHeading theta swing rotate" title="Drag into action flow or click to add">swingToHeading(θ)</button>
+              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="wait" data-category="control" data-keywords="wait delay pause timer" title="Drag into action flow or click to add">wait / delay</button>
+              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="ifElse" data-category="control" data-keywords="ifelse if else scratch condition branch" title="Drag into action flow or click to add">if / else</button>
+              <button type="button" class="palette-block-btn btn-control" draggable="true" data-act-type="loop" data-category="control" data-keywords="loop for until forever repeat" title="Drag into action flow or click to add">loop (for / while)</button>
+              <button type="button" class="palette-block-btn btn-subsystem" draggable="true" data-category="subsystem" data-keywords="clamp goal pneumatic pneumatics set_value" data-snip-add="clamp.set_value(true);" title="Drag into action flow or click to add">clamp.set_value</button>
+              <button type="button" class="palette-block-btn btn-subsystem" draggable="true" data-category="subsystem" data-keywords="intake move motor rollers" data-snip-add="intake.move(127);" title="Drag into action flow or click to add">intake.move</button>
+              <button type="button" class="palette-block-btn btn-custom" draggable="true" data-category="custom" data-keywords="custom cpp code snippet" data-act-type="custom" title="Drag into action flow or click to add">Custom C++</button>
             </div>
           </div>
 
@@ -722,8 +685,8 @@
 
           <div class="start-card" id="startCard">
             <div class="card-title">
-              <span class="badge start">START</span>
-              <span class="hint-inline">Drag robot on field · must touch wall</span>
+              <span class="badge start">START POSE</span>
+              <span class="hint-inline">Drag robot on field · snaps to alliance wall</span>
             </div>
             <div class="card-body row">
               <label>X <input type="number" id="startX" step="0.001" value="-60" /></label>
@@ -748,16 +711,16 @@
             <select id="newType">
               <option value="moveToPoint">moveToPoint</option>
               <option value="moveToPose">moveToPose</option>
-              <option value="bezierCurve">🌊 bezierCurve (Spline Arc)</option>
+              <option value="bezierCurve">bezierCurve (Spline Arc)</option>
               <option value="turnToPoint">turnToPoint</option>
               <option value="turnToHeading">turnToHeading</option>
               <option value="swingToPoint">swingToPoint</option>
               <option value="swingToHeading">swingToHeading</option>
-              <option value="wait">📍 Wait / Event Trigger</option>
-              <option value="ifElse">🔀 if / else (Scratch Block)</option>
-              <option value="custom">Custom Code</option>
+              <option value="wait">wait / delay</option>
+              <option value="ifElse">if / else branch</option>
+              <option value="custom">Custom C++</option>
             </select>
-            <button id="btnAddAction" class="primary">+ Add Block</button>
+            <button id="btnAddAction" class="primary">+ Add Step</button>
           </div>
         </div>
 
@@ -765,43 +728,41 @@
         <div class="planner-tab-pane" id="paneTabConditions" style="display:none;">
           <section class="conditions-section" style="margin-top:4px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:4px;">
-              <h2 style="margin-bottom:0;display:flex;align-items:center;gap:6px;">
-                <span>🔀 Condition Manager</span>
-              </h2>
+              <h2 style="margin-bottom:0;">Boolean Flags &amp; Conditions</h2>
               <div style="display:flex;gap:4px;">
-                <button type="button" id="btnCondAddPresetPack" class="btn-xs-clean" title="Load VEX robotics standard condition variables">📦 Presets</button>
-                <button type="button" id="btnCondResetDefaults" class="btn-xs-clean" title="Reset to default condition variables">🔄 Reset</button>
+                <button type="button" id="btnCondAddPresetPack" class="btn-xs-clean" title="Load standard VEX sensor condition flags">Load Presets</button>
+                <button type="button" id="btnCondResetDefaults" class="btn-xs-clean" title="Reset to default condition variables">Reset</button>
               </div>
             </div>
 
-            <p class="hint" style="margin-bottom:8px">Define boolean variables (e.g. <code>isGoalLoaded</code>, <code>ringDetected</code>) to control <strong>If/Else</strong> branching and loop logic across your autonomous routines.</p>
+            <p class="hint" style="margin-bottom:8px">Declare boolean variables (such as <code>isGoalLoaded</code> or <code>ringDetected</code>) to test branching paths in simulation and export to C++.</p>
 
             <!-- Add / Create Variable Card -->
             <div class="cond-create-card">
               <div class="cond-create-header">
-                <span style="font-weight:700;font-size:0.78rem;color:#38bdf8;">➕ Define New Variable</span>
-                <span style="font-size:0.68rem;color:#94a3b8;">C++ <code>bool</code> flag</span>
+                <span style="font-weight:700;font-size:0.78rem;color:var(--text);">New Boolean Flag</span>
+                <span style="font-size:0.68rem;color:var(--text-muted);" class="font-mono">bool</span>
               </div>
               <div class="row" style="margin-bottom:6px;">
                 <label style="flex:1.4;">Variable Name
-                  <input type="text" id="newCondName" placeholder="e.g. isGoalLoaded" style="font-family:ui-monospace, monospace;font-weight:700;" />
+                  <input type="text" id="newCondName" placeholder="e.g. isGoalLoaded" style="font-family:var(--font-mono);font-weight:600;" />
                 </label>
-                <label style="flex:1;">Initial Sim Value
+                <label style="flex:1;">Sim State
                   <div class="cond-val-pill-group" id="newCondValGroup">
-                    <button type="button" class="cond-val-pill active" id="pillValTrue" data-val="true">✓ true</button>
-                    <button type="button" class="cond-val-pill" id="pillValFalse" data-val="false">✕ false</button>
+                    <button type="button" class="cond-val-pill active" id="pillValTrue" data-val="true">true</button>
+                    <button type="button" class="cond-val-pill" id="pillValFalse" data-val="false">false</button>
                   </div>
                 </label>
               </div>
               <div class="row" style="margin-bottom:8px;">
-                <label style="flex:1;">Description / Note (optional)
-                  <input type="text" id="newCondDesc" placeholder="e.g. Mobile goal clamp loaded / engaged" />
+                <label style="flex:1;">Comment (optional)
+                  <input type="text" id="newCondDesc" placeholder="e.g. Clamp switch triggered" />
                 </label>
               </div>
               
               <!-- Quick Preset Chips -->
               <div class="cond-quick-presets">
-                <span style="font-size:0.68rem;color:#64748b;font-weight:600;">Quick Presets:</span>
+                <span style="font-size:0.68rem;color:var(--text-muted);font-weight:600;">Templates:</span>
                 <button type="button" class="cond-quick-chip" data-name="isGoalLoaded" data-val="true" data-desc="Mobile goal clamp locked">isGoalLoaded</button>
                 <button type="button" class="cond-quick-chip" data-name="ringDetected" data-val="false" data-desc="Optical sensor sees ring">ringDetected</button>
                 <button type="button" class="cond-quick-chip" data-name="isRedAlliance" data-val="true" data-desc="Red alliance match side">isRedAlliance</button>
@@ -810,16 +771,16 @@
               </div>
 
               <div style="margin-top:8px;">
-                <button type="button" id="btnAddNewCondition" class="primary" style="width:100%;padding:6px 12px;font-size:0.8rem;">+ Add Condition Variable</button>
+                <button type="button" id="btnAddNewCondition" class="primary" style="width:100%;padding:6px 12px;font-size:0.8rem;">+ Add Variable</button>
               </div>
             </div>
 
             <!-- Search & Active Count -->
             <div class="cond-search-bar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;margin-bottom:6px;">
               <div style="display:flex;align-items:center;gap:6px;flex:1;">
-                <input type="text" id="condSearchInput" placeholder="🔍 Filter variables..." style="font-size:0.75rem;padding:4px 8px;border-radius: 4px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;width:100%;" />
+                <input type="text" id="condSearchInput" placeholder="Filter variables..." style="font-size:0.75rem;padding:4px 8px;border-radius: 4px;background:var(--bg);border:1px solid var(--border);color:var(--text);width:100%;" />
               </div>
-              <span id="condActiveCountBadge" class="badge" style="font-size:0.7rem;background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);white-space:nowrap;">5 Variables</span>
+              <span id="condActiveCountBadge" class="font-mono tabular-nums" style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;">5 Variables</span>
             </div>
 
             <!-- Condition Variables List Container -->
@@ -828,23 +789,23 @@
             </div>
 
             <!-- Active Routine Usage Summary -->
-            <div class="cond-usage-box" id="condUsageBox" style="margin-top:10px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
+            <div class="cond-usage-box" id="condUsageBox" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                <span style="font-size:0.74rem;font-weight:700;color:#fbbf24;">⚡ Condition Usage in Active Routine</span>
-                <span id="condIfElseCountBadge" style="font-size:0.68rem;color:#94a3b8;">0 blocks</span>
+                <span style="font-size:0.74rem;font-weight:700;color:var(--text);">Used in Active Routine</span>
+                <span id="condIfElseCountBadge" class="font-mono tabular-nums" style="font-size:0.68rem;color:var(--text-muted);">0 blocks</span>
               </div>
-              <div id="condIfElseUsageList" style="font-size:0.72rem;color:#cbd5e1;display:flex;flex-direction:column;gap:4px;">
+              <div id="condIfElseUsageList" style="font-size:0.72rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px;">
                 <!-- Populated dynamically -->
               </div>
             </div>
 
             <!-- C++ Code Declarations Preview -->
-            <div class="cond-cpp-preview-box" style="margin-top:10px;background:#090d16;border:1px solid #1e293b;border-radius: 8px;padding:8px;">
+            <div class="cond-cpp-preview-box" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                <span style="font-size:0.72rem;font-weight:700;color:#94a3b8;">📄 C++ Variable Declarations</span>
-                <button type="button" id="btnCopyCondCpp" class="btn-xs-clean" style="font-size:0.65rem;">📋 Copy C++</button>
+                <span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);">C++ Declarations</span>
+                <button type="button" id="btnCopyCondCpp" class="btn-xs-clean" style="font-size:0.65rem;">Copy C++</button>
               </div>
-              <pre id="condCppPreview" style="margin:0;padding:6px;background:#030712;border-radius: 4px;font-family:ui-monospace, monospace;font-size:0.7rem;color:#38bdf8;overflow-x:auto;max-height:100px;"></pre>
+              <pre id="condCppPreview" style="margin:0;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius: 4px;font-family:var(--font-mono);font-size:0.7rem;color:#38bdf8;overflow-x:auto;max-height:100px;"></pre>
             </div>
           </section>
         </div>
@@ -852,24 +813,22 @@
         <!-- TAB PANE 2: Bot & LemLib PID Hardware Setup -->
         <div class="planner-tab-pane" id="paneTabBot" style="display:none;">
           <section class="bot-settings" id="botSettings" style="margin-top:4px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:4px;">
-              <h2 style="margin-bottom:0;display:flex;align-items:center;gap:6px;">
-                <span>🤖 LemLib Bot &amp; Hardware Setup</span>
-              </h2>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px;">
+              <h2 style="margin-bottom:0;">Chassis &amp; PID Configuration</h2>
               <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <button type="button" id="btnSyncBotFromCpp" class="btn-xs-clean" title="Extract and sync values from src/robot-config.cpp">🔄 Sync from C++</button>
-                <button type="button" id="btnSaveBotToCpp" class="btn-xs-clean" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);" title="Inject these values into src/robot-config.cpp">💾 Update C++</button>
-                <button type="button" id="btnOpenPidFromBot" class="btn-sm-pid-shortcut" title="Open PID Tuning Visualizer">🎛️ Tune PID</button>
-                <a href="tools.html#pid" class="btn-xs-clean" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);text-decoration:none;" title="Open Dedicated LemLib PID Gain Step Response Playground on Tools Page">🛠️ Tools Page ↗</a>
+                <button type="button" id="btnSyncBotFromCpp" class="btn-xs-clean" title="Read settings from src/robot-config.cpp">Read C++</button>
+                <button type="button" id="btnSaveBotToCpp" class="btn-xs-clean" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);" title="Write settings to src/robot-config.cpp">Write C++</button>
+                <button type="button" id="btnOpenPidFromBot" class="btn-sm-pid-shortcut" title="Open Step-Response PID Visualizer">PID Graph</button>
+                <a href="tools.html#pid" class="btn-xs-clean" style="color:#38bdf8;border-color:rgba(56,189,248,0.4);text-decoration:none;" title="Open Tools Suite">Tools ↗</a>
               </div>
             </div>
             
-            <div id="botSyncStatusBadge" class="bot-sync-badge synced" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius: 4px;padding:4px 8px;font-size:0.72rem;color:#34d399;">
-              <span>⚡ Synced with <code>src/robot-config.cpp</code></span>
-              <span id="botSyncDetail" style="color:#94a3b8;font-size:0.68rem;">600 RPM · 3.25" Wheels</span>
+            <div id="botSyncStatusBadge" class="bot-sync-badge synced" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0;font-size:0.72rem;color:#34d399;">
+              <span>Synced with <code>src/robot-config.cpp</code></span>
+              <span id="botSyncDetail" class="font-mono tabular-nums" style="color:var(--text-muted);font-size:0.68rem;">600 RPM · 3.25" Wheels</span>
             </div>
 
-            <p class="hint" style="margin-bottom:6px">Actual robot dimensions in inches scale accurately onto the 144&quot; field and drive all LemLib simulation calculations</p>
+            <p class="hint" style="margin-bottom:8px">Physical measurements in inches scale the robot footprint on the 144" field and drive the 10ms kinematics loop.</p>
             
             <!-- Drivetrain & Dimensions -->
             <div class="row">
@@ -887,7 +846,7 @@
               <label>Wheel diam (in)
                 <div style="display:flex;gap:4px;">
                   <input type="number" id="wheelDiam" step="0.05" value="3.25" min="0.5" style="width:65px;"/>
-                  <select id="wheelDiamPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;flex:1;">
+                  <select id="wheelDiamPreset" style="font-size:0.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius: 4px;flex:1;">
                     <option value="3.25">3.25" (NEW_325)</option>
                     <option value="2.75">2.75" (NEW_275)</option>
                     <option value="2.0">2.00" (NEW_2)</option>
@@ -898,7 +857,7 @@
               <label>Drivetrain RPM
                 <div style="display:flex;gap:4px;">
                   <input type="number" id="driveRpm" step="1" value="600" min="1" style="width:65px;"/>
-                  <select id="driveRpmPreset" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;flex:1;">
+                  <select id="driveRpmPreset" style="font-size:0.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius: 4px;flex:1;">
                     <option value="600">600 RPM (Blue 1:1)</option>
                     <option value="450">450 RPM (Blue 36:48)</option>
                     <option value="360">360 RPM (Green 36:60)</option>
@@ -918,17 +877,17 @@
             </div>
 
             <!-- Real-Time Drive Physics & Dyno Configuration -->
-            <div class="bot-physics-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
+            <div class="bot-physics-section" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:6px;flex-wrap:wrap;">
-                <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;">⚡ Real-Time Drive Physics &amp; Dyno</span>
+                <span style="font-size:0.75rem;font-weight:700;color:var(--text);">Drivetrain Mass &amp; Traction</span>
                 <div style="display:flex;gap:4px;">
-                  <button type="button" id="btnOpenPhysicsFromBot" class="btn-xs-clean" style="color:#fbbf24;border-color:rgba(245,158,11,0.4);" title="Open Real-Time Drive Dyno &amp; Telemetry Inspector">⚡ Dyno Modal</button>
-                  <a href="tools.html#dyno" class="btn-xs-clean" style="color:#fbbf24;border-color:rgba(245,158,11,0.4);text-decoration:none;" title="Open Dedicated Real-Time Drive Dyno on Tools Page">🛠️ Tools Page ↗</a>
+                  <button type="button" id="btnOpenPhysicsFromBot" class="btn-xs-clean" title="Open Drive Dyno &amp; Telemetry Curve">Open Dyno</button>
+                  <a href="tools.html#dyno" class="btn-xs-clean" style="text-decoration:none;" title="Open Dedicated Drive Dyno on Tools Page">Full Dyno ↗</a>
                 </div>
               </div>
               <div class="row" style="margin-bottom:4px;">
                 <label title="Number of drivetrain drive motors">Motors
-                  <select id="botMotorCount" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;">
+                  <select id="botMotorCount" style="font-size:0.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius: 4px;">
                     <option value="6" selected>6-Motor (3L/3R)</option>
                     <option value="4">4-Motor (2L/2R)</option>
                     <option value="8">8-Motor (4L/4R)</option>
@@ -940,14 +899,14 @@
               </div>
               <div class="row">
                 <label title="Friction coefficient between drive wheels and foam field tiles">Traction (µ)
-                  <select id="botWheelTraction" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;">
+                  <select id="botWheelTraction" style="font-size:0.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius: 4px;">
                     <option value="0.85" selected>0.85 µ (Omni on Foam)</option>
                     <option value="1.10">1.10 µ (Traction Wheels)</option>
                     <option value="0.65">0.65 µ (Worn Rollers)</option>
                   </select>
                 </label>
                 <label title="Battery state of charge / initial voltage">Battery (V)
-                  <select id="botBatteryVolts" style="font-size:0.72rem;background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius: 4px;">
+                  <select id="botBatteryVolts" style="font-size:0.72rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius: 4px;">
                     <option value="12.8" selected>12.8V (100% Fresh)</option>
                     <option value="12.2">12.2V (60% Typical)</option>
                     <option value="11.5">11.5V (Low Sag)</option>
@@ -957,18 +916,18 @@
             </div>
 
             <!-- LemLib PID Controllers Configuration (Direct in UI) -->
-            <div class="lemlib-pid-section" style="margin-top:10px;background:rgba(15,23,42,0.85);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
+            <div class="lemlib-pid-section" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <span style="font-size:0.75rem;font-weight:700;color:#38bdf8;">🎛️ LemLib PID Controller Constants</span>
-                <div class="pid-ui-tab-toggle" style="display:flex;gap:2px;background:#0b0f19;padding:2px;border-radius: 4px;">
-                  <button type="button" id="btnBotPidTabLat" class="btn-xs-tab active" style="padding:2px 6px;font-size:0.68rem;background:#0284c7;color:#fff;border:none;border-radius: 4px;cursor:pointer;">Lateral</button>
-                  <button type="button" id="btnBotPidTabAng" class="btn-xs-tab" style="padding:2px 6px;font-size:0.68rem;background:transparent;color:#94a3b8;border:none;border-radius: 4px;cursor:pointer;">Angular</button>
+                <span style="font-size:0.75rem;font-weight:700;color:var(--text);">LemLib PID Gains</span>
+                <div class="pid-ui-tab-toggle" style="display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);padding:2px;border-radius: 4px;">
+                  <button type="button" id="btnBotPidTabLat" class="btn-xs-tab active" style="padding:2px 8px;font-size:0.68rem;background:#0284c7;color:#fff;border:none;border-radius: 3px;cursor:pointer;">Lateral</button>
+                  <button type="button" id="btnBotPidTabAng" class="btn-xs-tab" style="padding:2px 8px;font-size:0.68rem;background:transparent;color:var(--text-muted);border:none;border-radius: 3px;cursor:pointer;">Angular</button>
                 </div>
               </div>
 
               <!-- Lateral PID Sub-card -->
               <div id="botPidLatCard">
-                <div style="font-size:0.68rem;color:#94a3b8;margin-bottom:4px;"><code>lemlib::ControllerSettings lateral_controller</code> (Linear Movements)</div>
+                <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:4px;"><code>lemlib::ControllerSettings lateral_controller</code></div>
                 <div class="row" style="margin-bottom:4px;">
                   <label title="Proportional gain for distance error">kP (Linear)
                     <input type="number" id="botLateralKp" step="0.1" value="8.0" min="0"/>
@@ -1006,7 +965,7 @@
 
               <!-- Angular PID Sub-card -->
               <div id="botPidAngCard" style="display:none;">
-                <div style="font-size:0.68rem;color:#94a3b8;margin-bottom:4px;"><code>lemlib::ControllerSettings angular_controller</code> (Heading Turns)</div>
+                <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:4px;"><code>lemlib::ControllerSettings angular_controller</code></div>
                 <div class="row" style="margin-bottom:4px;">
                   <label title="Proportional gain for heading error">kP (Angular)
                     <input type="number" id="botAngularKp" step="0.1" value="2.0" min="0"/>
@@ -1044,35 +1003,35 @@
             </div>
 
             <!-- Tracking Wheels & Sensors -->
-            <div class="tracking-sensors-section" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
+            <div class="tracking-sensors-section" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <span style="font-size:0.75rem;font-weight:700;color:#a78bfa;">🎯 Tracking Wheels &amp; Odom Sensors</span>
-                <span style="font-size:0.68rem;color:#64748b;">lemlib::OdomSensors</span>
+                <span style="font-size:0.75rem;font-weight:700;color:var(--text);">Odometry Tracking Wheels &amp; IMU</span>
+                <span style="font-size:0.68rem;color:var(--text-muted);" class="font-mono">lemlib::OdomSensors</span>
               </div>
               <div class="row">
-                <label title="Horizontal tracking wheel offset from center of rotation in inches (negative = behind/left)">Horiz Wheel Offset (in)
+                <label title="Horizontal tracking wheel offset from center of rotation in inches (negative = behind/left)">Horiz Offset (in)
                   <input type="number" id="horizTrackerOffset" step="0.1" value="-2.5"/>
                 </label>
                 <label title="Horizontal tracking wheel diameter in inches">Wheel Diam (in)
                   <input type="number" id="horizTrackerDiam" step="0.05" value="2.0"/>
                 </label>
-                <label title="IMU Smart Port Number">IMU Smart Port
+                <label title="IMU Smart Port Number">IMU Port
                   <input type="number" id="imuSensorPort" step="1" min="1" max="21" value="10"/>
                 </label>
               </div>
             </div>
 
             <!-- Drive Curves & Drift Scalers -->
-            <div class="drift-scalers-box" id="driftScalersBox" style="margin-top:8px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius: 8px;padding:8px;">
+            <div class="drift-scalers-box" id="driftScalersBox" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <span style="font-size:0.75rem;font-weight:700;color:#93c5fd;">🏎️ Drive Curves &amp; Drift Scalers</span>
-                <span style="font-size:0.68rem;color:#64748b;">moveToPose &amp; Kinematics</span>
+                <span style="font-size:0.75rem;font-weight:700;color:var(--text);">Pursuit &amp; Drift Scaling</span>
+                <span style="font-size:0.68rem;color:var(--text-muted);" class="font-mono">moveToPose</span>
               </div>
               <div class="row">
-                <label title="Simulates tile traction and lateral drift/slip (0.5 = high traction/crisp, 1.5 = high drift)">Lateral Drift Scaler
+                <label title="Simulates tile traction and lateral drift/slip (0.5 = high traction/crisp, 1.5 = high drift)">Lateral Drift
                   <input type="number" id="botLateralDrift" min="0.2" max="2.5" step="0.05" value="1.0" />
                 </label>
-                <label title="Angular turn curve and steering response exponent (0.5 = linear/snappy, 1.5 = progressive)">Turn Curve Scale
+                <label title="Angular turn curve and steering response exponent (0.5 = linear/snappy, 1.5 = progressive)">Turn Curve
                   <input type="number" id="botTurnDrift" min="0.2" max="2.5" step="0.05" value="1.0" />
                 </label>
                 <label title="Default Boomerang carrot lead distance multiplier for moveToPose">Default Lead
@@ -1080,22 +1039,20 @@
                 </label>
               </div>
             </div>
-            <p class="hint" style="margin-top:4px;font-size:0.72rem;color:#8b9bb4">All simulation movements and code generators use these exact LemLib constants; edit anytime.</p>
 
             <!-- Top-Down Robot Visual & Dimensions in Actual Inches -->
-            <div class="bot-visual-card" id="botVisualCard">
+            <div class="bot-visual-card" id="botVisualCard" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
               <div class="bot-visual-header">
                 <div class="bot-visual-title-wrap">
-                  <span class="bot-visual-badge">Field Scaled</span>
-                  <h3 class="bot-visual-title">📷 Top-Down Bot Picture</h3>
+                  <h3 class="bot-visual-title" style="font-size:0.78rem;margin:0;">Top-Down Robot Sprite</h3>
                 </div>
                 <button type="button" class="btn-bot-img-toggle active" id="btnToggleBotImg" title="Toggle robot picture visibility on field">
-                  👁️ Picture: ON
+                  Sprite: ON
                 </button>
               </div>
 
               <p class="bot-visual-desc">
-                Provide a top-down photo or CAD render of your bot. Enter dimensions in actual inches above; your bot is automatically scaled to match the 144&quot;&times;144&quot; field.
+                Upload a top-down photo or CAD render of your robot. It scales 1:1 against the 144" field using your width and length above.
               </p>
 
               <div class="bot-img-drop-zone" id="botImgDropZone" title="Click or drag an image here to load your top-down bot">
@@ -1107,20 +1064,19 @@
                     <span class="bot-thumb-front-tag" id="botThumbFrontTag">FRONT ↑</span>
                   </div>
                   <div class="bot-thumb-info">
-                    <div class="bot-thumb-size" id="botThumbSize">14.0&quot; &times; 14.0&quot;</div>
-                    <div class="bot-thumb-scale" id="botThumbScale">Scaled to field</div>
+                    <div class="bot-thumb-size font-mono tabular-nums" id="botThumbSize">14.0" × 14.0"</div>
+                    <div class="bot-thumb-scale" id="botThumbScale">1:1 field scale</div>
                   </div>
                 </div>
 
                 <div class="bot-img-upload-content" id="botImgUploadContent">
-                  <div class="bot-img-upload-icon">📷</div>
                   <div class="bot-img-upload-text">
-                    <strong>Click or Drag &amp; Drop</strong> top-down photo
-                    <span class="bot-img-upload-sub">PNG (transparent), JPG, SVG, or WebP</span>
+                    <strong>Drop top-down image</strong> or click to browse
+                    <span class="bot-img-upload-sub">PNG, JPG, SVG, or WebP</span>
                   </div>
                   <div class="bot-img-upload-btns">
-                    <button type="button" class="btn-img-action primary" id="btnUploadBotImg">Choose Image...</button>
-                    <button type="button" class="btn-img-action" id="btnPresetBotImg" title="Load sample VEX competition robot graphic">Sample Bot</button>
+                    <button type="button" class="btn-img-action primary" id="btnUploadBotImg">Select Image</button>
+                    <button type="button" class="btn-img-action" id="btnPresetBotImg" title="Load sample VEX competition robot graphic">Load Sample</button>
                   </div>
                 </div>
               </div>
@@ -1128,21 +1084,20 @@
               <!-- Image controls when active -->
               <div class="bot-img-controls" id="botImgControls" style="display:none;">
                 <div class="bot-img-dimension-callout">
-                  <span class="dim-icon">📐</span>
-                  <span class="dim-text">Field Scale: <strong id="botDimLabel">14.0&quot; &times; 14.0&quot;</strong></span>
+                  <span class="dim-text">Footprint: <strong id="botDimLabel" class="font-mono tabular-nums">14.0" × 14.0"</strong></span>
                   <label class="bot-ratio-lock-label" title="Keep proportional dimensions based on photo aspect ratio">
                     <input type="checkbox" id="botLockRatio" />
-                    <span>Lock Ratio</span>
+                    <span>Lock Aspect</span>
                   </label>
                 </div>
 
                 <div class="bot-img-row">
-                  <label class="bot-img-field">Photo Front Direction:
+                  <label class="bot-img-field">Intake / Front Side:
                     <select id="botImgOrientation" title="Which way does the front of your bot face in the original picture?">
-                      <option value="0">Front points UP (Top)</option>
-                      <option value="90">Front points RIGHT</option>
-                      <option value="180">Front points DOWN (Bottom)</option>
-                      <option value="270">Front points LEFT</option>
+                      <option value="0">Top (0°)</option>
+                      <option value="90">Right (90°)</option>
+                      <option value="180">Bottom (180°)</option>
+                      <option value="270">Left (270°)</option>
                     </select>
                   </label>
                   <div class="btn-group-rot">
@@ -1152,32 +1107,29 @@
                 </div>
 
                 <div class="bot-img-row sliders-row">
-                  <label class="bot-slider-label">Opacity: <span id="botOpacityVal">100%</span>
+                  <label class="bot-slider-label">Opacity: <span id="botOpacityVal" class="font-mono tabular-nums">100%</span>
                     <input type="range" id="botImgOpacity" min="20" max="100" step="5" value="100" />
                   </label>
                   <label class="bot-checkbox-label" title="Draw bounding border and front heading marker on field">
                     <input type="checkbox" id="botShowOutline" checked />
-                    <span>Heading &amp; Border</span>
+                    <span>Show Bounding Box</span>
                   </label>
                 </div>
 
                 <div class="bot-img-footer-row">
-                  <button type="button" class="btn-sm-danger" id="btnClearBotImg" title="Clear image and revert to schematic box">Clear Picture</button>
-                  <button type="button" class="btn-sm-subtle" id="btnChangeBotImg" title="Choose a different image file">Change Photo</button>
+                  <button type="button" class="btn-sm-danger" id="btnClearBotImg" title="Clear image and revert to schematic box">Remove Image</button>
+                  <button type="button" class="btn-sm-subtle" id="btnChangeBotImg" title="Choose a different image file">Replace Image</button>
                 </div>
               </div>
             </div>
 
             <!-- Keyboard Shortcuts & Hotkeys Settings Card -->
-            <div class="bot-shortcuts-card" style="margin-top:12px;background:rgba(15,23,42,0.6);border:1px solid #1e293b;border-radius: 8px;padding:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-              <div style="display:flex;align-items:center;gap:10px;">
-                <span style="font-size:1.3rem;">⌨️</span>
-                <div>
-                  <strong style="font-size:0.84rem;color:#f8fafc;display:block;">Keyboard Shortcuts &amp; Hotkeys</strong>
-                  <span style="font-size:0.72rem;color:#94a3b8;">Customize hotkeys for Bezier Curve tool (B), simulation, block duplication, and tabs.</span>
-                </div>
+            <div class="bot-shortcuts-card" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <div>
+                <strong style="font-size:0.78rem;color:var(--text);display:block;">Keyboard Shortcuts</strong>
+                <span style="font-size:0.72rem;color:var(--text-muted);">Rebind keys for Bezier tool (B), simulation (Space), and step editing.</span>
               </div>
-              <button type="button" id="btnOpenShortcutsModal" class="btn-xs-clean" style="background:#2563eb;color:#ffffff;border:none;padding:5px 12px;border-radius: 4px;font-weight:600;font-size:0.78rem;cursor:pointer;">Customize Shortcuts ⚙️</button>
+              <button type="button" id="btnOpenShortcutsModal" class="btn-xs-clean">Configure Keys</button>
             </div>
           </section>
         </div>
@@ -1227,85 +1179,83 @@
       <div class="canvas-wrap" id="canvasWrap">
         <!-- Floating / Dockable Interactive Simulation Control HUD -->
         <div class="sim-floating-hud" id="simFloatingHud">
-          <div class="sim-hud-handle-bar">
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span class="hud-drag-handle" id="hudDragHandle" title="Drag to reposition simulation controls">⋮⋮</span>
-              <span class="hud-title-tag">SIMULATION</span>
-            </div>
-            <div class="hud-action-btns">
-              <button type="button" id="btnScoringBeta" class="hud-tool-btn beta-pill-btn" title="Toggle Beta: Interactive Field Scoring Engine & Dynamic Element State Tracking">🎯 Scoring</button>
-              <button type="button" id="btnToolBezier" class="hud-tool-btn bezier-tool-btn" title="Toggle Bezier Curve Path Tool (Hotkey: B)">🌊 Bezier (B)</button>
-              <button type="button" id="btnHudCollisionModal" class="hud-tool-btn" title="Open Field Collision Detection & Obstacles Manager">🛡️ Clear (<span id="hudCollisionStatus">Clear</span>)</button>
-              <button type="button" id="btnHudPhysicsModal" class="hud-tool-btn" title="Open Real-Time Drive Dyno & Telemetry Inspector">⚡ Dyno</button>
-              <button type="button" id="btnHudDock" class="hud-tool-btn" title="Dock controls above field canvas so field image is 100% visible">📌 Dock</button>
-              <button type="button" id="btnHudMinimize" class="hud-tool-btn" title="Minimize or expand controls">―</button>
-            </div>
-          </div>
-          <!-- 15-Second Competition Auton Clock Progress Bar -->
-          <div class="sim-auton-clock-wrap" id="simAutonClockWrap">
-            <div class="sim-auton-clock-header">
-              <span class="clock-label" id="simClockLabel">⏱️ 15.0s Match Auton Clock</span>
-              <span class="clock-status legal" id="simClockStatus">🟢 Legal (0.00s / 15.0s)</span>
-            </div>
-            <div class="sim-auton-progress-track">
-              <div class="sim-auton-progress-bar" id="simAutonProgressBar" style="width: 0%;"></div>
-              <div class="sim-auton-marker-15s" id="simAutonMarker" title="15.00s Match Limit">15.0s</div>
-            </div>
-          </div>
+          <!-- Row 1: Primary Transport, Auton Clock & Live Pose Readouts -->
           <div class="sim-hud-content" id="simHudContent">
             <div class="sim-hud-left">
+              <span class="hud-drag-handle" id="hudDragHandle" title="Drag to reposition simulation controls">⋮⋮</span>
               <button type="button" id="btnSimField" class="btn-hud-play" title="Run 2D Autonomous Simulation (Kinematics & LemLib Profile)">
                 <span class="hud-btn-icon">▶</span> <span class="hud-btn-text">Simulate</span>
               </button>
               <button type="button" id="btnStopField" class="btn-hud-stop" title="Reset Simulation Robot Pose">
-                <span class="hud-btn-icon">⏹</span> Reset
+                Reset
               </button>
               <div class="sim-hud-speed-ctrl" title="Simulation Animation Speed Multiplier">
-                <span class="hud-speed-label">Speed:</span>
                 <input type="range" id="simSpeedField" min="0.25" max="3" step="0.25" value="1" />
-                <span id="speedLabelField" class="hud-speed-val">1×</span>
+                <span id="speedLabelField" class="hud-speed-val font-mono tabular-nums">1×</span>
               </div>
             </div>
+
+            <!-- Inline Auton Clock & Progress -->
+            <div class="sim-auton-clock-wrap" id="simAutonClockWrap">
+              <div class="sim-auton-clock-header">
+                <span class="clock-label" id="simClockLabel">15s Match</span>
+                <span class="clock-status legal font-mono tabular-nums" id="simClockStatus">0.00s / 15.0s</span>
+              </div>
+              <div class="sim-auton-progress-track">
+                <div class="sim-auton-progress-bar" id="simAutonProgressBar" style="width: 0%;"></div>
+                <div class="sim-auton-marker-15s" id="simAutonMarker" title="Match Time Limit">15s</div>
+              </div>
+            </div>
+
+            <!-- Live Pose & Velocity Readout Strip -->
             <div class="sim-hud-right">
-              <div class="sim-hud-chip chip-score" id="simHudScore" title="Live Autonomous Score & Dynamic Override Tracker (Beta). Click to open Scoring panel" style="display:none; cursor:pointer;">
-                🏆 0 pts · 🎚️ 0/4 Toggles · 🥅 0 Pins
+              <div class="sim-hud-chip chip-coords font-mono tabular-nums" id="simHudCoords" title="Realtime Field Coordinates (X, Y, θ)">
+                -60.0", -60.0" · 0°
               </div>
-              <div class="sim-hud-chip chip-time" id="simHudTime" title="Live Elapsed & Total Path Duration">
-                ⏱ 0.00s / ~0.00s
+              <div class="sim-hud-chip chip-speed font-mono tabular-nums" id="simHudSpeed" title="Simulated Linear & Angular Velocity">
+                0.0 in/s
               </div>
-              <div class="sim-hud-chip chip-speed" id="simHudSpeed" title="Simulated Linear & Angular Velocity">
-                🏎️ 0.0 in/s
-              </div>
-              <div class="sim-hud-chip chip-coords" id="simHudCoords" title="Realtime Field Coordinates (X, Y, θ)">
-                📍 (-60.0", -60.0") θ=0°
-              </div>
-              <div class="sim-hud-chip chip-collision legal" id="simHudCollision" title="Real-Time Collision Detection with Walls, Loaders &amp; Goals">
-                🛡️ Clear
-              </div>
+              <!-- Hidden legacy chips preserved in DOM for script compatibility -->
+              <div class="sim-hud-chip chip-time" id="simHudTime" hidden style="display:none !important;">0.00s</div>
+              <div class="sim-hud-chip chip-collision" id="simHudCollision" hidden style="display:none !important;">Clear</div>
+            </div>
+          </div>
 
-              <!-- Sleek Secondary Telemetry Group (collapsible to eliminate visual clutter) -->
-              <button type="button" class="btn-xs-clean hud-telemetry-toggle" id="btnToggleHudTelemetry" title="Toggle detailed physics readouts (accel, battery sag, traction, sharp turns)" style="font-size:0.72rem;padding:2px 7px;border-radius: 4px;cursor:pointer;background:rgba(30,41,59,0.7);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);">
-                ⚡ Telemetry ▾
-              </button>
-              <div id="hudTelemetryExtra" class="hud-telemetry-extra" style="display:none;align-items:center;gap:4px;">
-                <div class="sim-hud-chip chip-accel" id="simHudAccel" title="Linear Acceleration & Lateral G-Force">
-                  🚀 0.00g (0 in/s²)
-                </div>
-                <div class="sim-hud-chip chip-power" id="simHudPower" title="Drivetrain Power & Battery Voltage Sag">
-                  ⚡ 12.8V · 0W
-                </div>
-                <div class="sim-hud-chip chip-traction" id="simHudTraction" title="Wheel Traction Status on Foam Field Tiles">
-                  🛞 Grip 100%
-                </div>
-                <div class="sim-hud-chip chip-sharp-turn clean" id="simHudSharpTurn" title="Sharp Angle Transitions: Click to inspect velocity dips and optimize momentum" style="cursor:pointer;">
-                  ⚡ 0 Sharp Turns
-                </div>
-                <a href="tools.html#dyno" target="_blank" class="hud-tool-btn" style="color:#fbbf24;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:2px;" title="Open Dedicated Real-Time Drive Dyno on Tools Page">Dyno Suite ↗</a>
-              </div>
+          <!-- Row 2: Secondary Mode Tools & Telemetry Drawer Toggle -->
+          <div class="sim-hud-handle-bar">
+            <div class="hud-action-btns">
+              <button type="button" id="btnToolBezier" class="hud-tool-btn bezier-tool-btn" title="Toggle Bezier Curve Path Tool (Hotkey: B)">Bezier <kbd>B</kbd></button>
+              <button type="button" id="btnHudCollisionModal" class="hud-tool-btn" title="Open Field Collision Detection & Obstacles Manager">Collisions: <span id="hudCollisionStatus" class="hud-collision-badge clean">Clear</span></button>
+              <button type="button" id="btnScoringBeta" class="hud-tool-btn beta-pill-btn" title="Toggle Override Field Scoring Tracker">Scoring</button>
+              <button type="button" id="btnHudPhysicsModal" class="hud-tool-btn" title="Open Real-Time Drive Dyno & Telemetry Inspector">Dyno</button>
+              <button type="button" id="btnQuickCommentGuide" class="hud-tool-btn" title="Open autonomous comment trigger syntax guide">Syntax</button>
+            </div>
 
-              <button type="button" class="btn-xs-clean" id="btnQuickCommentGuide" title="Open step-by-step guide on how to use autonomous comments" style="background:rgba(56,189,248,0.18);border:1px solid rgba(56,189,248,0.4);color:#38bdf8;font-size:0.75rem;padding:3px 8px;border-radius: 4px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
-                <span>❓ Guide</span>
+            <div class="hud-right-tools">
+              <div class="sim-hud-chip chip-score font-mono tabular-nums" id="simHudScore" title="Live Autonomous Score & Override Tracker. Click to open Scoring panel" style="display:none; cursor:pointer;">
+                0 pts · 0/4 Toggles · 0 Pins
+              </div>
+              <button type="button" class="hud-tool-btn hud-telemetry-toggle" id="btnToggleHudTelemetry" title="Toggle detailed physics readouts (accel, battery sag, traction, sharp turns)">
+                Metrics ▾
               </button>
+              <button type="button" id="btnHudDock" class="hud-tool-btn" title="Dock controls above field canvas or float on field">Float</button>
+              <button type="button" id="btnHudMinimize" class="hud-tool-btn" title="Minimize or expand controls">―</button>
+            </div>
+          </div>
+
+          <!-- Collapsible Row 3: Physics & Kinematics Metrics Strip (Closed by default) -->
+          <div id="hudTelemetryExtra" class="hud-telemetry-extra" style="display:none;">
+            <div class="sim-hud-chip chip-accel font-mono tabular-nums" id="simHudAccel" title="Linear Acceleration & Lateral G-Force">
+              0.00g · 0 in/s²
+            </div>
+            <div class="sim-hud-chip chip-power font-mono tabular-nums" id="simHudPower" title="Drivetrain Power & Battery Voltage Sag">
+              12.8V · 0W
+            </div>
+            <div class="sim-hud-chip chip-traction font-mono tabular-nums" id="simHudTraction" title="Wheel Traction Status on Foam Field Tiles">
+              Grip 100%
+            </div>
+            <div class="sim-hud-chip chip-sharp-turn clean font-mono tabular-nums" id="simHudSharpTurn" title="Sharp Angle Transitions: Click to inspect velocity dips" style="cursor:pointer;">
+              0 Sharp Turns
             </div>
           </div>
         </div>
@@ -1314,8 +1264,8 @@
         <div id="bezierBanner" class="bezier-mode-banner" style="display: none;">
           <div class="bezier-banner-left">
             <span class="bezier-pulse-dot"></span>
-            <span class="bezier-banner-title">🌊 Bezier Curve Tool Active</span>
-            <span class="bezier-banner-hint">Drag any curve or line to bend · Drag CP1/CP2 along tangent rays (Hold Shift for free angle) · Click field to add curve</span>
+            <span class="bezier-banner-title">Bezier Curve Tool</span>
+            <span class="bezier-banner-hint">Drag any curve to bend · Drag CP1/CP2 along tangent rays (Hold Shift for free angle) · Click field to add</span>
           </div>
           <button type="button" id="btnExitBezierTool" class="btn-bezier-exit" title="Exit Bezier curve tool (Press B)">Done (B)</button>
         </div>
@@ -1323,21 +1273,21 @@
         <!-- Floating On-Canvas Quick Bar for Selected Bezier Curve -->
         <div id="bezierQuickBar" class="bezier-quick-bar" style="display: none;">
           <div class="bezier-quick-title">
-            <span class="bezier-quick-badge" id="bzbLabel">🌊 Curve Arc</span>
+            <span class="bezier-quick-badge" id="bzbLabel">Curve Arc</span>
           </div>
           <div class="bezier-quick-actions">
-            <button type="button" class="btn-bz-quick" id="btnBzBendLeft" title="Bend curve left (↶)">↶ Left</button>
-            <button type="button" class="btn-bz-quick" id="btnBzStraight" title="Straighten arc to direct line (📏)">📏 Straight</button>
-            <button type="button" class="btn-bz-quick" id="btnBzBendRight" title="Bend curve right (↷)">↷ Right</button>
-            <button type="button" class="btn-bz-quick" id="btnBzFlip" title="Flip curve bulge direction (🔄)">🔄 Flip</button>
-            <button type="button" class="btn-bz-quick" id="btnBzSCurve" title="Create smooth S-curve chicane (〰️)">〰️ S-Curve</button>
-            <button type="button" class="btn-bz-quick btn-bz-tangent" id="btnBzLockTangent" title="Toggle Tangent Locking: Keeps trajectory smooth along robot headings">🔒 Tangents: Locked</button>
-            <button type="button" class="btn-bz-quick" id="btnBzAuto" title="Auto-tune tangent leads for optimal robot speed (📐)">📐 Auto</button>
+            <button type="button" class="btn-bz-quick" id="btnBzBendLeft" title="Bend curve left">↶ Left</button>
+            <button type="button" class="btn-bz-quick" id="btnBzStraight" title="Straighten arc to direct line">Straight</button>
+            <button type="button" class="btn-bz-quick" id="btnBzBendRight" title="Bend curve right">↷ Right</button>
+            <button type="button" class="btn-bz-quick" id="btnBzFlip" title="Flip curve bulge direction">Flip</button>
+            <button type="button" class="btn-bz-quick" id="btnBzSCurve" title="Create smooth S-curve chicane">S-Curve</button>
+            <button type="button" class="btn-bz-quick btn-bz-tangent" id="btnBzLockTangent" title="Toggle Tangent Locking: Keeps trajectory smooth along robot headings">Tangents: Locked</button>
+            <button type="button" class="btn-bz-quick" id="btnBzAuto" title="Auto-tune tangent leads for optimal robot speed">Auto</button>
           </div>
           <div class="bezier-quick-slider-wrap">
             <span class="bz-slider-label">Bulge:</span>
             <input type="range" id="bzbSlider" min="-35" max="35" step="1" value="0" title="Slide to bend curve left/right smoothly" />
-            <span id="bzbVal" class="bz-slider-val">0"</span>
+            <span id="bzbVal" class="bz-slider-val font-mono tabular-nums">0"</span>
           </div>
         </div>
 
@@ -1347,39 +1297,38 @@
           <span class="coord-axis-val" id="coordYVal">Y: -60.0"</span>
           <span class="coord-delta-info" id="coordDeltaVal">Δ: 0.0" · θ: 0.0°</span>
           <div class="coord-precision-wrapper">
-            <button type="button" id="btnCyclePrecision" class="btn-coord-precision" title="Current pointer resolution: 0.1″ (Tenth Inch Grid, Default). Click to cycle resolutions">🎯 0.1″</button>
+            <button type="button" id="btnCyclePrecision" class="btn-coord-precision" title="Current pointer resolution: 0.1″ (Tenth Inch Grid, Default). Click to cycle resolutions">0.1″</button>
             <button type="button" id="btnPrecisionDropdownToggle" class="btn-coord-prec-dropdown" title="Open Resolution &amp; Snap Menu">▾</button>
             <div id="precisionMenuDropdown" class="precision-menu-dropdown" hidden>
               <div class="precision-menu-header">Resolution &amp; Snap</div>
-              <button type="button" class="precision-menu-item active" data-step="0.1"><span>🎯 0.1″</span> <span class="prec-sub">Tenth Inch Grid (1 dec) ★ Default</span></button>
-              <button type="button" class="precision-menu-item" data-step="0.5"><span>🎯 0.5″</span> <span class="prec-sub">Half-Inch Grid</span></button>
-              <button type="button" class="precision-menu-item" data-step="1.0"><span>🎯 1.0″</span> <span class="prec-sub">1-Inch Grid</span></button>
+              <button type="button" class="precision-menu-item active" data-step="0.1"><span>0.1″</span> <span class="prec-sub">Tenth Inch (Default)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.5"><span>0.5″</span> <span class="prec-sub">Half-Inch Grid</span></button>
+              <button type="button" class="precision-menu-item" data-step="1.0"><span>1.0″</span> <span class="prec-sub">1-Inch Grid</span></button>
               <div class="precision-menu-divider"></div>
-              <button type="button" class="precision-menu-item" data-step="0.05"><span>🎯 0.05″</span> <span class="prec-sub">Twentieth (2 dec)</span></button>
-              <button type="button" class="precision-menu-item" data-step="0.01"><span>🎯 0.01″</span> <span class="prec-sub">Hundredth (2 dec)</span></button>
-              <button type="button" class="precision-menu-item" data-step="0.005"><span>🎯 0.005″</span> <span class="prec-sub">Quarter-Hundredth (3 dec)</span></button>
-              <button type="button" class="precision-menu-item" data-step="0.001"><span>🎯 0.001″</span> <span class="prec-sub">High-Res (3 dec)</span></button>
-              <button type="button" class="precision-menu-item" data-step="0.0005"><span>🎯 0.0005″</span> <span class="prec-sub">Fine (4 dec)</span></button>
-              <button type="button" class="precision-menu-item" data-step="0.0001"><span>🎯 0.0001″</span> <span class="prec-sub">Ultra (4 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.05"><span>0.05″</span> <span class="prec-sub">Twentieth (2 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.01"><span>0.01″</span> <span class="prec-sub">Hundredth (2 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.005"><span>0.005″</span> <span class="prec-sub">Quarter-Hundredth (3 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.001"><span>0.001″</span> <span class="prec-sub">High-Res (3 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.0005"><span>0.0005″</span> <span class="prec-sub">Fine (4 dec)</span></button>
+              <button type="button" class="precision-menu-item" data-step="0.0001"><span>0.0001″</span> <span class="prec-sub">Ultra (4 dec)</span></button>
               <div class="precision-menu-divider"></div>
-              <button type="button" class="precision-menu-item" data-step="0"><span>🎯 Free / Raw</span> <span class="prec-sub">Subpixel Continuous</span></button>
+              <button type="button" class="precision-menu-item" data-step="0"><span>Free / Raw</span> <span class="prec-sub">Subpixel Continuous</span></button>
             </div>
           </div>
         </div>
-        <div id="timeEst">Est. time: —</div>
+        <div id="timeEst" hidden style="display:none !important;">Est. time: —</div>
         <div id="legend">
-          <span class="leg start"></span> Start
-          <span class="leg path"></span> Straight
-          <span class="leg" style="background:#06b6d4;box-shadow:0 0 4px #06b6d4;"></span> Bezier Arc
-          <span class="leg" style="background:#f59e0b;box-shadow:0 0 4px #f59e0b;"></span> CP1 / CP2
-          <span class="leg multitask"></span> ⚡ Multitask
-          <span class="leg collision"></span> 💥 Collision
-          <span class="leg end"></span> End + dir
-          <span class="leg robot"></span> Live
-          <span class="leg selected"></span> Selected
+          <span><span class="leg start"></span>Start</span>
+          <span><span class="leg path"></span>Path</span>
+          <span><span class="leg" style="background:#06b6d4;"></span>Bezier</span>
+          <span><span class="leg" style="background:#f59e0b;"></span>CP</span>
+          <span><span class="leg multitask"></span>Async</span>
+          <span><span class="leg collision"></span>Hit</span>
+          <span><span class="leg end"></span>End</span>
+          <span><span class="leg selected"></span>Selected</span>
         </div>
-        <div id="helpTip">
-          Drag start robot or waypoints on field · Use + Add to create moves · <button type="button" id="linkHelpDocs" class="linkish" style="color:#93c5fd;text-decoration:underline;background:none;border:none;cursor:pointer;padding:0 2px;">View Help &amp; Docs</button>
+        <div id="helpTip" hidden style="display:none !important;">
+          Drag start robot or waypoints on field · Use + Add to create moves · <button type="button" id="linkHelpDocs" class="linkish">View Help &amp; Docs</button>
         </div>
       </div>
 
@@ -1679,7 +1628,7 @@
       </div>
       <div class="flowchart-modal-footer">
         <p class="flowchart-explainer">
-          <strong>Seamless Concurrency Architecture:</strong> Actions flagged as <strong>Multitask (Async)</strong> fork seamlessly into parallel execution tracks (e.g. <code>custom code</code> subsystem tasks while chassis drives <code>moveToPoint</code>) and cleanly converge into subsequent sequential steps (e.g. <code>swingToPoint</code>) via <code>chassis.waitUntilDone()</code>.
+          <strong>Parallel Task Execution:</strong> Actions marked <strong>Multitask (Async)</strong> run in parallel while the chassis drives (for example, spinning the intake during <code>moveToPoint</code>) and synchronize at the next blocking motion via <code>chassis.waitUntilDone()</code>.
         </p>
         <button type="button" id="flowchartModalDoneBtn" class="primary">Close Diagram</button>
       </div>
@@ -2699,32 +2648,32 @@ void autonomous() {
 
         <!-- Contact Us Pane -->
         <div class="help-pane" data-pane="contact">
-          <h3>📬 Contact Us &amp; Technical Support</h3>
+          <h3>Contact &amp; Technical Support</h3>
           <p>
-            Have questions regarding LemLib trajectory math, bug reports, feature requests, or competitive team collaboration? Reach out directly:
+            Have questions about LemLib trajectory math, bug reports, or feature requests? Reach out directly:
           </p>
 
-          <div class="help-card" style="border-left: 3px solid #38bdf8; padding: 18px 20px; margin-bottom: 14px;">
+          <div class="help-card" style="border: 1px solid var(--border); padding: 18px 20px; margin-bottom: 14px;">
             <h4 style="margin-top:0;">Direct Developer Email</h4>
             <p style="font-size:0.85rem; margin-bottom:8px;">
-              Primary contact for technical inquiries, LemLib bug tracking, and feature recommendations:
+              Primary contact for technical inquiries, parser bug reports, and feature requests:
             </p>
-            <a href="mailto:smashyblocks7@gmail.com" style="font-family:var(--font-mono); font-size:1rem; font-weight:700; color:#38bdf8; text-decoration:none; background:rgba(56,189,248,0.12); padding:6px 14px; border-radius:4px; border:1px solid rgba(56,189,248,0.3); display:inline-block;">
-              ✉️ smashyblocks7@gmail.com
+            <a href="mailto:smashyblocks7@gmail.com" style="font-family:var(--font-mono); font-size:0.95rem; font-weight:700; color:#38bdf8; text-decoration:none; display:inline-block;">
+              smashyblocks7@gmail.com
             </a>
             <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
               <a href="mailto:smashyblocks7@gmail.com?subject=VEX%20LemLib%20Planner%20Question" class="btn-xs-clean" style="background:#0284c7; color:#fff; padding:6px 14px; border-radius:4px; text-decoration:none; font-size:0.8rem; font-weight:600;">
-                Send Direct Email ➔
+                Send Email →
               </a>
               <a href="https://github.com/yl-loaf/vex-path-planner/issues" target="_blank" rel="noopener" class="btn-xs-clean" style="background:#1e293b; color:#e2e8f0; border:1px solid #334155; padding:6px 14px; border-radius:4px; text-decoration:none; font-size:0.8rem;">
-                GitHub Issue Tracker ↗
+                GitHub Issues ↗
               </a>
             </div>
           </div>
 
           <div style="font-size:0.82rem; color:var(--muted); line-height:1.5;">
-            ⏱️ <strong>Response Time:</strong> Messages are reviewed and addressed within 24–48 business hours.<br/>
-            📍 <strong>Project Repository:</strong> <a href="https://yl-loaf.github.io/vex-path-planner/" style="color:#38bdf8; text-decoration:none;">https://yl-loaf.github.io/vex-path-planner/</a>
+            <strong>Response Time:</strong> Messages are reviewed within 24–48 hours.<br/>
+            <strong>Repository:</strong> <a href="https://yl-loaf.github.io/vex-path-planner/" style="color:#38bdf8; text-decoration:none;">https://yl-loaf.github.io/vex-path-planner/</a>
           </div>
         </div>
       </div>
@@ -3590,24 +3539,24 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20261021.k4"></script>
+  <script src="version.js?v=20261021.k6"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261021.k4"></script>
+  <script src="firebase-config.js?v=20261021.k6"></script>
   <script src="analytics-tracker.js"></script>
-  <script src="google-drive-sync.js?v=20261021.k4"></script>
-  <script src="session-guard.js?v=20261021.k4"></script>
-  <script src="theme.js?v=20261021.k4"></script>
-  <script src="v5-brain-serial.js?v=20261021.k4"></script>
-  <script src="project-manager.js?v=20261021.k4"></script>
-  <script src="cpp-parser.js?v=20261021.k4"></script>
-  <script src="scoring-engine.js?v=20261021.k4"></script>
-  <script src="match-analysis-engine.js?v=20261021.k4"></script>
-  <script src="app.js?v=20261021.k4"></script>
-  <script src="tutorial.js?v=20261021.k4"></script>
+  <script src="google-drive-sync.js?v=20261021.k6"></script>
+  <script src="session-guard.js?v=20261021.k6"></script>
+  <script src="theme.js?v=20261021.k6"></script>
+  <script src="v5-brain-serial.js?v=20261021.k6"></script>
+  <script src="project-manager.js?v=20261021.k6"></script>
+  <script src="cpp-parser.js?v=20261021.k6"></script>
+  <script src="scoring-engine.js?v=20261021.k6"></script>
+  <script src="match-analysis-engine.js?v=20261021.k6"></script>
+  <script src="app.js?v=20261021.k6"></script>
+  <script src="tutorial.js?v=20261021.k6"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

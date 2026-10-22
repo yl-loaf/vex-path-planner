@@ -7127,7 +7127,7 @@
     const hudPower = document.getElementById("simHudPower");
     const hudTraction = document.getElementById("simHudTraction");
 
-    setDomText(clockLabel, `⏱️ ${clockLimit.toFixed(0)}s ${bot.matchPeriod === "60s" ? "Skills" : "Match"} Auton Clock`);
+    setDomText(clockLabel, `${clockLimit.toFixed(0)}s ${bot.matchPeriod === "60s" ? "Skills" : "Match"}`);
     setDomText(autonMarker, `${clockLimit.toFixed(0)}s`);
 
     const curTime = (elapsed != null) ? elapsed : (actions.length ? estimateTotalTime() : 0);
@@ -7137,18 +7137,18 @@
     if (clockStatus) {
       if (curTime <= clockLimit - 1.5) {
         setDomClass(clockStatus, "clock-status legal");
-        setDomText(clockStatus, `🟢 Legal (${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s)`);
+        setDomText(clockStatus, `${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s`);
       } else if (curTime <= clockLimit) {
         setDomClass(clockStatus, "clock-status warning");
-        setDomText(clockStatus, `🟡 Buffer (${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s)`);
+        setDomText(clockStatus, `${curTime.toFixed(2)}s / ${clockLimit.toFixed(1)}s`);
       } else {
         setDomClass(clockStatus, "clock-status overtime");
-        setDomText(clockStatus, `⚠️ Overtime (+${(curTime - clockLimit).toFixed(2)}s)`);
+        setDomText(clockStatus, `+${(curTime - clockLimit).toFixed(2)}s Overtime`);
       }
     }
 
     const asyncCount = actions.filter((a) => a.async).length;
-    const asyncTag = asyncCount > 0 ? ` · ⚡ ${asyncCount} Multitask` : "";
+    const asyncTag = asyncCount > 0 ? ` · ${asyncCount} Multitask` : "";
     
     // Determine active robot pose for telemetry
     let activeRobotPose = pose;
@@ -7156,50 +7156,50 @@
       activeRobotPose = simPath[simIdx];
     }
 
-    setDomText(hudCoords, `📍 (${activeRobotPose.x.toFixed(1)}", ${activeRobotPose.y.toFixed(1)}") θ=${Math.round(normalizeAngle(activeRobotPose.theta))}°`);
+    setDomText(hudCoords, `${activeRobotPose.x.toFixed(1)}", ${activeRobotPose.y.toFixed(1)}" · ${Math.round(normalizeAngle(activeRobotPose.theta))}°`);
 
     if (elapsed != null && totalEst != null) {
       let speedText = "";
       if (currentVLin != null && currentOmegaDeg != null) {
         speedText = ` · ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`;
-        setDomText(hudSpeed, `🏎️ ${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`);
+        setDomText(hudSpeed, `${Math.abs(currentVLin).toFixed(1)} in/s · ${Math.abs(currentOmegaDeg).toFixed(0)}°/s`);
       }
       setDomText(el, `Time: ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s${asyncTag}${speedText}`);
-      setDomText(hudTime, `⏱ ${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s`);
+      setDomText(hudTime, `${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s`);
     } else {
       const t = estimateTotalTime();
       setDomText(el, actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)${asyncTag}` : `Est. time: —`);
-      setDomText(hudTime, actions.length ? `⏱ ~${t.toFixed(2)}s total` : `⏱ 0.00s`);
-      setDomText(hudSpeed, `🏎️ 0.0 in/s`);
+      setDomText(hudTime, actions.length ? `~${t.toFixed(2)}s total` : `0.00s`);
+      setDomText(hudSpeed, `0.0 in/s`);
     }
 
     if (currentPt) {
       if (hudAccel) {
         const aLin = currentPt.aLin != null ? Math.round(currentPt.aLin) : 0;
         const gLin = currentPt.gLin != null ? currentPt.gLin.toFixed(2) : "0.00";
-        setDomText(hudAccel, `🚀 ${gLin}g (${aLin} in/s²)`);
+        setDomText(hudAccel, `${gLin}g · ${aLin} in/s²`);
       }
       if (hudPower) {
         const v = currentPt.voltage != null ? currentPt.voltage.toFixed(1) : (bot.batteryVolts || 12.8).toFixed(1);
         const w = currentPt.watts != null ? Math.round(currentPt.watts) : 0;
-        setDomText(hudPower, `⚡ ${v}V · ${w}W`);
+        setDomText(hudPower, `${v}V · ${w}W`);
       }
       if (hudTraction) {
         if (currentPt.isSlipping) {
           setDomClass(hudTraction, "sim-hud-chip chip-traction slip");
-          setDomText(hudTraction, "⚠️ Wheel Slip! (Drift)");
+          setDomText(hudTraction, "Wheel Slip");
         } else {
           setDomClass(hudTraction, "sim-hud-chip chip-traction");
           const grip = currentPt.gripMargin != null ? currentPt.gripMargin : 100;
-          setDomText(hudTraction, `🛞 Grip ${grip}%`);
+          setDomText(hudTraction, `Grip ${grip}%`);
         }
       }
     } else {
-      setDomText(hudAccel, `🚀 0.00g (0 in/s²)`);
-      setDomText(hudPower, `⚡ ${(bot.batteryVolts || 12.8).toFixed(1)}V · 0W`);
+      setDomText(hudAccel, `0.00g · 0 in/s²`);
+      setDomText(hudPower, `${(bot.batteryVolts || 12.8).toFixed(1)}V · 0W`);
       if (hudTraction) {
         setDomClass(hudTraction, "sim-hud-chip chip-traction");
-        setDomText(hudTraction, `🛞 Grip 100%`);
+        setDomText(hudTraction, `Grip 100%`);
       }
     }
 
@@ -7208,10 +7208,10 @@
       const sharpList = analyzeSharpAngleTransitions();
       if (sharpList.length > 0) {
         setDomClass(sharpHud, "sim-hud-chip chip-sharp-turn");
-        setDomText(sharpHud, `⚡ ${sharpList.length} Sharp ${sharpList.length === 1 ? 'Turn' : 'Turns'}`);
+        setDomText(sharpHud, `${sharpList.length} Sharp ${sharpList.length === 1 ? 'Turn' : 'Turns'}`);
       } else {
         setDomClass(sharpHud, "sim-hud-chip chip-sharp-turn clean");
-        setDomText(sharpHud, `✨ Smooth Transitions`);
+        setDomText(sharpHud, `0 Sharp Turns`);
       }
     }
 
@@ -7233,7 +7233,7 @@
     if (hudColChip) {
       if (!collisionConfig.enabled) {
         setDomClass(hudColChip, "sim-hud-chip chip-collision");
-        setDomText(hudColChip, "🛡️ Off");
+        setDomText(hudColChip, "Off");
         if (hudColStatus) {
           hudColStatus.textContent = "Off";
           hudColStatus.className = "hud-collision-badge";
@@ -7244,14 +7244,14 @@
         if (liveCol.hit) {
           setDomClass(hudColChip, "sim-hud-chip chip-collision collision-alert");
           const hitName = liveCol.obstacles.map(o => o.name).join(", ");
-          setDomText(hudColChip, `💥 HIT: ${hitName}`);
+          setDomText(hudColChip, `HIT: ${hitName}`);
           if (hudColStatus) {
             hudColStatus.textContent = "HIT!";
             hudColStatus.className = "hud-collision-badge hit";
           }
         } else {
           setDomClass(hudColChip, "sim-hud-chip chip-collision legal");
-          setDomText(hudColChip, "🛡️ Clear");
+          setDomText(hudColChip, "Clear");
           if (hudColStatus) {
             hudColStatus.textContent = "Clear";
             hudColStatus.className = "hud-collision-badge clean";
@@ -7262,14 +7262,14 @@
         const rep = evaluateRoutineCollisions();
         if (rep.totalCollisions === 0) {
           setDomClass(hudColChip, "sim-hud-chip chip-collision legal");
-          setDomText(hudColChip, "🛡️ Clear");
+          setDomText(hudColChip, "Clear");
           if (hudColStatus) {
             hudColStatus.textContent = "Clear";
             hudColStatus.className = "hud-collision-badge clean";
           }
         } else {
           setDomClass(hudColChip, "sim-hud-chip chip-collision collision-alert");
-          setDomText(hudColChip, `⚠️ ${rep.totalCollisions} Hit${rep.totalCollisions > 1 ? "s" : ""}`);
+          setDomText(hudColChip, `${rep.totalCollisions} Hit${rep.totalCollisions > 1 ? "s" : ""}`);
           if (hudColStatus) {
             hudColStatus.textContent = `${rep.totalCollisions} Hits`;
             hudColStatus.className = "hud-collision-badge hit";
@@ -13833,8 +13833,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (chipScore) {
       if (isEngEnabled) {
         chipScore.style.display = "inline-flex";
-        const carriedText = res.carriedPin ? ` · 📌 1 Pin` : "";
-        setDomText(chipScore, `🏆 ${res.totalScore} pts · 🎚️ ${res.redTogglesOwned + res.blueTogglesOwned}/4 Toggles · 🥅 ${res.totalPinsStacked} Pins${carriedText}`);
+        const carriedText = res.carriedPin ? ` · 1 Held` : "";
+        setDomText(chipScore, `${res.totalScore} pts · ${res.redTogglesOwned + res.blueTogglesOwned}/4 Toggles · ${res.totalPinsStacked} Pins${carriedText}`);
       } else {
         chipScore.style.display = "none";
       }
@@ -15195,7 +15195,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
     const btn = document.getElementById("btnToolBezier");
     if (btn && customShortcuts.bezierTool) {
       const formatted = formatShortcutKey(customShortcuts.bezierTool);
-      btn.innerHTML = `🌊 Bezier Tool <kbd style="font-size:0.65rem;background:rgba(255,255,255,0.15);padding:1px 4px;border-radius:3px;margin-left:2px;">${escapeHtml(formatted)}</kbd>`;
+      btn.innerHTML = `Bezier <kbd style="font-size:0.65rem;background:rgba(255,255,255,0.12);padding:1px 4px;border-radius:3px;margin-left:2px;">${escapeHtml(formatted)}</kbd>`;
       btn.title = `Toggle Bezier Curve Path Tool (Hotkey: ${formatted}) - Drag control points between waypoints to create smooth curves`;
     }
   }
@@ -15973,7 +15973,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
     if (isDocked) {
       hud.classList.add("is-docked");
-      if (btnDock) btnDock.innerHTML = "🔓 Float on Field";
+      if (btnDock) btnDock.innerHTML = "Float";
     }
     if (isMinimized) {
       hud.classList.add("is-minimized");
@@ -15984,7 +15984,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
       btnDock.onclick = (e) => {
         e.stopPropagation();
         const docked = hud.classList.toggle("is-docked");
-        btnDock.innerHTML = docked ? "🔓 Float on Field" : "📌 Dock Above";
+        btnDock.innerHTML = docked ? "Float" : "Dock";
         localStorage.setItem("sim_hud_docked", docked ? "true" : "false");
         if (docked) {
           hud.style.top = "";
@@ -16010,13 +16010,13 @@ lemlib::ControllerSettings ${currentMode}_controller(
       const savedTelOpen = localStorage.getItem("sim_hud_telemetry_expanded") === "true";
       if (savedTelOpen) {
         extraTel.style.display = "inline-flex";
-        btnToggleTel.textContent = "⚡ Telemetry ▴";
+        btnToggleTel.textContent = "Metrics ▴";
       }
       btnToggleTel.onclick = (e) => {
         e.stopPropagation();
         const isHidden = extraTel.style.display === "none";
         extraTel.style.display = isHidden ? "inline-flex" : "none";
-        btnToggleTel.textContent = isHidden ? "⚡ Telemetry ▴" : "⚡ Telemetry ▾";
+        btnToggleTel.textContent = isHidden ? "Metrics ▴" : "Metrics ▾";
         localStorage.setItem("sim_hud_telemetry_expanded", isHidden ? "true" : "false");
       };
     }

@@ -1,6 +1,6 @@
 {
   "name": "VEX V5 LemLib Path Planner",
-  "description": "Interactive autonomous path planner and simulator for VEX V5 robotics using LemLib on the Override field.",
+  "description": "Plan, simulate, and export VEX V5 autonomous routines for LemLib and PROS C++. Draw 2D odometry paths, tune PID gains, translate raw C++ into visual blocks, and flash directly to your V5 Brain over USB.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
