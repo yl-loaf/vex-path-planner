@@ -2302,18 +2302,12 @@
       let branchAct = isElse ? action.elseAction : action.thenAction;
       if (!branchAct) {
         const code = isElse ? action.elseCode : action.thenCode;
-        if (window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
+        if (code && window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
           branchAct = window.CppTranslator.parseStatementToAction(code, b.defaultMaxSpeed || 127, b.defaultMinSpeed || 0);
         }
       }
       if (!branchAct) {
-        branchAct = {
-          type: "moveToPoint",
-          x: isElse ? (fromPose.x - 24) : (fromPose.x + 24),
-          y: isElse ? (fromPose.y - 24) : (fromPose.y + 24),
-          timeout: 2000,
-          forwards: !isElse,
-        };
+        return { endPose: pose, path: points, duration: 0, carrot: null };
       }
       return simulateAction({ ...branchAct, id: action.id }, fromPose, customBot);
     }
@@ -2345,18 +2339,12 @@
       let branchAct = action.loopAction;
       if (!branchAct) {
         const code = action.loopCode;
-        if (window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
+        if (code && window.CppTranslator && typeof window.CppTranslator.parseStatementToAction === "function") {
           branchAct = window.CppTranslator.parseStatementToAction(code, b.defaultMaxSpeed || 127, b.defaultMinSpeed || 0);
         }
       }
       if (!branchAct) {
-        branchAct = {
-          type: "moveToPoint",
-          x: fromPose.x + 24,
-          y: fromPose.y + 24,
-          timeout: 2000,
-          forwards: true,
-        };
+        return { endPose: pose, path: points, duration: 0, carrot: null };
       }
       return simulateAction({ ...branchAct, id: action.id }, fromPose, customBot);
     }

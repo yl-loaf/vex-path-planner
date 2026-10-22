@@ -198,17 +198,17 @@
     }
 
     // moveToPoint (supports both chassis.moveToPoint and custom moveToPoint(x, y, theta))
-    const mtPointMatch = line.match(/(?:([a-zA-Z0-9_]+)\.)?moveToPoint\s*\(([^;]+)\)/i);
-    if (mtPointMatch) {
+    const mtPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?moveToPoint\s*\(([^;]+)\)$/i);
+    if (mtPointMatch && isValidChassisReceiver(mtPointMatch[1], "moveToPoint", activeFnsMap)) {
       const hasChassisPrefix = !!mtPointMatch[1];
       return buildMoveToPointOrThetaAction(mtPointMatch[2], hasChassisPrefix, defaultMaxSpeed, defaultMinSpeed, activeFnsMap);
     }
 
     // moveToPose (supports both chassis.moveToPose and custom moveToPose(x, y, theta))
-    const mtPoseMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?moveToPose\s*\(([^;]+)\)/i);
-    if (mtPoseMatch) {
+    const mtPoseMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?moveToPose\s*\(([^;]+)\)$/i);
+    if (mtPoseMatch && isValidChassisReceiver(mtPoseMatch[1], "moveToPose", activeFnsMap)) {
       const isBezier = /bezier|spline/i.test(line);
-      const args = splitCppArgsSafe(mtPoseMatch[1]);
+      const args = splitCppArgsSafe(mtPoseMatch[2]);
       const act = createDefaultAction(isBezier ? "bezierCurve" : "moveToPose", defaultMaxSpeed, defaultMinSpeed);
       act.x = evaluateNumericArg(args[0]) || 0;
       act.y = evaluateNumericArg(args[1]) || 0;
@@ -228,7 +228,7 @@
       return act;
     }
 
-    // Check if statement is a call to a user-defined custom function with inferred motion
+    // Check if statement is a call to a user-defined custom function that ONLY contains chassis motion commands
     if (recursionDepth <= 2) {
       const expandedFromFn = expandCustomFunctionCall(line, activeFnsMap, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, null, visitedFns);
       if (expandedFromFn && expandedFromFn.length > 0) {
@@ -238,9 +238,9 @@
     }
 
     // chassis.followCurve or spline
-    const followCurveMatch = line.match(/chassis\.(?:followCurve|followSpline|follow)\s*\(([^;]+)\)/i);
-    if (followCurveMatch) {
-      const args = splitCppArgsSafe(followCurveMatch[1]);
+    const followCurveMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?(?:followCurve|followSpline|follow)\s*\(([^;]+)\)$/i);
+    if (followCurveMatch && isValidChassisReceiver(followCurveMatch[1], "followCurve", activeFnsMap)) {
+      const args = splitCppArgsSafe(followCurveMatch[2]);
       const act = createDefaultAction("bezierCurve", defaultMaxSpeed, defaultMinSpeed);
       if (args.length >= 3 && !isNaN(parseFloat(args[0]))) {
         act.x = parseFloat(args[0]) || 0;
@@ -252,9 +252,9 @@
     }
 
     // turnToPoint
-    const ttPointMatch = line.match(/chassis\.turnToPoint\s*\(([^;]+)\)/i);
-    if (ttPointMatch) {
-      const args = splitCppArgsSafe(ttPointMatch[1]);
+    const ttPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turnToPoint\s*\(([^;]+)\)$/i);
+    if (ttPointMatch && isValidChassisReceiver(ttPointMatch[1], "turnToPoint", activeFnsMap)) {
+      const args = splitCppArgsSafe(ttPointMatch[2]);
       const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
       act.x = parseFloat(args[0]) || 0;
       act.y = parseFloat(args[1]) || 0;
@@ -273,9 +273,9 @@
     }
 
     // turnToHeading
-    const ttHeadingMatch = line.match(/chassis\.turnToHeading\s*\(([^;]+)\)/i);
-    if (ttHeadingMatch) {
-      const args = splitCppArgsSafe(ttHeadingMatch[1]);
+    const ttHeadingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turnToHeading\s*\(([^;]+)\)$/i);
+    if (ttHeadingMatch && isValidChassisReceiver(ttHeadingMatch[1], "turnToHeading", activeFnsMap)) {
+      const args = splitCppArgsSafe(ttHeadingMatch[2]);
       const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
       act.theta = parseFloat(args[0]) || 0;
       act.timeout = parseInt(args[1], 10) || 1500;
@@ -292,9 +292,9 @@
     }
 
     // swingToPoint
-    const swPointMatch = line.match(/chassis\.swingToPoint\s*\(([^;]+)\)/i);
-    if (swPointMatch) {
-      const args = splitCppArgsSafe(swPointMatch[1]);
+    const swPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?swingToPoint\s*\(([^;]+)\)$/i);
+    if (swPointMatch && isValidChassisReceiver(swPointMatch[1], "swingToPoint", activeFnsMap)) {
+      const args = splitCppArgsSafe(swPointMatch[2]);
       const act = createDefaultAction("swingToPoint", defaultMaxSpeed, defaultMinSpeed);
       act.x = parseFloat(args[0]) || 0;
       act.y = parseFloat(args[1]) || 0;
@@ -304,9 +304,9 @@
     }
 
     // swingToHeading
-    const swHeadingMatch = line.match(/chassis\.swingToHeading\s*\(([^;]+)\)/i);
-    if (swHeadingMatch) {
-      const args = splitCppArgsSafe(swHeadingMatch[1]);
+    const swHeadingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?swingToHeading\s*\(([^;]+)\)$/i);
+    if (swHeadingMatch && isValidChassisReceiver(swHeadingMatch[1], "swingToHeading", activeFnsMap)) {
+      const args = splitCppArgsSafe(swHeadingMatch[2]);
       const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
       act.theta = parseFloat(args[0]) || 0;
       act.lockedSide = parseDriveSideEnum(args[1]);
@@ -315,7 +315,7 @@
     }
 
     // waitUntil distance
-    const waitDistMatch = line.match(/chassis\.waitUntil\s*\(\s*([-\d.]+)\s*\)/i);
+    const waitDistMatch = line.match(/^(?:chassis|bot|drive|drivetrain|robot)\.waitUntil\s*\(\s*([-\d.]+)\s*\)$/i);
     if (waitDistMatch) {
       const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
       act.waitType = "distance";
@@ -324,14 +324,14 @@
     }
 
     // waitUntilDone
-    if (/chassis\.waitUntilDone\s*\(\s*\)/i.test(line)) {
+    if (/^(?:chassis|bot|drive|drivetrain|robot)\.waitUntilDone\s*\(\s*\)$/i.test(line)) {
       const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
       act.waitType = "done";
       return act;
     }
 
     // pros::delay
-    const delayMatch = line.match(/(?:pros::)?delay\s*\(\s*(\d+)\s*\)/i);
+    const delayMatch = line.match(/^(?:pros::(?:c::)?)?delay\s*\(\s*(\d+)\s*\)$/i);
     if (delayMatch) {
       const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
       act.waitType = "time";
@@ -788,12 +788,13 @@
   // Custom Function Definition Extraction & Motion Inference
   // -------------------------------------------------------------
   const THETA_PARAM_REGEX = /^(theta|heading|angle|deg|degrees|dir|h|th|yaw|target_?theta|target_?heading|end_?theta|final_?heading)$/i;
+  const CHASSIS_OBJ_REGEX = /^(?:chassis|bot|drive|drivetrain|robot|lemlib|odom)$/i;
   const RESERVED_CPP_CALLS = new Set([
     "if", "else", "while", "for", "switch", "case", "return", "sizeof", "alignof",
     "setPose", "moveToPoint", "moveToPose", "turnToPoint", "turnToHeading",
     "swingToPoint", "swingToHeading", "waitUntil", "waitUntilDone", "follow",
     "followCurve", "followSpline", "delay", "Task", "move", "move_velocity",
-    "move_absolute", "set_value", "printf", "print"
+    "move_absolute", "move_relative", "move_voltage", "brake", "set_value", "printf", "print"
   ]);
   const REAL_MOTION_TYPES = new Set([
     "moveToPoint",
@@ -802,9 +803,124 @@
     "turnToPoint",
     "swingToHeading",
     "swingToPoint",
-    "bezierCurve",
-    "wait"
+    "bezierCurve"
   ]);
+
+  function isPureChassisAction(a) {
+    if (!a) return false;
+    if (REAL_MOTION_TYPES.has(a.type)) return true;
+    if (a.type === "wait" && (a.waitType === "distance" || a.waitType === "done")) return true;
+    return false;
+  }
+
+  function isValidChassisReceiver(objName, methodName = "", fnsMap = null) {
+    if (objName) {
+      return CHASSIS_OBJ_REGEX.test(objName.trim());
+    }
+    if (methodName && fnsMap && fnsMap.has(methodName)) {
+      const def = fnsMap.get(methodName);
+      if (def && !def.onlyContainsChassisMotions) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Strictly verify that a function body ONLY contains chassis motion commands (moveToPoint, moveToPose, turnToHeading, etc.)
+  // and no lift/subsystem/motor/PID/control-flow commands.
+  function checkBodyOnlyContainsChassisMotions(bodyStr, knownPureFnNames = null) {
+    if (!bodyStr || typeof bodyStr !== "string") return false;
+    const clean = stripCommentsPreserveLength(bodyStr).trim();
+    if (!clean) return false;
+
+    const stmts = [];
+    let cur = "";
+    let parenDepth = 0;
+    let braceDepth = 0;
+    let inString = false;
+    let quoteChar = "";
+
+    for (let i = 0; i < clean.length; i++) {
+      const c = clean[i];
+      const prev = i > 0 ? clean[i - 1] : "";
+      if (inString) {
+        cur += c;
+        if (c === quoteChar && prev !== "\\") inString = false;
+        continue;
+      }
+      if (c === '"' || c === "'") {
+        inString = true;
+        quoteChar = c;
+        cur += c;
+        continue;
+      }
+      if (c === "(") {
+        parenDepth++;
+        cur += c;
+        continue;
+      }
+      if (c === ")") {
+        if (parenDepth > 0) parenDepth--;
+        cur += c;
+        continue;
+      }
+      if (c === "{") {
+        // Braces are only allowed inside (...) for LemLib struct params like {.forwards = false}
+        if (parenDepth === 0) return false;
+        braceDepth++;
+        cur += c;
+        continue;
+      }
+      if (c === "}") {
+        if (parenDepth === 0) return false;
+        if (braceDepth > 0) braceDepth--;
+        cur += c;
+        continue;
+      }
+      if (c === ";" && parenDepth === 0 && braceDepth === 0) {
+        const s = cur.trim();
+        if (s) stmts.push(s);
+        cur = "";
+        continue;
+      }
+      cur += c;
+    }
+
+    const trailing = cur.trim();
+    if (trailing) stmts.push(trailing);
+    if (stmts.length === 0) return false;
+
+    const directMotionRe = /^(?:(?:chassis|bot|drive|drivetrain|robot|lemlib|odom)\s*(?:\.|->)\s*)?(moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline|follow|waitUntil|waitUntilDone|setPose)\s*\([\s\S]*\)$/i;
+    const realMoveCmdRe = /^(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline|follow)$/i;
+    const standaloneCallRe = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*\([\s\S]*\)$/;
+
+    let hasAtLeastOneMove = false;
+    for (let i = 0; i < stmts.length; i++) {
+      const st = stmts[i].trim();
+      if (!st) continue;
+      if (/^(?:if|else|while|for|switch|return)\b/i.test(st)) return false;
+
+      const dm = st.match(directMotionRe);
+      if (dm) {
+        const cmdName = dm[1];
+        if (realMoveCmdRe.test(cmdName)) {
+          hasAtLeastOneMove = true;
+        }
+        continue;
+      }
+
+      const sc = st.match(standaloneCallRe);
+      if (sc && knownPureFnNames && knownPureFnNames.has(sc[1])) {
+        hasAtLeastOneMove = true;
+        continue;
+      }
+
+      // Any other statement (e.g. lift.move_absolute, intake.move, pros::delay, variables) disqualifies this function
+      return false;
+    }
+
+    return hasAtLeastOneMove;
+  }
 
   let cachedCustomFunctions = new Map();
   let cachedProjectFunctionsMap = new Map();
@@ -919,12 +1035,13 @@
     return chars.join("");
   }
 
-  function extractFunctionsFromCodeString(codeStr, sourceFile = "inline") {
+  function extractFunctionsFromCodeString(codeStr, sourceFile = "inline", existingPureNames = null) {
     const fnMap = new Map();
     const fnList = [];
     fnMap._orderedList = fnList;
     if (!codeStr || typeof codeStr !== "string" || codeStr.length > 120000) return fnMap;
 
+    const pureFnNames = existingPureNames ? new Set(existingPureNames) : new Set();
     const cleanCode = stripCommentsPreserveLength(codeStr);
     const fnHeaderRegex = /(?:^|[\n;{}])\s*(?:inline\s+|static\s+)?(?:void|int|bool|double|float|auto)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^);{}]*)\)\s*\{/g;
     let match;
@@ -976,10 +1093,16 @@
       const headerStartIdx = match.index + (prefixMatch ? prefixMatch[0].length : 0);
       const params = parseFunctionParamsList(paramsRaw);
       const isThreeCoordThetaSignature = Boolean(params.length >= 3 && params[2].isThetaLike);
+      const onlyContainsChassisMotions = checkBodyOnlyContainsChassisMotions(body, pureFnNames);
+      if (onlyContainsChassisMotions) {
+        pureFnNames.add(fnName);
+      }
 
-      // Check if body contains moveToPoint(x, y, theta) or other LemLib movements
-      const mtpInBodyMatch = body.match(/(?:[a-zA-Z0-9_]+\.)?moveToPoint\s*\(([^;)]+)\)/i);
-      let hasMoveToPointTheta = isThreeCoordThetaSignature && fnName === "moveToPoint";
+      // Check if body contains moveToPoint(x, y, theta) or other LemLib movements (only if pure motion function)
+      const mtpInBodyMatch = onlyContainsChassisMotions
+        ? body.match(/(?:(?:chassis|bot|drive|drivetrain|robot|lemlib|odom)\s*(?:\.|->)\s*)?moveToPoint\s*\(([^;)]+)\)/i)
+        : null;
+      let hasMoveToPointTheta = Boolean(onlyContainsChassisMotions && isThreeCoordThetaSignature && fnName === "moveToPoint");
       if (mtpInBodyMatch) {
         const bodyMtpArgs = splitCppArgsSafe(mtpInBodyMatch[1]).filter((a) => {
           const t = a.trim();
@@ -999,7 +1122,7 @@
         }
       }
       const hasMoveToPoint3 = !!mtpInBodyMatch;
-      const hasAnyMotion = /(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline)/i.test(body);
+      const hasAnyMotion = onlyContainsChassisMotions;
 
       const fnDef = {
         name: fnName,
@@ -1012,11 +1135,35 @@
         hasMoveToPoint3,
         hasMoveToPointTheta,
         hasAnyMotion,
+        onlyContainsChassisMotions,
         isThreeCoordThetaSignature,
       };
-      fnMap.set(fnName, fnDef);
+      // If overloaded in same file, prefer the overload that onlyContainsChassisMotions
+      const prevDef = fnMap.get(fnName);
+      if (!prevDef || fnDef.onlyContainsChassisMotions || !prevDef.onlyContainsChassisMotions) {
+        fnMap.set(fnName, fnDef);
+      }
       fnList.push(fnDef);
     }
+
+    // Second pass: resolve transitive pure motion wrappers (e.g. wrapper calling another pure motion function defined below it)
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const def of fnList) {
+        if (!def.onlyContainsChassisMotions && checkBodyOnlyContainsChassisMotions(def.body, pureFnNames)) {
+          def.onlyContainsChassisMotions = true;
+          def.hasAnyMotion = true;
+          if (def.isThreeCoordThetaSignature && def.name === "moveToPoint") {
+            def.hasMoveToPointTheta = true;
+          }
+          pureFnNames.add(def.name);
+          fnMap.set(def.name, def);
+          changed = true;
+        }
+      }
+    }
+
     return fnMap;
   }
 
@@ -1065,26 +1212,46 @@
       const fp = computeProjectFingerprint(filesObj);
       if (fp !== cachedProjectFingerprint) {
         const nextProjMap = new Map();
+        const projPureNames = new Set();
         Object.entries(filesObj).forEach(([fileName, content]) => {
           if (!shouldScanProjectFile(fileName, content)) return;
-          const fileFns = extractFunctionsFromCodeString(content, fileName);
+          const fileFns = extractFunctionsFromCodeString(content, fileName, projPureNames);
           fileFns.forEach((def, name) => {
-            nextProjMap.set(name, def);
+            if (def.onlyContainsChassisMotions) projPureNames.add(name);
+            const prev = nextProjMap.get(name);
+            if (!prev || def.onlyContainsChassisMotions || !prev.onlyContainsChassisMotions) {
+              nextProjMap.set(name, def);
+            }
           });
         });
         cachedProjectFunctionsMap = nextProjMap;
+        cachedCustomFunctions = new Map(nextProjMap);
         cachedProjectFingerprint = fp;
         inferredCustomCodeCache.clear();
       }
     }
 
-    const combined = new Map(cachedProjectFunctionsMap);
+    const combined = new Map(cachedCustomFunctions);
+    cachedProjectFunctionsMap.forEach((def, name) => {
+      const prev = combined.get(name);
+      if (!prev || def.onlyContainsChassisMotions || !prev.onlyContainsChassisMotions) {
+        combined.set(name, def);
+      }
+    });
+
+    const knownPure = new Set();
+    combined.forEach((def, name) => {
+      if (def.onlyContainsChassisMotions) knownPure.add(name);
+    });
 
     // 2. Collect from current rawCode (overrides project files if redefined locally)
     if (rawCode && typeof rawCode === "string") {
-      const localFns = extractFunctionsFromCodeString(rawCode, "local");
+      const localFns = extractFunctionsFromCodeString(rawCode, "local", knownPure);
       localFns.forEach((def, name) => {
-        combined.set(name, def);
+        const prev = combined.get(name);
+        if (!prev || def.onlyContainsChassisMotions || !prev.onlyContainsChassisMotions) {
+          combined.set(name, def);
+        }
       });
     }
 
@@ -1123,6 +1290,7 @@
     let inferredTimeout = 2000;
 
     const customMoveToPointDef = customFnsMap && customFnsMap.get("moveToPoint");
+    const isCustomPureMoveToPoint = Boolean(customMoveToPointDef && customMoveToPointDef.onlyContainsChassisMotions);
 
     if (scalarArgs.length >= 4) {
       // 4 scalar args: moveToPoint(x, y, theta, timeout)
@@ -1143,9 +1311,9 @@
           Boolean(paramEnv && paramEnv.__forceMoveToPointTheta) ||
           THETA_PARAM_REGEX.test(rawArg3) ||
           (paramEnv && paramEnv.__thetaParams && paramEnv.__thetaParams.has(rawArg3)) ||
-          (customMoveToPointDef && (customMoveToPointDef.hasMoveToPointTheta || customMoveToPointDef.isThreeCoordThetaSignature || (customMoveToPointDef.params.length >= 3 && customMoveToPointDef.params[2].isThetaLike)));
+          (isCustomPureMoveToPoint && (customMoveToPointDef.hasMoveToPointTheta || customMoveToPointDef.isThreeCoordThetaSignature || (customMoveToPointDef.params.length >= 3 && customMoveToPointDef.params[2].isThetaLike)));
 
-        if (arg3IsThetaIdent || (!isNaN(val3) && Math.abs(val3) <= 360)) {
+        if (arg3IsThetaIdent || (!hasChassisPrefix && !isNaN(val3) && Math.abs(val3) <= 360)) {
           hasThetaArg = true;
           inferredTheta = isNaN(val3) ? 0 : val3;
           inferredTimeout = 2000;
@@ -1198,7 +1366,7 @@
         env.__forceMoveToPointTheta = true;
       }
     }
-    if (fnDef && (fnDef.hasMoveToPointTheta || fnDef.isThreeCoordThetaSignature)) {
+    if (fnDef && fnDef.onlyContainsChassisMotions && (fnDef.hasMoveToPointTheta || fnDef.isThreeCoordThetaSignature)) {
       env.__forceMoveToPointTheta = true;
     }
 
@@ -1210,7 +1378,7 @@
       } else {
         env[p.name] = 0;
       }
-      if (p.isThetaLike) {
+      if (p.isThetaLike && fnDef && fnDef.onlyContainsChassisMotions) {
         thetaParams.add(p.name);
         env.__forceMoveToPointTheta = true;
       }
@@ -1251,8 +1419,14 @@
     const callArgs = rawArgsStr ? splitCppArgsSafe(rawArgsStr) : [];
     const fns = customFnsMap || getActiveCustomFunctionsMap();
 
+    // Only assume a custom function is a moving function if its definition exists
+    // AND its body ONLY contains chassis movement commands (moveToPoint, moveToPose, turnToHeading, etc.)
     if (fns && fns.has(fnName)) {
       const fnDef = fns.get(fnName);
+      if (!fnDef || !fnDef.onlyContainsChassisMotions) {
+        return null;
+      }
+
       const { substituted, env } = substituteParamsInBody(fnDef.body, fnDef.params, callArgs, parentEnv, fnDef);
       const subResult = parseCppAuton(substituted, {
         defaultMaxSpeed,
@@ -1268,7 +1442,12 @@
         return !isNaN(v) ? v : a;
       }).join(", ")})`;
 
-      if (subResult && Array.isArray(subResult.actions) && subResult.actions.length > 0) {
+      if (
+        subResult &&
+        Array.isArray(subResult.actions) &&
+        subResult.actions.length > 0 &&
+        subResult.actions.every(isPureChassisAction)
+      ) {
         const realMotionActions = subResult.actions.filter((a) => a && REAL_MOTION_TYPES.has(a.type));
         if (realMotionActions.length > 0) {
           realMotionActions.forEach((a) => {
@@ -1278,38 +1457,6 @@
             }
           });
           return realMotionActions;
-        }
-      }
-
-      // If function definition has a (x, y, theta) signature (e.g. custom PID body without LemLib calls), infer moveToPose directly
-      if (fnDef.isThreeCoordThetaSignature && callArgs.length >= 3) {
-        const act = buildMoveToPointOrThetaAction(rawArgsStr, false, defaultMaxSpeed, defaultMinSpeed, fns, env);
-        act.inferredFromCustomFn = callSig;
-        act.label = `via ${callSig}`;
-        return [act];
-      }
-    }
-
-    // Fallback: if function name is a custom motion wrapper (e.g. driveToPoint, moveTo, customMoveToPoint)
-    // or declared in ProjectManager.symbols.functions with (x, y, theta) parameters
-    if (callArgs.length >= 3) {
-      const v0 = evaluateNumericArg(callArgs[0], parentEnv);
-      const v1 = evaluateNumericArg(callArgs[1], parentEnv);
-      const v2 = evaluateNumericArg(callArgs[2], parentEnv);
-      if (!isNaN(v0) && !isNaN(v1) && !isNaN(v2)) {
-        let isThreeCoordWrapper = /^(?:drive|move|go|rush|pid)[a-zA-Z0-9_]*(?:Point|Pose|To|Coord|Target)?$/i.test(fnName);
-        if (!isThreeCoordWrapper && typeof window !== "undefined" && window.ProjectManager?.symbols?.functions) {
-          const sym = window.ProjectManager.symbols.functions.find((f) => f.name === fnName);
-          if (sym && sym.signature && /\b(theta|heading|angle|deg)\b/i.test(sym.signature)) {
-            isThreeCoordWrapper = true;
-          }
-        }
-        if (isThreeCoordWrapper) {
-          const act = buildMoveToPointOrThetaAction(rawArgsStr, false, defaultMaxSpeed, defaultMinSpeed, fns, parentEnv);
-          const callSig = `${fnName}(${v0}, ${v1}, ${v2})`;
-          act.inferredFromCustomFn = callSig;
-          act.label = `via ${callSig}`;
-          return [act];
         }
       }
     }
@@ -1345,8 +1492,6 @@
 
     // Determine which function in rawCode is the primary autonomous routine vs helper functions
     let targetCodeToParse = rawCode;
-    let standaloneThreeCoordFn = null;
-    let standaloneSampleArgs = null;
 
     if (localFnsMap.size > 0 && recursionDepth === 0) {
       const fnList = localFnsMap._orderedList || Array.from(localFnsMap.values());
@@ -1401,8 +1546,8 @@
         if (fnList.length === 1 && mainFn.params.length > 0 && hasOutsideExecutable) {
           // Helper function defined at top of snippet + calls to it below!
           targetCodeToParse = outsideCode;
-        } else if (fnList.length === 1 && mainFn.params.length > 0 && !hasOutsideExecutable) {
-          // Only a parameterized custom function definition was provided (e.g. void driveTo(x, y, theta) { moveToPoint(x, y, theta); })
+        } else if (fnList.length === 1 && mainFn.params.length > 0 && !hasOutsideExecutable && mainFn.onlyContainsChassisMotions) {
+          // Only a parameterized custom motion function definition was provided (e.g. void driveTo(x, y, theta) { moveToPoint(x, y, theta); })
           // Bind parameters to defaults or sample preview values so its body still infers blocks & simulation
           const sampleArgs = mainFn.params.map((p, idx) => {
             if (p.defaultVal != null) return p.defaultVal;
@@ -1412,10 +1557,6 @@
           const sub = substituteParamsInBody(mainFn.body, mainFn.params, sampleArgs, paramEnv, mainFn);
           paramEnv = sub.env;
           targetCodeToParse = sub.substituted;
-          if (mainFn.isThreeCoordThetaSignature || mainFn.name === "moveToPoint") {
-            standaloneThreeCoordFn = mainFn;
-            standaloneSampleArgs = sampleArgs;
-          }
           log.push(`Inferred motion blocks from parameterized function definition: ${mainFn.name}(${mainFn.paramsRaw})`);
         } else {
           targetCodeToParse = mainFn.body + (hasOutsideExecutable ? "\n" + outsideCode : "");
@@ -1776,14 +1917,14 @@
 
         const act = createDefaultAction("ifElse", defaultMaxSpeed, defaultMinSpeed);
         act.condition = condition;
-        act.thenCode = thenLines.filter(Boolean).join("\n").trim() || "chassis.moveToPoint(24, 24, 2000);";
-        act.elseCode = elseLines.filter(Boolean).join("\n").trim() || "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});";
-        act.thenAction = parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
-        act.elseAction = parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
-        act.thenChildren = parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap);
+        act.thenCode = thenLines.filter(Boolean).join("\n").trim();
+        act.elseCode = elseLines.filter(Boolean).join("\n").trim();
+        act.thenAction = act.thenCode ? parseStatementToAction(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap) : null;
+        act.elseAction = act.elseCode ? parseStatementToAction(act.elseCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap) : null;
+        act.thenChildren = act.thenCode ? parseStatementsToList(act.thenCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap) : [];
         act.elseChildren = act.elseCode ? parseStatementsToList(act.elseCode, defaultMaxSpeed, defaultMinSpeed, recursionDepth + 1, visitedFns, customFnsMap) : [];
-        act.thenLabel = getActionHumanLabel(act.thenAction, act.thenCode);
-        act.elseLabel = getActionHumanLabel(act.elseAction, act.elseCode);
+        act.thenLabel = act.thenAction ? getActionHumanLabel(act.thenAction, act.thenCode) : (act.thenCode ? "Custom Action" : "No Action");
+        act.elseLabel = act.elseAction ? getActionHumanLabel(act.elseAction, act.elseCode) : (act.elseCode ? "Custom Action" : "No Action");
 
         if (inlineComment) act.label = inlineComment;
         else if (pendingComments.length > 0) {
@@ -1797,8 +1938,8 @@
       }
 
       // LemLib Movements (supporting both chassis.moveToPoint and custom moveToPoint(x, y, theta))
-      const mtPointMatch = line.match(/(?:([a-zA-Z0-9_]+)\.)?moveToPoint\s*\(([^;]+)\)/i);
-      if (mtPointMatch) {
+      const mtPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?moveToPoint\s*\(([^;]+)\)\s*;?$/i);
+      if (mtPointMatch && isValidChassisReceiver(mtPointMatch[1], "moveToPoint", customFnsMap)) {
         flushCustomBlock();
         const hasChassisPrefix = !!mtPointMatch[1];
         const act = buildMoveToPointOrThetaAction(
@@ -1826,10 +1967,10 @@
         continue;
       }
 
-      const mtPoseMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?moveToPose\s*\(([^;]+)\)/i);
-      if (mtPoseMatch) {
+      const mtPoseMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?moveToPose\s*\(([^;]+)\)\s*;?$/i);
+      if (mtPoseMatch && isValidChassisReceiver(mtPoseMatch[1], "moveToPose", customFnsMap)) {
         flushCustomBlock();
-        const args = splitCppArgsSafe(mtPoseMatch[1]);
+        const args = splitCppArgsSafe(mtPoseMatch[2]);
         const act = createDefaultAction("moveToPose", defaultMaxSpeed, defaultMinSpeed);
         act.x = evaluateNumericArg(args[0], paramEnv) || 0;
         act.y = evaluateNumericArg(args[1], paramEnv) || 0;
@@ -1861,10 +2002,10 @@
         continue;
       }
 
-      const ttPointMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?turnToPoint\s*\(([^;]+)\)/i);
-      if (ttPointMatch) {
+      const ttPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turnToPoint\s*\(([^;]+)\)\s*;?$/i);
+      if (ttPointMatch && isValidChassisReceiver(ttPointMatch[1], "turnToPoint", customFnsMap)) {
         flushCustomBlock();
-        const args = splitCppArgsSafe(ttPointMatch[1]);
+        const args = splitCppArgsSafe(ttPointMatch[2]);
         const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
         act.x = evaluateNumericArg(args[0], paramEnv) || 0;
         act.y = evaluateNumericArg(args[1], paramEnv) || 0;
@@ -1894,10 +2035,10 @@
         continue;
       }
 
-      const ttHeadingMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?turnToHeading\s*\(([^;]+)\)/i);
-      if (ttHeadingMatch) {
+      const ttHeadingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turnToHeading\s*\(([^;]+)\)\s*;?$/i);
+      if (ttHeadingMatch && isValidChassisReceiver(ttHeadingMatch[1], "turnToHeading", customFnsMap)) {
         flushCustomBlock();
-        const args = splitCppArgsSafe(ttHeadingMatch[1]);
+        const args = splitCppArgsSafe(ttHeadingMatch[2]);
         const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
         act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
         act.timeout = parseInt(evaluateNumericArg(args[1], paramEnv), 10) || 1500;
@@ -1925,10 +2066,10 @@
         continue;
       }
 
-      const swPointMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?swingToPoint\s*\(([^;]+)\)/i);
-      if (swPointMatch) {
+      const swPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?swingToPoint\s*\(([^;]+)\)\s*;?$/i);
+      if (swPointMatch && isValidChassisReceiver(swPointMatch[1], "swingToPoint", customFnsMap)) {
         flushCustomBlock();
-        const args = splitCppArgsSafe(swPointMatch[1]);
+        const args = splitCppArgsSafe(swPointMatch[2]);
         const act = createDefaultAction("swingToPoint", defaultMaxSpeed, defaultMinSpeed);
         act.x = evaluateNumericArg(args[0], paramEnv) || 0;
         act.y = evaluateNumericArg(args[1], paramEnv) || 0;
@@ -1959,10 +2100,10 @@
         continue;
       }
 
-      const swHeadingMatch = line.match(/(?:[a-zA-Z0-9_]+\.)?swingToHeading\s*\(([^;]+)\)/i);
-      if (swHeadingMatch) {
+      const swHeadingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?swingToHeading\s*\(([^;]+)\)\s*;?$/i);
+      if (swHeadingMatch && isValidChassisReceiver(swHeadingMatch[1], "swingToHeading", customFnsMap)) {
         flushCustomBlock();
-        const args = splitCppArgsSafe(swHeadingMatch[1]);
+        const args = splitCppArgsSafe(swHeadingMatch[2]);
         const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
         act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
         act.lockedSide = parseDriveSideEnum(args[1]);
@@ -1992,7 +2133,7 @@
         continue;
       }
 
-      // Check if line is a call to a custom function whose definition has moveToPoint(x, y, theta) or other motion
+      // Check if line is a call to a custom function whose definition ONLY contains moveToPoint(x, y, theta) or other chassis motions
       const expandedActs = expandCustomFunctionCall(
         line,
         customFnsMap,
@@ -2019,7 +2160,7 @@
       }
 
       // chassis.waitUntil(distance) - Distance-based event trigger
-      const waitDistMatch = line.match(/chassis\.waitUntil\s*\(\s*([-\d.]+)\s*\)/i);
+      const waitDistMatch = line.match(/^(?:chassis|bot|drive|drivetrain|robot)\.waitUntil\s*\(\s*([-\d.]+)\s*\)\s*;?$/i);
       if (waitDistMatch) {
         flushCustomBlock();
         const dist = parseFloat(waitDistMatch[1]) || 12;
@@ -2041,7 +2182,7 @@
       }
 
       // chassis.waitUntilDone() - Chassis settle sync point
-      const waitDoneMatch = line.match(/chassis\.waitUntilDone\s*\(\s*\)/i);
+      const waitDoneMatch = line.match(/^(?:chassis|bot|drive|drivetrain|robot)\.waitUntilDone\s*\(\s*\)\s*;?$/i);
       if (waitDoneMatch) {
         flushCustomBlock();
         const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
@@ -2069,23 +2210,6 @@
     }
 
     flushCustomBlock();
-
-    // If a standalone (x, y, theta) function definition was parsed (e.g. void moveToPoint(double x, double y, double theta) { /* custom PID */ })
-    // and its body had no direct LemLib motion calls, synthesize the inferred moveToPose action from its signature
-    if (standaloneThreeCoordFn && standaloneSampleArgs && !actions.some((a) => REAL_MOTION_TYPES.has(a.type))) {
-      const synthAct = buildMoveToPointOrThetaAction(
-        standaloneSampleArgs.join(", "),
-        false,
-        defaultMaxSpeed,
-        defaultMinSpeed,
-        customFnsMap,
-        paramEnv
-      );
-      synthAct.inferredFromCustomFn = `${standaloneThreeCoordFn.name}(${standaloneThreeCoordFn.paramsRaw})`;
-      synthAct.label = `via ${standaloneThreeCoordFn.name}(${standaloneSampleArgs.join(", ")})`;
-      actions.unshift(synthAct);
-      log.push(`Synthesized moveToPose block from custom ${standaloneThreeCoordFn.name}(x, y, theta) definition`);
-    }
 
     // Contextual Multitask Post-processing
     for (let i = 0; i < actions.length - 1; i++) {
@@ -2316,12 +2440,15 @@ void autonomous() {
       projectFiles: options.projectFiles || null,
     });
     const allActions = (parsed && Array.isArray(parsed.actions)) ? parsed.actions : [];
-    const motionActions = allActions.filter((a) => a && REAL_MOTION_TYPES.has(a.type));
+    const rawMotionActions = allActions.filter((a) => a && REAL_MOTION_TYPES.has(a.type));
+    // Only treat custom code as a moving function if it ONLY contains chassis motion commands
+    const isPureMotionSnippet = allActions.length > 0 && rawMotionActions.length > 0 && allActions.every(isPureChassisAction);
+    const motionActions = isPureMotionSnippet ? rawMotionActions : [];
     const summaryParts = motionActions.map((a) => getActionHumanLabel(a, ""));
     const result = {
-      hasMotion: motionActions.length > 0,
+      hasMotion: isPureMotionSnippet,
       motionActions,
-      allActions,
+      allActions: isPureMotionSnippet ? allActions : [],
       summaryLabel: summaryParts.join(" → "),
     };
 
