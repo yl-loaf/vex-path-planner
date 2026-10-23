@@ -46,7 +46,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261021.k9" />
+  <link rel="stylesheet" href="style.css?v=20261023.k1" />
   <script>
     (function () {
       try {
@@ -2922,7 +2922,10 @@ void autonomous() {
           <div class="brain-gauge-card">
             <div class="gauge-card-title">⚡ Flash &amp; Program Control</div>
             <div style="margin-bottom:8px;">
-              <label for="modalSlotSelect" style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:4px;">Target Memory Slot:</label>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label for="modalSlotSelect" style="font-size:0.75rem;color:#94a3b8;margin:0;">Target Memory Slot:</label>
+                <button type="button" id="btnModalSyncSlots" style="background:transparent;border:none;color:#38bdf8;font-size:0.70rem;cursor:pointer;padding:0;" title="Query installed programs from V5 Brain QSPI flash">🔄 Sync Slots</button>
+              </div>
               <select id="modalSlotSelect" class="debug-slot-select" style="width:100%;">
                 <option value="1">Slot 1: Override_Auton</option>
                 <option value="2">Slot 2: Skills_60s_Run</option>
@@ -3539,24 +3542,24 @@ void autonomous() {
     </div>
   </div>
 
-  <script src="version.js?v=20261021.k9"></script>
+  <script src="version.js?v=20261023.k1"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261021.k9"></script>
+  <script src="firebase-config.js?v=20261023.k1"></script>
   <script src="analytics-tracker.js"></script>
-  <script src="google-drive-sync.js?v=20261021.k9"></script>
-  <script src="session-guard.js?v=20261021.k9"></script>
-  <script src="theme.js?v=20261021.k9"></script>
-  <script src="v5-brain-serial.js?v=20261021.k9"></script>
-  <script src="project-manager.js?v=20261021.k9"></script>
-  <script src="cpp-parser.js?v=20261021.k9"></script>
-  <script src="scoring-engine.js?v=20261021.k9"></script>
-  <script src="match-analysis-engine.js?v=20261021.k9"></script>
-  <script src="app.js?v=20261021.k9"></script>
-  <script src="tutorial.js?v=20261021.k9"></script>
+  <script src="google-drive-sync.js?v=20261023.k1"></script>
+  <script src="session-guard.js?v=20261023.k1"></script>
+  <script src="theme.js?v=20261023.k1"></script>
+  <script src="v5-brain-serial.js?v=20261023.k1"></script>
+  <script src="project-manager.js?v=20261023.k1"></script>
+  <script src="cpp-parser.js?v=20261023.k1"></script>
+  <script src="scoring-engine.js?v=20261023.k1"></script>
+  <script src="match-analysis-engine.js?v=20261023.k1"></script>
+  <script src="app.js?v=20261023.k1"></script>
+  <script src="tutorial.js?v=20261023.k1"></script>
   <script>
     (function () {
       if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {

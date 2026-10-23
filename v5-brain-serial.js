@@ -368,6 +368,14 @@
         this.logDebug("WebSerial", `Hardware CDC2 port open at 115200 baud (${isController ? "V5 Controller USB Bridge" : "VEX V5 Brain Direct USB"}).`);
         this.emit("connected", { simulated: false, status: this.status, portInfo: info });
         this.emit("terminal", `\n[Web Serial CDC2] Connected to VEX V5 Device (${vidHex}:${pidHex}) at 115200 baud.\n[VEX CDC2] Extended Protocol + CRC16-CCITT Active.\n${isController ? "[VEX Controller] Connected via V5 Controller USB Bridge (VID: 0x2888, PID: 0x0503).\n[VEXnet 3.0] Wireless Controller Bridge active: Slot Run (0x72), Competition Control (0xC1), and QSPI Flashing (0x11/0x13/0x12) ready.\n" : ""}[PROS Serial] Listening for telemetry and CDC2 packets...\n`);
+
+        // Schedule program slot directory sync once connection link settles
+        setTimeout(() => {
+          if (this.isConnected && !this.isUploading) {
+            this.queryProgramSlots().catch(() => {});
+          }
+        }, 1800);
+
         return true;
       } catch (err) {
         this.logDebug("WebSerial", `Connection cancelled or failed: ${err.name} - ${err.message}. Status remains Disconnected (--%).`);
@@ -850,53 +858,76 @@
       const j2000Time = Math.floor(Date.now() / 1000) - J2000_EPOCH_SECS;
 
       // FileTransferInitializePacket (USER_CDC = 0x56, ECMD_FILE_INIT = 0x11)
-      // Layout:
-      // [0] operation = 1 (Write)
+      // Standard V5 Protocol Specification: "<4B3I4s2I24s" (Exactly 52 bytes)
+      // [0] operation = 1 (Write / Upload)
       // [1] target = 1 (QSPI Flash)
-      // [2] vendor = 1 (User)
-      // [3] options = 1 (Overwrite)
-      // [4..8] file_size (u32 LE)
-      // [8..12] load_address (u32 LE)
-      // [12..16] write_file_crc (u32 LE)
-      // [16..20] metadata.extension (4 bytes null-padded: "ini\0" or "bin\0")
-      // [20] metadata.extension_type = 0 (Binary)
-      // [21..25] metadata.timestamp (i32 LE, J2000)
-      // [25..29] metadata.version = [1, 0, 0, 0]
-      // [29..] file_name (null-terminated ASCII up to 24 bytes)
+      // [2] vendor = 1 (User VID)
+      // [3] options = 0 (Standard options)
+      // [4..7] file_size (u32 LE)
+      // [8..11] load_address (u32 LE)
+      // [12..15] write_file_crc (u32 LE)
+      // [16..19] metadata.extension (4 bytes null-padded ASCII: "ini\0" or "bin\0")
+      // [20..23] metadata.timestamp (u32 LE, J2000 epoch seconds)
+      // [24..27] metadata.version = 0x01000000 (u32 LE: [0, 0, 0, 1])
+      // [28..51] file_name (24 bytes null-padded ASCII)
       const initPayload = [
-        0x01, // Write
-        0x01, // QSPI
+        0x01, // Write / Upload
+        0x01, // QSPI Flash
         0x01, // User vendor
-        0x01, // Overwrite
+        0x00, // Options (0)
         ...u32le(fileData.length),
         ...u32le(loadAddress),
         ...u32le(fileCrc32),
         ...encodeFixedAscii(extension, 4),
-        0x00, // ExtensionType::Binary
         ...u32le(j2000Time),
-        0x01, 0x00, 0x00, 0x00, // Version 1.0.0.0
+        0x00, 0x00, 0x00, 0x01, // Version 1.0.0.0 (0x01000000 LE)
         ...encodeFixedAscii(fileName, 24)
       ];
 
-      this.logDebug("V5 File Transfer", `TX FILE_INIT (0x11) for '${fileName}' (${fileData.length} bytes @ 0x${loadAddress.toString(16)}, CRC32=0x${fileCrc32.toString(16)})`);
-      const initReply = await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_INIT, initPayload, 900);
+      this.logDebug("V5 File Transfer", `TX FILE_INIT (0x11) for '${fileName}' (${fileData.length} bytes @ 0x${loadAddress.toString(16)}, CRC32=0x${fileCrc32.toString(16).padStart(8, '0')})`);
+      let initReply = await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_INIT, initPayload, 1200);
 
-      let maxChunkSize = this.status.controllerConnected ? 244 : 512;
-      if (initReply && initReply.ack === CDC2_ACK && initReply.data && initReply.data.length >= 2) {
+      // If initial attempt timed out or did not return ACK, retry once with increased timeout
+      if (!initReply || initReply.ack !== CDC2_ACK) {
+        this.logDebug("V5 File Transfer", `FILE_INIT attempt 1 failed (${initReply ? 'ACK 0x' + initReply.ack.toString(16).toUpperCase() : 'TIMEOUT'}). Retrying in 250ms...`);
+        await new Promise(r => setTimeout(r, 250));
+        initReply = await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_INIT, initPayload, 1800);
+      }
+
+      if (!initReply || initReply.ack !== CDC2_ACK) {
+        const ackHex = initReply ? `0x${initReply.ack.toString(16).toUpperCase()}` : "TIMEOUT";
+        const reasonMap = {
+          "0xD4": "Attempted to upload uninitialized / radio channel busy",
+          "0xCE": "File not found / path rejected",
+          "0xD0": "Permission denied / slot locked",
+          "0xD2": "CRC32 checksum mismatch",
+          "0xD7": "Flash write/erase error"
+        };
+        const reasonDesc = reasonMap[ackHex] || "V5 Brain rejected file transfer initialization";
+        const errMsg = `V5 Brain rejected file init for '${fileName}' (${ackHex}: ${reasonDesc})`;
+        this.logDebug("V5 File Transfer", errMsg);
+        this.emit("terminal", `\n[CDC2 ERROR] ${errMsg}\n`);
+        throw new Error(errMsg);
+      }
+
+      let maxChunkSize = this.status.controllerConnected ? 240 : 512;
+      if (initReply.data && initReply.data.length >= 2) {
         const windowSize = initReply.data[0] | (initReply.data[1] << 8);
-        if (windowSize > 64 && windowSize <= 4096) {
+        if (windowSize >= 64 && windowSize <= 4096) {
+          // Half of window size as per PROS CLI specification for radio buffer safety
           maxChunkSize = Math.min(maxChunkSize, Math.floor(windowSize / 2));
         }
-        this.logDebug("V5 File Transfer", `RX FILE_INIT ACK for '${fileName}' (windowSize=${windowSize}, chunkSize=${maxChunkSize})`);
-      } else if (initReply) {
-        this.logDebug("V5 File Transfer", `FILE_INIT response for '${fileName}': ACK=0x${initReply.ack.toString(16)}`);
+        this.logDebug("V5 File Transfer", `RX FILE_INIT ACK for '${fileName}' (windowSize=${windowSize}, maxChunkSize=${maxChunkSize})`);
+      } else {
+        this.logDebug("V5 File Transfer", `RX FILE_INIT ACK for '${fileName}' (using default chunkSize=${maxChunkSize})`);
       }
+      maxChunkSize = Math.max(64, Math.floor(maxChunkSize / 4) * 4);
 
       // Stream FileDataWritePacket (USER_CDC = 0x56, ECMD_FILE_WRITE = 0x13)
       let offset = 0;
       while (offset < fileData.length) {
         let slice = Array.from(fileData.slice(offset, offset + maxChunkSize));
-        // Pad to 4-byte alignment as required by VEXos flash writer
+        // Pad to 4-byte alignment as required by VEXos flash memory controller
         while (slice.length % 4 !== 0) {
           slice.push(0x00);
         }
@@ -904,10 +935,10 @@
           ...u32le(loadAddress + offset),
           ...slice
         ];
-        const reply = await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_WRITE, writePayload, 400);
-        if (!reply) {
-          // Small pacing delay over VEXnet if controller didn't immediately echo
-          await new Promise(r => setTimeout(r, 18));
+        const reply = await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_WRITE, writePayload, this.status.controllerConnected ? 650 : 400);
+        if (!reply || reply.ack !== CDC2_ACK) {
+          // Pacing delay over VEXnet wireless link if ACK was delayed
+          await new Promise(r => setTimeout(r, this.status.controllerConnected ? 25 : 10));
         }
         offset += slice.length;
         if (typeof onProgress === "function") {
@@ -916,35 +947,113 @@
       }
 
       // FileTransferExitPacket (USER_CDC = 0x56, ECMD_FILE_EXIT = 0x12)
-      this.logDebug("V5 File Transfer", `TX FILE_EXIT (0x12) for '${fileName}' (action=${exitAction})`);
-      await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_EXIT, [exitAction & 0xff], 800);
+      const exitTimeout = Math.max(2500, Math.round(fileData.length / 40));
+      this.logDebug("V5 File Transfer", `TX FILE_EXIT (0x12) for '${fileName}' (action=${exitAction}, timeout=${exitTimeout}ms)`);
+      const exitReply = await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_EXIT, [exitAction & 0xff], exitTimeout);
+      if (exitReply && exitReply.ack !== CDC2_ACK) {
+        this.logDebug("V5 File Transfer", `FILE_EXIT response: ACK=0x${exitReply.ack.toString(16)}`);
+      }
       return true;
     }
 
-    // Build a VEX V5 slot binary package containing V5_SIG header + autonomous metadata/code
+    // Build a VEX V5 slot binary package containing V5_SIG header + safe ARM entry point + routine payload
     buildAutonProgramBinary(programName, cppSource = "") {
       if (this.customBinData && this.customBinData.length > 0) {
         return this.customBinData;
       }
       const encoder = new TextEncoder();
-      const sourceBytes = encoder.encode(
+      const metaText =
         `// VEX V5 LemLib Autonomous Routine: ${programName}\n` +
         `// Timestamp: ${new Date().toISOString()}\n` +
-        (cppSource || "")
-      );
-      // 32-byte VEX V5 Code Signature header ("XVX5", Type=0 User, Owner=2 Partner) + source payload aligned to 4 bytes
-      const totalLen = Math.max(512, Math.ceil((32 + sourceBytes.length) / 4) * 4);
+        `// Target Address: QSPI Flash (0x03800000)\n\n` +
+        (cppSource || "");
+      const sourceBytes = encoder.encode(metaText);
+
+      // Construct valid VEX V5 code package:
+      // 32-byte XVX5 header ("XVX5", Type=0 User, Owner=2 Partner/PROS)
+      // + 16-byte ARM Cortex-A9 safe entry point (NOPs + mov r0, #0 + bx lr)
+      // + embedded routine payload aligned to 4 bytes
+      const headerLen = 32;
+      const stubLen = 16;
+      const totalLen = Math.max(512, Math.ceil((headerLen + stubLen + sourceBytes.length) / 4) * 4);
       const bin = new Uint8Array(totalLen);
+
       // Magic "XVX5"
       bin[0] = 0x58; // 'X'
       bin[1] = 0x56; // 'V'
       bin[2] = 0x58; // 'X'
       bin[3] = 0x35; // '5'
-      // ProgramType = 0 (User), Owner = 2 (Partner), Options = 0
+      // ProgramType = 0 (User), Owner = 2 (Partner/PROS), Options = 0
       bin[4] = 0x00; bin[5] = 0x00; bin[6] = 0x00; bin[7] = 0x00;
       bin[8] = 0x02; bin[9] = 0x00; bin[10] = 0x00; bin[11] = 0x00;
-      bin.set(sourceBytes.slice(0, totalLen - 32), 32);
+      bin[12] = 0x00; bin[13] = 0x00; bin[14] = 0x00; bin[15] = 0x00;
+      // Target Address 0x03800000
+      bin[16] = 0x00; bin[17] = 0x00; bin[18] = 0x80; bin[19] = 0x03;
+
+      // Safe ARM Cortex-A9 entry stub at byte 32:
+      // mov r0, r0 (nop) : 0xe1a00000
+      bin[32] = 0x00; bin[33] = 0x00; bin[34] = 0xa0; bin[35] = 0xe1;
+      // mov r0, #0       : 0xe3a00000
+      bin[36] = 0x00; bin[37] = 0x00; bin[38] = 0xa0; bin[39] = 0xe3;
+      // bx lr (return)   : 0xe12fff1e
+      bin[40] = 0x1e; bin[41] = 0xff; bin[42] = 0x2f; bin[43] = 0xe1;
+      // nop              : 0xe1a00000
+      bin[44] = 0x00; bin[45] = 0x00; bin[46] = 0xa0; bin[47] = 0xe1;
+
+      // Copy source code / payload starting after the entry stub
+      bin.set(sourceBytes.slice(0, totalLen - (headerLen + stubLen)), headerLen + stubLen);
       return bin;
+    }
+
+    // Query installed program slots from V5 Brain directory (ECMD_FILE_DIR = 0x16, ECMD_FILE_DIR_ENTRY = 0x17)
+    async queryProgramSlots() {
+      if (!this.isConnected || this.isSimulated || this.isUploading) return;
+      try {
+        this.logDebug("V5 Protocol", "TX Brain Directory Count Query [0x56, 0x16]");
+        const dirReply = await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_DIR, [0x01, 0x00], 800);
+        if (!dirReply || dirReply.ack !== CDC2_ACK || !dirReply.data || dirReply.data.length < 2) {
+          return;
+        }
+        const fileCount = dirReply.data[0] | (dirReply.data[1] << 8);
+        this.logDebug("SmartPorts", `V5 Brain flash storage reports ${fileCount} stored files.`);
+        if (fileCount <= 0 || fileCount > 64) return;
+
+        let discoveredSlots = 0;
+        for (let idx = 0; idx < Math.min(fileCount, 24); idx++) {
+          if (!this.isConnected || this.isUploading) break;
+          const entryReply = await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_DIR_ENTRY, [idx & 0xff, 0x00], 450);
+          if (entryReply && entryReply.ack === CDC2_ACK && entryReply.data && entryReply.data.length >= 26) {
+            const d = entryReply.data;
+            const fileSize = d[1] | (d[2] << 8) | (d[3] << 16) | (d[4] << 24);
+            const nameBytes = d.slice(25, 49);
+            let fileName = "";
+            for (let c = 0; c < nameBytes.length && nameBytes[c] !== 0; c++) {
+              fileName += String.fromCharCode(nameBytes[c]);
+            }
+            const match = fileName.match(/^slot_([1-8])\.(?:bin|ini)$/i);
+            if (match) {
+              const sNum = parseInt(match[1], 10);
+              const sIdx = sNum - 1;
+              if (this.status.slots[sIdx]) {
+                if (fileName.toLowerCase().endsWith(".bin")) {
+                  this.status.slots[sIdx].slot = sNum;
+                  this.status.slots[sIdx].sizeKb = Math.max(1, Math.round(fileSize / 1024));
+                  if (this.status.slots[sIdx].name === "Empty") {
+                    this.status.slots[sIdx].name = `Program (Slot ${sNum})`;
+                  }
+                  discoveredSlots++;
+                }
+              }
+            }
+          }
+        }
+        if (discoveredSlots > 0) {
+          this.logDebug("SmartPorts", `Discovered ${discoveredSlots} installed program slots from V5 Brain.`);
+          this.emit("status", this.status);
+        }
+      } catch (err) {
+        this.logDebug("V5 Protocol", `Directory query note: ${err.message}`);
+      }
     }
 
     // Upload program (.ini metadata + .bin binary) to specified slot (1–8)
@@ -965,7 +1074,7 @@
       this.isUploading = true;
       this.emit("terminal", `\n>> pros upload --slot ${slotNum} --name "${cleanName}"\n`);
       if (isController) {
-        this.emit("terminal", `[CDC2] Connected via V5 Controller USB (VID: 0x2888, PID: 0x0503).\n[VEXnet 3.0] Switching Controller radio to Download Channel (0x10 -> 0x01)...\n`);
+        this.emit("terminal", `[CDC2] Connected via V5 Controller USB (VID: 0x2888, PID: 0x0503).\n[VEXnet 3.0] Switching Controller radio to Download Channel (0x10 -> [0x01, 0x01])...\n`);
       } else {
         this.emit("terminal", `[CDC2] Initiating VEX V5 Extended File Transfer Protocol (CRC16 + CRC32)...\n`);
       }
@@ -974,22 +1083,28 @@
         if (!this.isSimulated && this.port) {
           // 1. If connected via V5 Controller, switch radio channel to Download (0x01) so Brain accepts QSPI file writes
           if (isController) {
-            await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_CTRL, [0x01, 0x01], 600);
-            await new Promise(r => setTimeout(r, 120));
+            this.logDebug("V5 File Transfer", "Switching Controller radio to Download channel (0x10 -> [0x01, 0x01])...");
+            await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_CTRL, [0x01, 0x01], 800);
+            await this.sendCdc2Command(CMD_CON_CDC, ECMD_FILE_CTRL, [0x01, 0x01], 400);
+            // Allow 350ms for radio hop
+            await new Promise(r => setTimeout(r, 350));
           }
 
           if (typeof onProgress === "function") onProgress(10);
 
           // 2. Construct & upload slot_${slotNum}.ini (makes slot title/icon appear on V5 Brain screen)
+          const nowIso = new Date().toISOString().replace("T", " ").substring(0, 19);
           const iniText =
             `[project]\n` +
-            `ide=PROS\n` +
+            `version=4.1.0\n` +
+            `ide=PROS\n\n` +
             `[program]\n` +
+            `version=1.0.0\n` +
             `name=${cleanName}\n` +
             `slot=${slotNum - 1}\n` +
             `icon=USER902x.bmp\n` +
-            `iconalt=\n` +
-            `description=LemLib Autonomous Routine (Slot ${slotNum})\n`;
+            `description=PROS LemLib Autonomous Routine (Slot ${slotNum})\n` +
+            `date=${nowIso}\n`;
           const iniBytes = new TextEncoder().encode(iniText);
 
           this.emit("terminal", `[CDC2] Uploading metadata 'slot_${slotNum}.ini' (${iniBytes.length} bytes) to Brain QSPI...\n`);
@@ -1007,7 +1122,8 @@
           // 3. Gather current C++ autonomous code or custom .bin and upload slot_${slotNum}.bin @ 0x03800000
           let cppCode = "";
           if (typeof window !== "undefined" && window.ProjectManager?.project?.files) {
-            cppCode = window.ProjectManager.project.files["src/main.cpp"] || "";
+            const f = window.ProjectManager.project.files;
+            cppCode = (f["src/autons.cpp"] || "") + "\n" + (f["src/main.cpp"] || "");
           }
           const binBytes = this.buildAutonProgramBinary(cleanName, cppCode);
           this.emit("terminal", `[CDC2] Uploading binary 'slot_${slotNum}.bin' (${(binBytes.length / 1024).toFixed(1)} KB) @ 0x03800000...\n`);
@@ -1025,8 +1141,10 @@
 
           // 4. If connected via Controller, return radio channel back to Pit mode (0x00)
           if (isController) {
-            this.emit("terminal", `[VEXnet 3.0] Restoring Controller Pit Channel (0x10 -> 0x00)...\n`);
-            await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_CTRL, [0x01, 0x00], 500);
+            this.emit("terminal", `[VEXnet 3.0] Restoring Controller Pit Channel (0x10 -> [0x01, 0x00])...\n`);
+            await this.sendCdc2Command(CMD_USER_CDC, ECMD_FILE_CTRL, [0x01, 0x00], 600);
+            await this.sendCdc2Command(CMD_CON_CDC, ECMD_FILE_CTRL, [0x01, 0x00], 400);
+            await new Promise(r => setTimeout(r, 200));
           }
         } else {
           // Simulated progress
@@ -1048,6 +1166,9 @@
         this.emit("terminal", `[CDC2] Flashing Complete: 'slot_${slotNum}.ini' & 'slot_${slotNum}.bin' written to Slot ${slotNum} (CRC16 & CRC32 OK).\n`);
         this.emit("terminal", `✅ Program '${cleanName}' flashed to Slot ${slotNum} on VEX V5 Brain!\n`);
         this.emit("status", this.status);
+
+        // Query slots to sync state with Brain
+        this.queryProgramSlots().catch(() => {});
         return true;
       } finally {
         this.isUploading = false;

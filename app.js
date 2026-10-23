@@ -17130,6 +17130,19 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (btnModalUpload) btnModalUpload.onclick = () => handleUploadToBrain(modalSlotSelect, false);
     if (btnDebugUpload) btnDebugUpload.onclick = () => handleUploadToBrain(debugSlotSelect, false);
 
+    const btnModalSyncSlots = document.getElementById("btnModalSyncSlots");
+    if (btnModalSyncSlots) {
+      btnModalSyncSlots.onclick = async () => {
+        if (!window.V5BrainSerial.isConnected) {
+          showToast("⚠️ Connect VEX device first.", "warning");
+          return;
+        }
+        showToast("🔄 Querying program slots from V5 Brain QSPI flash...");
+        await window.V5BrainSerial.queryProgramSlots();
+        showToast("✅ Synced program slots from V5 Brain!");
+      };
+    }
+
     // Optional .bin attachment for hardware flashing
     const btnModalAttachBin = document.getElementById("btnModalAttachBin");
     const modalBinFileInput = document.getElementById("modalBinFileInput");
@@ -17639,6 +17652,27 @@ lemlib::ControllerSettings ${currentMode}_controller(
         btnDebugRun.innerHTML = status.programRunning ? `▶ Running (${status.activeSlot})` : "▶ Run";
         btnDebugRun.style.background = status.programRunning ? "#15803d" : "#16a34a";
       }
+
+      // Update Target Slot Selectors with live Brain slots
+      if (modalSlotSelect && Array.isArray(status.slots) && status.slots.length > 0) {
+        const curVal = modalSlotSelect.value;
+        modalSlotSelect.innerHTML = status.slots.map(s => {
+          const isSlotEmpty = !s.name || s.name === "Empty";
+          const label = isSlotEmpty ? `Slot ${s.slot}: [Empty Slot]` : `Slot ${s.slot}: ${s.name} (${s.sizeKb || 1} KB)`;
+          return `<option value="${s.slot}">${label}</option>`;
+        }).join("");
+        if (curVal) modalSlotSelect.value = curVal;
+      }
+      if (debugSlotSelect && Array.isArray(status.slots) && status.slots.length > 0) {
+        const curVal = debugSlotSelect.value;
+        debugSlotSelect.innerHTML = status.slots.map(s => {
+          const isSlotEmpty = !s.name || s.name === "Empty";
+          const label = isSlotEmpty ? `Slot ${s.slot}: [Empty]` : `Slot ${s.slot}: ${s.name} (${s.sizeKb || 1} KB)`;
+          return `<option value="${s.slot}">${label}</option>`;
+        }).join("");
+        if (curVal) debugSlotSelect.value = curVal;
+      }
+
       renderSmartports();
 
       // Serial Debug Diagnostics

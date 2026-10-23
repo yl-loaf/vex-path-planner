@@ -3305,6 +3305,19 @@
       });
     }
 
+    const ideBtnSyncSlots = document.getElementById("btnModalSyncSlots");
+    if (ideBtnSyncSlots) {
+      ideBtnSyncSlots.addEventListener("click", async () => {
+        if (!window.V5BrainSerial?.isConnected) {
+          if (typeof showToast === "function") showToast("⚠️ Connect VEX device first.", "warning");
+          return;
+        }
+        if (typeof showToast === "function") showToast("🔄 Querying program slots from V5 Brain QSPI flash...");
+        await window.V5BrainSerial.queryProgramSlots();
+        if (typeof showToast === "function") showToast("✅ Synced program slots from V5 Brain!");
+      });
+    }
+
     async function handleFlashUpload() {
       if (!window.V5BrainSerial) return;
 
@@ -3727,6 +3740,17 @@
       if (modalSystemPort) {
         modalSystemPort.textContent = isConn ? (window.V5BrainSerial.isSimulated ? "Simulated Port" : "CDC 115200 Active") : "Unplugged";
         modalSystemPort.style.color = isConn ? "#38bdf8" : "#94a3b8";
+      }
+
+      // Update Target Slot Selectors with live Brain slots
+      if (modalSlotSelect && Array.isArray(status.slots) && status.slots.length > 0) {
+        const curVal = modalSlotSelect.value;
+        modalSlotSelect.innerHTML = status.slots.map(s => {
+          const isSlotEmpty = !s.name || s.name === "Empty";
+          const label = isSlotEmpty ? `Slot ${s.slot}: [Empty Slot]` : `Slot ${s.slot}: ${s.name} (${s.sizeKb || 1} KB)`;
+          return `<option value="${s.slot}">${label}</option>`;
+        }).join("");
+        if (curVal) modalSlotSelect.value = curVal;
       }
 
       // Serial Debug Diagnostics
