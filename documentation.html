@@ -637,6 +637,7 @@
         <div class="docs-sidebar-group">
           <div class="docs-sidebar-title">1. Getting Started</div>
           <a href="#section-overview" class="docs-sidebar-link active">Studio Overview</a>
+          <a href="#section-libraries-overview" class="docs-sidebar-link">Multi-Library Switching</a>
           <a href="#section-coordinates" class="docs-sidebar-link">Coordinate System &amp; Angles</a>
           <a href="#section-workflow" class="docs-sidebar-link">Project Workflow &amp; .vpath</a>
         </div>
@@ -650,6 +651,13 @@
           <a href="#section-api-follow" class="docs-sidebar-link">chassis.follow() (Pure Pursuit)</a>
           <a href="#section-api-wait" class="docs-sidebar-link">waitUntil() &amp; waitUntilDone()</a>
           <a href="#section-api-odometry" class="docs-sidebar-link">setPose() &amp; Odometry</a>
+        </div>
+
+        <div class="docs-sidebar-group">
+          <div class="docs-sidebar-title">2b. EZ, RW &amp; JAR APIs</div>
+          <a href="#section-api-ez" class="docs-sidebar-link">EZ-Template v3+ (PROS)</a>
+          <a href="#section-api-rw" class="docs-sidebar-link">RW-Template (VEXcode)</a>
+          <a href="#section-api-jar" class="docs-sidebar-link">JAR-Template (VEXcode)</a>
         </div>
 
         <div class="docs-sidebar-group">
@@ -701,15 +709,15 @@
 
       <!-- Hero Banner -->
       <section class="docs-hero">
-        <div class="docs-hero-eyebrow">VEX V5 LemLib Suite · Engineering Manual</div>
-        <h1>LemLib Autonomous &amp; Studio Documentation</h1>
+        <div class="docs-hero-eyebrow">VEX V5 Multi-Library Studio · Engineering Manual</div>
+        <h1>VEX V5 Autonomous &amp; Multi-Library Documentation</h1>
         <p class="docs-hero-desc">
-          Everything you need to engineer championship-tier autonomous routines for the VEX Robotics Competition Override season. Learn the mathematical foundations of the Boomerang controller, master LemLib C++ API signatures, tune PID gains, and collaborate safely with your team.
+          Complete engineering reference for <strong>LemLib</strong>, <strong>EZ-Template</strong>, <strong>RW-Template</strong>, and <strong>JAR-Template</strong>. Master path planning, two-way C++ AST translation, PID tuning, and VEX V5 hardware workflows without changing your field geometry.
         </p>
         <div class="docs-hero-meta">
           <span>📚 Version: <strong id="lblDocsBuildVersion" style="color:#38bdf8;">20260930.k1</strong></span>
           <span>·</span>
-          <span>🤖 LemLib Version: <strong>v0.5.x+ (PROS 4 &amp; 3)</strong></span>
+          <span>🤖 Libraries: <strong>LemLib v0.5+ · EZ-Template v3+ · RW-Template · JAR-Template</strong></span>
           <span>·</span>
           <span>🎯 Field Standard: <strong>144" × 144" Override 2026-27</strong></span>
           <span>·</span>
@@ -735,6 +743,63 @@
         </ul>
         <div class="doc-callout">
           💡 <strong>Tip for Competitors:</strong> The application runs fully offline once loaded, supports automatic saving to localStorage and Google Drive, and never exposes or overwrites your custom C++ header definitions.
+        </div>
+      </section>
+
+      <!-- 1b. MULTI-LIBRARY OVERVIEW -->
+      <section class="doc-section" id="section-libraries-overview">
+        <div class="doc-section-header">
+          <h2><span>🔀</span> Multi-Library Switching (LemLib, EZ-Template, RW &amp; JAR)</h2>
+          <span class="doc-section-tag">Cross-Library</span>
+        </div>
+        <p class="doc-p">
+          You can switch the active autonomous library at any time from the <strong>Planner Project Banner</strong>, the <strong>Bot &amp; PID Setup</strong> tab, the <strong>Generated C++ Code</strong> tab, the <strong>Multi-File IDE</strong>, or the <strong>C++ Translator</strong>. Switching libraries in the visual planner preserves all your field coordinates, angles, comments, and durations while immediately regenerating C++ in the selected template's syntax.
+        </p>
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Library / Template</th>
+                <th>Toolchain</th>
+                <th>Speed / Power Units</th>
+                <th>Motion Blocking Model</th>
+                <th>Primary Motion Functions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>LemLib (v0.5+)</strong></td>
+                <td>PROS 4 / 3 (<code>main.h</code>)</td>
+                <td><code>0 – 127</code> motor units</td>
+                <td>Async FreeRTOS task; use <code>waitUntilDone()</code> or <code>waitUntil(in)</code></td>
+                <td><code>moveToPoint</code>, <code>moveToPose</code>, <code>turnToHeading</code>, <code>swingToHeading</code></td>
+              </tr>
+              <tr>
+                <td><strong>EZ-Template (v3+)</strong></td>
+                <td>PROS 4 / 3 (<code>main.h</code>)</td>
+                <td><code>0 – 127</code> + Okapi literals (<code>_in</code>, <code>_deg</code>)</td>
+                <td>Non-blocking call followed by <code>pid_wait()</code>, <code>pid_wait_quick_chain()</code>, or <code>pid_wait_until()</code></td>
+                <td><code>pid_odom_set</code>, <code>pid_drive_set</code>, <code>pid_turn_set</code>, <code>pid_swing_set</code></td>
+              </tr>
+              <tr>
+                <td><strong>RW-Template</strong></td>
+                <td>VEXcode V5 (<code>vex.h</code>)</td>
+                <td><code>0 – 12.0 V</code> volts</td>
+                <td>Blocking with explicit <code>timeout</code> (ms) and early-exit tolerance</td>
+                <td><code>moveToPoint</code>, <code>driveTo</code>, <code>turnToAngle</code>, <code>turnToPoint</code>, <code>swing</code></td>
+              </tr>
+              <tr>
+                <td><strong>JAR-Template</strong></td>
+                <td>VEXcode V5 (<code>vex.h</code>)</td>
+                <td><code>0 – 12.0 V</code> volts</td>
+                <td>Blocking calls on <code>Drive chassis</code></td>
+                <td><code>drive_to_point</code>, <code>drive_to_pose</code>, <code>drive_distance</code>, <code>turn_to_angle</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="doc-callout">
+          🛡️ <strong>IDE Safety:</strong> In the Multi-File C++ IDE, switching the library selector updates IntelliSense autocomplete, hover signatures, and compiler diagnostics immediately without wiping existing files. Click <strong>Apply Starter</strong> whenever you want to load that library's complete multi-file starter template (your prior files are automatically backed up in Version History).
         </div>
       </section>
 
@@ -789,7 +854,7 @@
 
         <div class="doc-subhead">Interactive Angle &amp; Heading Calculator</div>
         <p class="doc-p">
-          Enter two field coordinates to instantly calculate the distance, target angle in LemLib format, and the exact C++ command:
+          Enter two field coordinates and pick a target library to instantly calculate distance, clockwise bearing, and the exact C++ command:
         </p>
         <div class="docs-interactive-box">
           <div class="docs-interactive-inputs">
@@ -810,14 +875,23 @@
               <label>Y2:</label>
               <input type="number" id="calcY2" value="36" />
             </div>
+            <div class="docs-input-field" style="margin-left:auto;">
+              <label for="calcLibrarySelect">Library:</label>
+              <select id="calcLibrarySelect" style="padding:5px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:0.78rem;">
+                <option value="lemlib">LemLib</option>
+                <option value="ez_template">EZ-Template</option>
+                <option value="rw_template">RW-Template</option>
+                <option value="jar_template">JAR-Template</option>
+              </select>
+            </div>
           </div>
           <div style="font-size:0.86rem;margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;">
             <span>Distance: <strong id="calcDistance" style="color:#10b981;">43.3 in</strong></span>
-            <span>Bearing (LemLib): <strong id="calcHeading" style="color:#38bdf8;">33.7°</strong></span>
+            <span>Bearing (0° North CW): <strong id="calcHeading" style="color:#38bdf8;">33.7°</strong></span>
           </div>
           <div class="code-container" style="margin-top:12px;">
             <div class="code-header">
-              <span>Generated LemLib Call</span>
+              <span id="calcCodeHeaderLabel">Generated LemLib Call</span>
               <button type="button" class="btn-copy-code" id="btnCopyCalcCode">📋 Copy</button>
             </div>
             <pre><code id="calcOutputCode">chassis.moveToPose(24.0, 36.0, 34, 2500, {.lead = 0.6, .maxSpeed = 110});</code></pre>
@@ -1120,6 +1194,229 @@ mogoClamp.<span class="code-fn">set_value</span>(<span class="code-kw">true</spa
         </div>
       </section>
 
+      <!-- 2b. EZ-TEMPLATE API -->
+      <section class="doc-section" id="section-api-ez">
+        <div class="doc-section-header">
+          <h2><span>⚡</span> EZ-Template v3+ API Reference (PROS)</h2>
+          <span class="doc-section-tag">EZ-Template</span>
+        </div>
+        <p class="doc-p">
+          <strong>EZ-Template</strong> uses an <code>ez::Drive chassis</code> controller with Okapi unit literals (<code>_in</code> for inches, <code>_deg</code> for degrees, <code>_ms</code> for milliseconds). Unlike LemLib's blocking-by-default single calls, every EZ-Template PID setter starts a motion and pairs with an explicit wait call (<code>pid_wait()</code>, <code>pid_wait_quick()</code>, <code>pid_wait_quick_chain()</code>, or <code>pid_wait_until()</code>).
+        </p>
+
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>EZ-Template Method</th>
+                <th>Purpose</th>
+                <th>Key Arguments</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>chassis.odom_xyt_set(x_in, y_in, theta_deg)</code></td>
+                <td>Set starting odometry pose</td>
+                <td><code>-60_in, -60_in, 0_deg</code></td>
+              </tr>
+              <tr>
+                <td><code>chassis.pid_odom_set({{x_in, y_in[, theta_deg]}, dir, speed})</code></td>
+                <td>Drive to 2D coordinate / pose</td>
+                <td><code>ez::fwd</code> or <code>ez::rev</code>, speed <code>0–127</code>; also accepts multi-waypoint vector lists</td>
+              </tr>
+              <tr>
+                <td><code>chassis.pid_drive_set(dist_in, speed[, slew])</code></td>
+                <td>Straight relative drive</td>
+                <td>Positive drives forward, negative drives reverse</td>
+              </tr>
+              <tr>
+                <td><code>chassis.pid_turn_set(theta_deg, speed)</code> / <code>({x_in, y_in}, dir, speed)</code></td>
+                <td>Point turn to heading or point</td>
+                <td>Target angle (<code>_deg</code>) or coordinate pair, speed <code>0–127</code></td>
+              </tr>
+              <tr>
+                <td><code>chassis.pid_swing_set(type, theta_deg, speed[, opp_speed])</code></td>
+                <td>Single-side pivot swing</td>
+                <td><code>ez::LEFT_SWING</code> or <code>ez::RIGHT_SWING</code></td>
+              </tr>
+              <tr>
+                <td><code>chassis.pid_wait()</code> / <code>pid_wait_quick_chain()</code> / <code>pid_wait_until(x)</code></td>
+                <td>Synchronize or chain motions</td>
+                <td><code>pid_wait_quick_chain()</code> blends smoothly into the next motion</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Example: EZ-Template Odometry + Motion Chaining</span>
+            <button type="button" class="btn-copy-code" data-copy="void ez_mogo_rush() {&#10;    chassis.odom_xyt_set(-60_in, -24_in, 90_deg);&#10;    intake.move(127);&#10;&#10;    // Move smoothly through intermediate waypoint into target pose&#10;    chassis.pid_odom_set({&#10;        {{-36_in, -24_in}, ez::fwd, 110},&#10;        {{-12_in, -36_in, 135_deg}, ez::fwd, 95}&#10;    });&#10;    chassis.pid_wait_until(18_in);&#10;    clamp.set(true);&#10;    chassis.pid_wait();&#10;&#10;    chassis.pid_turn_set(0_deg, 90);&#10;    chassis.pid_wait_quick_chain();&#10;    chassis.pid_drive_set(24_in, 110);&#10;    chassis.pid_wait();&#10;}">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-type">void</span> <span class="code-fn">ez_mogo_rush</span>() {
+    <span class="code-fn">chassis.odom_xyt_set</span>(-<span class="code-num">60_in</span>, -<span class="code-num">24_in</span>, <span class="code-num">90_deg</span>);
+    <span class="code-fn">intake.move</span>(<span class="code-num">127</span>);
+
+    <span class="code-comm">// Move smoothly through intermediate waypoint into target pose</span>
+    <span class="code-fn">chassis.pid_odom_set</span>({
+        {{-<span class="code-num">36_in</span>, -<span class="code-num">24_in</span>}, ez::<span class="code-type">fwd</span>, <span class="code-num">110</span>},
+        {{-<span class="code-num">12_in</span>, -<span class="code-num">36_in</span>, <span class="code-num">135_deg</span>}, ez::<span class="code-type">fwd</span>, <span class="code-num">95</span>}
+    });
+    <span class="code-fn">chassis.pid_wait_until</span>(<span class="code-num">18_in</span>);
+    <span class="code-fn">clamp.set</span>(<span class="code-kw">true</span>);
+    <span class="code-fn">chassis.pid_wait</span>();
+
+    <span class="code-fn">chassis.pid_turn_set</span>(<span class="code-num">0_deg</span>, <span class="code-num">90</span>);
+    <span class="code-fn">chassis.pid_wait_quick_chain</span>();
+    <span class="code-fn">chassis.pid_drive_set</span>(<span class="code-num">24_in</span>, <span class="code-num">110</span>);
+    <span class="code-fn">chassis.pid_wait</span>();
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- 2c. RW-TEMPLATE API -->
+      <section class="doc-section" id="section-api-rw">
+        <div class="doc-section-header">
+          <h2><span>🛠️</span> RW-Template API Reference (VEXcode V5)</h2>
+          <span class="doc-section-tag">RW-Template</span>
+        </div>
+        <p class="doc-p">
+          <strong>RW-Template</strong> runs on the VEXcode V5 SDK (<code>vex.h</code>) and exposes clean global motion functions. Speed limits are specified in <strong>Volts (<code>0–12.0 V</code>)</strong>, directions use <code>1</code> (forward / left swing) or <code>-1</code> (reverse / right swing), and every motion accepts an explicit millisecond <code>timeout</code>.
+        </p>
+
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>RW-Template Function</th>
+                <th>Purpose</th>
+                <th>Parameters</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>setOdom(x, y, heading)</code></td>
+                <td>Initialize odometry pose</td>
+                <td><code>x</code>, <code>y</code> (inches), <code>heading</code> (degrees)</td>
+              </tr>
+              <tr>
+                <td><code>moveToPoint(x, y, dir, timeout[, exit, maxVolt])</code></td>
+                <td>Drive to field coordinate</td>
+                <td><code>dir</code>: <code>1</code> fwd / <code>-1</code> rev; <code>timeout</code> (ms); optional exit range &amp; volts</td>
+              </tr>
+              <tr>
+                <td><code>driveTo(dist_in, timeout[, exit, maxVolt])</code></td>
+                <td>Relative straight drive</td>
+                <td><code>dist_in</code> (+ fwd, - rev), <code>timeout</code> (ms)</td>
+              </tr>
+              <tr>
+                <td><code>turnToAngle(angle, timeout[, exit, maxVolt])</code></td>
+                <td>Turn to absolute heading</td>
+                <td>Target IMU heading in degrees</td>
+              </tr>
+              <tr>
+                <td><code>turnToPoint(x, y, dir, timeout)</code></td>
+                <td>Turn toward/away from point</td>
+                <td><code>dir = 1</code> faces point; <code>dir = -1</code> backs toward point</td>
+              </tr>
+              <tr>
+                <td><code>swing(angle, dir, timeout)</code></td>
+                <td>Arc swing turn</td>
+                <td><code>dir = 1</code> left swing, <code>-1</code> right swing</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Example: RW-Template VEXcode Autonomous Routine</span>
+            <button type="button" class="btn-copy-code" data-copy="void rw_auton_left() {&#10;    setOdom(-60, -24, 90);&#10;    intake.spin(vex::fwd, 12, vex::volt);&#10;    moveToPoint(-24, -24, 1, 2000, 0.5, 10.5);&#10;    turnToPoint(-12, -48, -1, 1200);&#10;    moveToPoint(-12, -48, -1, 1800);&#10;    clamp.set(true);&#10;    wait(200, msec);&#10;    swing(0, 1, 1500);&#10;}">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-type">void</span> <span class="code-fn">rw_auton_left</span>() {
+    <span class="code-fn">setOdom</span>(-<span class="code-num">60</span>, -<span class="code-num">24</span>, <span class="code-num">90</span>);
+    <span class="code-fn">intake.spin</span>(vex::fwd, <span class="code-num">12</span>, vex::volt);
+    <span class="code-fn">moveToPoint</span>(-<span class="code-num">24</span>, -<span class="code-num">24</span>, <span class="code-num">1</span>, <span class="code-num">2000</span>, <span class="code-num">0.5</span>, <span class="code-num">10.5</span>);
+    <span class="code-fn">turnToPoint</span>(-<span class="code-num">12</span>, -<span class="code-num">48</span>, -<span class="code-num">1</span>, <span class="code-num">1200</span>);
+    <span class="code-fn">moveToPoint</span>(-<span class="code-num">12</span>, -<span class="code-num">48</span>, -<span class="code-num">1</span>, <span class="code-num">1800</span>);
+    <span class="code-fn">clamp.set</span>(<span class="code-kw">true</span>);
+    <span class="code-fn">wait</span>(<span class="code-num">200</span>, msec);
+    <span class="code-fn">swing</span>(<span class="code-num">0</span>, <span class="code-num">1</span>, <span class="code-num">1500</span>);
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- 2d. JAR-TEMPLATE API -->
+      <section class="doc-section" id="section-api-jar">
+        <div class="doc-section-header">
+          <h2><span>🏺</span> JAR-Template API Reference (VEXcode V5)</h2>
+          <span class="doc-section-tag">JAR-Template</span>
+        </div>
+        <p class="doc-p">
+          <strong>JAR-Template</strong> provides a lightweight, competitive VEXcode V5 <code>Drive chassis</code> class supporting distance drives, coordinate point drives, Boomerang <code>drive_to_pose</code>, point turns, and left/right swings with voltage caps (<code>0–12 V</code>).
+        </p>
+
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>JAR-Template Method</th>
+                <th>Purpose</th>
+                <th>Signature / Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>chassis.set_coordinates(x, y, angle)</code></td>
+                <td>Set starting odom pose</td>
+                <td><code>float X, float Y, float orientation_deg</code></td>
+              </tr>
+              <tr>
+                <td><code>chassis.drive_to_point(x, y[, minV, maxV, headV])</code></td>
+                <td>Drive to coordinate</td>
+                <td>Automatically computes forward/reverse vector to <code>(x, y)</code></td>
+              </tr>
+              <tr>
+                <td><code>chassis.drive_to_pose(x, y, angle[, lead, minV, maxV, headV])</code></td>
+                <td>Boomerang curve to pose</td>
+                <td><code>lead</code> defaults to <code>0.5</code></td>
+              </tr>
+              <tr>
+                <td><code>chassis.drive_distance(dist[, heading, maxV, headV])</code></td>
+                <td>Relative straight drive</td>
+                <td>Positive drives forward, negative reverses</td>
+              </tr>
+              <tr>
+                <td><code>chassis.turn_to_angle(angle[, maxV])</code> / <code>turn_to_point(x, y)</code></td>
+                <td>In-place angular turn</td>
+                <td>Turns to heading or faces target coordinate</td>
+              </tr>
+              <tr>
+                <td><code>chassis.left_swing_to_angle(angle)</code> / <code>right_swing_to_angle(angle)</code></td>
+                <td>One-side swing turn</td>
+                <td>Locks opposite side of drivetrain</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span>Example: JAR-Template VEXcode Autonomous Routine</span>
+            <button type="button" class="btn-copy-code" data-copy="void jar_auton_right() {&#10;    chassis.set_coordinates(-60, -60, 0);&#10;    intake.spin(vex::fwd, 12, vex::volt);&#10;    chassis.drive_to_point(-24, -24, 0, 10, 8);&#10;    chassis.drive_to_pose(0, -48, 180, 0.5, 0, 9, 8);&#10;    clamp.set(true);&#10;    wait(250, msec);&#10;    chassis.left_swing_to_angle(90);&#10;}">📋 Copy</button>
+          </div>
+          <pre><code><span class="code-type">void</span> <span class="code-fn">jar_auton_right</span>() {
+    <span class="code-fn">chassis.set_coordinates</span>(-<span class="code-num">60</span>, -<span class="code-num">60</span>, <span class="code-num">0</span>);
+    <span class="code-fn">intake.spin</span>(vex::fwd, <span class="code-num">12</span>, vex::volt);
+    <span class="code-fn">chassis.drive_to_point</span>(-<span class="code-num">24</span>, -<span class="code-num">24</span>, <span class="code-num">0</span>, <span class="code-num">10</span>, <span class="code-num">8</span>);
+    <span class="code-fn">chassis.drive_to_pose</span>(<span class="code-num">0</span>, -<span class="code-num">48</span>, <span class="code-num">180</span>, <span class="code-num">0.5</span>, <span class="code-num">0</span>, <span class="code-num">9</span>, <span class="code-num">8</span>);
+    <span class="code-fn">clamp.set</span>(<span class="code-kw">true</span>);
+    <span class="code-fn">wait</span>(<span class="code-num">250</span>, msec);
+    <span class="code-fn">chassis.left_swing_to_angle</span>(<span class="code-num">90</span>);
+}</code></pre>
+        </div>
+      </section>
+
       <!-- 3. PROS C++ IDE & BUILD -->
       <section class="doc-section" id="section-ide-sync">
         <div class="doc-section-header">
@@ -1284,50 +1581,53 @@ mogoClamp.<span class="code-fn">set_value</span>(<span class="code-kw">true</spa
             <thead>
               <tr>
                 <th>Motion Goal</th>
-                <th>Best LemLib Function</th>
-                <th>Key Parameters</th>
+                <th>LemLib (PROS)</th>
+                <th>EZ-Template (PROS)</th>
+                <th>RW-Template / JAR-Template (VEXcode)</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>Drive straight to coordinate</td>
-                <td><code>chassis.moveToPoint(x, y, timeout)</code></td>
-                <td><code>{.forwards = true, .maxSpeed = 127}</code></td>
+                <td>Set Starting Pose</td>
+                <td><code>chassis.setPose(x, y, θ)</code></td>
+                <td><code>chassis.odom_xyt_set(x_in, y_in, θ_deg)</code></td>
+                <td><code>setOdom(x, y, θ)</code> / <code>chassis.set_coordinates(x, y, θ)</code></td>
               </tr>
               <tr>
-                <td>Curve to pose with specific angle</td>
-                <td><code>chassis.moveToPose(x, y, theta, timeout)</code></td>
-                <td><code>{.lead = 0.6, .horizontalDrift = 2.0}</code></td>
+                <td>Drive to Coordinate</td>
+                <td><code>chassis.moveToPoint(x, y, ms)</code></td>
+                <td><code>chassis.pid_odom_set({{x_in, y_in}, dir, spd})</code></td>
+                <td><code>moveToPoint(x, y, dir, ms)</code> / <code>chassis.drive_to_point(x, y)</code></td>
               </tr>
               <tr>
-                <td>Reverse into a mobile goal</td>
-                <td><code>chassis.moveToPose(x, y, theta, timeout)</code></td>
-                <td><code>{.forwards = false, .lead = 0.55}</code></td>
+                <td>Curve to Pose</td>
+                <td><code>chassis.moveToPose(x, y, θ, ms)</code></td>
+                <td><code>chassis.pid_odom_set({{x_in, y_in, θ_deg}, dir, spd})</code></td>
+                <td><code>moveToPoint(...) + turnToAngle</code> / <code>chassis.drive_to_pose(x, y, θ)</code></td>
               </tr>
               <tr>
-                <td>Pivot in place to angle</td>
-                <td><code>chassis.turnToHeading(theta, timeout)</code></td>
-                <td><code>{.maxSpeed = 100}</code></td>
+                <td>Turn to Heading</td>
+                <td><code>chassis.turnToHeading(θ, ms)</code></td>
+                <td><code>chassis.pid_turn_set(θ_deg, spd)</code></td>
+                <td><code>turnToAngle(θ, ms)</code> / <code>chassis.turn_to_angle(θ)</code></td>
               </tr>
               <tr>
-                <td>Aim launcher or intake at piece</td>
-                <td><code>chassis.turnToPoint(x, y, timeout)</code></td>
-                <td><code>{.forwards = true}</code></td>
+                <td>Turn to Point</td>
+                <td><code>chassis.turnToPoint(x, y, ms)</code></td>
+                <td><code>chassis.pid_turn_set({x_in, y_in}, dir, spd)</code></td>
+                <td><code>turnToPoint(x, y, dir, ms)</code> / <code>chassis.turn_to_point(x, y)</code></td>
               </tr>
               <tr>
-                <td>Arc swing around an obstacle</td>
-                <td><code>chassis.swingToHeading(theta, side, timeout)</code></td>
-                <td><code>lemlib::DriveSide::LEFT</code> or <code>RIGHT</code></td>
+                <td>Arc Swing Turn</td>
+                <td><code>chassis.swingToHeading(θ, side, ms)</code></td>
+                <td><code>chassis.pid_swing_set(ez::LEFT_SWING, θ_deg, spd)</code></td>
+                <td><code>swing(θ, dir, ms)</code> / <code>chassis.left_swing_to_angle(θ)</code></td>
               </tr>
               <tr>
-                <td>Trigger intake during motion</td>
-                <td><code>chassis.waitUntil(distance)</code></td>
-                <td>Distance from endpoint in inches</td>
-              </tr>
-              <tr>
-                <td>Wait for movement to settle</td>
-                <td><code>chassis.waitUntilDone()</code></td>
-                <td>Blocks until settled within tolerance</td>
+                <td>Wait / Delay</td>
+                <td><code>waitUntil(in)</code> / <code>waitUntilDone()</code> / <code>pros::delay(ms)</code></td>
+                <td><code>pid_wait_until(in)</code> / <code>pid_wait()</code> / <code>pid_wait_quick_chain()</code></td>
+                <td><code>wait(ms, msec)</code></td>
               </tr>
             </tbody>
           </table>
@@ -1485,11 +1785,13 @@ mogoClamp.<span class="code-fn">set_value</span>(<span class="code-kw">true</spa
         });
       });
 
-      // 4. Interactive Angle & Coordinate Calculator
+      // 4. Interactive Angle & Coordinate Calculator (Multi-Library)
       const calcX1 = document.getElementById("calcX1");
       const calcY1 = document.getElementById("calcY1");
       const calcX2 = document.getElementById("calcX2");
       const calcY2 = document.getElementById("calcY2");
+      const calcLib = document.getElementById("calcLibrarySelect");
+      const calcHeaderLbl = document.getElementById("calcCodeHeaderLabel");
       const calcDistance = document.getElementById("calcDistance");
       const calcHeading = document.getElementById("calcHeading");
       const calcOutputCode = document.getElementById("calcOutputCode");
@@ -1500,25 +1802,39 @@ mogoClamp.<span class="code-fn">set_value</span>(<span class="code-kw">true</spa
         const y1 = parseFloat(calcY1?.value || "0");
         const x2 = parseFloat(calcX2?.value || "24");
         const y2 = parseFloat(calcY2?.value || "36");
+        const lib = calcLib ? calcLib.value : "lemlib";
 
         const dx = x2 - x1;
         const dy = y2 - y1;
         const dist = Math.hypot(dx, dy);
 
-        // LemLib heading: 0 is +Y, increases clockwise (standard atan2 is 0 = +X, counter-clockwise)
-        // angle from north clockwise: Math.atan2(dx, dy) in radians
-        let rad = Math.atan2(dx, dy);
+        // Heading: 0 is +Y, increases clockwise
+        const rad = Math.atan2(dx, dy);
         let deg = (rad * 180 / Math.PI);
         if (deg < 0) deg += 360;
+        const degRound = Math.round(deg);
 
         if (calcDistance) calcDistance.textContent = `${dist.toFixed(1)} in`;
         if (calcHeading) calcHeading.textContent = `${deg.toFixed(1)}°`;
 
-        const codeStr = `chassis.moveToPose(${x2.toFixed(1)}, ${y2.toFixed(1)}, ${Math.round(deg)}, 2500, {.lead = 0.6, .maxSpeed = 110});`;
+        let codeStr = `chassis.moveToPose(${x2.toFixed(1)}, ${y2.toFixed(1)}, ${degRound}, 2500, {.lead = 0.6, .maxSpeed = 110});`;
+        let hdr = "Generated LemLib Call";
+        if (lib === "ez_template") {
+          hdr = "Generated EZ-Template Call";
+          codeStr = `chassis.pid_odom_set({{${x2.toFixed(1)}_in, ${y2.toFixed(1)}_in, ${degRound}_deg}, ez::fwd, 110});\nchassis.pid_wait();`;
+        } else if (lib === "rw_template") {
+          hdr = "Generated RW-Template Call";
+          codeStr = `moveToPoint(${x2.toFixed(1)}, ${y2.toFixed(1)}, 1, 2000, 0.5, 10.4);\nturnToAngle(${degRound}, 1000);`;
+        } else if (lib === "jar_template") {
+          hdr = "Generated JAR-Template Call";
+          codeStr = `chassis.drive_to_pose(${x2.toFixed(1)}, ${y2.toFixed(1)}, ${degRound}, 0.5, 0, 10.4, 8);`;
+        }
+
+        if (calcHeaderLbl) calcHeaderLbl.textContent = hdr;
         if (calcOutputCode) calcOutputCode.textContent = codeStr;
       }
 
-      [calcX1, calcY1, calcX2, calcY2].forEach((el) => {
+      [calcX1, calcY1, calcX2, calcY2, calcLib].forEach((el) => {
         if (el) {
           el.addEventListener("input", updateCalc);
           el.addEventListener("change", updateCalc);
@@ -1530,7 +1846,7 @@ mogoClamp.<span class="code-fn">set_value</span>(<span class="code-kw">true</spa
         btnCopyCalcCode.addEventListener("click", () => {
           if (calcOutputCode) {
             navigator.clipboard.writeText(calcOutputCode.textContent).then(() => {
-              showToast("✓ Copied LemLib command to clipboard!");
+              showToast("✓ Copied C++ command to clipboard!");
             });
           }
         });

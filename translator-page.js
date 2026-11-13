@@ -4,9 +4,17 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "lemlib_path_planner_v2";
+  const STORAGE_KEY = "vex-lemlib-path-v1";
+  const LEGACY_STORAGE_KEY = "lemlib_path_planner_v2";
   const AUTH_STORAGE_KEY = "vex_auth_user_cache";
   const AUTH_EXPLICIT_SIGNOUT_KEY = "vex_auth_explicit_signout";
+
+  const LIB_LABELS = {
+    lemlib: "LemLib",
+    ez_template: "EZ-Template",
+    rw_template: "RW-Template",
+    jar_template: "JAR-Template",
+  };
 
   let paths = [
     {
@@ -18,6 +26,7 @@
   ];
   let activePathId = "p_default";
   let bot = {
+    library: "lemlib",
     robotW: 14,
     robotL: 14,
     trackWidth: 12,
@@ -51,6 +60,9 @@
   const slotSelect = document.getElementById("cppTargetSlotSelect");
   const errorEl = document.getElementById("cppErrorMsg");
   const btnApply = document.getElementById("btnTranslateAndOpen");
+  const libSelect = document.getElementById("cppTranslatorLibrary");
+  const liveBadge = document.getElementById("cppLiveBadge");
+  const dialectTag = document.getElementById("cppTranslatorDialectTag");
   const sampleBtns = document.querySelectorAll(".btn-cpp-sample");
   const targetRadios = document.querySelectorAll('input[name="cppImportTarget"]');
   const buildEl = document.getElementById("buildNumber");
@@ -159,10 +171,19 @@
   // Load and save functions synchronized with same localStorage slot
   function loadLocal() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+      const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (!raw) {
+        const storedLib = localStorage.getItem("vex_active_library");
+        if (storedLib && window.CppTranslator?.normalizeLibraryId) {
+          bot.library = window.CppTranslator.normalizeLibraryId(storedLib);
+        }
+        return;
+      }
       const data = JSON.parse(raw);
       if (data.bot) bot = { ...bot, ...data.bot };
+      if (window.CppTranslator?.normalizeLibraryId) {
+        bot.library = window.CppTranslator.normalizeLibraryId(data.bot?.library || data.library || localStorage.getItem("vex_active_library") || "lemlib");
+      }
       if (Array.isArray(data.paths) && data.paths.length) {
         paths = data.paths.map((p) => ({
           id: p.id || uidPath(),
@@ -328,11 +349,21 @@
       return;
     }
 
+    const libChoice = libSelect ? libSelect.value : "auto";
     const res = window.CppTranslator.parseCppAuton(text, {
+      library: libChoice,
       defaultMaxSpeed: bot.defaultMaxSpeed || 127,
       defaultMinSpeed: bot.defaultMinSpeed || 0,
     });
     lastParsed = res;
+    const libLabel = LIB_LABELS[res.library] || "LemLib";
+
+    if (liveBadge) {
+      liveBadge.textContent = `[AST READY · ${libLabel}]`;
+    }
+    if (dialectTag) {
+      dialectTag.textContent = `${libLabel} C++`;
+    }
 
     if (statPose) {
       statPose.textContent = res.startPose
@@ -345,15 +376,15 @@
     if (statComments) statComments.textContent = String(res.stats.commentsCount);
 
     const totalItems = res.actions.length + (res.startPose ? 1 : 0);
-    if (analysisCount) analysisCount.textContent = `${totalItems} item${totalItems === 1 ? "" : "s"} detected`;
+    if (analysisCount) analysisCount.textContent = `${totalItems} item${totalItems === 1 ? "" : "s"} detected (${libLabel})`;
 
     if (analysisStatus) {
       if (res.actions.length > 0) {
-        analysisStatus.innerHTML = `<span style="color:#34d399;font-weight:700;">✓ Parsed ${res.actions.length} action blocks successfully</span>`;
+        analysisStatus.innerHTML = `<span style="color:#34d399;font-weight:700;">✓ Parsed ${res.actions.length} action blocks (${escapeHtml(libLabel)})</span>`;
       } else if (res.startPose) {
-        analysisStatus.innerHTML = `<span style="color:#38bdf8;font-weight:700;">✓ Parsed start pose</span>`;
+        analysisStatus.innerHTML = `<span style="color:#38bdf8;font-weight:700;">✓ Parsed start pose (${escapeHtml(libLabel)})</span>`;
       } else {
-        analysisStatus.innerHTML = `<span style="color:#fbbf24;font-weight:700;">⚠️ No LemLib movement actions recognized</span>`;
+        analysisStatus.innerHTML = `<span style="color:#fbbf24;font-weight:700;">⚠️ No movement actions recognized (${escapeHtml(libLabel)})</span>`;
       }
     }
 
@@ -364,16 +395,23 @@
     // Render detailed visual action blocks breakdown
     if (previewList) {
       if (res.actions.length === 0 && !res.startPose) {
-        previewList.innerHTML = '<span class="empty-preview-hint">No LemLib motions recognized yet. Check syntax or try a sample routine above.</span>';
+        previewList.innerHTML = '<span class="empty-preview-hint">No chassis motions recognized yet. Check syntax, switch library selector, or try a sample routine above.</span>';
       } else {
         let html = "";
         if (res.startPose) {
+          const poseCall = res.library === "ez_template"
+            ? `chassis.odom_xyt_set(${res.startPose.x}_in, ${res.startPose.y}_in, ${res.startPose.theta}_deg)`
+            : res.library === "rw_template"
+              ? `setOdom(${res.startPose.x}, ${res.startPose.y}, ${res.startPose.theta})`
+              : res.library === "jar_template"
+                ? `chassis.set_coordinates(${res.startPose.x}, ${res.startPose.y}, ${res.startPose.theta})`
+                : `chassis.setPose(${res.startPose.x}, ${res.startPose.y}, ${res.startPose.theta}°)`;
           html += `
             <div class="parsed-block-item start-block">
               <div class="block-badge start">🏁 START POSE</div>
               <div class="block-info">
-                <span class="block-main">chassis.setPose(${res.startPose.x}, ${res.startPose.y}, ${res.startPose.theta}°)</span>
-                <span class="block-sub">Initial field coordinate &amp; heading</span>
+                <span class="block-main">${escapeHtml(poseCall)}</span>
+                <span class="block-sub">Initial field coordinate &amp; heading (${escapeHtml(libLabel)})</span>
               </div>
             </div>`;
         }
@@ -414,15 +452,17 @@
             else detailsText += " · Instant/Async Task";
           } else if (a.type === "wait") {
             const wType = a.waitType || "distance";
-            if (wType === "distance") {
-              titleText = `chassis.waitUntil(${a.waitDistance || 0}")`;
-              detailsText = `Triggers non-blocking event trigger at ${a.waitDistance || 0} inches into previous motion`;
+            const wDist = a.distance ?? a.waitDistance ?? 12;
+            const wTime = a.delayMs ?? a.waitTime ?? 250;
+            if (wType === "distance" || wType === "until") {
+              titleText = res.library === "ez_template" ? `chassis.pid_wait_until(${wDist}_in)` : `chassis.waitUntil(${wDist}")`;
+              detailsText = `Triggers event at ${wDist} inches into motion`;
             } else if (wType === "done") {
-              titleText = "chassis.waitUntilDone()";
-              detailsText = "Waits for active chassis motion to complete before executing subsequent actions";
+              titleText = res.library === "ez_template" ? "chassis.pid_wait()" : "chassis.waitUntilDone()";
+              detailsText = "Waits for active chassis motion to settle";
             } else {
-              titleText = `pros::delay(${a.waitTime || 500}ms)`;
-              detailsText = `Pauses autonomous execution thread for ${a.waitTime || 500} milliseconds`;
+              titleText = (res.library === "rw_template" || res.library === "jar_template") ? `wait(${wTime}, msec)` : `pros::delay(${wTime}ms)`;
+              detailsText = `Pauses autonomous execution thread for ${wTime} milliseconds`;
             }
           } else if (a.type === "ifElse") {
             titleText = `if (${a.condition || 'true'}) { ${a.thenLabel || 'Move forward'} } else { ${a.elseLabel || 'Move backwards'} }`;
@@ -531,9 +571,16 @@
       id: uid(),
     }));
 
+    if (lastParsed.library) {
+      bot.library = window.CppTranslator?.normalizeLibraryId
+        ? window.CppTranslator.normalizeLibraryId(lastParsed.library)
+        : lastParsed.library;
+    }
+
     // Save to local storage
     saveLocal();
     try {
+      localStorage.setItem("vex_active_library", bot.library || "lemlib");
       localStorage.setItem("lemlib_translator_just_saved", "true");
     } catch (_) {}
 
@@ -542,7 +589,7 @@
       await cloudSave();
     }
 
-    showToast(`✓ Translated & saved ${targetPath.actions.length} blocks to "${targetPath.name}". Redirecting to Visual Planner...`);
+    showToast(`✓ Translated (${LIB_LABELS[bot.library] || "LemLib"}) & saved ${targetPath.actions.length} blocks to "${targetPath.name}". Redirecting...`);
 
     // Redirect to index.html to render blocks & field immediately
     setTimeout(() => {
@@ -676,17 +723,32 @@
     codeInput.addEventListener("paste", () => setTimeout(runLiveAnalysis, 50));
   }
 
+  function getSampleCodeForSelection(sampleKey) {
+    const sel = libSelect ? libSelect.value : "auto";
+    const sampleLib = (sel && sel !== "auto") ? sel : (bot.library || "lemlib");
+    const byLib = window.CppTranslator.SAMPLE_ROUTINES_BY_LIBRARY?.[sampleLib];
+    if (byLib && byLib[sampleKey]) return byLib[sampleKey];
+    return window.CppTranslator.SAMPLE_ROUTINES?.[sampleKey] || "";
+  }
+
   sampleBtns.forEach((btn) => {
     btn.onclick = () => {
       const sampleKey = btn.dataset.sample;
       if (sampleKey === "clear") {
         if (codeInput) codeInput.value = "";
-      } else if (window.CppTranslator.SAMPLE_ROUTINES[sampleKey]) {
-        if (codeInput) codeInput.value = window.CppTranslator.SAMPLE_ROUTINES[sampleKey];
+      } else {
+        const sampleText = getSampleCodeForSelection(sampleKey);
+        if (codeInput && sampleText) codeInput.value = sampleText;
       }
       runLiveAnalysis();
     };
   });
+
+  if (libSelect) {
+    libSelect.addEventListener("change", () => {
+      runLiveAnalysis();
+    });
+  }
 
   targetRadios.forEach((radio) => {
     radio.addEventListener("change", () => {
@@ -713,7 +775,7 @@
 
   // Load initial sample code if textarea is empty
   if (codeInput && !codeInput.value.trim()) {
-    codeInput.value = window.CppTranslator.SAMPLE_ROUTINES.preload_rush;
+    codeInput.value = getSampleCodeForSelection("preload_rush");
   }
   runLiveAnalysis();
 })();

@@ -56,6 +56,130 @@
     return args;
   }
 
+  // =========================================================================
+  // Shared Multi-Library Registry (Single Source of Truth)
+  // =========================================================================
+  const LIBRARIES = {
+    lemlib: {
+      id: "lemlib",
+      name: "LemLib (v0.5+)",
+      shortName: "LemLib",
+      framework: "PROS 4",
+      speedUnit: "voltage_127",
+      defaultMaxSpeed: 127,
+      includes: '#include "main.h"\n#include "lemlib/api.hpp"',
+      configFile: "src/robot-config.cpp",
+      description: "PROS v4/v3 chassis controller with Boomerang moveToPose, Pure Pursuit follow, and async motion queuing.",
+    },
+    ez_template: {
+      id: "ez_template",
+      name: "EZ-Template (v3+)",
+      shortName: "EZ-Template",
+      framework: "PROS 4",
+      speedUnit: "voltage_127",
+      defaultMaxSpeed: 110,
+      includes: '#include "main.h"\n#include "EZ-Template/api.hpp"',
+      configFile: "src/main.cpp",
+      description: "PROS chassis PID & odometry library with _in/_deg literals, pid_odom_set, pid_drive_set, and pid_wait_quick_chain.",
+    },
+    rw_template: {
+      id: "rw_template",
+      name: "RW-Template (VEXcode)",
+      shortName: "RW-Template",
+      framework: "VEXcode V5",
+      speedUnit: "voltage_12",
+      defaultMaxSpeed: 127,
+      includes: '#include "vex.h"\n#include "autons.h"',
+      configFile: "src/robot-config.cpp",
+      description: "Richard Wang VEXcode V5 template featuring setOdom, moveToPoint, driveTo, turnToAngle, turnToPoint, and swing.",
+    },
+    jar_template: {
+      id: "jar_template",
+      name: "JAR-Template (VEXcode)",
+      shortName: "JAR-Template",
+      framework: "VEXcode V5",
+      speedUnit: "voltage_12",
+      defaultMaxSpeed: 127,
+      includes: '#include "vex.h"\n#include "JAR-Template/drive.h"',
+      configFile: "src/robot-config.cpp",
+      description: "VEXcode V5 odometry & PID template featuring set_coordinates, drive_to_point, drive_to_pose, drive_distance, and swing_to_angle.",
+    },
+  };
+
+  function normalizeLibraryId(lib) {
+    if (!lib || typeof lib !== "string") return "lemlib";
+    const s = lib.trim().toLowerCase().replace(/[-\s]+/g, "_");
+    if (s === "ez" || s === "ez_template" || s === "eztemplate") return "ez_template";
+    if (s === "rw" || s === "rw_template" || s === "rwtemplate") return "rw_template";
+    if (s === "jar" || s === "jar_template" || s === "jartemplate") return "jar_template";
+    if (s === "auto") return "auto";
+    return "lemlib";
+  }
+
+  function detectLibraryFromCode(rawCode) {
+    if (!rawCode || typeof rawCode !== "string") return "lemlib";
+    // EZ-Template signatures
+    if (/\b(?:pid_odom_set|pid_drive_set|pid_turn_set|pid_swing_set|pid_wait_quick_chain|pid_wait_quick|pid_wait_until|pid_wait|odom_xyt_set|drive_angle_set)\s*\(/i.test(rawCode) ||
+        /\bez::(?:fwd|rev|LEFT_SWING|RIGHT_SWING|Drive)\b/.test(rawCode) ||
+        /\bEZ-Template\b/i.test(rawCode)) {
+      return "ez_template";
+    }
+    // JAR-Template signatures
+    if (/\b(?:drive_to_point|drive_to_pose|drive_distance|turn_to_angle|turn_to_point|left_swing_to_angle|right_swing_to_angle|set_coordinates|set_heading)\s*\(/i.test(rawCode) ||
+        /\bJAR-Template\b/i.test(rawCode)) {
+      return "jar_template";
+    }
+    // RW-Template signatures
+    if (/\b(?:setOdom|turnToAngle)\s*\(/i.test(rawCode) ||
+        (/\b(?:driveTo|swing)\s*\(/i.test(rawCode) && !/chassis\.swingTo/i.test(rawCode)) ||
+        (/moveToPoint\s*\([^)]*,\s*[-+]?1\s*,/i.test(rawCode) && /\bwait\s*\(\s*\d+\s*,\s*(?:msec|vex::msec|sec)\s*\)/i.test(rawCode)) ||
+        /\bRW[- ]?Template\b/i.test(rawCode)) {
+      return "rw_template";
+    }
+    return "lemlib";
+  }
+
+  // Compute next target (x, y) from relative linear drive distance using VEX clockwise heading (0 deg = +Y North)
+  function computeRelativeDriveTarget(simPose, distIn) {
+    const sx = Number(simPose?.x || 0);
+    const sy = Number(simPose?.y || 0);
+    const thDeg = Number(simPose?.theta || 0);
+    const rad = (thDeg * Math.PI) / 180;
+    const nx = Number((sx + distIn * Math.sin(rad)).toFixed(2));
+    const ny = Number((sy + distIn * Math.cos(rad)).toFixed(2));
+    return { x: nx, y: ny };
+  }
+
+  function advanceSimPose(simPose, act) {
+    if (!simPose || !act) return simPose;
+    if (act.type === "moveToPoint") {
+      const dx = Number(act.x) - simPose.x;
+      const dy = Number(act.y) - simPose.y;
+      if (Math.hypot(dx, dy) > 0.25 && act.inferredDriveDist == null) {
+        let deg = (Math.atan2(dx, dy) * 180) / Math.PI;
+        if (act.forwards === false) deg += 180;
+        simPose.theta = ((deg % 360) + 360) % 360;
+      }
+      simPose.x = Number(act.x);
+      simPose.y = Number(act.y);
+    } else if (act.type === "moveToPose" || act.type === "bezierCurve") {
+      simPose.x = Number(act.x);
+      simPose.y = Number(act.y);
+      simPose.theta = Number(act.theta);
+    } else if (act.type === "turnToHeading" || act.type === "swingToHeading") {
+      simPose.theta = Number(act.theta);
+    } else if (act.type === "turnToPoint" || act.type === "swingToPoint") {
+      const dx = Number(act.x) - simPose.x;
+      const dy = Number(act.y) - simPose.y;
+      if (Math.hypot(dx, dy) > 0.1) {
+        let deg = (Math.atan2(dx, dy) * 180) / Math.PI;
+        if (act.forwards === false) deg += 180;
+        simPose.theta = ((deg % 360) + 360) % 360;
+      }
+    }
+    return simPose;
+  }
+
   // Parse LemLib struct parameters like {.forwards = false, .maxSpeed = 100, .earlyExitRange = 2, .async = true}
   function parseLemlibStructParams(rawParamsStr) {
     const res = {
@@ -92,7 +216,7 @@
     return res;
   }
 
-  // Parse DriveSide enum (e.g. DriveSide::LEFT, lemlib::DriveSide::RIGHT, "LEFT", "RIGHT")
+  // Parse DriveSide enum (e.g. DriveSide::LEFT, ez::LEFT_SWING, lemlib::DriveSide::RIGHT, "LEFT", "RIGHT")
   function parseDriveSideEnum(sideStr) {
     if (!sideStr) return "LEFT";
     const s = sideStr.toUpperCase();
@@ -197,14 +321,53 @@
       }
     }
 
-    // moveToPoint (supports both chassis.moveToPoint and custom moveToPoint(x, y, theta))
+    // Helper: parse EZ-Template brace coordinates {x_in, y_in} or {x_in, y_in, theta_deg}
+    function parseEzBracedVec(str) {
+      const inner = String(str || "").trim().replace(/^\{|\}$/g, "");
+      const parts = splitCppArgsSafe(inner);
+      return parts.map((p) => evaluateNumericArg(p));
+    }
+
+    // Helper: parse EZ-Template drive/turn speed token (handles DRIVE_SPEED, TURN_SPEED, SWING_SPEED, numbers)
+    function parseEzSpeed(str, fallback = 110) {
+      if (!str) return fallback;
+      const s = str.trim();
+      if (/DRIVE_SPEED/i.test(s)) return 110;
+      if (/TURN_SPEED/i.test(s)) return 90;
+      if (/SWING_SPEED/i.test(s)) return 110;
+      const n = evaluateNumericArg(s);
+      return isNaN(n) ? fallback : Math.min(127, Math.max(10, Math.abs(n)));
+    }
+
+    // Helper: parse VEXcode voltage speed (0-12V -> 0-127)
+    function voltsTo127(v, fallback = 127) {
+      const n = evaluateNumericArg(v);
+      if (isNaN(n) || n <= 0) return fallback;
+      if (n <= 12.5) return Math.min(127, Math.round((n / 12) * 127));
+      return Math.min(127, Math.round(n));
+    }
+
+    // moveToPoint: handles BOTH LemLib chassis.moveToPoint(x, y, timeout, params) AND RW-Template moveToPoint(x, y, dir, timeout, ...)
     const mtPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?moveToPoint\s*\(([^;]+)\)$/i);
     if (mtPointMatch && isValidChassisReceiver(mtPointMatch[1], "moveToPoint", activeFnsMap)) {
       const hasChassisPrefix = !!mtPointMatch[1];
+      const mtArgs = splitCppArgsSafe(mtPointMatch[2]);
+      const thirdRaw = mtArgs[2] ? mtArgs[2].trim() : "";
+      const fourthVal = mtArgs[3] ? evaluateNumericArg(mtArgs[3]) : NaN;
+      const looksLikeRw = !hasChassisPrefix && mtArgs.length >= 4 && (thirdRaw === "1" || thirdRaw === "-1" || /^(?:fwd|rev)$/i.test(thirdRaw)) && !isNaN(fourthVal) && fourthVal >= 50;
+      if (looksLikeRw) {
+        const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+        act.x = evaluateNumericArg(mtArgs[0]) || 0;
+        act.y = evaluateNumericArg(mtArgs[1]) || 0;
+        act.forwards = !(thirdRaw === "-1" || /rev/i.test(thirdRaw));
+        act.timeout = parseInt(fourthVal, 10) || 2000;
+        if (mtArgs[5] != null) act.maxSpeed = voltsTo127(mtArgs[5], defaultMaxSpeed);
+        return act;
+      }
       return buildMoveToPointOrThetaAction(mtPointMatch[2], hasChassisPrefix, defaultMaxSpeed, defaultMinSpeed, activeFnsMap);
     }
 
-    // moveToPose (supports both chassis.moveToPose and custom moveToPose(x, y, theta))
+    // moveToPose (LemLib)
     const mtPoseMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?moveToPose\s*\(([^;]+)\)$/i);
     if (mtPoseMatch && isValidChassisReceiver(mtPoseMatch[1], "moveToPose", activeFnsMap)) {
       const isBezier = /bezier|spline/i.test(line);
@@ -225,6 +388,169 @@
         if (p.async) act.async = true;
       }
       if (args[args.length - 1]?.trim().toLowerCase() === "true") act.async = true;
+      return act;
+    }
+
+    // --- EZ-Template Statements ---
+    // chassis.pid_odom_set({{x, y[, theta]}, ez::fwd, speed})
+    const ezOdomMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?pid_odom_set\s*\(([^;]+)\)$/i);
+    if (ezOdomMatch && isValidChassisReceiver(ezOdomMatch[1], "pid_odom_set", activeFnsMap)) {
+      let rawArgs = ezOdomMatch[2].trim();
+      if (rawArgs.startsWith("{") && rawArgs.endsWith("}")) {
+        rawArgs = rawArgs.slice(1, -1).trim();
+      }
+      const parts = splitCppArgsSafe(rawArgs);
+      // Single odom target: {x, y[, theta]}, dir, speed
+      if (parts[0] && parts[0].startsWith("{")) {
+        const vec = parseEzBracedVec(parts[0]);
+        // If nested multi-waypoint: parts[0] itself contains '{'
+        if (parts[0].slice(1).includes("{")) {
+          const innerParts = splitCppArgsSafe(parts[0].slice(1, -1).trim());
+          const firstVec = parseEzBracedVec(innerParts[0]);
+          const hasTheta = firstVec.length >= 3 && !isNaN(firstVec[2]);
+          const act = createDefaultAction(hasTheta ? "moveToPose" : "moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+          act.x = isNaN(firstVec[0]) ? 0 : firstVec[0];
+          act.y = isNaN(firstVec[1]) ? 0 : firstVec[1];
+          if (hasTheta) act.theta = firstVec[2];
+          act.forwards = !/rev/i.test(innerParts[1] || "");
+          act.maxSpeed = parseEzSpeed(innerParts[2], 110);
+          return act;
+        }
+        const hasTheta = vec.length >= 3 && !isNaN(vec[2]);
+        const act = createDefaultAction(hasTheta ? "moveToPose" : "moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+        act.x = isNaN(vec[0]) ? 0 : vec[0];
+        act.y = isNaN(vec[1]) ? 0 : vec[1];
+        if (hasTheta) act.theta = vec[2];
+        act.forwards = !/rev/i.test(parts[1] || "");
+        act.maxSpeed = parseEzSpeed(parts[2], 110);
+        return act;
+      }
+    }
+
+    // chassis.pid_turn_set(theta, speed) OR chassis.pid_turn_set({x, y}, dir, speed)
+    const ezTurnMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?pid_turn_set\s*\(([^;]+)\)$/i);
+    if (ezTurnMatch && isValidChassisReceiver(ezTurnMatch[1], "pid_turn_set", activeFnsMap)) {
+      const args = splitCppArgsSafe(ezTurnMatch[2]);
+      if (args[0] && args[0].trim().startsWith("{")) {
+        const vec = parseEzBracedVec(args[0]);
+        const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
+        act.x = isNaN(vec[0]) ? 0 : vec[0];
+        act.y = isNaN(vec[1]) ? 0 : vec[1];
+        act.forwards = !/rev/i.test(args[1] || "");
+        act.maxSpeed = parseEzSpeed(args[2], 90);
+        return act;
+      }
+      const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
+      act.theta = evaluateNumericArg(args[0]) || 0;
+      act.maxSpeed = parseEzSpeed(args[1], 90);
+      return act;
+    }
+
+    // chassis.pid_swing_set(ez::LEFT_SWING, theta, speed)
+    const ezSwingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?pid_swing_set\s*\(([^;]+)\)$/i);
+    if (ezSwingMatch && isValidChassisReceiver(ezSwingMatch[1], "pid_swing_set", activeFnsMap)) {
+      const args = splitCppArgsSafe(ezSwingMatch[2]);
+      const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
+      act.lockedSide = parseDriveSideEnum(args[0]);
+      act.theta = evaluateNumericArg(args[1]) || 0;
+      act.maxSpeed = parseEzSpeed(args[2], 110);
+      return act;
+    }
+
+    // chassis.pid_wait_until(dist) / pid_wait()
+    const ezWaitUntilMatch = line.match(/^(?:[a-zA-Z0-9_]+\s*(?:\.|->)\s*)?pid_wait_until\s*\(\s*([^)]+)\s*\)$/i);
+    if (ezWaitUntilMatch) {
+      const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+      act.waitType = "distance";
+      act.distance = evaluateNumericArg(ezWaitUntilMatch[1]) || 12;
+      return act;
+    }
+    if (/^(?:[a-zA-Z0-9_]+\s*(?:\.|->)\s*)?pid_wait(?:_quick(?:_chain)?)?\s*\(\s*\)$/i.test(line)) {
+      const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+      act.waitType = "done";
+      return act;
+    }
+
+    // --- JAR-Template Statements ---
+    const jarPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?drive_to_point\s*\(([^;]+)\)$/i);
+    if (jarPointMatch && isValidChassisReceiver(jarPointMatch[1], "drive_to_point", activeFnsMap)) {
+      const args = splitCppArgsSafe(jarPointMatch[2]);
+      const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+      act.x = evaluateNumericArg(args[0]) || 0;
+      act.y = evaluateNumericArg(args[1]) || 0;
+      if (args[3] != null) act.maxSpeed = voltsTo127(args[3], defaultMaxSpeed);
+      return act;
+    }
+    const jarPoseMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?drive_to_pose\s*\(([^;]+)\)$/i);
+    if (jarPoseMatch && isValidChassisReceiver(jarPoseMatch[1], "drive_to_pose", activeFnsMap)) {
+      const args = splitCppArgsSafe(jarPoseMatch[2]);
+      const act = createDefaultAction("moveToPose", defaultMaxSpeed, defaultMinSpeed);
+      act.x = evaluateNumericArg(args[0]) || 0;
+      act.y = evaluateNumericArg(args[1]) || 0;
+      act.theta = evaluateNumericArg(args[2]) || 0;
+      if (args[4] != null) act.maxSpeed = voltsTo127(args[4], defaultMaxSpeed);
+      return act;
+    }
+    const jarTurnMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turn_to_angle\s*\(([^;]+)\)$/i);
+    if (jarTurnMatch && isValidChassisReceiver(jarTurnMatch[1], "turn_to_angle", activeFnsMap)) {
+      const args = splitCppArgsSafe(jarTurnMatch[2]);
+      const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
+      act.theta = evaluateNumericArg(args[0]) || 0;
+      if (args[1] != null) act.maxSpeed = voltsTo127(args[1], defaultMaxSpeed);
+      return act;
+    }
+    const jarTurnPtMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turn_to_point\s*\(([^;]+)\)$/i);
+    if (jarTurnPtMatch && isValidChassisReceiver(jarTurnPtMatch[1], "turn_to_point", activeFnsMap)) {
+      const args = splitCppArgsSafe(jarTurnPtMatch[2]);
+      const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
+      act.x = evaluateNumericArg(args[0]) || 0;
+      act.y = evaluateNumericArg(args[1]) || 0;
+      return act;
+    }
+    const jarSwingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?(left|right)_swing_to_angle\s*\(([^;]+)\)$/i);
+    if (jarSwingMatch && isValidChassisReceiver(jarSwingMatch[1], jarSwingMatch[2] + "_swing_to_angle", activeFnsMap)) {
+      const args = splitCppArgsSafe(jarSwingMatch[3]);
+      const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
+      act.lockedSide = jarSwingMatch[2].toUpperCase() === "RIGHT" ? "RIGHT" : "LEFT";
+      act.theta = evaluateNumericArg(args[0]) || 0;
+      return act;
+    }
+
+    // --- RW-Template Statements ---
+    const rwTurnAngleMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turnToAngle\s*\(([^;]+)\)$/i);
+    if (rwTurnAngleMatch && isValidChassisReceiver(rwTurnAngleMatch[1], "turnToAngle", activeFnsMap)) {
+      const args = splitCppArgsSafe(rwTurnAngleMatch[2]);
+      const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
+      act.theta = evaluateNumericArg(args[0]) || 0;
+      act.timeout = parseInt(evaluateNumericArg(args[1]), 10) || 1500;
+      return act;
+    }
+    const rwSwingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?(?:(left|right)Swing|swing)\s*\(([^;]+)\)$/i);
+    if (rwSwingMatch && isValidChassisReceiver(rwSwingMatch[1], "swing", activeFnsMap)) {
+      const args = splitCppArgsSafe(rwSwingMatch[3]);
+      const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
+      act.theta = evaluateNumericArg(args[0]) || 0;
+      if (rwSwingMatch[2]) {
+        act.lockedSide = rwSwingMatch[2].toUpperCase() === "RIGHT" ? "RIGHT" : "LEFT";
+      } else {
+        const dirVal = evaluateNumericArg(args[1]);
+        act.lockedSide = (!isNaN(dirVal) && dirVal < 0) || /right/i.test(args[1] || "") ? "RIGHT" : "LEFT";
+      }
+      act.timeout = parseInt(evaluateNumericArg(args[2]), 10) || 1800;
+      return act;
+    }
+
+    // Relative drive distance fallback inside statement parser (EZ pid_drive_set / RW driveTo / JAR drive_distance)
+    const relDriveMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?(?:pid_drive_set|drive_distance|driveTo|driveDistance)\s*\(([^;]+)\)$/i);
+    if (relDriveMatch && isValidChassisReceiver(relDriveMatch[1], "drive_distance", activeFnsMap)) {
+      const args = splitCppArgsSafe(relDriveMatch[2]);
+      const dist = evaluateNumericArg(args[0]) || 0;
+      const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+      act.forwards = dist >= 0;
+      act.inferredDriveDist = dist;
+      const target = computeRelativeDriveTarget({ x: 0, y: 0, theta: 0 }, dist);
+      act.x = target.x;
+      act.y = target.y;
       return act;
     }
 
@@ -251,14 +577,20 @@
       return act;
     }
 
-    // turnToPoint
+    // turnToPoint (LemLib & RW-Template)
     const ttPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turnToPoint\s*\(([^;]+)\)$/i);
     if (ttPointMatch && isValidChassisReceiver(ttPointMatch[1], "turnToPoint", activeFnsMap)) {
       const args = splitCppArgsSafe(ttPointMatch[2]);
       const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
-      act.x = parseFloat(args[0]) || 0;
-      act.y = parseFloat(args[1]) || 0;
-      act.timeout = parseInt(args[2], 10) || 1500;
+      act.x = evaluateNumericArg(args[0]) || 0;
+      act.y = evaluateNumericArg(args[1]) || 0;
+      const arg2Trim = args[2] ? args[2].trim() : "";
+      if (!ttPointMatch[1] && (arg2Trim === "1" || arg2Trim === "-1") && args[3]) {
+        act.forwards = arg2Trim !== "-1";
+        act.timeout = parseInt(evaluateNumericArg(args[3]), 10) || 1500;
+      } else {
+        act.timeout = parseInt(evaluateNumericArg(args[2]), 10) || 1500;
+      }
       let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
       if (structParamStr) {
         const p = parseLemlibStructParams(structParamStr);
@@ -272,13 +604,13 @@
       return act;
     }
 
-    // turnToHeading
+    // turnToHeading (LemLib)
     const ttHeadingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turnToHeading\s*\(([^;]+)\)$/i);
     if (ttHeadingMatch && isValidChassisReceiver(ttHeadingMatch[1], "turnToHeading", activeFnsMap)) {
       const args = splitCppArgsSafe(ttHeadingMatch[2]);
       const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
-      act.theta = parseFloat(args[0]) || 0;
-      act.timeout = parseInt(args[1], 10) || 1500;
+      act.theta = evaluateNumericArg(args[0]) || 0;
+      act.timeout = parseInt(evaluateNumericArg(args[1]), 10) || 1500;
       let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
       if (structParamStr) {
         const p = parseLemlibStructParams(structParamStr);
@@ -296,10 +628,10 @@
     if (swPointMatch && isValidChassisReceiver(swPointMatch[1], "swingToPoint", activeFnsMap)) {
       const args = splitCppArgsSafe(swPointMatch[2]);
       const act = createDefaultAction("swingToPoint", defaultMaxSpeed, defaultMinSpeed);
-      act.x = parseFloat(args[0]) || 0;
-      act.y = parseFloat(args[1]) || 0;
+      act.x = evaluateNumericArg(args[0]) || 0;
+      act.y = evaluateNumericArg(args[1]) || 0;
       act.lockedSide = parseDriveSideEnum(args[2]);
-      act.timeout = parseInt(args[3], 10) || 2000;
+      act.timeout = parseInt(evaluateNumericArg(args[3]), 10) || 2000;
       return act;
     }
 
@@ -308,18 +640,18 @@
     if (swHeadingMatch && isValidChassisReceiver(swHeadingMatch[1], "swingToHeading", activeFnsMap)) {
       const args = splitCppArgsSafe(swHeadingMatch[2]);
       const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
-      act.theta = parseFloat(args[0]) || 0;
+      act.theta = evaluateNumericArg(args[0]) || 0;
       act.lockedSide = parseDriveSideEnum(args[1]);
-      act.timeout = parseInt(args[2], 10) || 2000;
+      act.timeout = parseInt(evaluateNumericArg(args[2]), 10) || 2000;
       return act;
     }
 
     // waitUntil distance
-    const waitDistMatch = line.match(/^(?:chassis|bot|drive|drivetrain|robot)\.waitUntil\s*\(\s*([-\d.]+)\s*\)$/i);
+    const waitDistMatch = line.match(/^(?:chassis|bot|drive|drivetrain|robot)\.waitUntil\s*\(\s*([^)]+)\s*\)$/i);
     if (waitDistMatch) {
       const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
       act.waitType = "distance";
-      act.distance = parseFloat(waitDistMatch[1]) || 12;
+      act.distance = evaluateNumericArg(waitDistMatch[1]) || 12;
       return act;
     }
 
@@ -330,12 +662,27 @@
       return act;
     }
 
-    // pros::delay
+    // pros::delay / vex wait(ms, msec) / vex::task::sleep(ms)
     const delayMatch = line.match(/^(?:pros::(?:c::)?)?delay\s*\(\s*(\d+)\s*\)$/i);
     if (delayMatch) {
       const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
       act.waitType = "time";
       act.delayMs = parseInt(delayMatch[1], 10) || 250;
+      return act;
+    }
+    const vexWaitMatch = line.match(/^(?:vex::)?wait\s*\(\s*([\d.]+)\s*,\s*(?:vex::)?(msec|sec|seconds)\s*\)$/i);
+    if (vexWaitMatch) {
+      const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+      act.waitType = "time";
+      const val = parseFloat(vexWaitMatch[1]) || 250;
+      act.delayMs = /^sec/i.test(vexWaitMatch[2]) ? Math.round(val * 1000) : Math.round(val);
+      return act;
+    }
+    const vexSleepMatch = line.match(/^(?:vex::)?(?:this_thread::sleep_for|task::sleep)\s*\(\s*(\d+)\s*\)$/i);
+    if (vexSleepMatch) {
+      const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+      act.waitType = "time";
+      act.delayMs = parseInt(vexSleepMatch[1], 10) || 250;
       return act;
     }
 
@@ -791,9 +1138,21 @@
   const CHASSIS_OBJ_REGEX = /^(?:chassis|bot|drive|drivetrain|robot|lemlib|odom)$/i;
   const RESERVED_CPP_CALLS = new Set([
     "if", "else", "while", "for", "switch", "case", "return", "sizeof", "alignof",
+    // LemLib
     "setPose", "moveToPoint", "moveToPose", "turnToPoint", "turnToHeading",
     "swingToPoint", "swingToHeading", "waitUntil", "waitUntilDone", "follow",
-    "followCurve", "followSpline", "delay", "Task", "move", "move_velocity",
+    "followCurve", "followSpline",
+    // EZ-Template
+    "pid_odom_set", "pid_drive_set", "pid_turn_set", "pid_swing_set",
+    "pid_wait", "pid_wait_quick", "pid_wait_quick_chain", "pid_wait_until",
+    "odom_xyt_set", "drive_angle_set", "odom_x_set", "odom_y_set",
+    // RW-Template
+    "setOdom", "driveTo", "driveDistance", "turnToAngle", "swing", "leftSwing", "rightSwing",
+    // JAR-Template
+    "drive_to_point", "drive_to_pose", "drive_distance", "turn_to_angle", "turn_to_point",
+    "left_swing_to_angle", "right_swing_to_angle", "set_coordinates", "set_heading",
+    // System / Subsystems
+    "delay", "wait", "sleep", "Task", "move", "move_velocity",
     "move_absolute", "move_relative", "move_voltage", "brake", "set_value", "printf", "print"
   ]);
   const REAL_MOTION_TYPES = new Set([
@@ -890,8 +1249,8 @@
     if (trailing) stmts.push(trailing);
     if (stmts.length === 0) return false;
 
-    const directMotionRe = /^(?:(?:chassis|bot|drive|drivetrain|robot|lemlib|odom)\s*(?:\.|->)\s*)?(moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline|follow|waitUntil|waitUntilDone|setPose)\s*\([\s\S]*\)$/i;
-    const realMoveCmdRe = /^(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline|follow)$/i;
+    const directMotionRe = /^(?:(?:chassis|bot|drive|drivetrain|robot|lemlib|odom)\s*(?:\.|->)\s*)?(moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline|follow|waitUntil|waitUntilDone|setPose|pid_odom_set|pid_drive_set|pid_turn_set|pid_swing_set|pid_wait|pid_wait_quick|pid_wait_quick_chain|pid_wait_until|odom_xyt_set|drive_angle_set|drive_to_point|drive_to_pose|drive_distance|turn_to_angle|turn_to_point|left_swing_to_angle|right_swing_to_angle|set_coordinates|set_heading|driveTo|driveDistance|turnToAngle|swing|leftSwing|rightSwing|setOdom)\s*\([\s\S]*\)$/i;
+    const realMoveCmdRe = /^(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|followCurve|followSpline|follow|pid_odom_set|pid_drive_set|pid_turn_set|pid_swing_set|drive_to_point|drive_to_pose|drive_distance|turn_to_angle|turn_to_point|left_swing_to_angle|right_swing_to_angle|driveTo|driveDistance|turnToAngle|swing|leftSwing|rightSwing)$/i;
     const standaloneCallRe = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*\([\s\S]*\)$/;
 
     let hasAtLeastOneMove = false;
@@ -931,6 +1290,8 @@
     if (exprStr == null) return NaN;
     let s = String(exprStr).trim();
     if (!s) return NaN;
+    if (/^(?:ez::)?fwd$/i.test(s)) return 1;
+    if (/^(?:ez::)?rev$/i.test(s)) return -1;
     // Substitute known parameter values from env
     if (env && typeof env === "object") {
       for (const [k, v] of Object.entries(env)) {
@@ -941,8 +1302,8 @@
         }
       }
     }
-    // Strip trailing float suffixes like 24.0f
-    s = s.replace(/(\d)f\b/gi, "$1");
+    // Strip C++ EZ-Template / VEX user-defined unit literals & float suffixes (_in, _deg, _okapi, 24.0f)
+    s = s.replace(/(\d)_?(?:in|deg|rad|ft|mm|cm|msec|ms|sec|pct|rpm|volt|f)\b/gi, "$1");
     // Only evaluate if expression consists purely of numbers, arithmetic operators, and parens
     if (/^[0-9.+\-*/()\s]+$/.test(s)) {
       try {
@@ -1471,10 +1832,13 @@
     const recursionDepth = options._recursionDepth || 0;
     const visitedFns = options._visitedFns || null;
     let paramEnv = options.paramEnv || null;
+    const requestedLibrary = options.library ? normalizeLibraryId(options.library) : "auto";
+    const detectedLibrary = requestedLibrary === "auto" ? detectLibraryFromCode(rawCode) : requestedLibrary;
 
     if (!rawCode || !rawCode.trim() || recursionDepth > 4) {
       return {
         success: false,
+        library: detectedLibrary,
         routineName: "Imported Auton",
         startPose: null,
         actions: [],
@@ -1485,6 +1849,7 @@
 
     const log = [];
     let routineName = "Imported Auton";
+    log.push(`Parser library mode: ${LIBRARIES[detectedLibrary]?.name || detectedLibrary}`);
 
     // Build custom functions map from project files + rawCode
     const customFnsMap = options.customFunctionsMap || extractCustomFunctions(rawCode, options.projectFiles);
@@ -1583,9 +1948,41 @@
     }
 
     let detectedStartPose = null;
+    const simPose = options.initialPose
+      ? { x: Number(options.initialPose.x || 0), y: Number(options.initialPose.y || 0), theta: Number(options.initialPose.theta || 0) }
+      : { x: -60, y: -60, theta: 0 };
     const actions = [];
     let pendingComments = [];
     let pendingCustomLines = [];
+    let lastEzMotionIndex = -1;
+
+    function pushMotionAction(act) {
+      advanceSimPose(simPose, act);
+      actions.push(act);
+      return actions.length - 1;
+    }
+
+    function parseEzBracedVec(str) {
+      const inner = String(str || "").trim().replace(/^\{|\}$/g, "");
+      return splitCppArgsSafe(inner).map((p) => evaluateNumericArg(p, paramEnv));
+    }
+
+    function parseEzSpeed(str, fallback = 110) {
+      if (!str) return fallback;
+      const s = str.trim();
+      if (/DRIVE_SPEED/i.test(s)) return 110;
+      if (/TURN_SPEED/i.test(s)) return 90;
+      if (/SWING_SPEED/i.test(s)) return 110;
+      const n = evaluateNumericArg(s, paramEnv);
+      return isNaN(n) ? fallback : Math.min(127, Math.max(10, Math.abs(n)));
+    }
+
+    function voltsTo127(v, fallback = 127) {
+      const n = evaluateNumericArg(v, paramEnv);
+      if (isNaN(n) || n <= 0) return fallback;
+      if (n <= 12.5) return Math.min(127, Math.round((n / 12) * 127));
+      return Math.min(127, Math.round(n));
+    }
 
     function flushCustomBlock() {
       if (pendingCustomLines.length === 0) return;
@@ -1648,10 +2045,17 @@
       }
 
       let totalDelayMs = 0;
-      const delayMatches = fullCode.matchAll(/pros::(?:c::)?delay\s*\(\s*([-\d.]+)\s*\)/g);
+      const delayMatches = fullCode.matchAll(/(?:pros::(?:c::)?delay|(?:vex::)?(?:task::sleep|this_thread::sleep_for))\s*\(\s*([-\d.]+)\s*\)/g);
       for (const dm of delayMatches) {
         const ms = parseFloat(dm[1]);
         if (!isNaN(ms) && ms > 0) totalDelayMs += ms;
+      }
+      const vexWaitMatches = fullCode.matchAll(/(?:vex::)?wait\s*\(\s*([-\d.]+)\s*,\s*(?:vex::)?(msec|sec|seconds)\s*\)/gi);
+      for (const wm of vexWaitMatches) {
+        const val = parseFloat(wm[1]);
+        if (!isNaN(val) && val > 0) {
+          totalDelayMs += /^sec/i.test(wm[2]) ? val * 1000 : val;
+        }
       }
       if (totalDelayMs > 0) {
         customAct.customDuration = Number((totalDelayMs / 1000).toFixed(2));
@@ -1659,8 +2063,8 @@
         customAct.customDuration = 0;
       }
 
-      const isTask = /pros::Task\b|pros::task::create\b/i.test(fullCode);
-      const isContinuousSubsystem = /intake\.move|conveyor\.move|flywheel\.move|piston\.set_value|clamp\.set_value/i.test(fullCode) && totalDelayMs === 0;
+      const isTask = /pros::Task\b|pros::task::create\b|vex::task\b/i.test(fullCode);
+      const isContinuousSubsystem = /(?:intake|conveyor|flywheel|piston|clamp|doinker)\.(?:move|spin|set_value|set|open|close)/i.test(fullCode) && totalDelayMs === 0;
 
       if (isTask || isContinuousSubsystem) {
         customAct.async = true;
@@ -1698,19 +2102,74 @@
         line = line.replace(/\/\/\s*.+$/, "").trim();
       }
 
-      // Check for chassis.setPose
-      const setPoseMatch = line.match(/chassis\.setPose\s*\(\s*(?:lemlib::)?(?:Pose\s*\(\s*)?([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)(?:\s*,\s*([a-zA-Z0-9_]+))?\s*\)?\s*\)/i);
+      // ---------------------------------------------------------------------
+      // Pose / Coordinate Initializers (LemLib, EZ-Template, RW, JAR)
+      // ---------------------------------------------------------------------
+      const setPoseMatch = line.match(/chassis\.setPose\s*\(\s*(?:lemlib::)?(?:Pose\s*\(\s*)?([^,]+)\s*,\s*([^,]+)\s*,\s*([^,)]+)(?:\s*,\s*([a-zA-Z0-9_]+))?\s*\)?\s*\)\s*;?/i);
       if (setPoseMatch) {
         flushCustomBlock();
-        const px = parseFloat(setPoseMatch[1]);
-        const py = parseFloat(setPoseMatch[2]);
-        const pt = parseFloat(setPoseMatch[3]);
+        const px = evaluateNumericArg(setPoseMatch[1], paramEnv);
+        const py = evaluateNumericArg(setPoseMatch[2], paramEnv);
+        const pt = evaluateNumericArg(setPoseMatch[3], paramEnv);
         detectedStartPose = {
           x: isNaN(px) ? -60 : px,
           y: isNaN(py) ? -60 : py,
           theta: isNaN(pt) ? 0 : pt,
         };
+        Object.assign(simPose, detectedStartPose);
         log.push(`Found start pose: chassis.setPose(${detectedStartPose.x}, ${detectedStartPose.y}, ${detectedStartPose.theta}°)`);
+        pendingComments = [];
+        continue;
+      }
+
+      // EZ-Template: chassis.odom_xyt_set(x_in, y_in, theta_deg)
+      const ezOdomInitMatch = line.match(/^(?:[a-zA-Z0-9_]+\s*(?:\.|->)\s*)?odom_xyt_set\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)\s*;?$/i);
+      if (ezOdomInitMatch) {
+        flushCustomBlock();
+        const px = evaluateNumericArg(ezOdomInitMatch[1], paramEnv);
+        const py = evaluateNumericArg(ezOdomInitMatch[2], paramEnv);
+        const pt = evaluateNumericArg(ezOdomInitMatch[3], paramEnv);
+        detectedStartPose = {
+          x: isNaN(px) ? -60 : px,
+          y: isNaN(py) ? -60 : py,
+          theta: isNaN(pt) ? 0 : pt,
+        };
+        Object.assign(simPose, detectedStartPose);
+        log.push(`Found EZ-Template start pose: odom_xyt_set(${detectedStartPose.x}, ${detectedStartPose.y}, ${detectedStartPose.theta}°)`);
+        pendingComments = [];
+        continue;
+      }
+
+      // EZ-Template drive_angle_set(theta) or JAR set_heading(theta)
+      const angleSetMatch = line.match(/^(?:[a-zA-Z0-9_]+\s*(?:\.|->)\s*)?(?:drive_angle_set|set_heading)\s*\(\s*([^)]+)\s*\)\s*;?$/i);
+      if (angleSetMatch) {
+        flushCustomBlock();
+        const pt = evaluateNumericArg(angleSetMatch[1], paramEnv);
+        if (!isNaN(pt)) {
+          simPose.theta = pt;
+          if (!detectedStartPose) {
+            detectedStartPose = { x: simPose.x, y: simPose.y, theta: pt };
+          }
+          log.push(`Updated heading: ${pt}°`);
+        }
+        pendingComments = [];
+        continue;
+      }
+
+      // RW-Template setOdom(x, y, theta) & JAR chassis.set_coordinates(x, y, theta)
+      const rwJarCoordMatch = line.match(/^(?:[a-zA-Z0-9_]+\s*(?:\.|->)\s*)?(?:setOdom|set_coordinates)\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)\s*;?$/i);
+      if (rwJarCoordMatch) {
+        flushCustomBlock();
+        const px = evaluateNumericArg(rwJarCoordMatch[1], paramEnv);
+        const py = evaluateNumericArg(rwJarCoordMatch[2], paramEnv);
+        const pt = evaluateNumericArg(rwJarCoordMatch[3], paramEnv);
+        detectedStartPose = {
+          x: isNaN(px) ? -60 : px,
+          y: isNaN(py) ? -60 : py,
+          theta: isNaN(pt) ? 0 : pt,
+        };
+        Object.assign(simPose, detectedStartPose);
+        log.push(`Found start pose: (${detectedStartPose.x}, ${detectedStartPose.y}, ${detectedStartPose.theta}°)`);
         pendingComments = [];
         continue;
       }
@@ -1937,19 +2396,35 @@
         continue;
       }
 
-      // LemLib Movements (supporting both chassis.moveToPoint and custom moveToPoint(x, y, theta))
+      // LemLib & RW-Template moveToPoint
       const mtPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?moveToPoint\s*\(([^;]+)\)\s*;?$/i);
       if (mtPointMatch && isValidChassisReceiver(mtPointMatch[1], "moveToPoint", customFnsMap)) {
         flushCustomBlock();
         const hasChassisPrefix = !!mtPointMatch[1];
-        const act = buildMoveToPointOrThetaAction(
-          mtPointMatch[2],
-          hasChassisPrefix,
-          defaultMaxSpeed,
-          defaultMinSpeed,
-          customFnsMap,
-          paramEnv
-        );
+        const mtArgs = splitCppArgsSafe(mtPointMatch[2]);
+        const thirdRaw = mtArgs[2] ? mtArgs[2].trim() : "";
+        const fourthVal = mtArgs[3] ? evaluateNumericArg(mtArgs[3], paramEnv) : NaN;
+        const looksLikeRw = (detectedLibrary === "rw_template" && !hasChassisPrefix) ||
+          (!hasChassisPrefix && mtArgs.length >= 4 && (thirdRaw === "1" || thirdRaw === "-1" || /^(?:fwd|rev)$/i.test(thirdRaw)) && !isNaN(fourthVal) && fourthVal >= 50);
+
+        let act;
+        if (looksLikeRw) {
+          act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+          act.x = evaluateNumericArg(mtArgs[0], paramEnv) || 0;
+          act.y = evaluateNumericArg(mtArgs[1], paramEnv) || 0;
+          act.forwards = !(thirdRaw === "-1" || /rev/i.test(thirdRaw));
+          act.timeout = parseInt(fourthVal, 10) || 2000;
+          if (mtArgs[5] != null) act.maxSpeed = voltsTo127(mtArgs[5], defaultMaxSpeed);
+        } else {
+          act = buildMoveToPointOrThetaAction(
+            mtPointMatch[2],
+            hasChassisPrefix,
+            defaultMaxSpeed,
+            defaultMinSpeed,
+            customFnsMap,
+            paramEnv
+          );
+        }
 
         if (inlineComment) act.label = inlineComment;
         else if (pendingComments.length > 0) {
@@ -1958,11 +2433,11 @@
         }
 
         if (act.async) act.showFlowchart = true;
-        actions.push(act);
+        pushMotionAction(act);
         if (act.type === "moveToPose" && act.inferredFromMoveToPointTheta) {
           log.push(`Inferred moveToPoint(${act.x}, ${act.y}, ${act.theta}°) with heading -> moveToPose block`);
         } else {
-          log.push(`Parsed moveToPoint(${act.x}, ${act.y}) timeout: ${act.timeout}ms, async: ${act.async}`);
+          log.push(`Parsed moveToPoint(${act.x}, ${act.y}) timeout: ${act.timeout}ms, forwards: ${act.forwards}`);
         }
         continue;
       }
@@ -1997,7 +2472,7 @@
         }
 
         if (act.async) act.showFlowchart = true;
-        actions.push(act);
+        pushMotionAction(act);
         log.push(`Parsed moveToPose(${act.x}, ${act.y}, ${act.theta}°) timeout: ${act.timeout}ms, lead: ${act.lead}`);
         continue;
       }
@@ -2009,7 +2484,13 @@
         const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
         act.x = evaluateNumericArg(args[0], paramEnv) || 0;
         act.y = evaluateNumericArg(args[1], paramEnv) || 0;
-        act.timeout = parseInt(evaluateNumericArg(args[2], paramEnv), 10) || 1500;
+        const arg2Trim = args[2] ? args[2].trim() : "";
+        if (!ttPointMatch[1] && (arg2Trim === "1" || arg2Trim === "-1") && args[3]) {
+          act.forwards = arg2Trim !== "-1";
+          act.timeout = parseInt(evaluateNumericArg(args[3], paramEnv), 10) || 1500;
+        } else {
+          act.timeout = parseInt(evaluateNumericArg(args[2], paramEnv), 10) || 1500;
+        }
 
         let structParamStr = args.find((a) => a.startsWith("{") && a.endsWith("}"));
         if (structParamStr) {
@@ -2030,7 +2511,7 @@
         }
 
         if (act.async) act.showFlowchart = true;
-        actions.push(act);
+        pushMotionAction(act);
         log.push(`Parsed turnToPoint(${act.x}, ${act.y}) timeout: ${act.timeout}ms`);
         continue;
       }
@@ -2061,7 +2542,7 @@
         }
 
         if (act.async) act.showFlowchart = true;
-        actions.push(act);
+        pushMotionAction(act);
         log.push(`Parsed turnToHeading(${act.theta}°) timeout: ${act.timeout}ms`);
         continue;
       }
@@ -2095,7 +2576,7 @@
         }
 
         if (act.async) act.showFlowchart = true;
-        actions.push(act);
+        pushMotionAction(act);
         log.push(`Parsed swingToPoint(${act.x}, ${act.y}, ${act.lockedSide}) timeout: ${act.timeout}ms`);
         continue;
       }
@@ -2128,12 +2609,359 @@
         }
 
         if (act.async) act.showFlowchart = true;
-        actions.push(act);
+        pushMotionAction(act);
         log.push(`Parsed swingToHeading(${act.theta}°, ${act.lockedSide}) timeout: ${act.timeout}ms`);
         continue;
       }
 
-      // Check if line is a call to a custom function whose definition ONLY contains moveToPoint(x, y, theta) or other chassis motions
+      // ---------------------------------------------------------------------
+      // EZ-Template Motions
+      // ---------------------------------------------------------------------
+      const ezOdomMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?pid_odom_set\s*\(([^;]+)\)\s*;?$/i);
+      if (ezOdomMatch && isValidChassisReceiver(ezOdomMatch[1], "pid_odom_set", customFnsMap)) {
+        flushCustomBlock();
+        let rawArgs = ezOdomMatch[2].trim();
+        if (rawArgs.startsWith("{") && rawArgs.endsWith("}")) {
+          const outer = splitCppArgsSafe(rawArgs.slice(1, -1).trim());
+          // Multi-waypoint vector: { {{x1, y1}, fwd, spd}, {{x2, y2}, fwd, spd} }
+          if (outer.length > 0 && outer[0].trim().startsWith("{") && outer[0].trim().slice(1).includes("{")) {
+            outer.forEach((wpStr, wpIdx) => {
+              const parts = splitCppArgsSafe(wpStr.trim().replace(/^\{|\}$/g, ""));
+              const vec = parseEzBracedVec(parts[0]);
+              const hasTheta = vec.length >= 3 && !isNaN(vec[2]);
+              const act = createDefaultAction(hasTheta ? "moveToPose" : "moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+              act.x = isNaN(vec[0]) ? 0 : vec[0];
+              act.y = isNaN(vec[1]) ? 0 : vec[1];
+              if (hasTheta) act.theta = vec[2];
+              act.forwards = !/rev/i.test(parts[1] || "");
+              act.maxSpeed = parseEzSpeed(parts[2], 110);
+              if (wpIdx === 0) {
+                if (inlineComment) act.label = inlineComment;
+                else if (pendingComments.length > 0) {
+                  act.label = pendingComments.join(" · ").trim();
+                  pendingComments = [];
+                }
+              }
+              lastEzMotionIndex = pushMotionAction(act);
+            });
+            log.push(`Parsed EZ-Template multi-waypoint pid_odom_set (${outer.length} targets)`);
+            continue;
+          }
+          rawArgs = rawArgs.slice(1, -1).trim();
+        }
+        const parts = splitCppArgsSafe(rawArgs);
+        if (parts[0] && parts[0].trim().startsWith("{")) {
+          const vec = parseEzBracedVec(parts[0]);
+          const hasTheta = vec.length >= 3 && !isNaN(vec[2]);
+          const act = createDefaultAction(hasTheta ? "moveToPose" : "moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+          act.x = isNaN(vec[0]) ? 0 : vec[0];
+          act.y = isNaN(vec[1]) ? 0 : vec[1];
+          if (hasTheta) act.theta = vec[2];
+          act.forwards = !/rev/i.test(parts[1] || "");
+          act.maxSpeed = parseEzSpeed(parts[2], 110);
+          if (inlineComment) act.label = inlineComment;
+          else if (pendingComments.length > 0) {
+            act.label = pendingComments.join(" · ").trim();
+            pendingComments = [];
+          }
+          lastEzMotionIndex = pushMotionAction(act);
+          log.push(`Parsed EZ pid_odom_set(${act.x}, ${act.y}${hasTheta ? `, ${act.theta}°` : ""})`);
+          continue;
+        }
+      }
+
+      const ezDriveMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?pid_drive_set\s*\(([^;]+)\)\s*;?$/i);
+      if (ezDriveMatch && isValidChassisReceiver(ezDriveMatch[1], "pid_drive_set", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(ezDriveMatch[2]);
+        const dist = evaluateNumericArg(args[0], paramEnv) || 0;
+        const target = computeRelativeDriveTarget(simPose, dist);
+        const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+        act.x = target.x;
+        act.y = target.y;
+        act.forwards = dist >= 0;
+        act.inferredDriveDist = dist;
+        act.maxSpeed = parseEzSpeed(args[1], 110);
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        } else {
+          act.label = `Drive ${dist >= 0 ? "+" : ""}${dist}"`;
+        }
+        lastEzMotionIndex = pushMotionAction(act);
+        log.push(`Parsed EZ pid_drive_set(${dist}") -> (${act.x}, ${act.y})`);
+        continue;
+      }
+
+      const ezTurnMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?pid_turn_set\s*\(([^;]+)\)\s*;?$/i);
+      if (ezTurnMatch && isValidChassisReceiver(ezTurnMatch[1], "pid_turn_set", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(ezTurnMatch[2]);
+        let act;
+        if (args[0] && args[0].trim().startsWith("{")) {
+          const vec = parseEzBracedVec(args[0]);
+          act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
+          act.x = isNaN(vec[0]) ? 0 : vec[0];
+          act.y = isNaN(vec[1]) ? 0 : vec[1];
+          act.forwards = !/rev/i.test(args[1] || "");
+          act.maxSpeed = parseEzSpeed(args[2], 90);
+        } else {
+          act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
+          act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
+          act.maxSpeed = parseEzSpeed(args[1], 90);
+        }
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        lastEzMotionIndex = pushMotionAction(act);
+        log.push(`Parsed EZ pid_turn_set -> ${act.type}`);
+        continue;
+      }
+
+      const ezSwingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?pid_swing_set\s*\(([^;]+)\)\s*;?$/i);
+      if (ezSwingMatch && isValidChassisReceiver(ezSwingMatch[1], "pid_swing_set", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(ezSwingMatch[2]);
+        const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
+        act.lockedSide = parseDriveSideEnum(args[0]);
+        act.theta = evaluateNumericArg(args[1], paramEnv) || 0;
+        act.maxSpeed = parseEzSpeed(args[2], 110);
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        lastEzMotionIndex = pushMotionAction(act);
+        log.push(`Parsed EZ pid_swing_set(${act.lockedSide}, ${act.theta}°)`);
+        continue;
+      }
+
+      const ezWaitUntilMatch = line.match(/^(?:[a-zA-Z0-9_]+\s*(?:\.|->)\s*)?pid_wait_until\s*\(\s*([^)]+)\s*\)\s*;?$/i);
+      if (ezWaitUntilMatch) {
+        flushCustomBlock();
+        const dist = evaluateNumericArg(ezWaitUntilMatch[1], paramEnv) || 12;
+        if (lastEzMotionIndex >= 0 && actions[lastEzMotionIndex]) {
+          actions[lastEzMotionIndex].async = true;
+          actions[lastEzMotionIndex].showFlowchart = true;
+        }
+        const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+        act.waitType = "distance";
+        act.distance = dist;
+        act.async = true;
+        act.showFlowchart = true;
+        act.label = inlineComment || (pendingComments.length ? pendingComments.join(" · ").trim() : `Trigger @ ${dist}"`);
+        pendingComments = [];
+        actions.push(act);
+        lastEzMotionIndex = -1;
+        log.push(`Parsed EZ pid_wait_until(${dist}")`);
+        continue;
+      }
+
+      const ezWaitMatch = line.match(/^(?:[a-zA-Z0-9_]+\s*(?:\.|->)\s*)?(pid_wait_quick_chain|pid_wait_quick|pid_wait)\s*\(\s*\)\s*;?$/i);
+      if (ezWaitMatch) {
+        flushCustomBlock();
+        const waitKind = ezWaitMatch[1].toLowerCase();
+        // If wait immediately follows the EZ motion (no intervening custom/subsystem statements), apply chaining/settle cleanly
+        if (lastEzMotionIndex === actions.length - 1 && actions[lastEzMotionIndex]) {
+          if (waitKind === "pid_wait_quick_chain") {
+            actions[lastEzMotionIndex].earlyExitRange = Math.max(actions[lastEzMotionIndex].earlyExitRange || 0, 2);
+          } else if (waitKind === "pid_wait_quick") {
+            actions[lastEzMotionIndex].earlyExitRange = Math.max(actions[lastEzMotionIndex].earlyExitRange || 0, 1);
+          }
+          actions[lastEzMotionIndex].async = false;
+          if (inlineComment && !actions[lastEzMotionIndex].label) {
+            actions[lastEzMotionIndex].label = inlineComment;
+          }
+          pendingComments = [];
+          lastEzMotionIndex = -1;
+          continue;
+        }
+        // Intervening async subsystem happened between motion and wait -> mark previous motion async & emit explicit wait block
+        if (lastEzMotionIndex >= 0 && actions[lastEzMotionIndex]) {
+          actions[lastEzMotionIndex].async = true;
+          actions[lastEzMotionIndex].showFlowchart = true;
+        }
+        const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
+        act.waitType = "done";
+        act.async = false;
+        act.showFlowchart = true;
+        act.label = inlineComment || (pendingComments.length ? pendingComments.join(" · ").trim() : `EZ ${waitKind}()`);
+        pendingComments = [];
+        actions.push(act);
+        lastEzMotionIndex = -1;
+        continue;
+      }
+
+      // ---------------------------------------------------------------------
+      // JAR-Template Motions
+      // ---------------------------------------------------------------------
+      const jarPointMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?drive_to_point\s*\(([^;]+)\)\s*;?$/i);
+      if (jarPointMatch && isValidChassisReceiver(jarPointMatch[1], "drive_to_point", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(jarPointMatch[2]);
+        const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+        act.x = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.y = evaluateNumericArg(args[1], paramEnv) || 0;
+        if (args[3] != null) act.maxSpeed = voltsTo127(args[3], defaultMaxSpeed);
+        // Infer reverse if inline comment says reverse
+        if (/rev|back/i.test(inlineComment)) act.forwards = false;
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        pushMotionAction(act);
+        log.push(`Parsed JAR drive_to_point(${act.x}, ${act.y})`);
+        continue;
+      }
+
+      const jarPoseMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?drive_to_pose\s*\(([^;]+)\)\s*;?$/i);
+      if (jarPoseMatch && isValidChassisReceiver(jarPoseMatch[1], "drive_to_pose", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(jarPoseMatch[2]);
+        const act = createDefaultAction("moveToPose", defaultMaxSpeed, defaultMinSpeed);
+        act.x = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.y = evaluateNumericArg(args[1], paramEnv) || 0;
+        act.theta = evaluateNumericArg(args[2], paramEnv) || 0;
+        if (args[4] != null) act.maxSpeed = voltsTo127(args[4], defaultMaxSpeed);
+        if (/rev|back/i.test(inlineComment)) act.forwards = false;
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        pushMotionAction(act);
+        log.push(`Parsed JAR drive_to_pose(${act.x}, ${act.y}, ${act.theta}°)`);
+        continue;
+      }
+
+      const jarTurnMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turn_to_angle\s*\(([^;]+)\)\s*;?$/i);
+      if (jarTurnMatch && isValidChassisReceiver(jarTurnMatch[1], "turn_to_angle", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(jarTurnMatch[2]);
+        const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
+        act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
+        if (args[1] != null) act.maxSpeed = voltsTo127(args[1], defaultMaxSpeed);
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        pushMotionAction(act);
+        log.push(`Parsed JAR turn_to_angle(${act.theta}°)`);
+        continue;
+      }
+
+      const jarTurnPtMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turn_to_point\s*\(([^;]+)\)\s*;?$/i);
+      if (jarTurnPtMatch && isValidChassisReceiver(jarTurnPtMatch[1], "turn_to_point", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(jarTurnPtMatch[2]);
+        const act = createDefaultAction("turnToPoint", defaultMaxSpeed, defaultMinSpeed);
+        act.x = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.y = evaluateNumericArg(args[1], paramEnv) || 0;
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        pushMotionAction(act);
+        log.push(`Parsed JAR turn_to_point(${act.x}, ${act.y})`);
+        continue;
+      }
+
+      const jarSwingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?(left|right)_swing_to_angle\s*\(([^;]+)\)\s*;?$/i);
+      if (jarSwingMatch && isValidChassisReceiver(jarSwingMatch[1], jarSwingMatch[2] + "_swing_to_angle", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(jarSwingMatch[3]);
+        const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
+        act.lockedSide = jarSwingMatch[2].toUpperCase() === "RIGHT" ? "RIGHT" : "LEFT";
+        act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
+        if (args[1] != null) act.maxSpeed = voltsTo127(args[1], defaultMaxSpeed);
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        pushMotionAction(act);
+        log.push(`Parsed JAR ${jarSwingMatch[2]}_swing_to_angle(${act.theta}°)`);
+        continue;
+      }
+
+      // ---------------------------------------------------------------------
+      // RW-Template Motions & Relative Linear Drives (RW driveTo / JAR drive_distance)
+      // ---------------------------------------------------------------------
+      const rwTurnAngleMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?turnToAngle\s*\(([^;]+)\)\s*;?$/i);
+      if (rwTurnAngleMatch && isValidChassisReceiver(rwTurnAngleMatch[1], "turnToAngle", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(rwTurnAngleMatch[2]);
+        const act = createDefaultAction("turnToHeading", defaultMaxSpeed, defaultMinSpeed);
+        act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.timeout = parseInt(evaluateNumericArg(args[1], paramEnv), 10) || 1500;
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        pushMotionAction(act);
+        log.push(`Parsed RW turnToAngle(${act.theta}°)`);
+        continue;
+      }
+
+      const rwSwingMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?(?:(left|right)Swing|swing)\s*\(([^;]+)\)\s*;?$/i);
+      if (rwSwingMatch && isValidChassisReceiver(rwSwingMatch[1], "swing", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(rwSwingMatch[3]);
+        const act = createDefaultAction("swingToHeading", defaultMaxSpeed, defaultMinSpeed);
+        act.theta = evaluateNumericArg(args[0], paramEnv) || 0;
+        if (rwSwingMatch[2]) {
+          act.lockedSide = rwSwingMatch[2].toUpperCase() === "RIGHT" ? "RIGHT" : "LEFT";
+        } else {
+          const dirVal = evaluateNumericArg(args[1], paramEnv);
+          act.lockedSide = (!isNaN(dirVal) && dirVal < 0) || /right/i.test(args[1] || "") ? "RIGHT" : "LEFT";
+        }
+        act.timeout = parseInt(evaluateNumericArg(args[2], paramEnv), 10) || 1800;
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        pushMotionAction(act);
+        log.push(`Parsed RW swing(${act.theta}°, ${act.lockedSide})`);
+        continue;
+      }
+
+      const relDriveMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?(?:drive_distance|driveTo|driveDistance)\s*\(([^;]+)\)\s*;?$/i);
+      if (relDriveMatch && isValidChassisReceiver(relDriveMatch[1], "drive_distance", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(relDriveMatch[2]);
+        const dist = evaluateNumericArg(args[0], paramEnv) || 0;
+        const target = computeRelativeDriveTarget(simPose, dist);
+        const act = createDefaultAction("moveToPoint", defaultMaxSpeed, defaultMinSpeed);
+        act.x = target.x;
+        act.y = target.y;
+        act.forwards = dist >= 0;
+        act.inferredDriveDist = dist;
+        if (/driveTo/i.test(line) && args[1]) {
+          act.timeout = parseInt(evaluateNumericArg(args[1], paramEnv), 10) || 2000;
+        } else if (args[2] != null) {
+          act.maxSpeed = voltsTo127(args[2], defaultMaxSpeed);
+        }
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        } else {
+          act.label = `Drive ${dist >= 0 ? "+" : ""}${dist}"`;
+        }
+        pushMotionAction(act);
+        log.push(`Parsed relative drive(${dist}") -> (${act.x}, ${act.y})`);
+        continue;
+      }
+
+      // Check if line is a call to a custom function whose definition ONLY contains chassis motions
       const expandedActs = expandCustomFunctionCall(
         line,
         customFnsMap,
@@ -2153,17 +2981,17 @@
               pendingComments = [];
             }
           }
-          actions.push(ea);
+          pushMotionAction(ea);
         });
         log.push(`Inferred ${expandedActs.length} action(s) from custom function call: ${line}`);
         continue;
       }
 
       // chassis.waitUntil(distance) - Distance-based event trigger
-      const waitDistMatch = line.match(/^(?:chassis|bot|drive|drivetrain|robot)\.waitUntil\s*\(\s*([-\d.]+)\s*\)\s*;?$/i);
+      const waitDistMatch = line.match(/^(?:chassis|bot|drive|drivetrain|robot)\.waitUntil\s*\(\s*([^)]+)\s*\)\s*;?$/i);
       if (waitDistMatch) {
         flushCustomBlock();
-        const dist = parseFloat(waitDistMatch[1]) || 12;
+        const dist = evaluateNumericArg(waitDistMatch[1], paramEnv) || 12;
         const act = createDefaultAction("wait", defaultMaxSpeed, defaultMinSpeed);
         act.waitType = "distance";
         act.distance = dist;
@@ -2201,7 +3029,7 @@
         continue;
       }
 
-      // Non-LemLib line: Subsystem / pros::delay / pros::Task / Custom C++
+      // Non-motion line: Subsystem / pros::delay / wait(ms, msec) / pros::Task / Custom C++
       let fullLine = item.text;
       if (inlineComment) {
         fullLine = `${item.text} // ${inlineComment}`;
@@ -2237,6 +3065,7 @@
 
     return {
       success: actions.length > 0 || detectedStartPose !== null,
+      library: detectedLibrary,
       routineName,
       startPose: detectedStartPose,
       actions,
@@ -2414,7 +3243,135 @@ void autonomous() {
 }`,
   };
 
-  // Infer LemLib motion/control actions from a custom C++ snippet or custom function call
+  const SAMPLE_ROUTINES_BY_LIBRARY = {
+    lemlib: {
+      preload_rush: SAMPLE_ROUTINES.preload_rush,
+      multitask_subsystems: SAMPLE_ROUTINES.multitask_subsystems,
+      boomerang_swings: SAMPLE_ROUTINES.boomerang_swings,
+      conditional_scratch: SAMPLE_ROUTINES.conditional_scratch,
+    },
+    ez_template: {
+      preload_rush: `// Autonomous: EZ-Template Odom & Chaining Mogo Rush
+void autonomous() {
+  // Set robot starting pose touching alliance wall
+  chassis.odom_xyt_set(-60_in, -60_in, 0_deg);
+
+  // Spin intake and drive to center coordinate with quick chain
+  intake.move(127);
+  chassis.pid_odom_set({{-24_in, -24_in}, ez::fwd, 110}); // rush mogo
+  chassis.pid_wait_quick_chain();
+
+  // Reverse with target pose heading to clamp goal
+  chassis.pid_odom_set({{0_in, 48_in, 90_deg}, ez::rev, 95});
+  chassis.pid_wait_until(12_in);
+  clamp.set_value(true); // grab goal
+  chassis.pid_wait();
+
+  // Turn to corner stack and drive forward
+  chassis.pid_turn_set(180_deg, 90);
+  chassis.pid_wait();
+  chassis.pid_drive_set(24_in, 110);
+  chassis.pid_wait();
+}`,
+      multitask_subsystems: `// Autonomous: EZ-Template Concurrent Wait & Swing
+void ezRedLeftAuton() {
+  chassis.odom_xyt_set(-54_in, -54_in, 45_deg);
+
+  intake.move(127); // start intake async
+  chassis.pid_odom_set({{-24_in, -24_in}, ez::fwd, 115});
+  chassis.pid_wait_until(8_in);
+  clamp.set_value(true); // clamp early
+  chassis.pid_wait();
+
+  chassis.pid_swing_set(ez::LEFT_SWING, 270_deg, 110);
+  chassis.pid_wait();
+}`,
+      boomerang_swings: `// Autonomous: EZ-Template Multi-Point Odom Path
+void ezSkillsAuton() {
+  chassis.odom_xyt_set(0_in, -60_in, 0_deg);
+
+  chassis.pid_odom_set({
+    {{18_in, -36_in}, ez::fwd, 110},
+    {{36_in, -12_in, 45_deg}, ez::fwd, 100}
+  });
+  chassis.pid_wait();
+
+  chassis.pid_turn_set({48_in, 24_in}, ez::fwd, 90); // aim at corner
+  chassis.pid_wait();
+}`,
+    },
+    rw_template: {
+      preload_rush: `// Autonomous: RW-Template VEXcode Mogo Rush
+void autonomous() {
+  // Initialize odometry pose (X, Y, Heading)
+  setOdom(-60, -60, 0);
+
+  // Spin intake while driving to center point
+  intake.spin(fwd, 12, volt);
+  moveToPoint(-24, -24, 1, 2000); // approach mogo
+
+  // Reverse into mobile goal
+  moveToPoint(0, 48, -1, 2400); // reverse clamp
+  clamp.set(true);
+  wait(200, msec);
+
+  // Turn and drive forward to stake
+  turnToAngle(180, 1400);
+  driveTo(24, 1500);
+}`,
+      multitask_subsystems: `// Autonomous: RW-Template Aim & Swing
+void rwRedLeft() {
+  setOdom(-54, -54, 45);
+  intake.spin(fwd, 12, volt);
+  moveToPoint(-24, -24, 1, 1800);
+  turnToPoint(24, 0, 1, 1200); // aim at target
+  swing(270, 1, 1500); // left swing
+}`,
+      boomerang_swings: `// Autonomous: RW-Template Skills Routine
+void rwSkills() {
+  setOdom(0, -60, 0);
+  driveTo(24, 1600);
+  turnToAngle(90, 1200);
+  moveToPoint(36, -36, 1, 1800);
+  moveToPoint(12, -36, -1, 1500); // back up
+}`,
+    },
+    jar_template: {
+      preload_rush: `// Autonomous: JAR-Template VEXcode Mogo Rush
+void autonomous() {
+  // Set field coordinates & heading
+  chassis.set_coordinates(-60, -60, 0);
+
+  intake.spin(fwd, 12, volt);
+  chassis.drive_to_point(-24, -24); // drive to goal
+
+  chassis.drive_to_pose(0, 48, 90); // approach pose
+  clamp.set(true);
+  wait(200, msec);
+
+  chassis.turn_to_angle(180);
+  chassis.drive_distance(24);
+}`,
+      multitask_subsystems: `// Autonomous: JAR-Template Swing & Aim
+void jarRedLeft() {
+  chassis.set_coordinates(-54, -54, 45);
+  intake.spin(fwd, 12, volt);
+  chassis.drive_to_point(-24, -24);
+  chassis.left_swing_to_angle(270);
+  chassis.turn_to_point(24, 24);
+}`,
+      boomerang_swings: `// Autonomous: JAR-Template Skills Routine
+void jarSkills() {
+  chassis.set_coordinates(0, -60, 0);
+  chassis.drive_distance(24);
+  chassis.turn_to_angle(90);
+  chassis.drive_to_pose(36, -24, 45);
+  chassis.right_swing_to_angle(180);
+}`,
+    },
+  };
+
+  // Infer LemLib/EZ/RW/JAR motion/control actions from a custom C++ snippet or custom function call
   function inferActionsFromCustomCode(customCode, options = {}) {
     if (!customCode || typeof customCode !== "string" || !customCode.trim() || customCode.length > 20000) {
       return { hasMotion: false, motionActions: [], allActions: [], summaryLabel: "" };
@@ -2437,6 +3394,7 @@ void autonomous() {
     const parsed = parseCppAuton(customCode, {
       defaultMaxSpeed,
       defaultMinSpeed,
+      library: options.library || "auto",
       projectFiles: options.projectFiles || null,
     });
     const allActions = (parsed && Array.isArray(parsed.actions)) ? parsed.actions : [];
@@ -2462,6 +3420,9 @@ void autonomous() {
   }
 
   return {
+    LIBRARIES,
+    normalizeLibraryId,
+    detectLibraryFromCode,
     splitCppArgsSafe,
     parseLemlibStructParams,
     parseDriveSideEnum,
@@ -2478,5 +3439,6 @@ void autonomous() {
     expandCustomFunctionCall,
     inferActionsFromCustomCode,
     SAMPLE_ROUTINES,
+    SAMPLE_ROUTINES_BY_LIBRARY,
   };
 });

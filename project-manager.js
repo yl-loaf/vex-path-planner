@@ -325,9 +325,9 @@ void initialize() {
     // Standard PROS background task to stream robot battery & LemLib odometry over serial CDC
     pros::Task telemetry_task([]{
         while (true) {
-            printf("[BATT] %.2fV %d%%\n", pros::battery::get_voltage() / 1000.0, (int)pros::battery::get_capacity());
+            printf("[BATT] %.2fV %d%%\\n", pros::battery::get_voltage() / 1000.0, (int)pros::battery::get_capacity());
             lemlib::Pose pose = chassis.getPose();
-            printf("ODOM: X=%.2f Y=%.2f H=%.2f\n", pose.x, pose.y, pose.theta);
+            printf("ODOM: X=%.2f Y=%.2f H=%.2f\\n", pose.x, pose.y, pose.theta);
             pros::delay(2000);
         }
     });
@@ -401,6 +401,495 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
 }`
   };
 
+  const LIBRARY_TEMPLATES = {
+    lemlib: DEFAULT_TEMPLATES,
+    ez_template: {
+      "src/autons.cpp": `// =================================================================
+// autons.cpp - Autonomous Routines for VEX V5 EZ-Template (v3+)
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+#include "subsystems.hpp"
+
+const int DRIVE_SPEED = 110;
+const int TURN_SPEED = 90;
+const int SWING_SPEED = 110;
+
+// -----------------------------------------------------------------
+// Routine 1: Red Mogo Rush & Preload
+// -----------------------------------------------------------------
+void red_rush_auton() {
+    chassis.odom_xyt_set(-60_in, -60_in, 0_deg);
+    intake.move(127);
+
+    chassis.pid_odom_set({{-24_in, -24_in}, ez::fwd, DRIVE_SPEED});
+    chassis.pid_wait_quick_chain();
+
+    chassis.pid_odom_set({{0_in, 48_in, 90_deg}, ez::rev, 95});
+    chassis.pid_wait_until(12_in);
+    clamp.set_value(true);
+    chassis.pid_wait();
+
+    chassis.pid_turn_set(180_deg, TURN_SPEED);
+    chassis.pid_wait();
+}
+
+// -----------------------------------------------------------------
+// Routine 2: Blue Solo AWP
+// -----------------------------------------------------------------
+void blue_solo_awp() {
+    chassis.odom_xyt_set(60_in, -60_in, 0_deg);
+    intake.move(127);
+    chassis.pid_odom_set({{24_in, -24_in}, ez::fwd, DRIVE_SPEED});
+    chassis.pid_wait();
+    clamp.set_value(true);
+    chassis.pid_turn_set(270_deg, TURN_SPEED);
+    chassis.pid_wait();
+}
+
+// -----------------------------------------------------------------
+// Routine 3: Autonomous Skills Routine (60s)
+// -----------------------------------------------------------------
+void skills_auton() {
+    chassis.odom_xyt_set(-60_in, 0_in, 90_deg);
+    intake.move(127);
+    chassis.pid_drive_set(24_in, DRIVE_SPEED);
+    chassis.pid_wait();
+    clamp.set_value(true);
+    chassis.pid_swing_set(ez::LEFT_SWING, 0_deg, SWING_SPEED);
+    chassis.pid_wait();
+}
+`,
+      "include/robot-config.h": `// =================================================================
+// robot-config.h - EZ-Template Hardware & Chassis Declarations
+// =================================================================
+#pragma once
+#include "main.h"
+#include "EZ-Template/api.hpp"
+
+extern pros::Motor intake;
+extern pros::Motor lift;
+extern pros::adi::DigitalOut clamp;
+extern pros::adi::DigitalOut doinker;
+
+extern ez::Drive chassis;
+`,
+      "src/robot-config.cpp": `// =================================================================
+// robot-config.cpp - EZ-Template Drive & PID Constants Setup
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+
+pros::Motor intake(7, pros::v5::MotorGears::blue);
+pros::Motor lift(8, pros::v5::MotorGears::green);
+pros::adi::DigitalOut clamp('A', false);
+pros::adi::DigitalOut doinker('B', false);
+
+// EZ-Template Chassis Constructor
+ez::Drive chassis(
+    {1, 2, 3},      // Left Motors
+    {-11, -12, -13}, // Right Motors
+    10,              // IMU Port
+    3.25,            // Wheel Diameter (in)
+    600              // Wheel RPM
+);
+
+void default_constants() {
+    chassis.pid_drive_constants_set(20.0, 0.0, 100.0);
+    chassis.pid_heading_constants_set(11.0, 0.0, 20.0);
+    chassis.pid_turn_constants_set(3.0, 0.05, 20.0, 15.0);
+    chassis.pid_swing_constants_set(6.0, 0.0, 65.0);
+
+    chassis.pid_drive_exit_condition_set(90_ms, 1_in, 250_ms, 3_in, 500_ms, 500_ms);
+    chassis.pid_turn_exit_condition_set(90_ms, 3_deg, 250_ms, 7_deg, 500_ms, 500_ms);
+    chassis.pid_swing_exit_condition_set(90_ms, 3_deg, 250_ms, 7_deg, 500_ms, 500_ms);
+}
+`,
+      "include/subsystems.hpp": `#pragma once
+#include "main.h"
+
+void setIntake(int speed);
+void setClamp(bool clamped);
+`,
+      "src/subsystems.cpp": `#include "main.h"
+#include "robot-config.h"
+#include "subsystems.hpp"
+
+void setIntake(int speed) {
+    intake.move(speed);
+}
+
+void setClamp(bool clamped) {
+    clamp.set_value(clamped);
+}
+`,
+      "src/main.cpp": `// =================================================================
+// main.cpp - PROS Competition Entry Point (EZ-Template)
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+#include "subsystems.hpp"
+
+extern void default_constants();
+extern void red_rush_auton();
+
+void initialize() {
+    pros::delay(500);
+    chassis.opcontrol_curve_buttons_toggle(true);
+    default_constants();
+    chassis.initialize();
+}
+
+void disabled() {}
+void competition_initialize() {}
+
+void autonomous() {
+    chassis.pid_targets_reset();
+    chassis.drive_imu_reset();
+    chassis.drive_sensor_reset();
+    chassis.drive_brake_set(MOTOR_BRAKE_HOLD);
+    red_rush_auton();
+}
+
+void opcontrol() {
+    pros::Controller master(pros::E_CONTROLLER_MASTER);
+    while (true) {
+        chassis.opcontrol_arcade_standard(ez::SPLIT);
+        if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) intake.move(127);
+        else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) intake.move(-127);
+        else intake.move(0);
+        pros::delay(ez::util::DELAY_TIME);
+    }
+}
+`,
+      "include/main.h": `#pragma once
+#include "api.h"
+#include "EZ-Template/api.hpp"
+`,
+      "project.pros": `{
+    "py/object": "pros.conductor.project.Project",
+    "py/state": {
+        "project_name": "VEX_EZ_Template_OverRide",
+        "target": "v5",
+        "templates": {
+            "kernel": {"version": "4.1.0"},
+            "EZ-Template": {"version": "3.1.1"}
+        }
+    }
+}`
+    },
+    rw_template: {
+      "src/autons.cpp": `// =================================================================
+// autons.cpp - Autonomous Routines for VEXcode RW-Template
+// =================================================================
+#include "vex.h"
+#include "robot-config.h"
+
+// -----------------------------------------------------------------
+// Routine 1: Red Mogo Rush & Preload
+// -----------------------------------------------------------------
+void red_rush_auton() {
+    setOdom(-60, -60, 0);
+    intake.spin(fwd, 12, volt);
+
+    moveToPoint(-24, -24, 1, 2000);
+    moveToPoint(0, 48, -1, 2500);
+    clamp.set(true);
+    wait(200, msec);
+
+    turnToAngle(180, 1500);
+    driveTo(24, 1500);
+}
+
+// -----------------------------------------------------------------
+// Routine 2: Blue Solo AWP
+// -----------------------------------------------------------------
+void blue_solo_awp() {
+    setOdom(60, -60, 0);
+    intake.spin(fwd, 12, volt);
+    moveToPoint(24, -24, 1, 2200);
+    clamp.set(true);
+    turnToAngle(270, 1400);
+}
+
+// -----------------------------------------------------------------
+// Routine 3: Autonomous Skills Routine (60s)
+// -----------------------------------------------------------------
+void skills_auton() {
+    setOdom(-60, 0, 90);
+    intake.spin(fwd, 12, volt);
+    driveTo(24, 1600);
+    clamp.set(true);
+    swing(0, 1, 1400);
+}
+`,
+      "include/robot-config.h": `// =================================================================
+// robot-config.h - RW-Template VEXcode Hardware & Motion API
+// =================================================================
+#pragma once
+#include "vex.h"
+
+extern vex::brain Brain;
+extern vex::controller Controller1;
+extern vex::motor intake;
+extern vex::motor lift;
+extern vex::digital_out clamp;
+extern vex::inertial Inertial;
+
+void setOdom(double x, double y, double theta);
+void moveToPoint(double x, double y, int dir, int timeout, double exit = 0.5, double max_output = 12);
+void driveTo(double distance_in, int timeout, double exit = 0.5, double max_output = 12);
+void turnToAngle(double angle_deg, int timeout, double exit = 1.0, double max_output = 12);
+void turnToPoint(double x, double y, int dir, int timeout);
+void swing(double angle_deg, int dir, int timeout);
+`,
+      "src/robot-config.cpp": `// =================================================================
+// robot-config.cpp - RW-Template Motors, Sensors & PID Constants
+// =================================================================
+#include "vex.h"
+#include "robot-config.h"
+
+vex::brain Brain;
+vex::controller Controller1(vex::controllerType::primary);
+
+vex::motor left_front(vex::PORT1, vex::ratio6_1, false);
+vex::motor left_middle(vex::PORT2, vex::ratio6_1, false);
+vex::motor left_back(vex::PORT3, vex::ratio6_1, false);
+vex::motor right_front(vex::PORT11, vex::ratio6_1, true);
+vex::motor right_middle(vex::PORT12, vex::ratio6_1, true);
+vex::motor right_back(vex::PORT13, vex::ratio6_1, true);
+
+vex::motor_group left_motors(left_front, left_middle, left_back);
+vex::motor_group right_motors(right_front, right_middle, right_back);
+
+vex::motor intake(vex::PORT7, vex::ratio6_1, false);
+vex::motor lift(vex::PORT8, vex::ratio18_1, false);
+vex::digital_out clamp(Brain.ThreeWirePort.A);
+vex::inertial Inertial(vex::PORT10);
+
+// RW-Template Physical Geometry & PID Gains
+double wheel_diam = 3.25;
+double drive_rpm = 600.0;
+double track_width = 12.0;
+double lateral_kp = 8.0, lateral_ki = 0.0, lateral_kd = 30.0;
+double angular_kp = 2.0, angular_ki = 0.0, angular_kd = 10.0;
+`,
+      "include/vex.h": `#pragma once
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "v5.h"
+#include "v5_vcs.h"
+
+using namespace vex;
+`,
+      "src/main.cpp": `// =================================================================
+// main.cpp - VEXcode V5 Competition Entry Point (RW-Template)
+// =================================================================
+#include "vex.h"
+#include "robot-config.h"
+
+extern void red_rush_auton();
+
+vex::competition Competition;
+
+void pre_auton(void) {
+    Inertial.calibrate();
+    while (Inertial.isCalibrating()) {
+        wait(20, msec);
+    }
+}
+
+void autonomous(void) {
+    red_rush_auton();
+}
+
+void usercontrol(void) {
+    while (true) {
+        int forward = Controller1.Axis3.position();
+        int turn = Controller1.Axis1.position();
+        left_motors.spin(fwd, (forward + turn) * 0.12, volt);
+        right_motors.spin(fwd, (forward - turn) * 0.12, volt);
+        wait(20, msec);
+    }
+}
+
+int main() {
+    Competition.autonomous(autonomous);
+    Competition.drivercontrol(usercontrol);
+    pre_auton();
+    while (true) {
+        wait(100, msec);
+    }
+}
+`
+    },
+    jar_template: {
+      "src/autons.cpp": `// =================================================================
+// autons.cpp - Autonomous Routines for VEXcode JAR-Template
+// =================================================================
+#include "vex.h"
+#include "robot-config.h"
+
+// -----------------------------------------------------------------
+// Routine 1: Red Mogo Rush & Preload
+// -----------------------------------------------------------------
+void red_rush_auton() {
+    chassis.set_coordinates(-60, -60, 0);
+    intake.spin(fwd, 12, volt);
+
+    chassis.drive_to_point(-24, -24);
+    chassis.drive_to_pose(0, 48, 90);
+    clamp.set(true);
+    wait(200, msec);
+
+    chassis.turn_to_angle(180);
+    chassis.drive_distance(24);
+}
+
+// -----------------------------------------------------------------
+// Routine 2: Blue Solo AWP
+// -----------------------------------------------------------------
+void blue_solo_awp() {
+    chassis.set_coordinates(60, -60, 0);
+    intake.spin(fwd, 12, volt);
+    chassis.drive_to_point(24, -24);
+    clamp.set(true);
+    chassis.turn_to_angle(270);
+}
+
+// -----------------------------------------------------------------
+// Routine 3: Autonomous Skills Routine (60s)
+// -----------------------------------------------------------------
+void skills_auton() {
+    chassis.set_coordinates(-60, 0, 90);
+    intake.spin(fwd, 12, volt);
+    chassis.drive_distance(24);
+    clamp.set(true);
+    chassis.left_swing_to_angle(0);
+}
+`,
+      "include/robot-config.h": `// =================================================================
+// robot-config.h - JAR-Template VEXcode Hardware & Drive Declarations
+// =================================================================
+#pragma once
+#include "vex.h"
+
+extern vex::brain Brain;
+extern vex::controller Controller1;
+extern vex::motor intake;
+extern vex::motor lift;
+extern vex::digital_out clamp;
+extern vex::inertial Inertial;
+extern Drive chassis;
+`,
+      "src/robot-config.cpp": `// =================================================================
+// robot-config.cpp - JAR-Template Drivetrain & PID Configuration
+// =================================================================
+#include "vex.h"
+#include "robot-config.h"
+
+vex::brain Brain;
+vex::controller Controller1(vex::controllerType::primary);
+
+vex::motor Left1(vex::PORT1, vex::ratio6_1, true);
+vex::motor Left2(vex::PORT2, vex::ratio6_1, true);
+vex::motor Left3(vex::PORT3, vex::ratio6_1, true);
+vex::motor Right1(vex::PORT11, vex::ratio6_1, false);
+vex::motor Right2(vex::PORT12, vex::ratio6_1, false);
+vex::motor Right3(vex::PORT13, vex::ratio6_1, false);
+
+vex::motor_group LeftDrive(Left1, Left2, Left3);
+vex::motor_group RightDrive(Right1, Right2, Right3);
+vex::motor intake(vex::PORT7, vex::ratio6_1, false);
+vex::motor lift(vex::PORT8, vex::ratio18_1, false);
+vex::digital_out clamp(Brain.ThreeWirePort.A);
+vex::inertial Inertial(vex::PORT10);
+
+Drive chassis(
+    ZERO_TRACKER_NO_ODOM,
+    LeftDrive,
+    RightDrive,
+    vex::PORT10,
+    3.25,     // wheel diameter (in)
+    1.0,      // external gear ratio
+    360,      // gyro scale
+    vex::PORT1,
+    vex::PORT2,
+    vex::PORT3,
+    vex::PORT11,
+    12.0,     // drive width (in)
+    -2.5      // tracker offset
+);
+
+void default_constants() {
+    chassis.set_drive_constants(10, 1.5, 0, 10, 0);
+    chassis.set_heading_constants(6, .4, 0, 1, 0);
+    chassis.set_turn_constants(12, .4, .03, 3, 15);
+    chassis.set_swing_constants(12, .3, .001, 2, 15);
+}
+`,
+      "include/vex.h": `#pragma once
+#include <math.h>
+#include <stdio.h>
+#include "v5.h"
+#include "v5_vcs.h"
+
+using namespace vex;
+`,
+      "src/main.cpp": `// =================================================================
+// main.cpp - VEXcode V5 Competition Entry Point (JAR-Template)
+// =================================================================
+#include "vex.h"
+#include "robot-config.h"
+
+extern void default_constants();
+extern void red_rush_auton();
+
+vex::competition Competition;
+
+void pre_auton(void) {
+    default_constants();
+    Inertial.calibrate();
+    while (Inertial.isCalibrating()) {
+        wait(20, msec);
+    }
+}
+
+void autonomous(void) {
+    red_rush_auton();
+}
+
+void usercontrol(void) {
+    while (true) {
+        chassis.control_arcade();
+        wait(20, msec);
+    }
+}
+
+int main() {
+    Competition.autonomous(autonomous);
+    Competition.drivercontrol(usercontrol);
+    pre_auton();
+    while (true) {
+        wait(100, msec);
+    }
+}
+`
+    }
+  };
+
+  function normalizeLibId(raw) {
+    if (typeof window !== "undefined" && window.CppTranslator && typeof window.CppTranslator.normalizeLibraryId === "function") {
+      return window.CppTranslator.normalizeLibraryId(raw);
+    }
+    const v = String(raw || "lemlib").trim().toLowerCase();
+    if (v === "ez" || v === "ez-template" || v === "ez_template") return "ez_template";
+    if (v === "rw" || v === "rw-template" || v === "rw_template") return "rw_template";
+    if (v === "jar" || v === "jar-template" || v === "jar_template") return "jar_template";
+    return "lemlib";
+  }
+
   class ProjectManager {
     constructor() {
       this.project = null;
@@ -464,6 +953,77 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       return this.project;
     }
 
+    getTemplatesForLibrary(libId) {
+      const id = normalizeLibId(libId);
+      return LIBRARY_TEMPLATES[id] || DEFAULT_TEMPLATES;
+    }
+
+    getProjectLibrary() {
+      if (this.project && this.project.library) {
+        return normalizeLibId(this.project.library);
+      }
+      if (this.project && this.project.files && typeof window !== "undefined" && window.CppTranslator && typeof window.CppTranslator.detectLibraryFromCode === "function") {
+        const combined = (this.project.files["src/autons.cpp"] || "") + "\n" + (this.project.files["src/robot-config.cpp"] || "") + "\n" + (this.project.files["src/main.cpp"] || "");
+        if (combined.trim()) {
+          return normalizeLibId(window.CppTranslator.detectLibraryFromCode(combined));
+        }
+      }
+      try {
+        const saved = localStorage.getItem("vex_active_library");
+        if (saved) return normalizeLibId(saved);
+      } catch (_) {}
+      return "lemlib";
+    }
+
+    setProjectLibrary(libId, options = {}) {
+      if (!this.project) this.initDefaultProject();
+      const norm = normalizeLibId(libId);
+      this.project.library = norm;
+      try {
+        localStorage.setItem("vex_active_library", norm);
+      } catch (_) {}
+
+      const defaultNames = ["Override_LemLib_Bot", "Override_EZ_Bot", "Override_RW_Bot", "Override_JAR_Bot"];
+      if (defaultNames.includes(this.project.name)) {
+        const nameMap = {
+          lemlib: "Override_LemLib_Bot",
+          ez_template: "Override_EZ_Bot",
+          rw_template: "Override_RW_Bot",
+          jar_template: "Override_JAR_Bot",
+        };
+        this.project.name = nameMap[norm] || "Override_VEX_Bot";
+      }
+
+      if (options.applyTemplate) {
+        const tpl = this.getTemplatesForLibrary(norm);
+        const includeAutons = options.replaceAutons !== false;
+        Object.keys(this.project.files || {}).forEach((existingFile) => {
+          if (existingFile !== "src/autons.cpp" && tpl[existingFile] === undefined) {
+            // Preserve user custom files unless they are old template config files being swapped
+            if (["include/main.h", "include/vex.h", "project.pros", "Makefile", "include/subsystems.hpp", "src/subsystems.cpp"].includes(existingFile)) {
+              delete this.project.files[existingFile];
+            }
+          }
+        });
+        for (const [fPath, fContent] of Object.entries(tpl)) {
+          if (fPath === "src/autons.cpp" && !includeAutons) continue;
+          if (this.project.files[fPath]) {
+            this.createVersionSnapshot(fPath, "before_blocks_sync", `Backup before switching template to ${norm}`);
+          }
+          this.project.files[fPath] = fContent;
+        }
+        if (!includeAutons) {
+          this.project.files["src/autons.cpp"] = this.project.files["src/autons.cpp"] || tpl["src/autons.cpp"];
+        }
+      }
+
+      this.project.updatedAt = Date.now();
+      this.indexVariables();
+      this.saveLocal(true);
+      this.notifyListeners("library_changed");
+      return norm;
+    }
+
     // Load active project from LocalStorage or initialize default
     loadProject() {
       try {
@@ -473,15 +1033,17 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           if (parsed && parsed._idb) {
             // Full project is in IndexedDB; initAsyncStorage will populate it
             if (!this.project) {
+              const lib = normalizeLibId(parsed.library || "lemlib");
               this.project = {
                 name: parsed.name || "Override_LemLib_Bot",
+                library: lib,
                 version: parsed.version || "1.0.0",
                 target: "v5",
                 kernel: "4.1.0",
                 lemlibVersion: "0.5.4",
                 createdAt: parsed.updatedAt || Date.now(),
                 updatedAt: parsed.updatedAt || Date.now(),
-                files: { ...DEFAULT_TEMPLATES },
+                files: { ...this.getTemplatesForLibrary(lib) },
                 activeAuton: "red_rush_auton",
                 cloudSynced: true,
                 _idb: true
@@ -489,8 +1051,11 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
             }
           } else {
             this.project = parsed;
+            if (!this.project.library) {
+              this.project.library = this.getProjectLibrary();
+            }
             if (!this.project.files || Object.keys(this.project.files).length === 0) {
-              this.project.files = { ...DEFAULT_TEMPLATES };
+              this.project.files = { ...this.getTemplatesForLibrary(this.project.library) };
             }
           }
         } else {
@@ -507,16 +1072,22 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       return this.project;
     }
 
-    initDefaultProject(name = "Override_LemLib_Bot") {
+    initDefaultProject(name = "Override_LemLib_Bot", library = null) {
+      let activeLib = library;
+      if (!activeLib) {
+        try { activeLib = localStorage.getItem("vex_active_library") || "lemlib"; } catch (_) { activeLib = "lemlib"; }
+      }
+      activeLib = normalizeLibId(activeLib);
       this.project = {
         name: name,
+        library: activeLib,
         version: "1.0.0",
         target: "v5",
         kernel: "4.1.0",
         lemlibVersion: "0.5.4",
         createdAt: 0,
         updatedAt: 0,
-        files: { ...DEFAULT_TEMPLATES },
+        files: { ...this.getTemplatesForLibrary(activeLib) },
         activeAuton: "red_rush_auton",
         cloudSynced: false,
         isDefault: true,
@@ -531,10 +1102,11 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       if ((Number(this.project.updatedAt) || 0) === 0) return true;
       const files = this.project.files || {};
       const keys = Object.keys(files);
-      const defaultKeys = Object.keys(DEFAULT_TEMPLATES);
+      const activeTpl = this.getTemplatesForLibrary(this.getProjectLibrary());
+      const defaultKeys = Object.keys(activeTpl);
       if (keys.length === 0) return true;
       if (keys.length === defaultKeys.length) {
-        const isExactTemplates = defaultKeys.every(k => files[k] !== undefined && files[k] === DEFAULT_TEMPLATES[k]);
+        const isExactTemplates = defaultKeys.every(k => files[k] !== undefined && files[k] === activeTpl[k]);
         if (isExactTemplates) return true;
       }
       return false;
@@ -1685,87 +2257,89 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
           const trimmed = line.trim();
           if (trimmed.startsWith("//") || trimmed.startsWith("/*")) return;
 
-          // 1. Motors & MotorGroups
-          // e.g. pros::Motor intake(7, pros::v5::MotorGears::blue);
-          // or extern pros::Motor intake;
-          const motorMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?Motor\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
-          if (motorMatch && motorMatch[1] && !motorMatch[1].includes("Group") && motorMatch[1] !== "left_front" && motorMatch[1] !== "right_front") {
+          // 1. Motors & MotorGroups (PROS + VEXcode)
+          const motorMatch = trimmed.match(/(?:extern\s+)?(?:pros::(?:v5::)?Motor|vex::motor|motor)\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          if (motorMatch && motorMatch[1] && !motorMatch[1].includes("Group") && !motorMatch[1].includes("group") && !["left_front", "right_front", "Left1", "Right1"].includes(motorMatch[1])) {
             const name = motorMatch[1];
             const args = motorMatch[2] || "";
+            const isVex = trimmed.includes("vex::") || /\bPORT\d+/i.test(args) || /\bratio\d+/i.test(args) || /\bmotor\b/.test(trimmed);
             if (!isIgnoredSymbol(name) && !symbols.motors.some(m => m.name === name)) {
               symbols.motors.push({
                 name,
-                type: "pros::Motor",
+                type: isVex ? "vex::motor" : "pros::Motor",
                 args,
                 file: fileName,
                 line: lineIdx + 1,
-                snippet: `${name}.move(127);`,
-                stopSnippet: `${name}.move(0);`,
+                snippet: isVex ? `${name}.spin(fwd, 12, volt);` : `${name}.move(127);`,
+                stopSnippet: isVex ? `${name}.stop();` : `${name}.move(0);`,
               });
             }
           }
 
-          // MotorGroups
-          const groupMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?MotorGroup\s+([a-zA-Z0-9_]+)/);
+          // MotorGroups (PROS + VEXcode)
+          const groupMatch = trimmed.match(/(?:extern\s+)?(?:pros::(?:v5::)?MotorGroup|vex::motor_group|motor_group)\s+([a-zA-Z0-9_]+)/);
           if (groupMatch && groupMatch[1]) {
             const name = groupMatch[1];
+            const isVex = trimmed.includes("vex::") || trimmed.includes("motor_group");
             if (!isIgnoredSymbol(name) && !symbols.motors.some(m => m.name === name)) {
               symbols.motors.push({
                 name,
-                type: "pros::MotorGroup",
+                type: isVex ? "vex::motor_group" : "pros::MotorGroup",
                 file: fileName,
                 line: lineIdx + 1,
-                snippet: `${name}.move(127);`,
-                stopSnippet: `${name}.move(0);`,
+                snippet: isVex ? `${name}.spin(fwd, 12, volt);` : `${name}.move(127);`,
+                stopSnippet: isVex ? `${name}.stop();` : `${name}.move(0);`,
               });
             }
           }
 
-          // 2. Pneumatics / ADI DigitalOut
-          // e.g. pros::adi::DigitalOut clamp('A', false);
-          const pistonMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?(?:adi::)?(?:DigitalOut|ADIDigitalOut)\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          // 2. Pneumatics / ADI DigitalOut (PROS + VEXcode)
+          const pistonMatch = trimmed.match(/(?:extern\s+)?(?:(?:pros::)?(?:adi::)?(?:DigitalOut|ADIDigitalOut)|(?:vex::)?(?:digital_out|pneumatics))\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
           if (pistonMatch && pistonMatch[1]) {
             const name = pistonMatch[1];
             const port = pistonMatch[2] || "Port";
+            const isVex = trimmed.includes("vex::") || trimmed.includes("digital_out") || trimmed.includes("pneumatics");
             if (!isIgnoredSymbol(name) && !symbols.pistons.some(p => p.name === name)) {
               symbols.pistons.push({
                 name,
-                type: "pros::adi::DigitalOut",
+                type: isVex ? "vex::digital_out" : "pros::adi::DigitalOut",
                 port,
                 file: fileName,
                 line: lineIdx + 1,
-                snippet: `${name}.set_value(true);`,
-                releaseSnippet: `${name}.set_value(false);`,
+                snippet: isVex ? `${name}.set(true);` : `${name}.set_value(true);`,
+                releaseSnippet: isVex ? `${name}.set(false);` : `${name}.set_value(false);`,
               });
             }
           }
 
-          // 3. Sensors (IMU, Rotation, Distance, GPS, Optical)
-          const sensorMatch = trimmed.match(/(?:extern\s+)?(?:pros::)?(Imu|Rotation|Distance|GPS|Optical)\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
-          if (sensorMatch && sensorMatch[2]) {
-            const stype = sensorMatch[1];
-            const name = sensorMatch[2];
-            const args = sensorMatch[3] || "";
+          // 3. Sensors (PROS + VEXcode IMU, Rotation, Distance, GPS, Optical)
+          const sensorMatch = trimmed.match(/(?:extern\s+)?(?:(?:pros::)?(Imu|Rotation|Distance|GPS|Optical)|(?:vex::)?(inertial|rotation|distance|gps|optical))\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          if (sensorMatch && sensorMatch[3]) {
+            const rawType = sensorMatch[1] || sensorMatch[2];
+            const isVex = Boolean(sensorMatch[2]);
+            const name = sensorMatch[3];
+            const args = sensorMatch[4] || "";
             if (!isIgnoredSymbol(name) && !symbols.sensors.some(s => s.name === name)) {
               symbols.sensors.push({
                 name,
-                type: `pros::${stype}`,
+                type: isVex ? `vex::${rawType}` : `pros::${rawType}`,
                 args,
                 file: fileName,
                 line: lineIdx + 1,
-                snippet: `${name}.get_value();`,
+                snippet: isVex ? `${name}.rotation(degrees);` : `${name}.get_value();`,
               });
             }
           }
 
-          // 4. LemLib Chassis
-          const chassisMatch = trimmed.match(/(?:extern\s+)?(?:lemlib::)?Chassis\s+([a-zA-Z0-9_]+)/);
-          if (chassisMatch && chassisMatch[1]) {
-            const name = chassisMatch[1];
+          // 4. Chassis (LemLib, EZ-Template, JAR-Template)
+          const chassisMatch = trimmed.match(/(?:extern\s+)?(?:(lemlib::Chassis|ez::Drive|Drive))\s+([a-zA-Z0-9_]+)/);
+          if (chassisMatch && chassisMatch[2]) {
+            const cType = chassisMatch[1];
+            const name = chassisMatch[2];
             if (!isIgnoredSymbol(name) && !symbols.chassis.some(c => c.name === name)) {
               symbols.chassis.push({
                 name,
-                type: "lemlib::Chassis",
+                type: cType.includes("::") ? cType : (cType === "Drive" ? "Drive" : "lemlib::Chassis"),
                 file: fileName,
                 line: lineIdx + 1,
               });
@@ -1958,6 +2532,144 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
     // -------------------------------------------------------------
     updateRobotConfigCpp(bot) {
       if (!this.project) this.initDefaultProject();
+      const lib = normalizeLibId(bot?.library || this.getProjectLibrary());
+      const trackWidth = Number(bot.trackWidth || 12).toFixed(1);
+      const wheelDiam = Number(bot.wheelDiam || 3.25).toFixed(2);
+      const driveRpm = Math.round(bot.driveRpm || 600);
+      const imuPort = bot.imuPort || 10;
+      const horizPort = bot.horizTrackerPort || 9;
+      const horizOffset = Number(bot.horizTrackerOffset != null ? bot.horizTrackerOffset : -2.5).toFixed(1);
+      const latKp = Number(bot.lateralKp != null ? bot.lateralKp : 8.0).toFixed(2);
+      const latKi = Number(bot.lateralKi != null ? bot.lateralKi : 0.0).toFixed(3);
+      const latKd = Number(bot.lateralKd != null ? bot.lateralKd : 30.0).toFixed(2);
+      const angKp = Number(bot.angularKp != null ? bot.angularKp : 2.0).toFixed(2);
+      const angKi = Number(bot.angularKi != null ? bot.angularKi : 0.0).toFixed(3);
+      const angKd = Number(bot.angularKd != null ? bot.angularKd : 10.0).toFixed(2);
+
+      if (lib === "ez_template") {
+        const ezConfigCpp = `// =================================================================
+// robot-config.cpp - EZ-Template Drive & PID Constants Setup
+// Synchronized with Path Planner & PID Tuner
+// =================================================================
+#include "main.h"
+#include "robot-config.h"
+
+pros::Motor intake(7, pros::v5::MotorGears::blue);
+pros::Motor lift(8, pros::v5::MotorGears::green);
+pros::adi::DigitalOut clamp('A', false);
+pros::adi::DigitalOut doinker('B', false);
+
+ez::Drive chassis(
+    {1, 2, 3},      // Left Motors
+    {-11, -12, -13}, // Right Motors
+    ${imuPort},      // IMU Port
+    ${wheelDiam},    // Wheel Diameter (in)
+    ${driveRpm}      // Wheel RPM
+);
+
+void default_constants() {
+    chassis.pid_drive_constants_set(${latKp}, ${latKi}, ${latKd});
+    chassis.pid_heading_constants_set(11.0, 0.0, 20.0);
+    chassis.pid_turn_constants_set(${angKp}, ${angKi}, ${angKd}, 15.0);
+    chassis.pid_swing_constants_set(6.0, 0.0, 65.0);
+
+    chassis.pid_drive_exit_condition_set(90_ms, 1_in, 250_ms, 3_in, 500_ms, 500_ms);
+    chassis.pid_turn_exit_condition_set(90_ms, 3_deg, 250_ms, 7_deg, 500_ms, 500_ms);
+    chassis.pid_swing_exit_condition_set(90_ms, 3_deg, 250_ms, 7_deg, 500_ms, 500_ms);
+}
+`;
+        this.setFile("src/robot-config.cpp", ezConfigCpp);
+        return ezConfigCpp;
+      }
+
+      if (lib === "rw_template") {
+        const rwConfigCpp = `// =================================================================
+// robot-config.cpp - RW-Template Motors, Sensors & PID Constants
+// Synchronized with Path Planner & PID Tuner
+// =================================================================
+#include "vex.h"
+#include "robot-config.h"
+
+vex::brain Brain;
+vex::controller Controller1(vex::controllerType::primary);
+
+vex::motor left_front(vex::PORT1, vex::ratio6_1, false);
+vex::motor left_middle(vex::PORT2, vex::ratio6_1, false);
+vex::motor left_back(vex::PORT3, vex::ratio6_1, false);
+vex::motor right_front(vex::PORT11, vex::ratio6_1, true);
+vex::motor right_middle(vex::PORT12, vex::ratio6_1, true);
+vex::motor right_back(vex::PORT13, vex::ratio6_1, true);
+
+vex::motor_group left_motors(left_front, left_middle, left_back);
+vex::motor_group right_motors(right_front, right_middle, right_back);
+
+vex::motor intake(vex::PORT7, vex::ratio6_1, false);
+vex::motor lift(vex::PORT8, vex::ratio18_1, false);
+vex::digital_out clamp(Brain.ThreeWirePort.A);
+vex::inertial Inertial(vex::PORT${imuPort});
+
+double wheel_diam = ${wheelDiam};
+double drive_rpm = ${driveRpm}.0;
+double track_width = ${trackWidth};
+double lateral_kp = ${latKp}, lateral_ki = ${latKi}, lateral_kd = ${latKd};
+double angular_kp = ${angKp}, angular_ki = ${angKi}, angular_kd = ${angKd};
+`;
+        this.setFile("src/robot-config.cpp", rwConfigCpp);
+        return rwConfigCpp;
+      }
+
+      if (lib === "jar_template") {
+        const jarConfigCpp = `// =================================================================
+// robot-config.cpp - JAR-Template Drivetrain & PID Configuration
+// Synchronized with Path Planner & PID Tuner
+// =================================================================
+#include "vex.h"
+#include "robot-config.h"
+
+vex::brain Brain;
+vex::controller Controller1(vex::controllerType::primary);
+
+vex::motor Left1(vex::PORT1, vex::ratio6_1, true);
+vex::motor Left2(vex::PORT2, vex::ratio6_1, true);
+vex::motor Left3(vex::PORT3, vex::ratio6_1, true);
+vex::motor Right1(vex::PORT11, vex::ratio6_1, false);
+vex::motor Right2(vex::PORT12, vex::ratio6_1, false);
+vex::motor Right3(vex::PORT13, vex::ratio6_1, false);
+
+vex::motor_group LeftDrive(Left1, Left2, Left3);
+vex::motor_group RightDrive(Right1, Right2, Right3);
+vex::motor intake(vex::PORT7, vex::ratio6_1, false);
+vex::motor lift(vex::PORT8, vex::ratio18_1, false);
+vex::digital_out clamp(Brain.ThreeWirePort.A);
+vex::inertial Inertial(vex::PORT${imuPort});
+
+Drive chassis(
+    ZERO_TRACKER_NO_ODOM,
+    LeftDrive,
+    RightDrive,
+    vex::PORT${imuPort},
+    ${wheelDiam}, // wheel diameter (in)
+    1.0,          // external gear ratio
+    360,          // gyro scale
+    vex::PORT1,
+    vex::PORT2,
+    vex::PORT3,
+    vex::PORT11,
+    ${trackWidth}, // drive width (in)
+    ${horizOffset} // tracker offset (in)
+);
+
+void default_constants() {
+    chassis.set_drive_constants(10, ${latKp}, ${latKi}, ${latKd}, 0);
+    chassis.set_heading_constants(6, .4, 0, 1, 0);
+    chassis.set_turn_constants(12, ${angKp}, ${angKi}, ${angKd}, 15);
+    chassis.set_swing_constants(12, .3, .001, 2, 15);
+}
+`;
+        this.setFile("src/robot-config.cpp", jarConfigCpp);
+        return jarConfigCpp;
+      }
+
       const wheelEnum = (diam) => {
         if (Math.abs(diam - 2.0) < 0.1) return "lemlib::Omniwheel::NEW_2";
         if (Math.abs(diam - 2.75) < 0.1) return "lemlib::Omniwheel::NEW_275";
@@ -1966,15 +2678,10 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
         return `${Number(diam).toFixed(2)}`;
       };
 
-      const trackWidth = Number(bot.trackWidth || 12).toFixed(1);
       const wheelDiamEnum = wheelEnum(bot.wheelDiam || 3.25);
-      const driveRpm = Number(bot.driveRpm || 600).toFixed(1);
+      const driveRpmFloat = Number(bot.driveRpm || 600).toFixed(1);
       const driftScaler = Number(bot.lateralDrift || 2.0).toFixed(1);
 
-      // Lateral PID
-      const latKp = Number(bot.lateralKp != null ? bot.lateralKp : 8.0).toFixed(2);
-      const latKi = Number(bot.lateralKi != null ? bot.lateralKi : 0.0).toFixed(3);
-      const latKd = Number(bot.lateralKd != null ? bot.lateralKd : 30.0).toFixed(2);
       const latWindup = Number(bot.lateralWindup != null ? bot.lateralWindup : 3.0).toFixed(1);
       const latSmallErr = Number(bot.lateralSmallErr != null ? bot.lateralSmallErr : 1.0).toFixed(1);
       const latSmallTime = Math.round(bot.lateralSmallTime != null ? bot.lateralSmallTime : 100);
@@ -1982,10 +2689,6 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       const latLargeTime = Math.round(bot.lateralLargeTime != null ? bot.lateralLargeTime : 500);
       const latSlew = Math.round(bot.lateralSlew != null ? bot.lateralSlew : 0);
 
-      // Angular PID
-      const angKp = Number(bot.angularKp != null ? bot.angularKp : 2.0).toFixed(2);
-      const angKi = Number(bot.angularKi != null ? bot.angularKi : 0.0).toFixed(3);
-      const angKd = Number(bot.angularKd != null ? bot.angularKd : 10.0).toFixed(2);
       const angWindup = Number(bot.angularWindup != null ? bot.angularWindup : 3.0).toFixed(1);
       const angSmallErr = Number(bot.angularSmallErr != null ? bot.angularSmallErr : 1.0).toFixed(1);
       const angSmallTime = Math.round(bot.angularSmallTime != null ? bot.angularSmallTime : 100);
@@ -1993,10 +2696,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
       const angLargeTime = Math.round(bot.angularLargeTime != null ? bot.angularLargeTime : 500);
       const angSlew = Math.round(bot.angularSlew != null ? bot.angularSlew : 0);
 
-      const horizOffset = Number(bot.horizTrackerOffset != null ? bot.horizTrackerOffset : -2.5).toFixed(1);
       const horizWheelEnum = wheelEnum(bot.horizTrackerWheelDiam != null ? bot.horizTrackerWheelDiam : 2.0);
-      const imuPort = bot.imuPort || 10;
-      const horizPort = bot.horizTrackerPort || 9;
 
       const newConfigCpp = `// =================================================================
 // robot-config.cpp - Hardware Port Definitions & Controller Setup
@@ -2005,7 +2705,7 @@ CXXFLAGS = -std=gnu++20 -O2 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARNFL
 #include "main.h"
 #include "robot-config.h"
 
-// Drivetrain 6-Motor Setup (${driveRpm} RPM)
+// Drivetrain 6-Motor Setup (${driveRpmFloat} RPM)
 pros::Motor left_front(1, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
 pros::Motor left_middle(2, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
 pros::Motor left_back(3, pros::v5::MotorGears::blue, pros::v5::MotorUnits::degrees);
@@ -2032,13 +2732,13 @@ pros::Distance dist_sensor(15);
 // Tracking Wheel Setup
 lemlib::TrackingWheel horiz_wheel(&horiz_tracker, ${horizWheelEnum}, ${horizOffset});
 
-// LemLib Drivetrain Configuration (${trackWidth}" Track Width, ${bot.wheelDiam || 3.25}" Wheels, ${driveRpm} RPM)
+// LemLib Drivetrain Configuration (${trackWidth}" Track Width, ${bot.wheelDiam || 3.25}" Wheels, ${driveRpmFloat} RPM)
 lemlib::Drivetrain drivetrain(
     &left_motors,
     &right_motors,
     ${trackWidth}, // track width (inches)
     ${wheelDiamEnum}, // wheel diameter
-    ${driveRpm}, // drivetrain RPM
+    ${driveRpmFloat}, // drivetrain RPM
     ${driftScaler} // horizontal drift scaler
 );
 
@@ -2177,12 +2877,33 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     // Generate C++ code string from visual planner paths
-    fallbackEmitRoutineBody(pose0, acts, indent = "    ") {
+    fallbackEmitRoutineBody(pose0, acts, indent = "    ", library = null) {
+      const lib = normalizeLibId(library || this.getProjectLibrary());
+      const f = (v) => {
+        const n = Number(v || 0);
+        return Number.isInteger(n) ? `${n}.0` : Number(n.toFixed(1)).toString();
+      };
+      const speedToVolts = (spd) => {
+        const s = Math.max(0, Math.min(127, Number(spd != null ? spd : 127)));
+        return Number(((s / 127) * 12).toFixed(1));
+      };
       let code = "";
       if (pose0) {
-        code += `${indent}chassis.setPose(${Number(pose0.x || 0).toFixed(1)}, ${Number(pose0.y || 0).toFixed(1)}, ${Number(pose0.theta || 0).toFixed(1)});\n`;
+        if (lib === "ez_template") {
+          code += `${indent}chassis.odom_xyt_set(${f(pose0.x)}_in, ${f(pose0.y)}_in, ${f(pose0.theta)}_deg);\n`;
+        } else if (lib === "rw_template") {
+          code += `${indent}setOdom(${f(pose0.x)}, ${f(pose0.y)}, ${f(pose0.theta)});\n`;
+        } else if (lib === "jar_template") {
+          code += `${indent}chassis.set_coordinates(${f(pose0.x)}, ${f(pose0.y)}, ${f(pose0.theta)});\n`;
+        } else {
+          code += `${indent}chassis.setPose(${f(pose0.x)}, ${f(pose0.y)}, ${f(pose0.theta)});\n`;
+        }
       }
-      for (const a of acts || []) {
+
+      const list = acts || [];
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i];
+        const nextAct = i < list.length - 1 ? list[i + 1] : null;
         const label = (a.label || "").trim();
         const cleanComment = label ? label.replace(/^\/\/\s*/, "") : "";
         if (a.type === "custom") {
@@ -2196,14 +2917,31 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         }
         if (a.type === "wait") {
           if (cleanComment) code += `${indent}// ${cleanComment}\n`;
-          if (a.waitType === "distance" || a.waitType === "until") {
-            code += `${indent}chassis.waitUntil(${a.distance != null ? a.distance : (a.waitDist != null ? a.waitDist : 12)});\n`;
-          } else if (a.waitType === "done") {
-            code += `${indent}chassis.waitUntilDone();\n`;
-          } else if (a.waitType === "time") {
-            code += `${indent}pros::delay(${a.delayMs != null ? a.delayMs : (a.timeout != null ? a.timeout : 250)});\n`;
+          if (lib === "ez_template") {
+            if (a.waitType === "distance" || a.waitType === "until") {
+              code += `${indent}chassis.pid_wait_until(${a.distance != null ? a.distance : (a.waitDist != null ? a.waitDist : 12)}_in);\n`;
+            } else if (a.waitType === "time") {
+              code += `${indent}pros::delay(${a.delayMs != null ? a.delayMs : (a.timeout != null ? a.timeout : 250)});\n`;
+            } else {
+              code += `${indent}chassis.pid_wait();\n`;
+            }
+          } else if (lib === "rw_template" || lib === "jar_template") {
+            if (a.waitType === "time") {
+              code += `${indent}wait(${a.delayMs != null ? a.delayMs : (a.timeout != null ? a.timeout : 250)}, msec);\n`;
+            } else if (a.waitType === "distance" || a.waitType === "until") {
+              code += `${indent}// Distance trigger @ ${a.distance != null ? a.distance : 12}"\n`;
+              code += `${indent}wait(150, msec);\n`;
+            }
           } else {
-            code += `${indent}chassis.waitUntilDone();\n`;
+            if (a.waitType === "distance" || a.waitType === "until") {
+              code += `${indent}chassis.waitUntil(${a.distance != null ? a.distance : (a.waitDist != null ? a.waitDist : 12)});\n`;
+            } else if (a.waitType === "done") {
+              code += `${indent}chassis.waitUntilDone();\n`;
+            } else if (a.waitType === "time") {
+              code += `${indent}pros::delay(${a.delayMs != null ? a.delayMs : (a.timeout != null ? a.timeout : 250)});\n`;
+            } else {
+              code += `${indent}chassis.waitUntilDone();\n`;
+            }
           }
           if (a.customCode && a.customCode.trim()) {
             const lines = a.customCode.trim().split("\n");
@@ -2214,9 +2952,100 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           }
           continue;
         }
-        const px = Number((a.x || 0) + (a.offsetX || 0)).toFixed(1);
-        const py = Number((a.y || 0) + (a.offsetY || 0)).toFixed(1);
-        const pt = Number((a.theta || 0) + (a.offsetTheta || 0)).toFixed(1);
+        const px = f((a.x || 0) + (a.offsetX || 0));
+        const py = f((a.y || 0) + (a.offsetY || 0));
+        const pt = f((a.theta || 0) + (a.offsetTheta || 0));
+        const inlineComment = cleanComment ? ` // ${cleanComment}` : "";
+        const spd = a.maxSpeed != null ? Math.round(a.maxSpeed) : 110;
+        const dirEnum = a.forwards === false ? "ez::rev" : "ez::fwd";
+        const dirInt = a.forwards === false ? -1 : 1;
+        const nextIsWait = nextAct && nextAct.type === "wait" && (nextAct.waitType === "distance" || nextAct.waitType === "until" || nextAct.waitType === "done");
+
+        if (lib === "ez_template") {
+          switch (a.type) {
+            case "moveToPoint":
+              code += `${indent}chassis.pid_odom_set({{${px}_in, ${py}_in}, ${dirEnum}, ${spd}});${inlineComment}\n`;
+              break;
+            case "moveToPose":
+            case "bezierCurve":
+              code += `${indent}chassis.pid_odom_set({{${px}_in, ${py}_in, ${pt}_deg}, ${dirEnum}, ${spd}});${inlineComment}\n`;
+              break;
+            case "turnToPoint":
+              code += `${indent}chassis.pid_turn_set({${px}_in, ${py}_in}, ${dirEnum}, ${a.maxSpeed != null ? spd : 90});${inlineComment}\n`;
+              break;
+            case "turnToHeading":
+              code += `${indent}chassis.pid_turn_set(${pt}_deg, ${a.maxSpeed != null ? spd : 90});${inlineComment}\n`;
+              break;
+            case "swingToPoint":
+            case "swingToHeading":
+              code += `${indent}chassis.pid_swing_set(ez::${a.lockedSide === "RIGHT" ? "RIGHT_SWING" : "LEFT_SWING"}, ${pt}_deg, ${spd});${inlineComment}\n`;
+              break;
+          }
+          if (!a.async && !nextIsWait) {
+            code += (a.earlyExitRange && a.earlyExitRange > 0)
+              ? `${indent}chassis.pid_wait_quick_chain();\n`
+              : `${indent}chassis.pid_wait();\n`;
+          }
+          continue;
+        }
+
+        if (lib === "rw_template") {
+          const maxV = a.maxSpeed != null && Number(a.maxSpeed) < 127 ? `, ${a.earlyExitRange || 0.5}, ${speedToVolts(a.maxSpeed)}` : "";
+          switch (a.type) {
+            case "moveToPoint":
+              code += `${indent}moveToPoint(${px}, ${py}, ${dirInt}, ${a.timeout || 2000}${maxV});${inlineComment}\n`;
+              break;
+            case "moveToPose":
+            case "bezierCurve":
+              code += `${indent}moveToPoint(${px}, ${py}, ${dirInt}, ${a.timeout || 2500}${maxV});${inlineComment}\n`;
+              code += `${indent}turnToAngle(${pt}, 1000);\n`;
+              break;
+            case "turnToPoint":
+              code += `${indent}turnToPoint(${px}, ${py}, ${dirInt}, ${a.timeout || 1500});${inlineComment}\n`;
+              break;
+            case "turnToHeading":
+              code += `${indent}turnToAngle(${pt}, ${a.timeout || 1500});${inlineComment}\n`;
+              break;
+            case "swingToPoint":
+            case "swingToHeading":
+              code += `${indent}swing(${pt}, ${a.lockedSide === "RIGHT" ? -1 : 1}, ${a.timeout || 1800});${inlineComment}\n`;
+              break;
+          }
+          continue;
+        }
+
+        if (lib === "jar_template") {
+          const vCap = speedToVolts(a.maxSpeed);
+          const hasVolts = a.maxSpeed != null && Number(a.maxSpeed) < 127;
+          switch (a.type) {
+            case "moveToPoint":
+              code += hasVolts
+                ? `${indent}chassis.drive_to_point(${px}, ${py}, 0, ${vCap}, 8);${inlineComment}\n`
+                : `${indent}chassis.drive_to_point(${px}, ${py});${inlineComment}\n`;
+              break;
+            case "moveToPose":
+            case "bezierCurve":
+              code += hasVolts
+                ? `${indent}chassis.drive_to_pose(${px}, ${py}, ${pt}, 0.5, 0, ${vCap}, 8);${inlineComment}\n`
+                : `${indent}chassis.drive_to_pose(${px}, ${py}, ${pt});${inlineComment}\n`;
+              break;
+            case "turnToPoint":
+              code += `${indent}chassis.turn_to_point(${px}, ${py});${inlineComment}\n`;
+              break;
+            case "turnToHeading":
+              code += hasVolts
+                ? `${indent}chassis.turn_to_angle(${pt}, ${vCap});${inlineComment}\n`
+                : `${indent}chassis.turn_to_angle(${pt});${inlineComment}\n`;
+              break;
+            case "swingToPoint":
+            case "swingToHeading":
+              code += `${indent}chassis.${a.lockedSide === "RIGHT" ? "right" : "left"}_swing_to_angle(${pt});${inlineComment}\n`;
+              break;
+          }
+          continue;
+        }
+
+        // LemLib default
         const params = [];
         if (a.forwards === false) params.push(".forwards = false");
         if (a.type === "moveToPose" && a.lead != null && Number(a.lead) !== 0.6) {
@@ -2234,13 +3063,13 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         if (a.earlyExitRange) params.push(`.earlyExitRange = ${a.earlyExitRange}`);
         const paramStr = params.length ? `, {${params.join(", ")}}` : "";
         const asyncArg = a.async ? ", true" : "";
-        const inlineComment = cleanComment ? ` // ${cleanComment}` : "";
 
         switch (a.type) {
           case "moveToPoint":
             code += `${indent}chassis.moveToPoint(${px}, ${py}, ${a.timeout || 2000}${paramStr}${asyncArg});${inlineComment}\n`;
             break;
           case "moveToPose":
+          case "bezierCurve":
             code += `${indent}chassis.moveToPose(${px}, ${py}, ${pt}, ${a.timeout || 2500}${paramStr}${asyncArg});${inlineComment}\n`;
             break;
           case "turnToPoint":
@@ -2260,15 +3089,23 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       return code;
     }
 
-    generateAutonCppCode(plannerPaths, indent = "    ") {
+    generateAutonCppCode(plannerPaths, indent = "    ", library = null) {
       if (!plannerPaths || plannerPaths.length === 0) return "";
+      const lib = normalizeLibId(library || this.getProjectLibrary());
+      const libLabels = {
+        lemlib: "VEX V5 LemLib",
+        ez_template: "VEX V5 EZ-Template",
+        rw_template: "VEXcode V5 RW-Template",
+        jar_template: "VEXcode V5 JAR-Template",
+      };
+      const isVexcode = lib === "rw_template" || lib === "jar_template";
       let header = `// =================================================================\n` +
-                   `// autons.cpp - Autonomous Routines for VEX V5 LemLib\n` +
+                   `// autons.cpp - Autonomous Routines for ${libLabels[lib] || "VEX V5"}\n` +
                    `// Generated & Synchronized with Visual Flowchart\n` +
                    `// =================================================================\n` +
-                   `#include "main.h"\n` +
-                   `#include "robot-config.h"\n` +
-                   `#include "subsystems.hpp"\n\n`;
+                   (isVexcode
+                     ? `#include "vex.h"\n#include "robot-config.h"\n\n`
+                     : `#include "main.h"\n#include "robot-config.h"\n#include "subsystems.hpp"\n\n`);
 
       let bodies = "";
       plannerPaths.forEach((p, idx) => {
@@ -2278,9 +3115,9 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         bodies += `// -----------------------------------------------------------------\n`;
         bodies += `void ${fnName}() {\n`;
         if (typeof window !== "undefined" && window.PlannerApp && typeof window.PlannerApp.emitRoutineBody === "function") {
-          bodies += window.PlannerApp.emitRoutineBody(p.pose, p.actions, indent);
+          bodies += window.PlannerApp.emitRoutineBody(p.pose, p.actions, indent, lib);
         } else {
-          bodies += this.fallbackEmitRoutineBody(p.pose, p.actions, indent);
+          bodies += this.fallbackEmitRoutineBody(p.pose, p.actions, indent, lib);
         }
         bodies += `}\n\n`;
       });
@@ -2301,6 +3138,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     mergePlannerIntoAutonCpp(plannerPaths, mode = "replace", indent = "    ", options = {}) {
       if (mode === "keep") return this.getFile("src/autons.cpp");
 
+      const lib = normalizeLibId(options.library || this.getProjectLibrary());
       const existing = this.getFile("src/autons.cpp") || "";
       if (existing.trim().length > 0) {
         this.createVersionSnapshot(
@@ -2310,7 +3148,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         );
       }
 
-      const generated = this.generateAutonCppCode(plannerPaths, indent);
+      const generated = this.generateAutonCppCode(plannerPaths, indent, lib);
       if (mode === "replace") {
         this.setFile("src/autons.cpp", generated);
         if (this.project) {
@@ -2332,28 +3170,10 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
             appendBodies += `// Appended Routine: ${p.name || fnName}\n`;
             appendBodies += `// -----------------------------------------------------------------\n`;
             appendBodies += `void ${fnName}() {\n`;
-            if (p.pose) {
-              appendBodies += `${indent}chassis.setPose(${Number(p.pose.x || 0).toFixed(1)}, ${Number(p.pose.y || 0).toFixed(1)}, ${Number(p.pose.theta || 0).toFixed(1)});\n\n`;
-            }
-            if (p.actions && p.actions.length) {
-              p.actions.forEach((a) => {
-                if (a.type === "custom") {
-                  const lines = (a.customCode || "").split("\n");
-                  lines.forEach((l) => {
-                    if (l.trim()) appendBodies += `${indent}${l.trim()}\n`;
-                  });
-                } else if (a.type === "wait") {
-                  appendBodies += `${indent}pros::delay(${a.timeout || 500});\n`;
-                } else if (a.type === "moveToPoint") {
-                  appendBodies += `${indent}chassis.moveToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${a.timeout || 2000}${a.async ? ", true" : ""});\n`;
-                } else if (a.type === "moveToPose") {
-                  appendBodies += `${indent}chassis.moveToPose(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${Number(a.theta).toFixed(1)}, ${a.timeout || 2500}${a.async ? ", true" : ""});\n`;
-                } else if (a.type === "turnToHeading") {
-                  appendBodies += `${indent}chassis.turnToHeading(${Number(a.theta).toFixed(1)}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
-                } else if (a.type === "turnToPoint") {
-                  appendBodies += `${indent}chassis.turnToPoint(${Number(a.x).toFixed(1)}, ${Number(a.y).toFixed(1)}, ${a.timeout || 1500}${a.async ? ", true" : ""});\n`;
-                }
-              });
+            if (typeof window !== "undefined" && window.PlannerApp && typeof window.PlannerApp.emitRoutineBody === "function") {
+              appendBodies += window.PlannerApp.emitRoutineBody(p.pose, p.actions, indent, lib);
+            } else {
+              appendBodies += this.fallbackEmitRoutineBody(p.pose, p.actions, indent, lib);
             }
             appendBodies += `}\n`;
           }
@@ -2407,14 +3227,18 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       let inBlockComment = false;
       let blockCommentStartLine = 0;
 
-      // Symbol set for variables, devices, and types
+      // Symbol set for variables, devices, and types across LemLib, EZ-Template, RW-Template, JAR-Template
       const symbolSet = declaredSymbols || new Set([
         ...(this.symbols?.motors || []).map(m => m.name),
         ...(this.symbols?.pistons || []).map(p => p.name),
         ...(this.symbols?.sensors || []).map(s => s.name),
         ...(this.symbols?.chassis || []).map(c => c.name),
         ...(this.symbols?.functions || []).map(f => f.name),
-        "chassis", "pros", "lemlib", "delay", "printf", "Master", "Controller", "intake", "clamp", "piston"
+        "chassis", "pros", "lemlib", "ez", "vex", "delay", "wait", "printf",
+        "Brain", "Controller", "Controller1", "Master", "Inertial",
+        "intake", "clamp", "piston", "doinker", "lift",
+        "left_motors", "right_motors", "LeftDrive", "RightDrive",
+        "DRIVE_SPEED", "TURN_SPEED", "SWING_SPEED", "Competition"
       ]);
 
       const validTypesAndKeywords = new Set([
@@ -2422,7 +3246,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         "return", "break", "continue", "goto", "using", "namespace", "typedef", "struct", "class", "enum", "union",
         "if", "else", "while", "for", "switch", "case", "default", "try", "catch", "public", "private", "protected",
         "const", "static", "volatile", "extern", "unsigned", "signed", "inline", "virtual", "override", "constexpr",
-        "pros", "lemlib", "chassis", "Motor", "ADIPiston", "Imu", "Distance", "Optical", "Rotation", "Controller",
+        "pros", "lemlib", "ez", "vex", "chassis", "Drive", "Chassis", "Motor", "ADIPiston", "Imu", "Distance", "Optical", "Rotation", "Controller",
         "ControllerSettings", "Drivetrain", "OdomSensors", "TrackingWheel", "Pose"
       ]);
 
@@ -2762,12 +3586,12 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           }
         }
 
-        // 10. Undefined Symbol Check
+        // 10. Undefined Symbol Check (only flags `.` member access on undeclared variables; allows chassis, ez, vex, Brain, etc.)
         if (fileName.endsWith(".cpp") || fileName.endsWith(".c")) {
-          const tokenMatch = codeWithoutStrings.match(/([a-zA-Z0-9_]+)\.(move|set_value|get_value|moveToPoint|moveToPose|turnToHeading)/);
+          const tokenMatch = codeWithoutStrings.match(/\b([a-zA-Z_][a-zA-Z0-9_]*)\.(move|spin|stop|set|set_value|get_value|moveToPoint|moveToPose|turnToHeading|odom_xyt_set|pid_odom_set|pid_drive_set|pid_turn_set|pid_swing_set|pid_wait|set_coordinates|drive_to_point|drive_to_pose|turn_to_angle|drive_distance)/);
           if (tokenMatch && tokenMatch[1]) {
             const varName = tokenMatch[1];
-            if (!symbolSet.has(varName)) {
+            if (!symbolSet.has(varName) && !validTypesAndKeywords.has(varName)) {
               warnings.push({
                 file: fileName,
                 line: lineNum,
@@ -2802,30 +3626,38 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     // -------------------------------------------------------------
-    // Multi-File Project Compiler Engine (Emulates `pros make`)
+    // Multi-File Project Compiler Engine (Emulates `pros make` / VEXcode build)
     // -------------------------------------------------------------
     compileProject() {
       const startTime = performance.now();
       const files = this.project?.files || {};
       const fileNames = Object.keys(files);
+      const lib = this.getProjectLibrary();
+      const isVexcode = lib === "rw_template" || lib === "jar_template";
+      const toolchainBanner = {
+        lemlib: "PROS 4 + LemLib v0.5.4",
+        ez_template: "PROS 4 + EZ-Template v3+",
+        rw_template: "VEXcode V5 Pro + RW-Template",
+        jar_template: "VEXcode V5 Pro + JAR-Template",
+      }[lib] || "PROS 4 + LemLib";
 
       const logs = [];
       const errors = [];
       const warnings = [];
 
-      logs.push(">> pros make");
-      logs.push("Compiling PROS LemLib project for VEX V5 (ARM Cortex-A9 Neon)...");
-      logs.push(`Project Name: ${this.project?.name || "VEX_Bot"} | Kernel: 4.1.0 | LemLib: 0.5.4`);
+      logs.push(isVexcode ? ">> vexcom / arm-none-eabi-g++ make" : ">> pros make");
+      logs.push(`Compiling ${toolchainBanner} project for VEX V5 (ARM Cortex-A9 Neon)...`);
+      logs.push(`Project Name: ${this.project?.name || "VEX_Bot"} | Toolchain: ${toolchainBanner}`);
       logs.push("----------------------------------------------------------------------");
 
-      // Verify essential PROS files (Standard PROS from purduesigbots/pros requires headers and source files)
-      const hasHeaders = files["include/main.h"] || Object.keys(files).some(f => f.endsWith(".h") || f.endsWith(".hpp"));
+      // Verify essential headers and source files
+      const hasHeaders = files["include/main.h"] || files["include/vex.h"] || Object.keys(files).some(f => f.endsWith(".h") || f.endsWith(".hpp"));
       const hasSrc = Object.keys(files).some(f => f.endsWith(".cpp") || f.endsWith(".c"));
       if (!hasHeaders) {
         warnings.push({
-          file: "include/main.h",
+          file: isVexcode ? "include/vex.h" : "include/main.h",
           line: 1,
-          message: `Standard PROS include/main.h not found. Using standard PROS header environment.`,
+          message: `Standard project header (${isVexcode ? "include/vex.h" : "include/main.h"}) not found.`,
         });
       }
       if (!hasSrc) {
@@ -2844,10 +3676,12 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         ...(this.symbols?.sensors || []).map(s => s.name),
         ...(this.symbols?.chassis || []).map(c => c.name),
         ...(this.symbols?.functions || []).map(f => f.name),
-        "chassis", "pros", "lemlib", "delay", "millis", "printf", "lcd", "battery", "master",
+        "chassis", "pros", "lemlib", "ez", "vex", "delay", "wait", "millis", "printf", "lcd", "battery", "master",
+        "Brain", "Controller", "Controller1", "Inertial", "Competition",
         "intake", "clamp", "doinker", "lift", "imu", "horiz_wheel", "vertical_wheel", "sensors",
+        "left_motors", "right_motors", "LeftDrive", "RightDrive",
         "drivetrain", "lateral_controller", "angular_controller", "Pose", "AngularDirection", "DriveSide",
-        "Motor", "MotorGroup", "Controller", "Imu", "Rotation", "Distance", "Optical", "Gps", "Vision",
+        "Motor", "MotorGroup", "Imu", "Rotation", "Distance", "Optical", "Gps", "Vision",
         "ADIEncoder", "ADIDigitalOut", "ADIDigitalIn", "Pneumatics", "Task", "Mutex",
         "E_CONTROLLER_MASTER", "E_CONTROLLER_ANALOG_LEFT_Y", "E_CONTROLLER_ANALOG_RIGHT_X",
         "E_CONTROLLER_DIGITAL_R1", "E_CONTROLLER_DIGITAL_R2", "E_CONTROLLER_DIGITAL_L1", "E_CONTROLLER_DIGITAL_L2"

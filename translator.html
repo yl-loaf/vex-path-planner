@@ -39,8 +39,8 @@
           <span class="breadcrumb-sep">/</span>
           <span class="breadcrumb-current">C++ Code Translator</span>
         </div>
-        <h1 class="translator-title" style="font-family:var(--font-display);letter-spacing:-0.02em;">LemLib C++ Autonomous Ingest &amp; Parser</h1>
-        <p class="subtitle" style="font-size:0.85rem;color:var(--muted);">Two-way LemLib v0.5+ AST parser with concurrent task decomposition · Synchronized with active profile &amp; slots</p>
+        <h1 class="translator-title" style="font-family:var(--font-display);letter-spacing:-0.02em;">VEX C++ Autonomous Ingest &amp; Parser</h1>
+        <p class="subtitle" style="font-size:0.85rem;color:var(--muted);">Multi-library AST parser (LemLib, EZ-Template, RW-Template, JAR-Template) · Synchronized with active profile &amp; slots</p>
       </div>
       <div class="header-actions">
         <button type="button" id="btnTranslatorThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
@@ -77,16 +77,24 @@
         <div class="translator-pane-header">
           <div class="pane-title-wrap">
             <span class="pane-step-badge" style="border-radius: 4px;font-family:var(--font-mono);">[INGEST · 01]</span>
-            <h2 style="font-family:var(--font-display);">Paste Raw LemLib C++ Source</h2>
+            <h2 style="font-family:var(--font-display);">Paste Raw VEX C++ Source</h2>
           </div>
-          <span class="pane-tag" style="border-radius: 4px;font-family:var(--font-mono);">LemLib &amp; PROS C++</span>
+          <span class="pane-tag" id="cppTranslatorDialectTag" style="border-radius: 4px;font-family:var(--font-mono);">Multi-Library C++</span>
         </div>
 
         <div class="cpp-presets-bar">
-          <span class="cpp-presets-label" style="font-family:var(--font-mono);font-size:0.72rem;text-transform:uppercase;">Preset Buffers:</span>
+          <label for="cppTranslatorLibrary" class="cpp-presets-label" style="font-family:var(--font-mono);font-size:0.72rem;text-transform:uppercase;">Library:</label>
+          <select id="cppTranslatorLibrary" title="Select C++ autonomous library dialect or Auto-Detect" style="font-family:var(--font-mono);font-size:0.74rem;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+            <option value="auto">Auto-Detect</option>
+            <option value="lemlib">LemLib (PROS)</option>
+            <option value="ez_template">EZ-Template (PROS)</option>
+            <option value="rw_template">RW-Template (VEXcode)</option>
+            <option value="jar_template">JAR-Template (VEXcode)</option>
+          </select>
+          <span class="cpp-presets-label" style="font-family:var(--font-mono);font-size:0.72rem;text-transform:uppercase;margin-left:6px;">Samples:</span>
           <button type="button" class="btn-cpp-sample" data-sample="preload_rush" style="border-radius: 4px;font-family:var(--font-mono);">Preload Rush</button>
           <button type="button" class="btn-cpp-sample" data-sample="multitask_subsystems" style="border-radius: 4px;font-family:var(--font-mono);">Subsystems</button>
-          <button type="button" class="btn-cpp-sample" data-sample="boomerang_swings" style="border-radius: 4px;font-family:var(--font-mono);">Boomerang</button>
+          <button type="button" class="btn-cpp-sample" data-sample="boomerang_swings" style="border-radius: 4px;font-family:var(--font-mono);">Swings &amp; Curves</button>
           <button type="button" class="btn-cpp-sample" data-sample="clear" style="border-radius: 4px;font-family:var(--font-mono);">Clear</button>
         </div>
 
@@ -95,7 +103,7 @@
             <span style="font-family:var(--font-mono);font-size:0.72rem;text-transform:uppercase;">Source Buffer:</span>
             <span class="translator-char-counter" id="cppCharCounter" style="font-family:var(--font-mono);">0 chars</span>
           </label>
-          <textarea id="cppCodeInput" class="translator-code-area" spellcheck="false" placeholder="// Paste any VEX V5 LemLib C++ routine here...
+          <textarea id="cppCodeInput" class="translator-code-area" spellcheck="false" placeholder="// Paste any LemLib, EZ-Template, RW-Template, or JAR-Template autonomous routine here...
 void autonomous() {
     chassis.setPose(-60, -60, 0);
     intake.move(127); // spin intake
@@ -110,11 +118,11 @@ void autonomous() {
         <div class="translator-features-box" style="border-radius: 4px;border:1px solid var(--border);background:var(--card);">
           <h3 style="font-family:var(--font-mono);font-size:0.75rem;text-transform:uppercase;color:var(--text-heading);">Supported Grammars &amp; Inferences:</h3>
           <ul class="translator-features-list" style="font-size:0.8rem;line-height:1.5;">
-            <li><strong>Starting Pose:</strong> <code>chassis.setPose(x, y, theta)</code></li>
-            <li><strong>LemLib Movements:</strong> <code>moveToPoint</code>, <code>moveToPose</code>, <code>turnToHeading</code>, <code>turnToPoint</code>, <code>swingToHeading</code></li>
-            <li><strong>Struct Parameters:</strong> <code>{.forwards, .maxSpeed, .minSpeed, .earlyExitRange, .lead, .async}</code></li>
-            <li><strong>Multitask Concurrency:</strong> Detects <code>pros::Task</code>, non-blocking subsystem calls, and trailing <code>async = true</code></li>
-            <li><strong>Comment Extraction:</strong> Preserves inline comments and preceding documentation blocks into step notes</li>
+            <li><strong>LemLib (PROS):</strong> <code>setPose</code>, <code>moveToPoint</code>, <code>moveToPose</code>, <code>turnToHeading</code>, <code>turnToPoint</code>, <code>swingToHeading</code>, struct params</li>
+            <li><strong>EZ-Template (PROS):</strong> <code>odom_xyt_set</code>, <code>pid_odom_set</code> (single &amp; vector lists), <code>pid_drive_set</code>, <code>pid_turn_set</code>, <code>pid_swing_set</code>, <code>pid_wait*</code></li>
+            <li><strong>RW-Template (VEXcode):</strong> <code>setOdom</code>, <code>moveToPoint</code>, <code>driveTo</code>, <code>turnToAngle</code>, <code>turnToPoint</code>, <code>swing</code>, <code>wait(ms, msec)</code></li>
+            <li><strong>JAR-Template (VEXcode):</strong> <code>set_coordinates</code>, <code>drive_to_point</code>, <code>drive_to_pose</code>, <code>drive_distance</code>, <code>turn_to_angle</code>, <code>left/right_swing_to_angle</code></li>
+            <li><strong>Subsystems &amp; Concurrency:</strong> Preserves non-motion commands (<code>intake</code>, <code>lift</code>, <code>clamp</code>) as custom/async blocks</li>
           </ul>
         </div>
       </section>
@@ -221,21 +229,21 @@ void autonomous() {
         C++ Parser Specification &amp; Technical Reference
       </h2>
       <p style="color:var(--muted);margin-bottom:24px;font-size:0.88rem;">
-        Deterministic AST tokenization, LemLib v0.5+ parameter extraction, and autonomous slot binding protocol.
+        Deterministic AST tokenization across LemLib, EZ-Template, RW-Template, and JAR-Template with autonomous slot binding.
       </p>
 
       <div class="faq-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:16px;">
         <div class="faq-card" style="background:var(--card);border:1px solid var(--border);border-radius: 4px;padding:18px;">
-          <h3 style="color:var(--text-heading);font-size:0.95rem;margin-bottom:8px;font-family:var(--font-display);">1. Tokenization and Method Mapping</h3>
+          <h3 style="color:var(--text-heading);font-size:0.95rem;margin-bottom:8px;font-family:var(--font-display);">1. Multi-Library Method Mapping</h3>
           <p style="color:var(--muted);font-size:0.85rem;line-height:1.5;">
-            The parser scans C++ source for LemLib motion primitives including <code>moveToPoint</code>, <code>moveToPose</code>, <code>turnToHeading</code>, and subsystem invocations. It extracts poses, velocity caps, and parameters into atomic action blocks.
+            Automatically detects or manually parses LemLib (<code>moveToPoint</code>), EZ-Template (<code>pid_odom_set</code>, <code>pid_drive_set</code>), RW-Template (<code>moveToPoint(x, y, dir, ms)</code>), and JAR-Template (<code>drive_to_point</code>, <code>drive_to_pose</code>), mapping relative distances into 2D field coordinates.
           </p>
         </div>
 
         <div class="faq-card" style="background:var(--card);border:1px solid var(--border);border-radius: 4px;padding:18px;">
-          <h3 style="color:var(--text-heading);font-size:0.95rem;margin-bottom:8px;font-family:var(--font-display);">2. LemLib Struct Support</h3>
+          <h3 style="color:var(--text-heading);font-size:0.95rem;margin-bottom:8px;font-family:var(--font-display);">2. Units, Structs &amp; Voltage Scaling</h3>
           <p style="color:var(--muted);font-size:0.85rem;line-height:1.5;">
-            Fully resolves designator structs containing <code>.forwards</code>, <code>.maxSpeed</code>, <code>.minSpeed</code>, <code>.earlyExitRange</code>, and <code>.lead</code>, allowing exact reproduction in the 2D simulation environment.
+            Resolves LemLib designator structs (<code>.forwards</code>, <code>.maxSpeed</code>, <code>.lead</code>), EZ-Template Okapi unit suffixes (<code>24_in</code>, <code>90_deg</code>), and VEXcode <code>0–12V</code> caps into unified planner properties.
           </p>
         </div>
 

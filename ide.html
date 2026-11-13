@@ -49,6 +49,13 @@
         <div class="ide-title-wrap">
           <span class="ide-project-tag" style="border-radius: 4px; font-family:var(--font-mono);">[PROJECT]</span>
           <span class="ide-project-name" id="ideProjectName" style="font-family:var(--font-mono);">Override_LemLib_Bot</span>
+          <select id="ideLibrarySelect" title="Switch active VEX C++ autonomous library &amp; IntelliSense" style="font-family:var(--font-mono);font-size:0.74rem;padding:3px 7px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;">
+            <option value="lemlib">LemLib (PROS)</option>
+            <option value="ez_template">EZ-Template (PROS)</option>
+            <option value="rw_template">RW-Template (VEXcode)</option>
+            <option value="jar_template">JAR-Template (VEXcode)</option>
+          </select>
+          <button type="button" id="btnIdeApplyTemplate" title="Load starter files for the selected library (snapshots current files to Version History first)" style="font-family:var(--font-mono);font-size:0.71rem;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;">Apply Starter</button>
           <span class="ide-dirty-badge" id="ideDirtyBadge" hidden style="border-radius: 4px; font-family:var(--font-mono);">● Unsaved</span>
           <span class="ide-autosave-badge" id="ideAutosaveBadge" title="Autosave status: Automatically saving changes in background" style="border-radius: 4px; font-family:var(--font-mono);">
             <span class="autosave-dot active" id="ideAutosaveDot"></span>

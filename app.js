@@ -35,6 +35,7 @@
   const HIT_R = 14;
 
   let bot = {
+    library: "lemlib",
     trackWidth: 12.0,
     robotW: 14.0,
     robotL: 14.0,
@@ -88,6 +89,74 @@
     botImageNaturalRatio: 1.0,
     botLockRatio: false,
   };
+
+  const LIB_LABELS = {
+    lemlib: "LemLib (PROS)",
+    ez_template: "EZ-Template (PROS)",
+    rw_template: "RW-Template (VEXcode)",
+    jar_template: "JAR-Template (VEXcode)",
+  };
+  const LIB_SHORT_LABELS = {
+    lemlib: "LemLib",
+    ez_template: "EZ-Template",
+    rw_template: "RW-Template",
+    jar_template: "JAR-Template",
+  };
+
+  function normalizeLibraryId(libId) {
+    if (window.CppTranslator && typeof window.CppTranslator.normalizeLibraryId === "function") {
+      return window.CppTranslator.normalizeLibraryId(libId);
+    }
+    const v = String(libId || "").toLowerCase().trim();
+    if (v === "ez" || v === "ez-template" || v === "ez_template") return "ez_template";
+    if (v === "rw" || v === "rw-template" || v === "rw_template") return "rw_template";
+    if (v === "jar" || v === "jar-template" || v === "jar_template") return "jar_template";
+    return "lemlib";
+  }
+
+  function getActiveLibrary() {
+    const raw = bot.library || localStorage.getItem("vex_active_library") || "lemlib";
+    return normalizeLibraryId(raw);
+  }
+
+  function syncLibrarySelectorsUI() {
+    const lib = getActiveLibrary();
+    bot.library = lib;
+    try {
+      localStorage.setItem("vex_active_library", lib);
+    } catch (_) {}
+
+    ["bannerLibrarySelect", "botLibrarySelect", "codeLibrarySelect"].forEach((id) => {
+      const sel = document.getElementById(id);
+      if (sel && sel.value !== lib) sel.value = lib;
+    });
+    const codeHeading = document.getElementById("codeSectionHeading");
+    if (codeHeading) {
+      codeHeading.textContent = `Generated ${LIB_SHORT_LABELS[lib] || "LemLib"} Code`;
+    }
+  }
+
+  function setActiveLibrary(libId, options = { syncProject: true, save: true, notify: false }) {
+    const lib = normalizeLibraryId(libId);
+    bot.library = lib;
+    syncLibrarySelectorsUI();
+
+    if (options.syncProject !== false && window.ProjectManager && typeof window.ProjectManager.setProjectLibrary === "function") {
+      const applyTemplate = typeof window.ProjectManager.isDefaultProject === "function" && window.ProjectManager.isDefaultProject();
+      window.ProjectManager.setProjectLibrary(lib, { applyTemplate, bot });
+    }
+
+    renderFlow();
+    generateCode();
+    try { updateTimeDisplay(); } catch (_) {}
+    if (options.save !== false) {
+      saveLocal(options.interactive === true);
+    }
+    if (options.notify && typeof showToast === "function") {
+      showToast(`📚 Switched active library to ${LIB_LABELS[lib] || lib}`);
+    }
+    return lib;
+  }
 
   const SAMPLE_BOT_VEX_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
   <defs>
@@ -3003,9 +3072,15 @@
   function loadLocal() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+      if (!raw) {
+        const storedLib = localStorage.getItem("vex_active_library");
+        if (storedLib) bot.library = normalizeLibraryId(storedLib);
+        syncLibrarySelectorsUI();
+        return;
+      }
       const data = JSON.parse(raw);
       if (data.bot) bot = { ...bot, ...data.bot };
+      bot.library = normalizeLibraryId(data.bot?.library || data.library || localStorage.getItem("vex_active_library") || "lemlib");
       if (Array.isArray(data.conditions) && data.conditions.length) {
         conditions = data.conditions;
       } else {
@@ -3101,6 +3176,7 @@
           throw new Error("Invalid .vpath");
         }
         if (data.bot) bot = { ...bot, ...data.bot };
+        bot.library = normalizeLibraryId(data.bot?.library || data.library || "lemlib");
         bindActive();
         selectedId = null;
         syncPathSelect();
@@ -5313,13 +5389,19 @@
         const distVal = a.distance != null ? a.distance : 12;
         const delayVal = a.delayMs != null ? a.delayMs : 250;
 
+        const activeLib = getActiveLibrary();
+        const isVexcodeLib = activeLib === "rw_template" || activeLib === "jar_template";
+        const distFnLabel = activeLib === "ez_template" ? `chassis.pid_wait_until(${distVal}_in)` : (isVexcodeLib ? `wait(150, msec)` : `chassis.waitUntil(${distVal})`);
+        const doneFnLabel = activeLib === "ez_template" ? `chassis.pid_wait()` : (isVexcodeLib ? `Motion settle` : `chassis.waitUntilDone()`);
+        const timeFnLabel = isVexcodeLib ? `wait(${delayVal}, msec)` : `pros::delay(${delayVal})`;
+
         let paramSection = "";
         if (mode === "distance") {
           paramSection = `
             <div class="wait-param-row">
               <label>Trigger at distance along motion:
                 <input type="number" data-f="distance" min="0.5" max="144" step="0.5" value="${distVal}" />
-                <span class="calc-sub-hint">inches (chassis.waitUntil)</span>
+                <span class="calc-sub-hint">inches (${escapeHtml(distFnLabel)})</span>
               </label>
               <div class="wait-chips-row">
                 <span style="font-size:0.68rem;color:#64748b;">Presets:</span>
@@ -5330,14 +5412,14 @@
                 <button type="button" class="wait-chip ${distVal === 36 ? 'active' : ''}" data-act="set-wait-dist" data-dist="36">36"</button>
               </div>
               <div class="wait-hint-box">
-                💡 <strong>chassis.waitUntil(${distVal})</strong> triggers concurrent subsystem actions (e.g. clamp goal, spin intake) when the robot has travelled ${distVal}" into its movement, without interrupting chassis drive momentum.
+                💡 <strong>${escapeHtml(distFnLabel)}</strong> triggers concurrent subsystem actions when the robot has travelled ${distVal}" into its movement.
               </div>
             </div>`;
         } else if (mode === "done") {
           paramSection = `
             <div class="wait-param-row">
               <div class="wait-hint-box">
-                ⏳ <strong>chassis.waitUntilDone()</strong> blocks execution until the preceding async movement has fully settled within tolerance before proceeding to the next step.
+                ⏳ <strong>${escapeHtml(doneFnLabel)}</strong> blocks execution until the preceding movement has settled within tolerance.
               </div>
             </div>`;
         } else if (mode === "time") {
@@ -5345,7 +5427,7 @@
             <div class="wait-param-row">
               <label>Delay duration:
                 <input type="number" data-f="delayMs" min="10" max="15000" step="25" value="${delayVal}" />
-                <span class="calc-sub-hint">ms (pros::delay)</span>
+                <span class="calc-sub-hint">ms (${isVexcodeLib ? "wait(ms, msec)" : "pros::delay"})</span>
               </label>
               <div class="wait-chips-row">
                 <span style="font-size:0.68rem;color:#64748b;">Presets:</span>
@@ -5355,7 +5437,7 @@
                 <button type="button" class="wait-chip ${delayVal === 1000 ? 'active' : ''}" data-act="set-wait-delay" data-ms="1000">1.0s</button>
               </div>
               <div class="wait-hint-box">
-                ⏱️ <strong>pros::delay(${delayVal})</strong> pauses the current execution thread for ${delayVal} milliseconds.
+                ⏱️ <strong>${escapeHtml(timeFnLabel)}</strong> pauses the current execution thread for ${delayVal} milliseconds.
               </div>
             </div>`;
         }
@@ -5364,7 +5446,7 @@
           <div class="wait-mode-selector">
             <button type="button" class="wait-mode-btn ${mode === 'distance' ? 'active' : ''}" data-act="set-wait-mode" data-mode="distance">📏 Distance (${distVal}")</button>
             <button type="button" class="wait-mode-btn ${mode === 'done' ? 'active' : ''}" data-act="set-wait-mode" data-mode="done">⏳ Wait Until Done</button>
-            <button type="button" class="wait-mode-btn ${mode === 'time' ? 'active' : ''}" data-act="set-wait-mode" data-mode="time">⏱️ PROS Delay (${delayVal}ms)</button>
+            <button type="button" class="wait-mode-btn ${mode === 'time' ? 'active' : ''}" data-act="set-wait-mode" data-mode="time">⏱️ ${isVexcodeLib ? "VEX Wait" : "PROS Delay"} (${delayVal}ms)</button>
           </div>
           ${paramSection}
           <label class="wide" style="margin-top:8px;">Subsystem Action Code / Comment (runs at trigger event)
@@ -5448,12 +5530,37 @@
           </div>
           <div class="multitask-presets-row" style="margin-top:4px;">
             <span style="font-size:0.68rem;color:#94a3b8;">C++:</span>
-            <button type="button" class="snippet-chip" data-snip="intake.move(127);">⚡ Intake On</button>
-            <button type="button" class="snippet-chip" data-snip="intake.move(0);">🛑 Intake Off</button>
-            <button type="button" class="snippet-chip" data-snip="clamp.set_value(true);">🦾 Clamp</button>
-            <button type="button" class="snippet-chip" data-snip="if (isRed) {\n  chassis.moveToPoint(24, 24, 2000);\n} else {\n  chassis.moveToPoint(-24, -24, 2000, {.forwards = false});\n}">🔀 If-Else Loop</button>
-            <button type="button" class="snippet-chip" data-snip="chassis.waitUntil(12);">⏱️ Wait 12"</button>
-            <button type="button" class="snippet-chip" data-snip="chassis.waitUntilDone();">⏳ Wait Done</button>
+            ${(() => {
+              const lib = getActiveLibrary();
+              if (lib === "ez_template") {
+                return `<button type="button" class="snippet-chip" data-snip="intake.move(127);">⚡ Intake On</button>
+                        <button type="button" class="snippet-chip" data-snip="intake.move(0);">🛑 Intake Off</button>
+                        <button type="button" class="snippet-chip" data-snip="clamp.set(true);">🦾 Clamp</button>
+                        <button type="button" class="snippet-chip" data-snip="if (isRed) {\n  chassis.pid_odom_set({{24_in, 24_in}, ez::fwd, 110});\n  chassis.pid_wait();\n} else {\n  chassis.pid_odom_set({{-24_in, -24_in}, ez::rev, 110});\n  chassis.pid_wait();\n}">🔀 If-Else</button>
+                        <button type="button" class="snippet-chip" data-snip="chassis.pid_wait_until(12_in);">⏱️ Wait 12"</button>
+                        <button type="button" class="snippet-chip" data-snip="chassis.pid_wait();">⏳ PID Wait</button>`;
+              }
+              if (lib === "rw_template") {
+                return `<button type="button" class="snippet-chip" data-snip="intake.spin(fwd, 12, volt);">⚡ Intake On</button>
+                        <button type="button" class="snippet-chip" data-snip="intake.stop();">🛑 Intake Off</button>
+                        <button type="button" class="snippet-chip" data-snip="clamp.set(true);">🦾 Clamp</button>
+                        <button type="button" class="snippet-chip" data-snip="if (isRed) {\n  moveToPoint(24, 24, 1, 2000);\n} else {\n  moveToPoint(-24, -24, -1, 2000);\n}">🔀 If-Else</button>
+                        <button type="button" class="snippet-chip" data-snip="wait(250, msec);">⏱️ Wait 250ms</button>`;
+              }
+              if (lib === "jar_template") {
+                return `<button type="button" class="snippet-chip" data-snip="intake.spin(fwd, 12, volt);">⚡ Intake On</button>
+                        <button type="button" class="snippet-chip" data-snip="intake.stop();">🛑 Intake Off</button>
+                        <button type="button" class="snippet-chip" data-snip="clamp.set(true);">🦾 Clamp</button>
+                        <button type="button" class="snippet-chip" data-snip="if (isRed) {\n  chassis.drive_to_point(24, 24);\n} else {\n  chassis.drive_to_point(-24, -24);\n}">🔀 If-Else</button>
+                        <button type="button" class="snippet-chip" data-snip="wait(250, msec);">⏱️ Wait 250ms</button>`;
+              }
+              return `<button type="button" class="snippet-chip" data-snip="intake.move(127);">⚡ Intake On</button>
+                      <button type="button" class="snippet-chip" data-snip="intake.move(0);">🛑 Intake Off</button>
+                      <button type="button" class="snippet-chip" data-snip="clamp.set_value(true);">🦾 Clamp</button>
+                      <button type="button" class="snippet-chip" data-snip="if (isRed) {\n  chassis.moveToPoint(24, 24, 2000);\n} else {\n  chassis.moveToPoint(-24, -24, 2000, {.forwards = false});\n}">🔀 If-Else Loop</button>
+                      <button type="button" class="snippet-chip" data-snip="chassis.waitUntil(12);">⏱️ Wait 12"</button>
+                      <button type="button" class="snippet-chip" data-snip="chassis.waitUntilDone();">⏳ Wait Done</button>`;
+            })()}
           </div>
           <div class="custom-duration-row">
             <div class="custom-duration-header">
@@ -6972,7 +7079,9 @@
     return sel ? sel.value : (localStorage.getItem("lemlib_code_comment_style") || "inline");
   }
 
-  function emitSingleAction(a, ind, commentStyle) {
+  function emitSingleAction(a, ind, commentStyle, libraryOverride, nextAct) {
+    const lib = normalizeLibraryId(libraryOverride || getActiveLibrary());
+    const isVexcodeLib = lib === "rw_template" || lib === "jar_template";
     let code = "";
     const cleanComment = cleanCommentText(a.label);
     if (a.type === "custom") {
@@ -6991,12 +7100,33 @@
         code += `${ind}// ${cleanComment}\n`;
       }
       const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
-      if (a.waitType === "distance") {
-        code += `${ind}chassis.waitUntil(${a.distance != null ? a.distance : 12});${commentSuffix}\n`;
-      } else if (a.waitType === "done") {
-        code += `${ind}chassis.waitUntilDone();${commentSuffix}\n`;
-      } else if (a.waitType === "time") {
-        code += `${ind}pros::delay(${a.delayMs != null ? a.delayMs : 250});${commentSuffix}\n`;
+      const dist = a.distance != null ? a.distance : 12;
+      const delayMs = a.delayMs != null ? a.delayMs : 250;
+      if (lib === "ez_template") {
+        if (a.waitType === "distance" || a.waitType === "until") {
+          code += `${ind}chassis.pid_wait_until(${dist}_in);${commentSuffix}\n`;
+        } else if (a.waitType === "time") {
+          code += `${ind}pros::delay(${delayMs});${commentSuffix}\n`;
+        } else {
+          code += `${ind}chassis.pid_wait();${commentSuffix}\n`;
+        }
+      } else if (isVexcodeLib) {
+        if (a.waitType === "time") {
+          code += `${ind}wait(${delayMs}, msec);${commentSuffix}\n`;
+        } else if (a.waitType === "distance" || a.waitType === "until") {
+          code += `${ind}// Distance trigger @ ${dist}"${commentSuffix}\n`;
+          code += `${ind}wait(150, msec);\n`;
+        } else {
+          code += `${ind}// Motion settled${commentSuffix}\n`;
+        }
+      } else {
+        if (a.waitType === "distance" || a.waitType === "until") {
+          code += `${ind}chassis.waitUntil(${dist});${commentSuffix}\n`;
+        } else if (a.waitType === "done") {
+          code += `${ind}chassis.waitUntilDone();${commentSuffix}\n`;
+        } else if (a.waitType === "time") {
+          code += `${ind}pros::delay(${delayMs});${commentSuffix}\n`;
+        }
       }
       if (a.customCode && a.customCode.trim()) {
         const lines = a.customCode.trim().split("\n");
@@ -7023,11 +7153,18 @@
         code += `${ind}while (true) {${commentSuffix}\n`;
       }
       if (Array.isArray(a.children) && a.children.length > 0) {
-        for (const child of a.children) {
-          code += emitSingleAction(child, ind + "  ", commentStyle);
+        for (let ci = 0; ci < a.children.length; ci++) {
+          code += emitSingleAction(a.children[ci], ind + "  ", commentStyle, lib, a.children[ci + 1]);
         }
       } else {
-        const loopCode = (a.loopCode != null && a.loopCode !== "") ? a.loopCode : (a.loopAction ? "chassis.moveToPoint(24, 24, 2000);" : "chassis.moveToPoint(24, 24, 2000);");
+        const defaultLoopStmt = lib === "ez_template"
+          ? "chassis.pid_odom_set({{24_in, 24_in}, ez::fwd, 110});\nchassis.pid_wait();"
+          : lib === "rw_template"
+            ? "moveToPoint(24, 24, 1, 2000);"
+            : lib === "jar_template"
+              ? "chassis.drive_to_point(24, 24);"
+              : "chassis.moveToPoint(24, 24, 2000);";
+        const loopCode = (a.loopCode != null && a.loopCode !== "") ? a.loopCode : defaultLoopStmt;
         const lines = loopCode.split("\n");
         for (const line of lines) {
           if (line.trim().length === 0) code += "\n";
@@ -7041,6 +7178,124 @@
     const px = a.x + (a.offsetX || 0);
     const py = a.y + (a.offsetY || 0);
     const pt = a.theta + (a.offsetTheta || 0);
+    let inlineComment = "";
+    if (cleanComment) {
+      if (commentStyle === "above") {
+        code += `${ind}// ${cleanComment}\n`;
+      } else {
+        inlineComment = ` // ${cleanComment}`;
+      }
+    }
+
+    const speedToVolts = (spd) => {
+      const s = spd != null ? Number(spd) : 127;
+      return Math.max(1.0, Math.min(12.0, (s / 127) * 12)).toFixed(1);
+    };
+    const nextIsWait = nextAct && nextAct.type === "wait" && (nextAct.waitType === "distance" || nextAct.waitType === "until" || nextAct.waitType === "done");
+
+    if (lib === "ez_template") {
+      const dirEnum = a.forwards === false ? "ez::rev" : "ez::fwd";
+      const spd = Math.round(a.maxSpeed != null ? a.maxSpeed : (bot.defaultMaxSpeed != null ? bot.defaultMaxSpeed : 110));
+      switch (a.type) {
+        case "moveToPoint":
+          code += `${ind}chassis.pid_odom_set({{${num(px)}_in, ${num(py)}_in}, ${dirEnum}, ${spd}});${inlineComment}\n`;
+          break;
+        case "moveToPose":
+          code += `${ind}chassis.pid_odom_set({{${num(px)}_in, ${num(py)}_in, ${num(pt)}_deg}, ${dirEnum}, ${spd}});${inlineComment}\n`;
+          break;
+        case "bezierCurve":
+          code += `${ind}// Smooth Spline Curve to (${num(px)}, ${num(py)}, ${num(pt)}°)\n`;
+          code += `${ind}chassis.pid_odom_set({{${num(px)}_in, ${num(py)}_in, ${num(pt)}_deg}, ${dirEnum}, ${spd}});${inlineComment}\n`;
+          break;
+        case "turnToPoint":
+          code += `${ind}chassis.pid_turn_set({${num(px)}_in, ${num(py)}_in}, ${dirEnum}, ${a.maxSpeed != null ? spd : 90});${inlineComment}\n`;
+          break;
+        case "turnToHeading":
+          code += `${ind}chassis.pid_turn_set(${num(pt)}_deg, ${a.maxSpeed != null ? spd : 90});${inlineComment}\n`;
+          break;
+        case "swingToPoint":
+        case "swingToHeading":
+          code += `${ind}chassis.pid_swing_set(ez::${a.lockedSide === "RIGHT" ? "RIGHT_SWING" : "LEFT_SWING"}, ${num(pt)}_deg, ${spd});${inlineComment}\n`;
+          break;
+        default:
+          code += `${ind}// unknown action ${a.type}${inlineComment}\n`;
+          return code;
+      }
+      if (!a.async && !nextIsWait) {
+        code += (a.earlyExitRange && a.earlyExitRange > 0)
+          ? `${ind}chassis.pid_wait_quick_chain();\n`
+          : `${ind}chassis.pid_wait();\n`;
+      }
+      return code;
+    }
+
+    if (lib === "rw_template") {
+      const dirInt = a.forwards === false ? -1 : 1;
+      const hasCustomCap = a.maxSpeed != null && Number(a.maxSpeed) < 127;
+      const optArgs = (hasCustomCap || a.earlyExitRange) ? `, ${a.earlyExitRange || 0.5}, ${speedToVolts(a.maxSpeed)}` : "";
+      switch (a.type) {
+        case "moveToPoint":
+          code += `${ind}moveToPoint(${num(px)}, ${num(py)}, ${dirInt}, ${a.timeout || 2000}${optArgs});${inlineComment}\n`;
+          break;
+        case "moveToPose":
+          code += `${ind}moveToPoint(${num(px)}, ${num(py)}, ${dirInt}, ${a.timeout || 2500}${optArgs});${inlineComment}\n`;
+          code += `${ind}turnToAngle(${num(pt)}, 1000);\n`;
+          break;
+        case "bezierCurve":
+          code += `${ind}// Curve target (${num(px)}, ${num(py)}, ${num(pt)}°)\n`;
+          code += `${ind}moveToPoint(${num(px)}, ${num(py)}, ${dirInt}, ${a.timeout || 2500}${optArgs});${inlineComment}\n`;
+          code += `${ind}turnToAngle(${num(pt)}, 1000);\n`;
+          break;
+        case "turnToPoint":
+          code += `${ind}turnToPoint(${num(px)}, ${num(py)}, ${dirInt}, ${a.timeout || 1500});${inlineComment}\n`;
+          break;
+        case "turnToHeading":
+          code += `${ind}turnToAngle(${num(pt)}, ${a.timeout || 1500});${inlineComment}\n`;
+          break;
+        case "swingToPoint":
+        case "swingToHeading":
+          code += `${ind}swing(${num(pt)}, ${a.lockedSide === "RIGHT" ? -1 : 1}, ${a.timeout || 1800});${inlineComment}\n`;
+          break;
+        default:
+          code += `${ind}// unknown action ${a.type}${inlineComment}\n`;
+      }
+      return code;
+    }
+
+    if (lib === "jar_template") {
+      const hasVolts = a.maxSpeed != null && Number(a.maxSpeed) < 127;
+      const vCap = speedToVolts(a.maxSpeed);
+      switch (a.type) {
+        case "moveToPoint":
+          code += hasVolts
+            ? `${ind}chassis.drive_to_point(${num(px)}, ${num(py)}, 0, ${vCap}, 8);${inlineComment}\n`
+            : `${ind}chassis.drive_to_point(${num(px)}, ${num(py)});${inlineComment}\n`;
+          break;
+        case "moveToPose":
+        case "bezierCurve":
+          code += hasVolts
+            ? `${ind}chassis.drive_to_pose(${num(px)}, ${num(py)}, ${num(pt)}, ${a.lead != null ? Number(a.lead) : 0.5}, 0, ${vCap}, 8);${inlineComment}\n`
+            : `${ind}chassis.drive_to_pose(${num(px)}, ${num(py)}, ${num(pt)});${inlineComment}\n`;
+          break;
+        case "turnToPoint":
+          code += `${ind}chassis.turn_to_point(${num(px)}, ${num(py)});${inlineComment}\n`;
+          break;
+        case "turnToHeading":
+          code += hasVolts
+            ? `${ind}chassis.turn_to_angle(${num(pt)}, ${vCap});${inlineComment}\n`
+            : `${ind}chassis.turn_to_angle(${num(pt)});${inlineComment}\n`;
+          break;
+        case "swingToPoint":
+        case "swingToHeading":
+          code += `${ind}chassis.${a.lockedSide === "RIGHT" ? "right" : "left"}_swing_to_angle(${num(pt)});${inlineComment}\n`;
+          break;
+        default:
+          code += `${ind}// unknown action ${a.type}${inlineComment}\n`;
+      }
+      return code;
+    }
+
+    // LemLib (default)
     const params = [];
     if (!a.forwards) params.push(".forwards = false");
     if (a.type === "moveToPose" && a.lead != null && Number(a.lead) !== 0.6) {
@@ -7060,15 +7315,6 @@
     if (a.earlyExitRange) params.push(`.earlyExitRange = ${a.earlyExitRange}`);
     const paramStr = params.length ? `, {${params.join(", ")}}` : "";
     const asyncArg = a.async ? ", true" : "";
-
-    let inlineComment = "";
-    if (cleanComment) {
-      if (commentStyle === "above") {
-        code += `${ind}// ${cleanComment}\n`;
-      } else {
-        inlineComment = ` // ${cleanComment}`;
-      }
-    }
 
     switch (a.type) {
       case "moveToPoint":
@@ -7099,12 +7345,23 @@
     return code;
   }
 
-  function emitRoutineBody(pose0, acts, indent) {
+  function emitRoutineBody(pose0, acts, indent, libraryOverride) {
     const ind = indent != null ? indent : "  ";
     const commentStyle = getCommentStyle();
+    const lib = normalizeLibraryId(libraryOverride || getActiveLibrary());
     let code = "";
-    code += `${ind}chassis.setPose(${num(pose0.x)}, ${num(pose0.y)}, ${num(pose0.theta)});\n`;
-    for (const a of acts) {
+    if (lib === "ez_template") {
+      code += `${ind}chassis.odom_xyt_set(${num(pose0.x)}_in, ${num(pose0.y)}_in, ${num(pose0.theta)}_deg);\n`;
+    } else if (lib === "rw_template") {
+      code += `${ind}setOdom(${num(pose0.x)}, ${num(pose0.y)}, ${num(pose0.theta)});\n`;
+    } else if (lib === "jar_template") {
+      code += `${ind}chassis.set_coordinates(${num(pose0.x)}, ${num(pose0.y)}, ${num(pose0.theta)});\n`;
+    } else {
+      code += `${ind}chassis.setPose(${num(pose0.x)}, ${num(pose0.y)}, ${num(pose0.theta)});\n`;
+    }
+    for (let i = 0; i < acts.length; i++) {
+      const a = acts[i];
+      const nextAct = acts[i + 1];
       if (a.type === "ifElse") {
         const cleanComment = cleanCommentText(a.label);
         const cond = (a.condition || "true").trim();
@@ -7114,11 +7371,18 @@
         const commentSuffix = cleanComment && commentStyle !== "above" ? ` // ${cleanComment}` : "";
         code += `${ind}if (${cond}) {${commentSuffix}\n`;
         if (Array.isArray(a.thenChildren) && a.thenChildren.length > 0) {
-          for (const child of a.thenChildren) {
-            code += emitSingleAction(child, ind + ind, commentStyle);
+          for (let ti = 0; ti < a.thenChildren.length; ti++) {
+            code += emitSingleAction(a.thenChildren[ti], ind + ind, commentStyle, lib, a.thenChildren[ti + 1]);
           }
         } else {
-          const thenCode = (a.thenCode != null && a.thenCode !== "") ? a.thenCode : (a.thenAction ? "chassis.moveToPoint(24, 24, 2000);" : "chassis.moveToPoint(24, 24, 2000);");
+          const defThen = lib === "ez_template"
+            ? "chassis.pid_odom_set({{24_in, 24_in}, ez::fwd, 110});\nchassis.pid_wait();"
+            : lib === "rw_template"
+              ? "moveToPoint(24, 24, 1, 2000);"
+              : lib === "jar_template"
+                ? "chassis.drive_to_point(24, 24);"
+                : "chassis.moveToPoint(24, 24, 2000);";
+          const thenCode = (a.thenCode != null && a.thenCode !== "") ? a.thenCode : defThen;
           const thenLines = thenCode.split("\n");
           for (const line of thenLines) {
             if (line.trim().length === 0) code += "\n";
@@ -7127,11 +7391,18 @@
         }
         code += `${ind}} else {\n`;
         if (Array.isArray(a.elseChildren) && a.elseChildren.length > 0) {
-          for (const child of a.elseChildren) {
-            code += emitSingleAction(child, ind + ind, commentStyle);
+          for (let ei = 0; ei < a.elseChildren.length; ei++) {
+            code += emitSingleAction(a.elseChildren[ei], ind + ind, commentStyle, lib, a.elseChildren[ei + 1]);
           }
         } else {
-          const elseCode = (a.elseCode != null && a.elseCode !== "") ? a.elseCode : (a.elseAction ? "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});" : "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});");
+          const defElse = lib === "ez_template"
+            ? "chassis.pid_odom_set({{-24_in, -24_in}, ez::rev, 110});\nchassis.pid_wait();"
+            : lib === "rw_template"
+              ? "moveToPoint(-24, -24, -1, 2000);"
+              : lib === "jar_template"
+                ? "chassis.drive_to_point(-24, -24);"
+                : "chassis.moveToPoint(-24, -24, 2000, {.forwards = false});";
+          const elseCode = (a.elseCode != null && a.elseCode !== "") ? a.elseCode : defElse;
           const elseLines = elseCode.split("\n");
           for (const line of elseLines) {
             if (line.trim().length === 0) code += "\n";
@@ -7141,7 +7412,7 @@
         code += `${ind}}\n`;
         continue;
       }
-      code += emitSingleAction(a, ind, commentStyle);
+      code += emitSingleAction(a, ind, commentStyle, lib, nextAct);
     }
     return code;
   }
@@ -7154,8 +7425,9 @@
     const modeEl = document.querySelector('input[name="codeMode"]:checked');
     const mode = modeEl ? modeEl.value : "current";
     const indent = getIndentString();
+    const lib = getActiveLibrary();
 
-    let code = `// Auto-generated by VEX LemLib Path Planner\n`;
+    let code = `// Auto-generated by VEX Path Planner [${LIB_LABELS[lib] || "LemLib"}]\n`;
 
     // Autonomous Sensor & Strategy Condition Flags
     if (conditions && conditions.length > 0) {
@@ -7173,7 +7445,7 @@
       paths.forEach((p, i) => {
         const fn = "auton_" + sanitizeIdent(p.name);
         code += `void ${fn}() {\n`;
-        code += emitRoutineBody(p.pose, p.actions, indent);
+        code += emitRoutineBody(p.pose, p.actions, indent, lib);
         code += `}\n\n`;
       });
 
@@ -7189,7 +7461,7 @@
     } else {
       const p = activePath();
       code += `// Routine: ${p.name}\n\n`;
-      code += emitRoutineBody(pose, actions, indent);
+      code += emitRoutineBody(pose, actions, indent, lib);
     }
 
     codeOut.value = code;
@@ -7290,7 +7562,8 @@
       setDomText(hudTime, `${elapsed.toFixed(2)}s / ~${totalEst.toFixed(2)}s`);
     } else {
       const t = estimateTotalTime();
-      setDomText(el, actions.length ? `Est. time: ~${t.toFixed(2)}s (LemLib)${asyncTag}` : `Est. time: —`);
+      const libLabel = LIB_SHORT_LABELS[getActiveLibrary()] || "LemLib";
+      setDomText(el, actions.length ? `Est. time: ~${t.toFixed(2)}s (${libLabel})${asyncTag}` : `Est. time: —`);
       setDomText(hudTime, actions.length ? `~${t.toFixed(2)}s total` : `0.00s`);
       setDomText(hudSpeed, `0.0 in/s`);
     }
@@ -10538,10 +10811,11 @@
     if (el("horizTrackerDiam")) el("horizTrackerDiam").value = bot.horizTrackerWheelDiam != null ? bot.horizTrackerWheelDiam : 2.0;
     if (el("imuSensorPort")) el("imuSensorPort").value = bot.imuPort != null ? bot.imuPort : 10;
 
-    // Sync detail text
+    // Sync detail text & library selectors
     if (el("botSyncDetail")) {
       el("botSyncDetail").textContent = `${bot.driveRpm || 600} RPM · ${bot.wheelDiam || 3.25}" Wheels · ${bot.trackWidth || 12}" Track`;
     }
+    syncLibrarySelectorsUI();
 
     initBotImageElement();
     syncBotVisualUI();
@@ -10731,12 +11005,23 @@
       btnSaveToCpp.addEventListener("click", () => {
         if (window.ProjectManager && typeof window.ProjectManager.updateRobotConfigCpp === "function") {
           window.ProjectManager.updateRobotConfigCpp(bot);
-          showToast("💾 Updated src/robot-config.cpp with current LemLib bot specs & PID constants!");
+          showToast(`💾 Updated src/robot-config.cpp with current ${LIB_SHORT_LABELS[getActiveLibrary()] || "LemLib"} bot specs & PID constants!`);
         } else {
           showToast("💾 Bot settings stored and applied to simulation!");
         }
       });
     }
+
+    // Wire all library selectors cleanly (banner, bot settings, code tab)
+    ["bannerLibrarySelect", "botLibrarySelect", "codeLibrarySelect"].forEach((id) => {
+      const sel = document.getElementById(id);
+      if (sel && !sel.dataset.libWired) {
+        sel.dataset.libWired = "1";
+        sel.addEventListener("change", () => {
+          setActiveLibrary(sel.value, { syncProject: true, save: true, interactive: true, notify: true });
+        });
+      }
+    });
   }
 
   
@@ -10782,6 +11067,7 @@
     cloudApplying = true;
     try {
       if (data.bot) bot = { ...bot, ...data.bot };
+      bot.library = normalizeLibraryId(data.bot?.library || data.library || bot.library || "lemlib");
       if (Array.isArray(data.paths) && data.paths.length) {
         paths = data.paths;
         activePathId = data.activePathId || paths[0].id;
@@ -11616,15 +11902,17 @@
   // -- Raw C++ Autonomous to Blocks Translator Engine ----------------
   // ===================================================================
   // Delegates parsing to shared modular engine window.CppTranslator in cpp-parser.js
-  function parseCppAuton(rawCode) {
+  function parseCppAuton(rawCode, libraryOpt) {
     if (window.CppTranslator && typeof window.CppTranslator.parseCppAuton === "function") {
       return window.CppTranslator.parseCppAuton(rawCode, {
+        library: libraryOpt || "auto",
         defaultMaxSpeed: bot.defaultMaxSpeed || 127,
         defaultMinSpeed: bot.defaultMinSpeed || 0,
       });
     }
     return {
       success: false,
+      library: "lemlib",
       routineName: "Imported Auton",
       startPose: null,
       actions: [],
@@ -11634,6 +11922,7 @@
   }
 
   const CPP_SAMPLE_ROUTINES = (window.CppTranslator && window.CppTranslator.SAMPLE_ROUTINES) || {};
+  const CPP_SAMPLE_ROUTINES_BY_LIB = (window.CppTranslator && window.CppTranslator.SAMPLE_ROUTINES_BY_LIBRARY) || {};
 
   // Wire C++ Auton Translator Modal
   function wireCppTranslateModal() {
@@ -11644,6 +11933,7 @@
     const btnCancel = document.getElementById("cppTranslateCancelBtn");
     const btnApply = document.getElementById("cppTranslateApplyBtn");
     const codeInput = document.getElementById("cppCodeInput");
+    const libSelect = document.getElementById("cppTranslateLibrarySelect");
     const sampleBtns = document.querySelectorAll(".btn-cpp-sample");
     const activeNameEl = document.getElementById("cppActiveRoutineName");
     const newNameInput = document.getElementById("cppNewRoutineName");
@@ -11662,6 +11952,14 @@
 
     let lastParsed = null;
 
+    function getModalSample(key) {
+      const selVal = libSelect ? libSelect.value : "auto";
+      const sampleLib = (selVal && selVal !== "auto") ? selVal : getActiveLibrary();
+      const libSamples = CPP_SAMPLE_ROUTINES_BY_LIB[sampleLib];
+      if (libSamples && libSamples[key]) return libSamples[key];
+      return CPP_SAMPLE_ROUTINES[key] || "";
+    }
+
     function updateActiveRoutineLabel() {
       const cur = activePath();
       if (activeNameEl && cur) {
@@ -11673,9 +11971,9 @@
       updateActiveRoutineLabel();
       modal.hidden = false;
       if (errorEl) errorEl.hidden = true;
+      if (libSelect && !libSelect.value) libSelect.value = "auto";
       if (codeInput && !codeInput.value.trim()) {
-        // Load default sample if empty
-        codeInput.value = CPP_SAMPLE_ROUTINES.preload_rush;
+        codeInput.value = getModalSample("preload_rush");
       }
       runLiveAnalysis();
       if (codeInput) codeInput.focus();
@@ -11700,8 +11998,10 @@
         return;
       }
 
-      const res = parseCppAuton(text);
+      const libChoice = libSelect ? libSelect.value : "auto";
+      const res = parseCppAuton(text, libChoice);
       lastParsed = res;
+      const detectedLabel = LIB_SHORT_LABELS[res.library] || "LemLib";
 
       if (statPose) {
         statPose.textContent = res.startPose
@@ -11714,15 +12014,15 @@
       if (statComments) statComments.textContent = String(res.stats.commentsCount);
 
       const totalItems = res.actions.length + (res.startPose ? 1 : 0);
-      if (analysisCount) analysisCount.textContent = `${totalItems} item${totalItems === 1 ? "" : "s"} detected`;
+      if (analysisCount) analysisCount.textContent = `${totalItems} item${totalItems === 1 ? "" : "s"} · ${detectedLabel}`;
 
       if (analysisStatus) {
         if (res.actions.length > 0) {
-          analysisStatus.innerHTML = `<span style="color:#34d399;">✓ Parsed ${res.actions.length} action blocks successfully</span>`;
+          analysisStatus.innerHTML = `<span style="color:#34d399;">✓ Parsed ${res.actions.length} action blocks (${escapeHtml(detectedLabel)})</span>`;
         } else if (res.startPose) {
-          analysisStatus.innerHTML = `<span style="color:#38bdf8;">✓ Parsed start pose</span>`;
+          analysisStatus.innerHTML = `<span style="color:#38bdf8;">✓ Parsed start pose (${escapeHtml(detectedLabel)})</span>`;
         } else {
-          analysisStatus.innerHTML = `<span style="color:#fbbf24;">⚠️ No movement actions recognized</span>`;
+          analysisStatus.innerHTML = `<span style="color:#fbbf24;">⚠️ No movement actions recognized (${escapeHtml(detectedLabel)})</span>`;
         }
       }
 
@@ -11733,7 +12033,7 @@
       // Render parsed preview pills
       if (previewList) {
         if (res.actions.length === 0 && !res.startPose) {
-          previewList.innerHTML = '<span style="color:#64748b;font-size:0.72rem;">No LemLib actions recognized. Check C++ syntax.</span>';
+          previewList.innerHTML = '<span style="color:#64748b;font-size:0.72rem;">No chassis motions recognized. Check C++ syntax or switch library dialect.</span>';
         } else {
           let pillsHtml = "";
           if (res.startPose) {
@@ -11744,6 +12044,7 @@
             const isCustom = a.type === "custom";
             let icon = "📍";
             if (isCustom) icon = "⚡";
+            else if (a.type === "wait") icon = "⏱️";
             else if (a.type.includes("turn")) icon = "🔄";
             else if (a.type.includes("swing")) icon = "🌊";
             else if (a.type === "moveToPose") icon = "🎯";
@@ -11754,6 +12055,8 @@
               desc = snippet.length > 18 ? snippet.slice(0, 16) + "…" : snippet;
               if (a.customDuration > 0) desc += ` (${a.customDuration}s)`;
               else desc += ` (0s)`;
+            } else if (a.type === "wait") {
+              desc = a.waitType === "time" ? `wait(${a.delayMs || 250}ms)` : a.waitType === "distance" ? `waitUntil(${a.distance || 12}")` : "waitUntilDone()";
             } else if (a.type === "moveToPoint") {
               desc = `moveToPoint(${a.x}, ${a.y})`;
             } else if (a.type === "moveToPose") {
@@ -11777,7 +12080,7 @@
     function applyTranslation() {
       if (!lastParsed || (!lastParsed.actions.length && !lastParsed.startPose)) {
         if (errorEl) {
-          errorEl.textContent = "Please paste valid LemLib C++ autonomous code before applying.";
+          errorEl.textContent = "Please paste valid VEX C++ autonomous code before applying.";
           errorEl.hidden = false;
         }
         return;
@@ -11795,6 +12098,15 @@
         if (cur && customName && targetRadio.value === "active" && lastParsed.routineName !== "Imported Auton") {
           cur.name = routineName;
           syncPathSelect();
+        }
+      }
+
+      // Apply detected/selected library if valid
+      if (lastParsed.library) {
+        bot.library = normalizeLibraryId(lastParsed.library);
+        syncLibrarySelectorsUI();
+        if (window.ProjectManager && typeof window.ProjectManager.setProjectLibrary === "function") {
+          window.ProjectManager.setProjectLibrary(bot.library, { applyTemplate: false });
         }
       }
 
@@ -11818,7 +12130,7 @@
       pushHistory("cpp_translate_import");
 
       closeModal();
-      showToast(`📥 Successfully imported & translated ${actions.length} action blocks onto the visual editor and field map!`);
+      showToast(`📥 Imported ${actions.length} blocks (${LIB_SHORT_LABELS[bot.library] || "LemLib"}) onto the visual editor!`);
     }
 
     if (btnOpenHead) btnOpenHead.onclick = openModal;
@@ -11826,6 +12138,12 @@
     if (btnClose) btnClose.onclick = closeModal;
     if (btnCancel) btnCancel.onclick = closeModal;
     if (btnApply) btnApply.onclick = applyTranslation;
+
+    if (libSelect) {
+      libSelect.addEventListener("change", () => {
+        runLiveAnalysis();
+      });
+    }
 
     if (codeInput) {
       codeInput.addEventListener("input", runLiveAnalysis);
@@ -11837,8 +12155,9 @@
         const sampleKey = btn.dataset.sample;
         if (sampleKey === "clear") {
           if (codeInput) codeInput.value = "";
-        } else if (CPP_SAMPLE_ROUTINES[sampleKey]) {
-          if (codeInput) codeInput.value = CPP_SAMPLE_ROUTINES[sampleKey];
+        } else {
+          const sampleText = getModalSample(sampleKey);
+          if (codeInput && sampleText) codeInput.value = sampleText;
         }
         runLiveAnalysis();
       };
@@ -15995,12 +16314,23 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
     // Convert parsed routines into planner paths
     const newPaths = [];
+    const projLib = window.ProjectManager && typeof window.ProjectManager.getProjectLibrary === "function"
+      ? window.ProjectManager.getProjectLibrary()
+      : getActiveLibrary();
+    bot.library = normalizeLibraryId(projLib);
+    syncLibrarySelectorsUI();
+
     autonRoutines.forEach((r, idx) => {
       let parsed = null;
       if (window.CppTranslator && typeof window.CppTranslator.parseCppAuton === "function") {
         try {
           const fullCode = `void ${r.name}() {\n${r.body}\n}`;
-          parsed = window.CppTranslator.parseCppAuton(fullCode, { defaultTimeout: 2000 });
+          parsed = window.CppTranslator.parseCppAuton(fullCode, {
+            library: projLib || "auto",
+            defaultTimeout: 2000,
+            defaultMaxSpeed: bot.defaultMaxSpeed || 127,
+            defaultMinSpeed: bot.defaultMinSpeed || 0,
+          });
         } catch (e) {
           console.warn("Failed parsing routine in CppTranslator:", e);
         }
@@ -17881,14 +18211,26 @@ lemlib::ControllerSettings ${currentMode}_controller(
       if (justSavedByTranslator) {
         localStorage.removeItem("lemlib_translator_just_saved");
         console.log("🚀 Detected fresh translation from Translator. Synchronizing to project...");
+        if (typeof window.ProjectManager.setProjectLibrary === "function") {
+          const applyTpl = typeof window.ProjectManager.isDefaultProject === "function" && window.ProjectManager.isDefaultProject();
+          window.ProjectManager.setProjectLibrary(getActiveLibrary(), { applyTemplate: applyTpl, bot });
+        }
         proj.lastAutonEditor = "blocks";
         proj.rawCppPreserved = false;
         syncPlannerIntoProjectManager({ ask: false, force: true });
+        syncLibrarySelectorsUI();
+        generateCode();
         updateProjectBanner();
         if (typeof showToast === "function") {
           showToast("✓ Translation successfully loaded and synchronized with Visual Planner & Flowchart!");
         }
         return;
+      }
+
+      if (proj.library && (proj.lastAutonEditor === "ide" || proj.rawCppPreserved || proj.importedProject)) {
+        bot.library = normalizeLibraryId(proj.library);
+        syncLibrarySelectorsUI();
+        generateCode();
       }
 
       const code = window.ProjectManager.getFile("src/autons.cpp");
@@ -18076,12 +18418,14 @@ lemlib::ControllerSettings ${currentMode}_controller(
     if (counts['{'] !== counts['}']) warnings.push("Unbalanced curly braces { and }");
     if (counts['['] !== counts[']']) warnings.push("Unbalanced square brackets [ and ]");
 
-    // Case typos in standard LemLib functions
-    if (/chassis\.moveto/i.test(code) && !/chassis\.moveTo/i.test(code) && /chassis\./i.test(code)) {
-      warnings.push("Typo: LemLib uses camelCase. Use 'chassis.moveToPoint' or 'chassis.moveToPose'.");
-    }
-    if (/chassis\.turnto/i.test(code) && !/chassis\.turnTo/i.test(code) && /chassis\./i.test(code)) {
-      warnings.push("Typo: LemLib uses camelCase. Use 'chassis.turnToHeading'.");
+    // Case typos in standard LemLib functions (only when LemLib is selected)
+    if (getActiveLibrary() === "lemlib") {
+      if (/chassis\.moveto/i.test(code) && !/chassis\.moveTo/i.test(code) && /chassis\./i.test(code)) {
+        warnings.push("Typo: LemLib uses camelCase. Use 'chassis.moveToPoint' or 'chassis.moveToPose'.");
+      }
+      if (/chassis\.turnto/i.test(code) && !/chassis\.turnTo/i.test(code) && /chassis\./i.test(code)) {
+        warnings.push("Typo: LemLib uses camelCase. Use 'chassis.turnToHeading'.");
+      }
     }
 
     // Missing semicolon checker
@@ -19045,7 +19389,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
     emitRoutineBody,
     syncPlannerIntoProjectManager,
     getPaths: () => paths,
-    getIndentString
+    getIndentString,
+    getActiveLibrary,
+    setActiveLibrary,
   };
 
   initFirebaseAuth();

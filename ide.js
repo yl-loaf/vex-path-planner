@@ -453,9 +453,12 @@
 
         const suggestions = [];
 
-        // 1. Built-in LemLib & PROS items
-        if (typeof BUILTIN_INTELLISENSE !== "undefined" && Array.isArray(BUILTIN_INTELLISENSE)) {
-          BUILTIN_INTELLISENSE.forEach(item => {
+        // 1. Built-in Library & PROS/VEXcode IntelliSense items
+        const activeIntel = typeof getActiveBuiltinIntelliSense === "function"
+          ? getActiveBuiltinIntelliSense()
+          : (typeof BUILTIN_INTELLISENSE !== "undefined" ? BUILTIN_INTELLISENSE : []);
+        if (Array.isArray(activeIntel)) {
+          activeIntel.forEach(item => {
             let kind = monacoInstance.languages.CompletionItemKind.Method;
             if (item.kind === "variable") kind = monacoInstance.languages.CompletionItemKind.Variable;
             else if (item.kind === "property") kind = monacoInstance.languages.CompletionItemKind.Property;
@@ -472,7 +475,7 @@
               kind: kind,
               insertText: snippetText,
               insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              detail: item.detail || "LemLib API",
+              detail: item.detail || "VEX C++ API",
               documentation: {
                 value: `**${item.name}**\n\n${item.doc || ""}`
               },
@@ -514,7 +517,9 @@
         if (!word) return null;
 
         const term = word.word;
-        const catalog = (typeof BUILTIN_INTELLISENSE !== "undefined" ? BUILTIN_INTELLISENSE : []);
+        const catalog = typeof getActiveBuiltinIntelliSense === "function"
+          ? getActiveBuiltinIntelliSense()
+          : (typeof BUILTIN_INTELLISENSE !== "undefined" ? BUILTIN_INTELLISENSE : []);
         const dynamicItems = (typeof getDynamicProjectItems === "function" ? getDynamicProjectItems() : []);
         const match = catalog.find(i => i.name === term) || dynamicItems.find(i => i.name === term);
         if (match) {
@@ -522,7 +527,7 @@
             range: new monacoInstance.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
             contents: [
               { value: "```cpp\n" + (match.detail || match.name) + "\n```" },
-              { value: match.doc || "LemLib / PROS C++ Robotics Engine" }
+              { value: match.doc || "VEX V5 C++ Robotics Engine" }
             ]
           };
         }
@@ -543,7 +548,9 @@
         if (!match) return null;
 
         const fnName = match[1];
-        const catalog = (typeof BUILTIN_INTELLISENSE !== "undefined" ? BUILTIN_INTELLISENSE : []);
+        const catalog = typeof getActiveBuiltinIntelliSense === "function"
+          ? getActiveBuiltinIntelliSense()
+          : (typeof BUILTIN_INTELLISENSE !== "undefined" ? BUILTIN_INTELLISENSE : []);
         const item = catalog.find(i => i.name === fnName);
         if (!item || !item.detail) return null;
 
@@ -1205,6 +1212,11 @@
   function renderProjectHeader() {
     if (elProjectName) elProjectName.textContent = ProjectManager.project?.name || "Override_LemLib_Bot";
     if (elDirtyBadge) elDirtyBadge.hidden = !ProjectManager.isDirty;
+    const sel = document.getElementById("ideLibrarySelect");
+    if (sel && ProjectManager && typeof ProjectManager.getProjectLibrary === "function") {
+      const lib = ProjectManager.getProjectLibrary();
+      if (sel.value !== lib) sel.value = lib;
+    }
   }
 
   const collapsedFolders = new Set();
@@ -1992,6 +2004,76 @@
     { name: "auton", kind: "snippet", icon: "💬", label: "autonomous routine", insertSnippet: "void auton_new_routine() {\n    chassis.setPose(-60, -60, 0);\n    chassis.moveToPoint(-24, -24, 2000);\n}", detail: "LemLib Autonomous Function", doc: "Creates a new autonomous routine." }
   ];
 
+  const INTELLISENSE_CATALOG_BY_LIBRARY = {
+    lemlib: BUILTIN_INTELLISENSE,
+    ez_template: [
+      { name: "odom_xyt_set", kind: "method", icon: "⚡", label: "odom_xyt_set(x_in, y_in, theta_deg)", insertSnippet: "odom_xyt_set(${-60}_in, ${-60}_in, ${0}_deg);", detail: "void ez::Drive::odom_xyt_set(okapi::QLength x, okapi::QLength y, okapi::QAngle theta)", doc: "Sets starting odometry position and heading using EZ-Template Okapi unit literals (_in, _deg).", scope: "chassis" },
+      { name: "drive_angle_set", kind: "method", icon: "⚡", label: "drive_angle_set(theta_deg)", insertSnippet: "drive_angle_set(${0}_deg);", detail: "void ez::Drive::drive_angle_set(okapi::QAngle theta)", doc: "Sets the current IMU / drivetrain heading angle.", scope: "chassis" },
+      { name: "pid_odom_set", kind: "method", icon: "⚡", label: "pid_odom_set({{x_in, y_in}, dir, speed})", insertSnippet: "pid_odom_set({{${x}_in, ${y}_in}, ez::fwd, ${110}});", detail: "void ez::Drive::pid_odom_set(ez::odom_movements odom, bool slew = false)", doc: "Moves chassis to target field coordinates (and optional theta_deg) using EZ-Template Boomerang/Pure-Pursuit odometry PID.", scope: "chassis" },
+      { name: "pid_drive_set", kind: "method", icon: "⚡", label: "pid_drive_set(dist_in, speed)", insertSnippet: "pid_drive_set(${24}_in, ${110});", detail: "void ez::Drive::pid_drive_set(okapi::QLength target, int speed, bool slew = false)", doc: "Drives straight relative to current heading by target inches (+ forward, - reverse).", scope: "chassis" },
+      { name: "pid_turn_set", kind: "method", icon: "⚡", label: "pid_turn_set(theta_deg, speed)", insertSnippet: "pid_turn_set(${90}_deg, ${90});", detail: "void ez::Drive::pid_turn_set(okapi::QAngle target, int speed)", doc: "Turns chassis to face an absolute heading (or {x_in, y_in} point) at specified speed (0-127).", scope: "chassis" },
+      { name: "pid_swing_set", kind: "method", icon: "⚡", label: "pid_swing_set(type, theta_deg, speed)", insertSnippet: "pid_swing_set(ez::LEFT_SWING, ${90}_deg, ${110});", detail: "void ez::Drive::pid_swing_set(ez::e_swing type, okapi::QAngle target, int speed, int opp_speed = 0)", doc: "Swings around locked side (ez::LEFT_SWING or ez::RIGHT_SWING) to target heading.", scope: "chassis" },
+      { name: "pid_wait", kind: "method", icon: "⚡", label: "pid_wait()", insertSnippet: "pid_wait();", detail: "void ez::Drive::pid_wait()", doc: "Blocks until the active EZ-Template PID motion settles within exit conditions.", scope: "chassis" },
+      { name: "pid_wait_quick", kind: "method", icon: "⚡", label: "pid_wait_quick()", insertSnippet: "pid_wait_quick();", detail: "void ez::Drive::pid_wait_quick()", doc: "Blocks until the robot crosses the target plane without waiting for small-error settle.", scope: "chassis" },
+      { name: "pid_wait_quick_chain", kind: "method", icon: "⚡", label: "pid_wait_quick_chain()", insertSnippet: "pid_wait_quick_chain();", detail: "void ez::Drive::pid_wait_quick_chain()", doc: "Chains smoothly into the next motion without stopping between segments.", scope: "chassis" },
+      { name: "pid_wait_until", kind: "method", icon: "⚡", label: "pid_wait_until(target)", insertSnippet: "pid_wait_until(${12}_in);", detail: "void ez::Drive::pid_wait_until(okapi::QLength target)", doc: "Blocks until robot reaches distance or heading threshold during an active motion.", scope: "chassis" },
+      { name: "ez::fwd", kind: "property", icon: "📦", label: "ez::fwd", insertSnippet: "ez::fwd", detail: "ez::e_angle_behavior ez::fwd", doc: "Drive forwards toward odometry or point target." },
+      { name: "ez::rev", kind: "property", icon: "📦", label: "ez::rev", insertSnippet: "ez::rev", detail: "ez::e_angle_behavior ez::rev", doc: "Drive backwards toward odometry or point target." },
+      { name: "ez::LEFT_SWING", kind: "property", icon: "📦", label: "ez::LEFT_SWING", insertSnippet: "ez::LEFT_SWING", detail: "ez::e_swing ez::LEFT_SWING", doc: "Swing drivetrain using left side active." },
+      { name: "ez::RIGHT_SWING", kind: "property", icon: "📦", label: "ez::RIGHT_SWING", insertSnippet: "ez::RIGHT_SWING", detail: "ez::e_swing ez::RIGHT_SWING", doc: "Swing drivetrain using right side active." },
+      { name: "set", kind: "method", icon: "⚡", label: "piston.set(state)", insertSnippet: "set(${true});", detail: "void ez::Piston::set(bool input)", doc: "Extends (true) or retracts (false) an ez::Piston solenoid." },
+      { name: "move", kind: "method", icon: "⚡", label: "motor.move(voltage)", insertSnippet: "move(${127});", detail: "void pros::Motor::move(int32_t voltage)", doc: "Powers PROS motor (-127 to 127)." },
+      { name: "delay", kind: "method", icon: "⚡", label: "pros::delay(ms)", insertSnippet: "pros::delay(${250});", detail: "void pros::delay(uint32_t ms)", doc: "Pauses current task thread in milliseconds." },
+      { name: "chassis", kind: "variable", icon: "📦", label: "chassis", insertSnippet: "chassis.", detail: "ez::Drive chassis", doc: "Global EZ-Template Drive controller." },
+      { name: "ez", kind: "type", icon: "🧱", label: "ez", insertSnippet: "ez::", detail: "namespace ez", doc: "EZ-Template namespace." },
+      { name: "auton", kind: "snippet", icon: "💬", label: "EZ-Template autonomous routine", insertSnippet: "void auton_ez_routine() {\n    chassis.odom_xyt_set(-60_in, -60_in, 0_deg);\n    chassis.pid_odom_set({{-24_in, -24_in}, ez::fwd, 110});\n    chassis.pid_wait();\n}", detail: "EZ-Template Autonomous Function", doc: "Creates an EZ-Template autonomous routine." }
+    ],
+    rw_template: [
+      { name: "setOdom", kind: "method", icon: "⚡", label: "setOdom(x, y, heading)", insertSnippet: "setOdom(${-60}, ${-60}, ${0});", detail: "void setOdom(double x, double y, double heading)", doc: "Initializes RW-Template odometry position (x, y in inches) and heading (degrees)." },
+      { name: "moveToPoint", kind: "method", icon: "⚡", label: "moveToPoint(x, y, dir, timeout, ...)", insertSnippet: "moveToPoint(${x}, ${y}, ${1}, ${2000});", detail: "void moveToPoint(double x, double y, int dir, double timeout, double exit = 0.5, double maxVolt = 12.0)", doc: "Drives chassis to field coordinate (x, y). dir: 1 forward, -1 reverse; blocking up to timeout ms." },
+      { name: "driveTo", kind: "method", icon: "⚡", label: "driveTo(distance_in, timeout)", insertSnippet: "driveTo(${24}, ${2000});", detail: "void driveTo(double distance_in, double timeout, bool exit = false, double maxVolt = 12.0)", doc: "Drives straight relative distance in inches (+ forward, - reverse)." },
+      { name: "turnToAngle", kind: "method", icon: "⚡", label: "turnToAngle(angle_deg, timeout)", insertSnippet: "turnToAngle(${90}, ${1500});", detail: "void turnToAngle(double angle, double timeout, bool exit = false, double maxVolt = 12.0)", doc: "Turns robot to absolute IMU heading in degrees." },
+      { name: "turnToPoint", kind: "method", icon: "⚡", label: "turnToPoint(x, y, dir, timeout)", insertSnippet: "turnToPoint(${x}, ${y}, ${1}, ${1500});", detail: "void turnToPoint(double x, double y, int dir, double timeout)", doc: "Turns robot to face (1) or back toward (-1) field coordinate (x, y)." },
+      { name: "swing", kind: "method", icon: "⚡", label: "swing(angle_deg, side, timeout)", insertSnippet: "swing(${90}, ${1}, ${1800});", detail: "void swing(double angle, int dir, double timeout)", doc: "Pivots on one side (1 = left swing, -1 = right swing) to target heading." },
+      { name: "spin", kind: "method", icon: "⚡", label: "motor.spin(dir, amount, units)", insertSnippet: "spin(vex::fwd, ${12}, vex::volt);", detail: "void vex::motor::spin(vex::directionType dir, double voltage, vex::voltageUnits units)", doc: "Spins VEXcode motor at voltage (volt) or percent (pct)." },
+      { name: "stop", kind: "method", icon: "⚡", label: "motor.stop()", insertSnippet: "stop();", detail: "void vex::motor::stop()", doc: "Stops VEXcode motor using configured brakeType." },
+      { name: "set", kind: "method", icon: "⚡", label: "piston.set(state)", insertSnippet: "set(${true});", detail: "void vex::digital_out::set(bool value)", doc: "Sets VEXcode pneumatic solenoid output (true/false)." },
+      { name: "wait", kind: "method", icon: "⚡", label: "wait(time, msec)", insertSnippet: "wait(${250}, msec);", detail: "void vex::wait(double time, vex::timeUnits units)", doc: "Pauses current thread for specified milliseconds (msec)." },
+      { name: "vex", kind: "type", icon: "🧱", label: "vex", insertSnippet: "vex::", detail: "namespace vex", doc: "VEXcode V5 API namespace." },
+      { name: "auton", kind: "snippet", icon: "💬", label: "RW-Template autonomous routine", insertSnippet: "void auton_rw_routine() {\n    setOdom(-60, -60, 0);\n    moveToPoint(-24, -24, 1, 2000);\n    turnToAngle(90, 1500);\n}", detail: "RW-Template Autonomous Function", doc: "Creates an RW-Template VEXcode autonomous routine." }
+    ],
+    jar_template: [
+      { name: "set_coordinates", kind: "method", icon: "⚡", label: "set_coordinates(X, Y, angle)", insertSnippet: "set_coordinates(${-60}, ${-60}, ${0});", detail: "void Drive::set_coordinates(float X_position, float Y_position, float orientation_deg)", doc: "Initializes JAR-Template odometry position and heading.", scope: "chassis" },
+      { name: "set_heading", kind: "method", icon: "⚡", label: "set_heading(angle)", insertSnippet: "set_heading(${0});", detail: "void Drive::set_heading(float orientation_deg)", doc: "Sets current inertial heading in degrees.", scope: "chassis" },
+      { name: "drive_to_point", kind: "method", icon: "⚡", label: "drive_to_point(X, Y)", insertSnippet: "drive_to_point(${x}, ${y});", detail: "void Drive::drive_to_point(float X_position, float Y_position, float drive_min_voltage = 0, float drive_max_voltage = 10, float heading_max_voltage = 8)", doc: "Drives to field coordinate (X, Y) in inches using JAR odometry.", scope: "chassis" },
+      { name: "drive_to_pose", kind: "method", icon: "⚡", label: "drive_to_pose(X, Y, angle)", insertSnippet: "drive_to_pose(${x}, ${y}, ${theta});", detail: "void Drive::drive_to_pose(float X_position, float Y_position, float angle, float lead = 0.5, float drive_min_voltage = 0, float drive_max_voltage = 10, float heading_max_voltage = 8)", doc: "Drives to coordinate (X, Y) and settles at target angle using JAR Boomerang.", scope: "chassis" },
+      { name: "drive_distance", kind: "method", icon: "⚡", label: "drive_distance(distance)", insertSnippet: "drive_distance(${24});", detail: "void Drive::drive_distance(float distance, float heading = current, float drive_max_voltage = 10, float heading_max_voltage = 8)", doc: "Drives relative distance in inches (+ forward, - reverse).", scope: "chassis" },
+      { name: "turn_to_angle", kind: "method", icon: "⚡", label: "turn_to_angle(angle)", insertSnippet: "turn_to_angle(${90});", detail: "void Drive::turn_to_angle(float angle, float turn_max_voltage = 12)", doc: "Turns chassis to absolute field heading in degrees.", scope: "chassis" },
+      { name: "turn_to_point", kind: "method", icon: "⚡", label: "turn_to_point(X, Y)", insertSnippet: "turn_to_point(${x}, ${y});", detail: "void Drive::turn_to_point(float X_position, float Y_position, float extra_angle_deg = 0)", doc: "Turns chassis to face field coordinate (X, Y).", scope: "chassis" },
+      { name: "left_swing_to_angle", kind: "method", icon: "⚡", label: "left_swing_to_angle(angle)", insertSnippet: "left_swing_to_angle(${90});", detail: "void Drive::left_swing_to_angle(float angle)", doc: "Swings left side of drivetrain to target angle.", scope: "chassis" },
+      { name: "right_swing_to_angle", kind: "method", icon: "⚡", label: "right_swing_to_angle(angle)", insertSnippet: "right_swing_to_angle(${90});", detail: "void Drive::right_swing_to_angle(float angle)", doc: "Swings right side of drivetrain to target angle.", scope: "chassis" },
+      { name: "spin", kind: "method", icon: "⚡", label: "motor.spin(dir, amount, units)", insertSnippet: "spin(vex::fwd, ${12}, vex::volt);", detail: "void vex::motor::spin(vex::directionType dir, double voltage, vex::voltageUnits units)", doc: "Spins VEXcode motor at voltage or percent." },
+      { name: "stop", kind: "method", icon: "⚡", label: "motor.stop()", insertSnippet: "stop();", detail: "void vex::motor::stop()", doc: "Stops VEXcode motor." },
+      { name: "set", kind: "method", icon: "⚡", label: "piston.set(state)", insertSnippet: "set(${true});", detail: "void vex::digital_out::set(bool value)", doc: "Sets pneumatic solenoid state (true/false)." },
+      { name: "wait", kind: "method", icon: "⚡", label: "wait(time, msec)", insertSnippet: "wait(${250}, msec);", detail: "void vex::wait(double time, vex::timeUnits units)", doc: "Pauses current thread for specified milliseconds (msec)." },
+      { name: "chassis", kind: "variable", icon: "📦", label: "chassis", insertSnippet: "chassis.", detail: "Drive chassis", doc: "Global JAR-Template Drive chassis controller." },
+      { name: "vex", kind: "type", icon: "🧱", label: "vex", insertSnippet: "vex::", detail: "namespace vex", doc: "VEXcode V5 API namespace." },
+      { name: "auton", kind: "snippet", icon: "💬", label: "JAR-Template autonomous routine", insertSnippet: "void auton_jar_routine() {\n    chassis.set_coordinates(-60, -60, 0);\n    chassis.drive_to_point(-24, -24);\n    chassis.turn_to_angle(90);\n}", detail: "JAR-Template Autonomous Function", doc: "Creates a JAR-Template VEXcode autonomous routine." }
+    ]
+  };
+
+  function getActiveLibrary() {
+    if (window.ProjectManager && typeof window.ProjectManager.getProjectLibrary === "function") {
+      return window.ProjectManager.getProjectLibrary();
+    }
+    return localStorage.getItem("vex_active_library") || "lemlib";
+  }
+
+  function getActiveBuiltinIntelliSense() {
+    const lib = getActiveLibrary();
+    return INTELLISENSE_CATALOG_BY_LIBRARY[lib] || BUILTIN_INTELLISENSE;
+  }
+
   function getDynamicProjectItems() {
     if (!window.ProjectManager) return [];
     const sym = window.ProjectManager.symbols || window.ProjectManager.indexVariables();
@@ -2086,7 +2168,7 @@
       return;
     }
 
-    const allItems = [...BUILTIN_INTELLISENSE, ...getDynamicProjectItems()];
+    const allItems = [...getActiveBuiltinIntelliSense(), ...getDynamicProjectItems()];
     const query = currentWord.toLowerCase();
 
     intelItems = allItems.filter(item => {
@@ -2224,15 +2306,15 @@
   function checkParameterSignatureHelp(lineUpToPos) {
     if (!elParamHint || !elParamSig || !elParamDoc) return false;
 
-    // Search for active function call e.g. chassis.moveToPose(10, 20,
-    const match = /(chassis|pros|lemlib|[a-zA-Z0-9_]+)\.(moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|waitUntil|setPose|set_value|move)\s*\(([^)]*)$/.exec(lineUpToPos);
+    // Search for active function call across LemLib, EZ-Template, RW-Template, JAR-Template
+    const match = /(?:(chassis|pros|lemlib|ez|vex|[a-zA-Z0-9_]+)\.)?(moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|waitUntil|setPose|set_value|move|odom_xyt_set|drive_angle_set|pid_odom_set|pid_drive_set|pid_turn_set|pid_swing_set|pid_wait_until|setOdom|driveTo|turnToAngle|swing|set_coordinates|set_heading|drive_to_point|drive_to_pose|drive_distance|turn_to_angle|turn_to_point|left_swing_to_angle|right_swing_to_angle|wait)\s*\(([^)]*)$/.exec(lineUpToPos);
     if (!match) return false;
 
     const fnName = match[2];
     const argsStr = match[3];
     const paramCount = argsStr.split(",").length - 1;
 
-    const builtin = BUILTIN_INTELLISENSE.find(b => b.name === fnName);
+    const builtin = getActiveBuiltinIntelliSense().find(b => b.name === fnName);
     if (!builtin) return false;
 
     const detailParts = builtin.detail.match(/\((.*?)\)/);
@@ -3165,6 +3247,67 @@
       });
     }
 
+    function applyLibrarySwitchInIde(libId, forceStarterTemplate = false) {
+      if (!window.ProjectManager || typeof window.ProjectManager.setProjectLibrary !== "function") return;
+      saveCurrentEditorState();
+      const isDefault = typeof window.ProjectManager.isDefaultProject === "function" && window.ProjectManager.isDefaultProject();
+      const applyTemplate = forceStarterTemplate || isDefault;
+
+      if (applyTemplate) {
+        Object.keys(window.ProjectManager.project?.files || {}).forEach((fname) => {
+          window.ProjectManager.createVersionSnapshot(fname, "library_switch", `Backup before switching to ${libId} starter`);
+        });
+      }
+
+      const lib = window.ProjectManager.setProjectLibrary(libId, { applyTemplate });
+      try {
+        localStorage.setItem("vex_active_library", lib);
+      } catch (_) {}
+
+      if (applyTemplate) {
+        if (isMonacoReady && monacoEditor) {
+          try { monacoEditor.setModel(null); } catch (_) {}
+        }
+        monacoModels.forEach((m) => {
+          try { if (!m.isDisposed()) m.dispose(); } catch (_) {}
+        });
+        monacoModels.clear();
+        const availableFiles = Object.keys(window.ProjectManager.project?.files || {});
+        if (!availableFiles.includes(activeFile)) {
+          activeFile = availableFiles.includes("src/autons.cpp") ? "src/autons.cpp" : (availableFiles[0] || "src/autons.cpp");
+        }
+        openTabs = ["src/autons.cpp", "include/robot-config.h", "src/main.cpp"].filter((f) => availableFiles.includes(f));
+        if (openTabs.length === 0 && availableFiles.length > 0) openTabs = [availableFiles[0]];
+        renderFileTree();
+        renderTabs();
+        loadFile(activeFile);
+      }
+
+      renderProjectHeader();
+      renderSymbols();
+      updateDiagnosticsUI();
+      if (typeof showToast === "function") {
+        showToast(applyTemplate
+          ? `📚 Switched to ${lib} and applied multi-file starter template`
+          : `📚 Switched IDE library & IntelliSense to ${lib}`);
+      }
+    }
+
+    const ideLibSelect = document.getElementById("ideLibrarySelect");
+    if (ideLibSelect) {
+      ideLibSelect.addEventListener("change", () => {
+        applyLibrarySwitchInIde(ideLibSelect.value, false);
+      });
+    }
+
+    const btnIdeApplyTemplate = document.getElementById("btnIdeApplyTemplate");
+    if (btnIdeApplyTemplate) {
+      btnIdeApplyTemplate.addEventListener("click", () => {
+        const lib = ideLibSelect ? ideLibSelect.value : getActiveLibrary();
+        applyLibrarySwitchInIde(lib, true);
+      });
+    }
+
     // -------------------------------------------------------------
     // V5 Brain Serial Driver & Telemetry Scanner Modal Wiring
     // -------------------------------------------------------------
@@ -4005,7 +4148,11 @@
   function runCompilation() {
     saveCurrentEditorState();
     if (!elBuildConsole) return;
-    elBuildConsole.textContent = "Compiling project workspace (pros make)...\n";
+    const activeLib = getActiveLibrary();
+    const isVexcode = activeLib === "rw_template" || activeLib === "jar_template";
+    elBuildConsole.textContent = isVexcode
+      ? "Compiling workspace (VEXcode arm-none-eabi-g++ make)...\n"
+      : "Compiling project workspace (pros make)...\n";
 
     // Switch tab to build
     const buildTabBtn = document.querySelector('.ide-out-tab[data-tab="build"]');

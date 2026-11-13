@@ -597,6 +597,16 @@
       <div class="project-banner-left">
         <strong class="project-name-label font-mono" id="bannerProjectName">Override_LemLib_Bot</strong>
         <span class="banner-sep" aria-hidden="true">·</span>
+        <label class="banner-lib-wrap font-mono" for="bannerLibrarySelect" style="display:inline-flex;align-items:center;gap:5px;font-size:0.74rem;color:var(--text-muted);">
+          <span>Lib:</span>
+          <select id="bannerLibrarySelect" title="Switch active VEX C++ autonomous library" style="font-family:var(--font-mono);font-size:0.73rem;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;">
+            <option value="lemlib">LemLib (PROS)</option>
+            <option value="ez_template">EZ-Template (PROS)</option>
+            <option value="rw_template">RW-Template (VEXcode)</option>
+            <option value="jar_template">JAR-Template (VEXcode)</option>
+          </select>
+        </label>
+        <span class="banner-sep" aria-hidden="true">·</span>
         <span class="project-file-label">Target: <code>src/autons.cpp</code></span>
         <span class="banner-sep" aria-hidden="true">·</span>
         <span class="project-variable-pill font-mono tabular-nums" id="bannerVariableCount" title="Variables and devices indexed across robot-config.h and other project files">0 devices indexed</span>
@@ -841,6 +851,17 @@
             <div id="botSyncStatusBadge" class="bot-sync-badge synced" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0;font-size:0.72rem;color:#34d399;">
               <span>Synced with <code>src/robot-config.cpp</code></span>
               <span id="botSyncDetail" class="font-mono tabular-nums" style="color:var(--text-muted);font-size:0.68rem;">600 RPM · 3.25" Wheels</span>
+            </div>
+
+            <div class="row" style="margin-bottom:8px;">
+              <label class="wide" for="botLibrarySelect">Autonomous Library / Template
+                <select id="botLibrarySelect" title="Select target VEX V5 C++ motion library">
+                  <option value="lemlib">LemLib v0.5+ (PROS 4)</option>
+                  <option value="ez_template">EZ-Template v3+ (PROS 4)</option>
+                  <option value="rw_template">RW-Template (VEXcode V5)</option>
+                  <option value="jar_template">JAR-Template (VEXcode V5)</option>
+                </select>
+              </label>
             </div>
 
             <p class="hint" style="margin-bottom:8px">Physical measurements in inches scale the robot footprint on the 144" field and drive the 10ms kinematics loop.</p>
@@ -1152,7 +1173,16 @@
         <!-- TAB PANE 3: Generated LemLib C++ Code -->
         <div class="planner-tab-pane" id="paneTabCode" style="display:none;">
           <section class="code-section" style="margin-top:4px;">
-            <h2>Generated LemLib Code</h2>
+            <h2 id="codeSectionHeading">Generated LemLib Code</h2>
+            <div class="code-indent-row" style="margin-bottom:6px;">
+              <label for="codeLibrarySelect">Library Dialect:</label>
+              <select id="codeLibrarySelect" title="Switch generated C++ output dialect">
+                <option value="lemlib">LemLib (PROS)</option>
+                <option value="ez_template">EZ-Template (PROS)</option>
+                <option value="rw_template">RW-Template (VEXcode)</option>
+                <option value="jar_template">JAR-Template (VEXcode)</option>
+              </select>
+            </div>
             <div class="code-mode-row">
               <label><input type="radio" name="codeMode" value="current" checked /> Current routine</label>
               <label><input type="radio" name="codeMode" value="all" /> All routines (switch)</label>
@@ -1655,7 +1685,7 @@
     <div class="modal-card cpp-translate-card">
       <div class="cpp-translate-header">
         <div class="cpp-translate-title-wrap">
-          <span class="cpp-translate-badge">LemLib v0.5+ · Two-Way Parser Engine</span>
+          <span class="cpp-translate-badge">Multi-Library · Two-Way C++ Parser Engine</span>
           <h2>C++ Auton Code to Blocks Translator</h2>
         </div>
         <button type="button" id="cppTranslateClose" class="modal-close-btn" title="Close (Esc)">✕</button>
@@ -1663,21 +1693,29 @@
 
       <div class="cpp-translate-body">
         <p class="cpp-translate-intro">
-          Paste any raw VEX V5 C++ autonomous code (full routine functions or snippets). The translator automatically parses <strong>start poses</strong> (<code>setPose</code>), <strong>LemLib motions</strong> (<code>moveToPoint</code>, <code>moveToPose</code>, <code>turnToHeading</code>, <code>swingToPoint</code>, etc.), struct parameters, custom subsystem commands, comments, and infers <strong>multitask asyncness</strong> and non-blocking concurrency.
+          Paste any raw VEX V5 C++ autonomous code (full routine functions or snippets) from <strong>LemLib</strong>, <strong>EZ-Template</strong>, <strong>RW-Template</strong>, or <strong>JAR-Template</strong>. The translator automatically parses start poses, motions, custom subsystem commands, comments, and infers multitask asyncness.
         </p>
 
         <div class="cpp-presets-bar">
-          <span class="cpp-presets-label">Sample Routines:</span>
+          <span class="cpp-presets-label">Library:</span>
+          <select id="cppTranslateLibrarySelect" title="Select parser dialect or Auto-Detect" style="font-family:var(--font-mono);font-size:0.74rem;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+            <option value="auto">Auto-Detect</option>
+            <option value="lemlib">LemLib (PROS)</option>
+            <option value="ez_template">EZ-Template (PROS)</option>
+            <option value="rw_template">RW-Template (VEXcode)</option>
+            <option value="jar_template">JAR-Template (VEXcode)</option>
+          </select>
+          <span class="cpp-presets-label" style="margin-left:6px;">Sample Routines:</span>
           <button type="button" class="btn-cpp-sample" data-sample="preload_rush">Preload &amp; Mogo Rush</button>
           <button type="button" class="btn-cpp-sample" data-sample="multitask_subsystems">Concurrent Intake &amp; Subsystems</button>
-          <button type="button" class="btn-cpp-sample" data-sample="boomerang_swings">Boomerang &amp; Swings</button>
+          <button type="button" class="btn-cpp-sample" data-sample="boomerang_swings">Swings &amp; Curves</button>
           <button type="button" class="btn-cpp-sample" data-sample="clear">Clear</button>
         </div>
 
         <div class="cpp-input-wrapper">
           <label for="cppCodeInput" class="cpp-input-label">
             <span>Raw C++ Autonomous Code:</span>
-            <span class="cpp-input-hint">Supports setPose, all LemLib motions, struct params, pros::Task, &amp; subsystems</span>
+            <span class="cpp-input-hint">Supports LemLib, EZ-Template, RW-Template, JAR-Template, pros::Task &amp; subsystems</span>
           </label>
           <textarea id="cppCodeInput" class="cpp-code-textarea" spellcheck="false" placeholder="// Paste your VEX V5 LemLib autonomous C++ code here...
 void autonomous() {
