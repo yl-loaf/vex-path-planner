@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20261023.k1" />
+  <link rel="stylesheet" href="style.css?v=20261113.k1" />
   <script>
     (function () {
       try {
@@ -43,6 +43,9 @@
         <a href="documentation.html" class="btn-ide-back" title="Open Documentation &amp; API Reference">
           Docs
         </a>
+        <a href="tm.html" class="btn-ide-back" title="VEX Competition &amp; Tournament Manager">
+          Comp TM
+        </a>
         <div class="ide-title-wrap">
           <span class="ide-project-tag" style="border-radius: 4px; font-family:var(--font-mono);">[PROJECT]</span>
           <span class="ide-project-name" id="ideProjectName" style="font-family:var(--font-mono);">Override_LemLib_Bot</span>
@@ -59,7 +62,7 @@
         <div id="ideBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect USB" style="border-radius: 4px; font-family:var(--font-mono);">
           <span class="brain-status-dot disconnected" id="ideBrainDot"></span>
           <span class="brain-status-text" id="ideBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill disconnected" id="ideBrainBatt">⚡ --%</span>
+          <span class="brain-battery-pill disconnected" id="ideBrainBatt">--%</span>
           <button type="button" id="btnConnectBrain" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC" style="border-radius: 4px;">Connect</button>
         </div>
 
@@ -113,8 +116,11 @@
             <a href="documentation.html" class="tools-menu-item" style="text-decoration:none;color:#38bdf8;font-weight:700;display:block;padding:8px 12px;" title="VEX &amp; LemLib Documentation &amp; API Reference">
               Documentation &amp; API
             </a>
-            <a href="team.html" class="tools-menu-item" style="text-decoration:none;color:#38bdf8;font-weight:700;display:block;padding:8px 12px;" title="Real-Time Team Collaboration &amp; Cloud Sync (ALPHA)">
-              Team Collaboration (ALPHA)
+            <a href="team.html" class="tools-menu-item" style="text-decoration:none;color:#38bdf8;font-weight:700;display:block;padding:8px 12px;" title="Real-Time Team Collaboration &amp; Cloud Sync">
+              Team Collaboration
+            </a>
+            <a href="tm.html" class="tools-menu-item" style="text-decoration:none;color:inherit;display:block;padding:8px 12px;" title="VEX Competition &amp; Tournament Manager">
+              Competition Manager (TM)
             </a>
             <a href="stats.html" class="tools-menu-item" style="text-decoration:none;color:inherit;display:block;padding:8px 12px;" title="View visitor stats">
               Visitor Telemetry Stats
@@ -125,7 +131,7 @@
 
       <div class="header-actions">
         <button type="button" id="btnIdeThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
-          <span class="theme-toggle-icon">☀️</span>
+          <span class="theme-toggle-icon"></span>
           <span class="theme-toggle-text">Theme</span>
         </button>
         <div id="authArea" class="auth-area">
@@ -812,21 +818,21 @@
   <!-- JSZip Library for Folder & Project Archive Operations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Firebase Compat SDKs -->
-  <script src="version.js?v=20261023.k1"></script>
+  <script src="version.js?v=20261113.k1"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261023.k1"></script>
+  <script src="firebase-config.js?v=20261113.k1"></script>
   <script src="analytics-tracker.js"></script>
-  <script src="google-drive-sync.js?v=20261023.k1"></script>
-  <script src="session-guard.js?v=20261023.k1"></script>
-  <script src="theme.js?v=20261023.k1"></script>
-  <script src="v5-brain-serial.js?v=20261023.k1"></script>
-  <script src="project-manager.js?v=20261023.k1"></script>
+  <script src="google-drive-sync.js?v=20261113.k1"></script>
+  <script src="session-guard.js?v=20261113.k1"></script>
+  <script src="theme.js?v=20261113.k1"></script>
+  <script src="v5-brain-serial.js?v=20261113.k1"></script>
+  <script src="project-manager.js?v=20261113.k1"></script>
   <!-- Monaco Editor (VS Code Engine) AMD Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="ide.js?v=20261023.k1"></script>
-  <script src="tutorial.js?v=20261023.k1"></script>
+  <script src="ide.js?v=20261113.k1"></script>
+  <script src="tutorial.js?v=20261113.k1"></script>
   <script>
     if (window.history && window.history.replaceState && window.location.search.includes("reload=")) {
       try {

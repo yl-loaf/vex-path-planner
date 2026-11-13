@@ -13,15 +13,15 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Real-Time Team Collaboration (ALPHA) · VEX V5 LemLib Suite</title>
+  <title>Real-Time Team Collaboration · VEX V5 LemLib Suite</title>
   <meta name="description" content="Collaborate in real time with teammates on VEX V5 LemLib autonomous paths. Live multi-user cursor editing, strategy consensus voting, collaborative field pin comments, and up to 500 version history checkpoints." />
-  <meta property="og:title" content="Real-Time Team Collaboration (ALPHA) · VEX V5 LemLib Suite" />
+  <meta property="og:title" content="Real-Time Team Collaboration · VEX V5 LemLib Suite" />
   <meta property="og:description" content="Multi-user real-time path planning, live cursors, strategy voting, and 500-entry version history for VEX robotics teams." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css" />
-  <link rel="stylesheet" href="style.css?v=20261023.k1" />
+  <link rel="stylesheet" href="style.css?v=20261113.k2" />
   <script>
     (function () {
       try {
@@ -91,7 +91,8 @@
         <nav class="header-mode-nav">
           <a href="index.html" class="mode-nav-btn" title="2D Simulation &amp; Visual Path Planner">Planner &amp; Sim</a>
           <a href="ide.html" class="mode-nav-btn" title="Full PROS C++ IDE with Syntax Highlighting">PROS IDE</a>
-          <a href="team.html" class="mode-nav-btn active" title="Real-Time Team Collaboration &amp; Cloud Sync">Team Collab <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.6rem;padding:1px 4px;margin-left:2px;border-radius: 4px;font-family:var(--font-mono);">ALPHA</span></a>
+          <a href="tm.html" class="mode-nav-btn" title="VEX Competition &amp; Tournament Manager">Comp TM</a>
+          <a href="team.html" class="mode-nav-btn active" title="Real-Time Team Collaboration &amp; Cloud Sync">Team Collab</a>
           <a href="admin.html" class="mode-nav-btn" title="Team Administration &amp; Member Permissions">Admin</a>
           <a href="tools.html" class="mode-nav-btn" title="Full Engineering Tools Suite">Tools Suite</a>
           <a href="documentation.html" class="mode-nav-btn" title="VEX &amp; LemLib Documentation &amp; API Guide">Documentation</a>
@@ -106,7 +107,7 @@
         <div id="bannerBrainStatus" class="banner-brain-pill" title="Click to view VEX V5 Brain telemetry or connect via USB" style="border-radius: 4px; font-family:var(--font-mono);">
           <span class="brain-status-dot disconnected" id="bannerBrainDot"></span>
           <span class="brain-status-text" id="bannerBrainText">Brain: Disconnected</span>
-          <span class="brain-battery-pill disconnected" id="bannerBrainBatt">⚡ --%</span>
+          <span class="brain-battery-pill disconnected" id="bannerBrainBatt">--%</span>
           <button id="btnConnectBrain" type="button" class="btn-xs-connect" title="Connect to VEX V5 Brain via USB Web Serial CDC" style="border-radius: 4px;">Connect</button>
           <button id="btnUploadAndRun" type="button" class="btn-xs-upload-run" title="Unified 1-Click: Compiles, Flashes Current Auton, and Runs on Connected Brain" style="display:none; border-radius: 4px;">Upload &amp; Run</button>
         </div>
@@ -125,6 +126,7 @@
             <button type="button" id="btnMenuSyncLocal" class="tools-menu-item">Sync to Local Planner</button>
             <div class="tools-menu-divider"></div>
             <div class="tools-menu-header" style="font-family:var(--font-mono); text-transform:uppercase; font-size:0.68rem;">Diagnostics &amp; Docs</div>
+            <a href="tm.html" class="tools-menu-item">Competition Manager (TM)</a>
             <a href="documentation.html" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">Documentation &amp; API</a>
             <a href="tools.html" class="tools-menu-item" style="color:#38bdf8; font-weight:700;">Engineering Tools Suite</a>
             <a href="translator.html" class="tools-menu-item">C++ Code Translator</a>
@@ -134,7 +136,7 @@
 
         <!-- Theme Switcher -->
         <button type="button" id="btnTeamThemeToggle" class="btn-theme-toggle" data-theme-toggle aria-label="Toggle theme" title="Toggle Light/Dark Theme">
-          <span class="theme-toggle-icon">☀️</span>
+          <span class="theme-toggle-icon"></span>
           <span class="theme-toggle-text">Theme</span>
         </button>
 
@@ -284,14 +286,14 @@
         <!-- Mode View Switcher Strip -->
         <div class="planner-tab-bar" style="margin-bottom:0;border-radius: 0;border-top:none;border-left:none;border-right:none;display:flex;align-items:center;justify-content:space-between;padding:6px 12px;">
           <div style="display:flex;align-items:center;gap:6px;">
-            <button type="button" id="btnViewModeField" class="planner-tab-btn active" style="font-size:0.75rem;padding:5px 12px;">🗺️ Field &amp; Sim</button>
-            <button type="button" id="btnViewModeIde" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">💻 Integrated C++ IDE</button>
-            <button type="button" id="btnViewModeSuggestions" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">💡 Suggestions <span id="badgeSuggestionsCount" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 5px;border-radius: 8px;font-size:0.65rem;">0</span></button>
-            <button type="button" id="btnViewModeReplay" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">📊 Match Replay <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.55rem;padding:1px 4px;border-radius: 4px;font-weight:800;">ALPHA</span></button>
-            <button type="button" id="btnViewModeAdmin" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;color:#f59e0b;font-weight:700;">🛡️ Admin Dashboard</button>
+            <button type="button" id="btnViewModeField" class="planner-tab-btn active" style="font-size:0.75rem;padding:5px 12px;">Field &amp; Sim</button>
+            <button type="button" id="btnViewModeIde" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">Integrated C++ IDE</button>
+            <button type="button" id="btnViewModeSuggestions" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">Suggestions <span id="badgeSuggestionsCount" style="background:rgba(245,158,11,0.2);color:#f59e0b;padding:1px 5px;border-radius: 8px;font-size:0.65rem;">0</span></button>
+            <button type="button" id="btnViewModeReplay" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;">Match Replay</button>
+            <button type="button" id="btnViewModeAdmin" class="planner-tab-btn" style="font-size:0.75rem;padding:5px 12px;color:#f59e0b;font-weight:700;">Admin Dashboard</button>
           </div>
           <div id="lblRolePermissionStatus" style="font-size:0.72rem;color:#38bdf8;font-weight:600;display:flex;align-items:center;gap:6px;">
-            <span>💻 Programmer View</span>
+            <span>Programmer View</span>
           </div>
         </div>
 
@@ -486,21 +488,20 @@
           </div>
         </div>
 
-        <!-- VIEW 4: TEAM MATCH REPLAY & LOG ANALYSIS STUDIO (ALPHA) -->
+        <!-- VIEW 4: TEAM MATCH REPLAY & LOG ANALYSIS STUDIO -->
         <div id="teamReplayContainer" style="display:none;flex:1 1 0;flex-direction:column;padding:14px;background:var(--card-inner);overflow-y:auto;min-height:0;height:100%;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
             <div>
               <div style="display:flex;align-items:center;gap:8px;">
-                <h3 style="margin:0;font-size:1.1rem;color:var(--text-heading);">📊 Collaborative Match Replay &amp; Telemetry Analysis</h3>
-                <span class="badge" style="background:#ef4444;color:#fff;font-size:0.6rem;padding:1px 6px;border-radius: 8px;">ALPHA</span>
+                <h3 style="margin:0;font-size:1.1rem;color:var(--text-heading);">Collaborative Match Replay &amp; Telemetry Analysis</h3>
               </div>
               <p style="margin:3px 0 0;font-size:0.75rem;color:var(--muted);">Inspect team match logs against planned trajectories, audit deviation heatmaps together, and pinpoint failure causes.</p>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              <button type="button" id="btnTeamReplayLoadSample" class="btn-team-primary" style="padding:5px 10px;font-size:0.75rem;">📥 Load Sample Log</button>
-              <button type="button" id="btnTeamReplayImportFile" class="btn-team-secondary" style="padding:5px 10px;font-size:0.75rem;">📂 Import CSV</button>
+              <button type="button" id="btnTeamReplayLoadSample" class="btn-team-primary" style="padding:5px 10px;font-size:0.75rem;">Load Sample Log</button>
+              <button type="button" id="btnTeamReplayImportFile" class="btn-team-secondary" style="padding:5px 10px;font-size:0.75rem;">Import CSV</button>
               <input type="file" id="teamReplayFileInput" accept=".csv,.txt,.log,.json" style="display:none;" />
-              <button type="button" id="btnTeamReplayExport" class="btn-team-secondary" style="padding:5px 10px;font-size:0.75rem;">📋 Copy Report</button>
+              <button type="button" id="btnTeamReplayExport" class="btn-team-secondary" style="padding:5px 10px;font-size:0.75rem;">Copy Report</button>
             </div>
           </div>
 
@@ -740,9 +741,9 @@
       <div class="team-setup-card">
         <div class="team-setup-header">
           <div style="display:flex;align-items:center;gap:12px;">
-            <span style="font-size:1.8rem;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);width:48px;height:48px;border-radius: 8px;display:flex;align-items:center;justify-content:center;">👥</span>
+            <span style="font-size:0.9rem;font-family:var(--font-mono);font-weight:700;color:var(--accent);background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);width:48px;height:48px;border-radius: 8px;display:flex;align-items:center;justify-content:center;">TEAM</span>
             <div>
-              <h1 style="margin:0;font-size:1.3rem;color:var(--text-heading);font-weight:800;letter-spacing:-0.02em;">VEX Team Workspace Setup <span class="badge" style="background:#ef4444;color:#ffffff;font-size:0.65rem;">ALPHA</span></h1>
+              <h1 style="margin:0;font-size:1.3rem;color:var(--text-heading);font-weight:800;letter-spacing:-0.02em;">VEX Team Workspace Setup</h1>
               <p style="margin:3px 0 0;font-size:0.78rem;color:var(--muted);">Real-time multi-user editing, live field telemetry &amp; 500 version checkpoints</p>
             </div>
           </div>
@@ -1726,20 +1727,20 @@
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20261023.k1"></script>
+  <script src="version.js?v=20261113.k2"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261023.k1"></script>
+  <script src="firebase-config.js?v=20261113.k2"></script>
   <script src="analytics-tracker.js"></script>
-  <script src="theme.js?v=20261023.k1"></script>
-  <script src="cpp-parser.js?v=20261023.k1"></script>
-  <script src="project-manager.js?v=20261023.k1"></script>
-  <script src="v5-brain-serial.js?v=20261023.k1"></script>
-  <script src="scoring-engine.js?v=20261023.k1"></script>
-  <script src="match-analysis-engine.js?v=20261023.k1"></script>
-  <script src="google-drive-sync.js?v=20261023.k1"></script>
+  <script src="theme.js?v=20261113.k2"></script>
+  <script src="cpp-parser.js?v=20261113.k2"></script>
+  <script src="project-manager.js?v=20261113.k2"></script>
+  <script src="v5-brain-serial.js?v=20261113.k2"></script>
+  <script src="scoring-engine.js?v=20261113.k2"></script>
+  <script src="match-analysis-engine.js?v=20261113.k2"></script>
+  <script src="google-drive-sync.js?v=20261113.k2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
-  <script src="team.js?v=20261023.k1"></script>
+  <script src="team.js?v=20261113.k2"></script>
 </body>
 </html>

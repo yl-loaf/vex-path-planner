@@ -403,6 +403,9 @@ app.use((req, res, next) => {
     pathUrl === '/translator' ||
     pathUrl === '/stats' ||
     pathUrl === '/tools' ||
+    pathUrl === '/team' ||
+    pathUrl === '/tm' ||
+    pathUrl === '/competition' ||
     pathUrl === '/api/track'
   ) {
     const stats = getStats();
@@ -415,6 +418,7 @@ app.use((req, res, next) => {
     else if (pathUrl.includes('stats')) pageKey = 'stats';
     else if (pathUrl.includes('tools')) pageKey = 'tools';
     else if (pathUrl.includes('team')) pageKey = 'team';
+    else if (pathUrl.includes('tm') || pathUrl.includes('competition')) pageKey = 'tm';
 
     stats.pages[pageKey] = (stats.pages[pageKey] || 0) + 1;
 
@@ -2209,6 +2213,172 @@ app.get(['/team', '/team.html'], (req, res) => {
 app.get(['/admin', '/admin.html'], (req, res) => {
   res.set(NO_CACHE_HEADERS);
   res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// VEX Tournament Manager (DWAB TM compatible) Storage & Live Sync API
+const tmStateFile = path.join(__dirname, 'data', 'tm_state.json');
+const tmSseClients = new Set();
+
+function getDefaultTmState() {
+  return {
+    version: 1,
+    updatedAt: Date.now(),
+    event: {
+      name: 'V5RC Override Regional Qualifier',
+      sku: 'RE-V5RC-26-0001',
+      date: new Date().toISOString().slice(0, 10),
+      location: 'Main Competition Gym',
+      program: 'override', // 'override' | 'highstakes' | 'generic'
+      division: 'Science Division',
+      autonSeconds: 15,
+      driverSeconds: 105,
+      skillsSeconds: 60,
+      allianceCount: 8,
+      elimFormat: 'bo1'
+    },
+    dwabBridge: {
+      host: 'http://localhost:8080',
+      connected: false,
+      lastSync: null
+    },
+    fields: [
+      { id: 'field_1', name: 'Competition Field 1', set: 'Field Set 1', activeMatchId: null },
+      { id: 'field_2', name: 'Competition Field 2', set: 'Field Set 1', activeMatchId: null },
+      { id: 'skills_1', name: 'Skills Field A', set: 'Skills Area', activeMatchId: null }
+    ],
+    teams: [],
+    matches: [],
+    elimMatches: [],
+    alliances: [],
+    skillsRuns: [],
+    liveTimer: {
+      fieldId: 'field_1',
+      matchId: null,
+      mode: 'match', // 'match' | 'driver_skills' | 'prog_skills'
+      phase: 'IDLE', // 'IDLE' | 'AUTON' | 'AUTON_PAUSE' | 'DRIVER' | 'ENDED'
+      remainingSec: 15,
+      running: false,
+      autonWinner: 'none',
+      displayMode: 'match', // 'match' | 'rankings' | 'skills' | 'bracket'
+      updatedAt: Date.now()
+    }
+  };
+}
+
+function readTmState() {
+  try {
+    if (fs.existsSync(tmStateFile)) {
+      const parsed = JSON.parse(fs.readFileSync(tmStateFile, 'utf8'));
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) {
+    console.error('[TM] Error reading state:', e);
+  }
+  return getDefaultTmState();
+}
+
+function writeTmState(nextState) {
+  try {
+    const dataDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const payload = {
+      ...nextState,
+      updatedAt: Date.now()
+    };
+    fs.writeFileSync(tmStateFile, JSON.stringify(payload, null, 2), 'utf8');
+    const msg = `event: tm_update\ndata: ${JSON.stringify(payload)}\n\n`;
+    for (const client of tmSseClients) {
+      try {
+        client.write(msg);
+      } catch (_) {
+        tmSseClients.delete(client);
+      }
+    }
+    return payload;
+  } catch (e) {
+    console.error('[TM] Error writing state:', e);
+    return null;
+  }
+}
+
+app.get(['/api/tm/state', '/vex-path-planner/api/tm/state'], (req, res) => {
+  res.json(readTmState());
+});
+
+app.post(['/api/tm/state', '/vex-path-planner/api/tm/state'], (req, res) => {
+  const incoming = req.body;
+  if (!incoming || typeof incoming !== 'object') {
+    return res.status(400).json({ error: 'Invalid tournament state payload' });
+  }
+  const saved = writeTmState(incoming);
+  if (!saved) {
+    return res.status(500).json({ error: 'Failed to save tournament state' });
+  }
+  res.json({ success: true, updatedAt: saved.updatedAt });
+});
+
+app.get(['/api/tm/stream', '/vex-path-planner/api/tm/stream'], (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  tmSseClients.add(res);
+  const initial = readTmState();
+  res.write(`event: tm_update\ndata: ${JSON.stringify(initial)}\n\n`);
+
+  const keepAlive = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch (_) {
+      clearInterval(keepAlive);
+      tmSseClients.delete(res);
+    }
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    tmSseClients.delete(res);
+  });
+});
+
+app.post(['/api/tm/dwab-proxy', '/vex-path-planner/api/tm/dwab-proxy'], async (req, res) => {
+  const { baseUrl, endpoint } = req.body || {};
+  if (!baseUrl || typeof baseUrl !== 'string') {
+    return res.status(400).json({ error: 'Missing baseUrl for DWAB VEX TM server' });
+  }
+  try {
+    const cleanBase = baseUrl.trim().replace(/\/+$/, '');
+    const cleanEp = (endpoint || '/api/v2/event').startsWith('/') ? (endpoint || '/api/v2/event') : `/${endpoint}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    const upstream = await fetch(`${cleanBase}${cleanEp}`, {
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    const text = await upstream.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (_) { data = text; }
+    return res.json({
+      ok: upstream.ok,
+      status: upstream.status,
+      data
+    });
+  } catch (err) {
+    return res.status(502).json({
+      ok: false,
+      error: err.name === 'AbortError' ? 'Connection timed out (check TM server IP/port)' : (err.message || 'Could not reach DWAB TM host')
+    });
+  }
+});
+
+// VEX Competition / Tournament Manager Route
+app.get(['/tm', '/tm.html', '/competition', '/competition.html'], (req, res) => {
+  res.set(NO_CACHE_HEADERS);
+  res.sendFile(path.join(__dirname, 'tm.html'));
 });
 
 // VEX V5 & LemLib Documentation Portal Route

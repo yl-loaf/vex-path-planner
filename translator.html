@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261023.k1" />
+  <link rel="stylesheet" href="style.css?v=20261113.k1" />
   <script>
     (function () {
       try {
@@ -44,9 +44,12 @@
       </div>
       <div class="header-actions">
         <button type="button" id="btnTranslatorThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
-          <span class="theme-toggle-icon">☀️</span>
+          <span class="theme-toggle-icon"></span>
           <span class="theme-toggle-text">Theme</span>
         </button>
+        <a href="tm.html" class="btn-return-planner" title="VEX Competition &amp; Tournament Manager">
+          Comp TM
+        </a>
         <a href="stats.html" class="btn-return-planner" title="View visitor stats">
           Telemetry <span id="globalVisitorBadgeTrans" style="color:#fbbf24;font-size:0.72rem;">...</span>
         </a>
@@ -261,17 +264,17 @@ void autonomous() {
   <div id="toastNotification" class="toast-notify" style="border-radius: 4px;font-family:var(--font-mono);"></div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20261023.k1"></script>
+  <script src="version.js?v=20261113.k1"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261023.k1"></script>
+  <script src="firebase-config.js?v=20261113.k1"></script>
   <script src="analytics-tracker.js"></script>
-  <script src="session-guard.js?v=20261023.k1"></script>
-  <script src="theme.js?v=20261023.k1"></script>
-  <script src="cpp-parser.js?v=20261023.k1"></script>
-  <script src="translator-page.js?v=20261023.k1"></script>
-  <script src="tutorial.js?v=20261023.k1"></script>
+  <script src="session-guard.js?v=20261113.k1"></script>
+  <script src="theme.js?v=20261113.k1"></script>
+  <script src="cpp-parser.js?v=20261113.k1"></script>
+  <script src="translator-page.js?v=20261113.k1"></script>
+  <script src="tutorial.js?v=20261113.k1"></script>
   <script>
     function fetchJsonp(url) {
       return new Promise((resolve, reject) => {

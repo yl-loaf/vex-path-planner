@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20261023.k1" />
+  <link rel="stylesheet" href="style.css?v=20261113.k2" />
   <script>
     (function () {
       try {
@@ -610,7 +610,8 @@
     <div class="tools-header-center">
       <a href="index.html" class="tools-tab-link" title="Visual 2D Autonomous Path Planner">Planner &amp; Sim</a>
       <a href="ide.html" class="tools-tab-link" title="Full PROS C++ IDE with Syntax Highlighting">PROS IDE</a>
-      <a href="team.html" class="tools-tab-link" title="Real-Time Team Collaboration &amp; Cloud Sync">Team Collab <span style="background:#ef4444;color:#ffffff;font-size:0.6rem;padding:1px 5px;border-radius: 4px;font-family:var(--font-mono);font-weight:700;">ALPHA</span></a>
+      <a href="tm.html" class="tools-tab-link" title="VEX Competition &amp; Tournament Manager">Comp TM</a>
+      <a href="team.html" class="tools-tab-link" title="Real-Time Team Collaboration &amp; Cloud Sync">Team Collab</a>
       <a href="admin.html" class="tools-tab-link" title="VEX Team Administration &amp; Member Permissions Dashboard">Admin</a>
       <a href="tools.html" class="tools-tab-link active" title="Comprehensive Engineering Tools Suite">Tools Suite</a>
       <a href="documentation.html" class="tools-tab-link" title="VEX &amp; LemLib Comprehensive Documentation &amp; API Reference">Documentation</a>
@@ -626,7 +627,7 @@
       </button>
 
       <button type="button" class="btn-theme-toggle" data-theme-toggle aria-label="Toggle theme" title="Toggle Light/Dark Theme">
-        <span class="theme-toggle-icon">☀️</span>
+        <span class="theme-toggle-icon"></span>
         <span class="theme-toggle-text">Theme</span>
       </button>
     </div>
@@ -797,18 +798,17 @@
         </div>
       </article>
 
-      <!-- TOOL 0B: Autonomous Match Replay & Log Analysis Suite (ALPHA) -->
+      <!-- TOOL 0B: Autonomous Match Replay & Log Analysis Suite -->
       <article id="replay" class="tool-card highlight" data-category="tuning collab" data-keywords="match replay log analysis actual vs planned odometry telemetry v5 brain deviation heatmap error root cause lemlib wheel slip collision">
         <div class="tool-card-header">
-          <div class="tool-icon-box" style="background:rgba(245, 158, 11, 0.15); border-color:rgba(245, 158, 11, 0.3); color:#f59e0b;">📊</div>
+          <div class="tool-icon-box" style="background:rgba(245, 158, 11, 0.15); border-color:rgba(245, 158, 11, 0.3); color:#f59e0b; font-family:var(--font-mono); font-size:0.78rem; font-weight:700;">LOG</div>
           <div class="tool-title-info">
             <div style="display:flex;align-items:center;gap:6px;">
               <h3>Autonomous Match Replay &amp; Log Analysis Suite</h3>
-              <span style="background:#ef4444;color:#ffffff;font-size:0.62rem;font-weight:800;padding:1px 6px;border-radius: 8px;">ALPHA</span>
             </div>
             <p class="tool-tagline">Overlay actual recorded V5 Brain odometry logs against planned paths, analyze deviation heatmaps, and pinpoint root-cause failure steps.</p>
           </div>
-          <span class="tool-category-badge" style="background:rgba(245, 158, 11, 0.15);color:#f59e0b;border-color:rgba(245, 158, 11, 0.3);">🎛️ Analysis</span>
+          <span class="tool-category-badge" style="background:rgba(245, 158, 11, 0.15);color:#f59e0b;border-color:rgba(245, 158, 11, 0.3);">Analysis</span>
         </div>
         <div class="tool-body">
           <div class="tool-result-strip">
@@ -832,10 +832,10 @@
 
           <div class="tool-actions-row">
             <a href="index.html#replay" class="btn-tool-action primary" id="btnLaunchReplayFromTools" title="Open Autonomous Match Replay in Visual Planner">
-              📊 Launch Replay in Planner (ALPHA)
+              Launch Replay in Planner
             </a>
             <a href="team.html" class="btn-tool-action" title="Inspect Match Replays Collaboratively with Teammates">
-              👥 Review in Team Collab
+              Review in Team Collab
             </a>
           </div>
         </div>
@@ -1714,7 +1714,7 @@ chassis.moveToPose(36, 36, 90, 2500, {.lead = 0.65, .maxSpeed = 127});</div>
   </div>
 
   <!-- Scripts -->
-  <script src="version.js?v=20261023.k1"></script>
+  <script src="version.js?v=20261113.k2"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>

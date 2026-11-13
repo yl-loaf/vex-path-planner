@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="shortcut icon" href="favicon.ico" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Competition Manager · VEX V5 LemLib Suite</title>
+  <meta name="description" content="VEX Robotics Competition Tournament Manager inspired by DWAB Tech VEX TM: match queue, field control timer, hardware inspection, scorekeeper, rankings, elimination brackets, and audience/pit displays." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=20261113.k1" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('vex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body class="tm-page-body">
+  <!-- Standard Suite Top Bar (Hidden in standalone ?display=audience or ?display=pit modes) -->
+  <div id="tmAppShell" class="tm-shell">
+    <header class="suite-header">
+      <div class="suite-header-left">
+        <a href="index.html" class="suite-brand" title="VEX V5 LemLib Suite">VEX LemLib</a>
+        <span class="suite-sep" aria-hidden="true">/</span>
+        <span class="suite-context font-mono" id="tmHeaderEventName">Competition Manager</span>
+      </div>
+
+      <nav class="suite-nav" aria-label="Primary Suite Navigation">
+        <a href="index.html" class="suite-nav-link">Planner</a>
+        <a href="ide.html" class="suite-nav-link">IDE</a>
+        <a href="tools.html" class="suite-nav-link">Tools</a>
+        <a href="tm.html" class="suite-nav-link active">Comp TM</a>
+        <a href="team.html" class="suite-nav-link">Team</a>
+        <a href="documentation.html" class="suite-nav-link">Docs</a>
+      </nav>
+
+      <div class="suite-header-right">
+        <button type="button" id="btnTmConnectBrain" class="suite-btn-subtle font-mono" title="Connect VEX V5 Controller via USB to run live Field Control on your robot">
+          <span class="status-indicator" id="tmBrainIndicator"></span>
+          <span id="tmBrainStatusLabel">Brain: Offline</span>
+        </button>
+        <button type="button" id="btnTmMuteAudio" class="suite-btn-subtle" title="Toggle match buzzer and horn audio cues">Audio: On</button>
+        <button type="button" id="btnTmThemeToggle" class="btn-theme-toggle" aria-label="Toggle theme" title="Toggle Light/Dark Theme">
+          <span class="theme-toggle-text">Theme</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="tm-workspace">
+      <!-- Left Rail Navigation -->
+      <aside class="tm-sidebar" aria-label="Tournament Manager Sections">
+        <div class="tm-sidebar-section-label">Operations</div>
+        <button type="button" class="tm-nav-btn active" data-tm-view="field">
+          <span>Field Control</span>
+          <span class="tm-nav-meta font-mono" id="tmSidePhase">IDLE</span>
+        </button>
+        <button type="button" class="tm-nav-btn" data-tm-view="queue">
+          <span>Match Queue</span>
+          <span class="tm-nav-meta font-mono tabular-nums" id="tmSideMatchCount">0</span>
+        </button>
+        <button type="button" class="tm-nav-btn" data-tm-view="scoring">
+          <span>Scorekeeper</span>
+          <span class="tm-nav-meta font-mono tabular-nums" id="tmSideScoredCount">0</span>
+        </button>
+
+        <div class="tm-sidebar-section-label">Standings &amp; Brackets</div>
+        <button type="button" class="tm-nav-btn" data-tm-view="rankings">
+          <span>Rankings &amp; Skills</span>
+        </button>
+        <button type="button" class="tm-nav-btn" data-tm-view="bracket">
+          <span>Eliminations</span>
+        </button>
+
+        <div class="tm-sidebar-section-label">Event Administration</div>
+        <button type="button" class="tm-nav-btn" data-tm-view="teams">
+          <span>Teams &amp; Inspection</span>
+          <span class="tm-nav-meta font-mono tabular-nums" id="tmSideTeamCount">0</span>
+        </button>
+        <button type="button" class="tm-nav-btn" data-tm-view="displays">
+          <span>Audience &amp; Pit</span>
+        </button>
+        <button type="button" class="tm-nav-btn" data-tm-view="setup">
+          <span>Event Setup</span>
+        </button>
+
+        <div class="tm-sidebar-footer">
+          <button type="button" id="btnTmLoadSampleQuick" class="suite-btn-subtle full">Load Sample Event</button>
+        </div>
+      </aside>
+
+      <!-- Main Operational Canvas -->
+      <main class="tm-main">
+        <!-- VIEW 1: FIELD CONTROL & MATCH TIMER -->
+        <section class="tm-view active" id="tmViewField">
+          <div class="tm-view-header">
+            <div>
+              <h1>Field Control &amp; Match Timer</h1>
+              <p>Operate VEX match timing, autonomous bonus calls, match queue progression, and direct V5 Controller competition states.</p>
+            </div>
+            <div class="tm-view-actions">
+              <select id="tmFieldSelect" class="tm-select-compact" title="Select competition field"></select>
+              <a href="?display=audience" target="_blank" rel="noopener" class="suite-btn-subtle">Open Audience Display</a>
+              <a href="?display=pit" target="_blank" rel="noopener" class="suite-btn-subtle">Open Pit Display</a>
+            </div>
+          </div>
+
+          <div class="tm-fc-grid">
+            <!-- Left: Match Clock & Transport -->
+            <div class="tm-panel tm-fc-clock-panel">
+              <div class="tm-fc-top-bar">
+                <div class="tm-fc-mode-tabs" role="tablist">
+                  <button type="button" class="tm-seg-btn active" data-fc-mode="match">Match (0:15 + 1:45)</button>
+                  <button type="button" class="tm-seg-btn" data-fc-mode="driver_skills">Driver Skills (1:00)</button>
+                  <button type="button" class="tm-seg-btn" data-fc-mode="prog_skills">Prog Skills (1:00)</button>
+                </div>
+                <span class="tm-phase-tag font-mono" id="tmFcPhaseBadge">IDLE</span>
+              </div>
+
+              <div class="tm-clock-well">
+                <div class="tm-clock-phase-label" id="tmFcPhaseTitle">READY ON FIELD</div>
+                <div class="tm-clock-digits font-mono tabular-nums" id="tmFcTimerDisplay">0:15</div>
+                <div class="tm-clock-progress-track">
+                  <div class="tm-clock-progress-fill" id="tmFcProgressBar" style="width: 100%;"></div>
+                </div>
+              </div>
+
+              <div class="tm-fc-transport">
+                <button type="button" id="btnTmStartMatch" class="tm-btn-primary">Start Match</button>
+                <button type="button" id="btnTmPauseMatch" class="suite-btn-subtle" disabled>Pause</button>
+                <button type="button" id="btnTmResumeDriver" class="tm-btn-accent" style="display:none;">Start Driver (1:45)</button>
+                <button type="button" id="btnTmAbortMatch" class="tm-btn-danger" disabled>Abort / End</button>
+                <button type="button" id="btnTmResetField" class="suite-btn-subtle">Reset Field</button>
+              </div>
+
+              <!-- Autonomous Winner Selector (visible after Auton / during pause) -->
+              <div class="tm-auton-bonus-bar">
+                <span class="tm-bar-label">Autonomous Bonus:</span>
+                <div class="tm-auton-btn-group">
+                  <button type="button" class="tm-auton-choice" data-auton="red">Red (+10)</button>
+                  <button type="button" class="tm-auton-choice" data-auton="blue">Blue (+10)</button>
+                  <button type="button" class="tm-auton-choice" data-auton="tie">Tie (+5 each)</button>
+                  <button type="button" class="tm-auton-choice active" data-auton="none">None</button>
+                </div>
+              </div>
+
+              <!-- V5 USB Competition Bridge Callout -->
+              <div class="tm-hw-bridge-bar">
+                <div class="tm-hw-info">
+                  <strong>VEX V5 Controller Competition Link</strong>
+                  <span id="tmHwBridgeDetail">Connect a V5 Controller via USB in the top bar to automatically push Disabled / Auton / Driver packets during the match timer.</span>
+                </div>
+                <div class="tm-hw-manual-btns">
+                  <button type="button" class="suite-btn-xs" id="btnTmHwAuton">Send Auton</button>
+                  <button type="button" class="suite-btn-xs" id="btnTmHwDriver">Send Driver</button>
+                  <button type="button" class="suite-btn-xs" id="btnTmHwDisable">Disable</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Loaded Match & Quick Queue Control -->
+            <div class="tm-panel tm-fc-match-panel">
+              <div class="tm-panel-head">
+                <h2>On Field Now</h2>
+                <div class="tm-inline-actions">
+                  <button type="button" id="btnTmQueueNextMatch" class="suite-btn-xs">Load Next Unplayed</button>
+                  <button type="button" id="btnTmOpenLoadedScore" class="suite-btn-xs">Score This Match</button>
+                </div>
+              </div>
+
+              <div id="tmFcActiveMatchBox" class="tm-active-match-box">
+                <div class="tm-active-match-title font-mono" id="tmFcMatchLabel">No Match Loaded</div>
+                <div class="tm-alliances-split">
+                  <div class="tm-alliance-card red">
+                    <div class="tm-alliance-head">RED ALLIANCE</div>
+                    <div class="tm-alliance-teams font-mono" id="tmFcRedTeams">— · —</div>
+                    <div class="tm-alliance-score font-mono tabular-nums" id="tmFcRedScore">0</div>
+                  </div>
+                  <div class="tm-alliance-card blue">
+                    <div class="tm-alliance-head">BLUE ALLIANCE</div>
+                    <div class="tm-alliance-teams font-mono" id="tmFcBlueTeams">— · —</div>
+                    <div class="tm-alliance-score font-mono tabular-nums" id="tmFcBlueScore">0</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tm-panel-subhead">
+                <span>On Deck &amp; Queued</span>
+                <span class="font-mono tabular-nums" id="tmFcQueueCount">0 pending</span>
+              </div>
+              <div id="tmFcMiniQueue" class="tm-mini-queue-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 2: MATCH QUEUE & SCHEDULE GENERATOR -->
+        <section class="tm-view" id="tmViewQueue">
+          <div class="tm-view-header">
+            <div>
+              <h1>Qualification Schedule &amp; Match Queue</h1>
+              <p>Generate balanced 2v2 qualification schedules and manage DWAB TM match states (UNPLAYED, QUEUED, ON_DECK, ACTIVE, SCORED, SUBMITTED).</p>
+            </div>
+            <div class="tm-view-actions">
+              <label class="tm-inline-field">
+                <span>Matches / Team</span>
+                <input type="number" id="tmGenMatchesPerTeam" min="1" max="16" value="6" class="tm-input-xs font-mono" />
+              </label>
+              <button type="button" id="btnTmGenerateSchedule" class="tm-btn-primary">Generate Qual Schedule</button>
+              <button type="button" id="btnTmAddManualMatch" class="suite-btn-subtle">+ Add Match</button>
+              <button type="button" id="btnTmClearMatches" class="tm-btn-danger-outline">Clear Schedule</button>
+            </div>
+          </div>
+
+          <div class="tm-panel">
+            <div class="tm-table-toolbar">
+              <div class="tm-filter-tabs" id="tmQueueFilterTabs">
+                <button type="button" class="tm-filter-btn active" data-q-filter="all">All</button>
+                <button type="button" class="tm-filter-btn" data-q-filter="pending">Pending</button>
+                <button type="button" class="tm-filter-btn" data-q-filter="active">Queued / On Deck / Active</button>
+                <button type="button" class="tm-filter-btn" data-q-filter="scored">Scored / Submitted</button>
+              </div>
+              <input type="text" id="tmQueueSearch" class="tm-search-input" placeholder="Filter by match or team #..." />
+            </div>
+
+            <div class="tm-table-wrap">
+              <table class="tm-table">
+                <thead>
+                  <tr>
+                    <th>Match</th>
+                    <th>State</th>
+                    <th>Red Alliance</th>
+                    <th>Blue Alliance</th>
+                    <th>Score (R – B)</th>
+                    <th>Auton</th>
+                    <th class="text-right">Queue Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tmQueueTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 3: SCOREKEEPER (MATCH + SKILLS) -->
+        <section class="tm-view" id="tmViewScoring">
+          <div class="tm-view-header">
+            <div>
+              <h1>Scorekeeper Console</h1>
+              <p>Official V5RC Override (2026-27) &amp; generic match scoring sheet plus 60-second Robot Skills entry.</p>
+            </div>
+            <div class="tm-view-actions">
+              <div class="tm-seg-group">
+                <button type="button" class="tm-seg-btn active" data-sk-mode="match">Match Scoring</button>
+                <button type="button" class="tm-seg-btn" data-sk-mode="skills">Skills Scoring</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Match Scoring Subview -->
+          <div id="tmSkMatchPane" class="tm-sk-pane">
+            <div class="tm-panel tm-sk-selector-bar">
+              <div class="tm-sk-select-group">
+                <label for="tmSkMatchSelect">Target Match</label>
+                <select id="tmSkMatchSelect"></select>
+              </div>
+              <div class="tm-sk-select-group">
+                <label for="tmSkRulesMode">Scoring Engine</label>
+                <select id="tmSkRulesMode">
+                  <option value="override">V5RC Override (2026-27)</option>
+                  <option value="manual">Direct Points Override</option>
+                </select>
+              </div>
+              <div class="tm-sk-select-group">
+                <label for="tmSkAutonWinner">Auton Winner</label>
+                <select id="tmSkAutonWinner">
+                  <option value="none">None (0 pts)</option>
+                  <option value="red">Red (+10 pts)</option>
+                  <option value="blue">Blue (+10 pts)</option>
+                  <option value="tie">Tie (+5 each)</option>
+                </select>
+              </div>
+              <div class="tm-sk-actions">
+                <button type="button" id="btnTmSkResetInputs" class="suite-btn-subtle">Zero Sheet</button>
+                <button type="button" id="btnTmSkSaveDraft" class="suite-btn-subtle">Save Scored</button>
+                <button type="button" id="btnTmSkSubmitOfficial" class="tm-btn-primary">Submit Official</button>
+              </div>
+            </div>
+
+            <div class="tm-sk-columns">
+              <!-- Red Alliance Scoring Card -->
+              <div class="tm-panel tm-sk-card red">
+                <div class="tm-sk-card-head">
+                  <div>
+                    <span class="tm-alliance-label red">RED ALLIANCE</span>
+                    <div class="tm-sk-teams font-mono" id="tmSkRedTeams">— · —</div>
+                  </div>
+                  <div class="tm-sk-total font-mono tabular-nums" id="tmSkRedTotal">0</div>
+                </div>
+
+                <div class="tm-sk-fields" id="tmSkOverrideRed">
+                  <div class="tm-sk-row">
+                    <span>Red Pins on Goals (5 pts ea)</span>
+                    <div class="tm-stepper">
+                      <button type="button" data-step="redPins:-1">-</button>
+                      <input type="number" id="skRedPins" min="0" max="63" value="0" class="font-mono tabular-nums" />
+                      <button type="button" data-step="redPins:1">+</button>
+                    </div>
+                  </div>
+                  <div class="tm-sk-row">
+                    <span>Yellow Pins (10 pts if ≥1 Toggle)</span>
+                    <div class="tm-stepper">
+                      <button type="button" data-step="redYellowPins:-1">-</button>
+                      <input type="number" id="skRedYellowPins" min="0" max="63" value="0" class="font-mono tabular-nums" />
+                      <button type="button" data-step="redYellowPins:1">+</button>
+                    </div>
+                  </div>
+                  <div class="tm-sk-row">
+                    <span>Wall Toggles Owned (10 pts ea)</span>
+                    <div class="tm-stepper">
+                      <button type="button" data-step="redToggles:-1">-</button>
+                      <input type="number" id="skRedToggles" min="0" max="4" value="0" class="font-mono tabular-nums" />
+                      <button type="button" data-step="redToggles:1">+</button>
+                    </div>
+                  </div>
+                  <div class="tm-sk-row">
+                    <span>Bonus / Park Points</span>
+                    <input type="number" id="skRedBonus" min="0" max="200" value="0" class="tm-input-xs font-mono tabular-nums" />
+                  </div>
+                </div>
+
+                <div class="tm-sk-fields" id="tmSkManualRed" style="display:none;">
+                  <div class="tm-sk-row">
+                    <span>Total Match Score</span>
+                    <input type="number" id="skRedManualScore" min="0" max="999" value="0" class="tm-input-sm font-mono tabular-nums" />
+                  </div>
+                </div>
+
+                <div class="tm-sk-flags">
+                  <label class="tm-check"><input type="checkbox" id="skRedAwp" /> <span>Auton Win Point (AWP +1 WP)</span></label>
+                  <label class="tm-check"><input type="checkbox" id="skRedDq" /> <span>Disqualified (DQ)</span></label>
+                </div>
+              </div>
+
+              <!-- Blue Alliance Scoring Card -->
+              <div class="tm-panel tm-sk-card blue">
+                <div class="tm-sk-card-head">
+                  <div>
+                    <span class="tm-alliance-label blue">BLUE ALLIANCE</span>
+                    <div class="tm-sk-teams font-mono" id="tmSkBlueTeams">— · —</div>
+                  </div>
+                  <div class="tm-sk-total font-mono tabular-nums" id="tmSkBlueTotal">0</div>
+                </div>
+
+                <div class="tm-sk-fields" id="tmSkOverrideBlue">
+                  <div class="tm-sk-row">
+                    <span>Blue Pins on Goals (5 pts ea)</span>
+                    <div class="tm-stepper">
+                      <button type="button" data-step="bluePins:-1">-</button>
+                      <input type="number" id="skBluePins" min="0" max="63" value="0" class="font-mono tabular-nums" />
+                      <button type="button" data-step="bluePins:1">+</button>
+                    </div>
+                  </div>
+                  <div class="tm-sk-row">
+                    <span>Yellow Pins (10 pts if ≥1 Toggle)</span>
+                    <div class="tm-stepper">
+                      <button type="button" data-step="blueYellowPins:-1">-</button>
+                      <input type="number" id="skBlueYellowPins" min="0" max="63" value="0" class="font-mono tabular-nums" />
+                      <button type="button" data-step="blueYellowPins:1">+</button>
+                    </div>
+                  </div>
+                  <div class="tm-sk-row">
+                    <span>Wall Toggles Owned (10 pts ea)</span>
+                    <div class="tm-stepper">
+                      <button type="button" data-step="blueToggles:-1">-</button>
+                      <input type="number" id="skBlueToggles" min="0" max="4" value="0" class="font-mono tabular-nums" />
+                      <button type="button" data-step="blueToggles:1">+</button>
+                    </div>
+                  </div>
+                  <div class="tm-sk-row">
+                    <span>Bonus / Park Points</span>
+                    <input type="number" id="skBlueBonus" min="0" max="200" value="0" class="tm-input-xs font-mono tabular-nums" />
+                  </div>
+                </div>
+
+                <div class="tm-sk-fields" id="tmSkManualBlue" style="display:none;">
+                  <div class="tm-sk-row">
+                    <span>Total Match Score</span>
+                    <input type="number" id="skBlueManualScore" min="0" max="999" value="0" class="tm-input-sm font-mono tabular-nums" />
+                  </div>
+                </div>
+
+                <div class="tm-sk-flags">
+                  <label class="tm-check"><input type="checkbox" id="skBlueAwp" /> <span>Auton Win Point (AWP +1 WP)</span></label>
+                  <label class="tm-check"><input type="checkbox" id="skBlueDq" /> <span>Disqualified (DQ)</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Skills Scoring Subview -->
+          <div id="tmSkSkillsPane" class="tm-sk-pane" style="display:none;">
+            <div class="tm-panel">
+              <div class="tm-panel-head">
+                <h2>Record Robot Skills Attempt</h2>
+              </div>
+              <form id="tmSkillsForm" class="tm-form-grid">
+                <label>Team
+                  <select id="tmSkillsTeamSelect" required></select>
+                </label>
+                <label>Skills Type
+                  <select id="tmSkillsType">
+                    <option value="driver">Driver Skills</option>
+                    <option value="programming">Autonomous Coding Skills</option>
+                  </select>
+                </label>
+                <label>Score
+                  <input type="number" id="tmSkillsScore" min="0" max="999" value="0" required class="font-mono tabular-nums" />
+                </label>
+                <label>Stop Time Remaining (s)
+                  <input type="number" id="tmSkillsStopSec" min="0" max="60" value="0" class="font-mono tabular-nums" />
+                </label>
+                <div class="tm-form-submit">
+                  <button type="submit" class="tm-btn-primary">Record Skills Run</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="tm-panel">
+              <div class="tm-panel-head">
+                <h2>Recorded Skills Attempts</h2>
+                <span class="font-mono tabular-nums" id="tmSkillsRunCount">0 runs</span>
+              </div>
+              <div class="tm-table-wrap">
+                <table class="tm-table">
+                  <thead>
+                    <tr>
+                      <th>Team</th>
+                      <th>Type</th>
+                      <th>Attempt</th>
+                      <th>Score</th>
+                      <th>Stop Time</th>
+                      <th class="text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tmSkillsLogBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 4: RANKINGS & SKILLS STANDINGS -->
+        <section class="tm-view" id="tmViewRankings">
+          <div class="tm-view-header">
+            <div>
+              <h1>Qualification Rankings &amp; Skills Standings</h1>
+              <p>Live tiebreaker computation following official VEX rules: Win Points (WP), Autonomous Points (AP), Strength of Schedule (SP), and High Score.</p>
+            </div>
+            <div class="tm-view-actions">
+              <button type="button" id="btnTmExportRankingsCsv" class="suite-btn-subtle">Export CSV</button>
+            </div>
+          </div>
+
+          <div class="tm-two-col-even">
+            <div class="tm-panel">
+              <div class="tm-panel-head">
+                <h2>Qualification Standings</h2>
+                <span class="tm-muted-meta font-mono" id="tmRankDivisionLabel">Science Division</span>
+              </div>
+              <div class="tm-table-wrap">
+                <table class="tm-table">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Team</th>
+                      <th>WP</th>
+                      <th>AP</th>
+                      <th>SP</th>
+                      <th>W-L-T</th>
+                      <th>Avg</th>
+                      <th>High</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tmRankingsBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="tm-panel">
+              <div class="tm-panel-head">
+                <h2>Robot Skills Leaderboard</h2>
+                <span class="tm-muted-meta">Driver + Programming Best</span>
+              </div>
+              <div class="tm-table-wrap">
+                <table class="tm-table">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Team</th>
+                      <th>Combined</th>
+                      <th>High Driver</th>
+                      <th>High Prog</th>
+                      <th>Runs</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tmSkillsStandingsBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 5: ALLIANCE SELECTION & ELIMINATION BRACKET -->
+        <section class="tm-view" id="tmViewBracket">
+          <div class="tm-view-header">
+            <div>
+              <h1>Alliance Selection &amp; Elimination Bracket</h1>
+              <p>Draft tournament alliances from qualification rankings and run Quarterfinals, Semifinals, and Finals.</p>
+            </div>
+            <div class="tm-view-actions">
+              <select id="tmAllianceCountSelect" class="tm-select-compact">
+                <option value="4">4 Alliances (SF / F)</option>
+                <option value="8" selected>8 Alliances (QF / SF / F)</option>
+              </select>
+              <button type="button" id="btnTmAutoSeedAlliances" class="suite-btn-subtle">Auto-Seed From Rankings</button>
+              <button type="button" id="btnTmBuildBracket" class="tm-btn-primary">Generate Bracket</button>
+            </div>
+          </div>
+
+          <div class="tm-bracket-layout">
+            <div class="tm-panel">
+              <div class="tm-panel-head">
+                <h2>Alliances</h2>
+                <span class="tm-muted-meta">2 Teams per Alliance</span>
+              </div>
+              <div id="tmAlliancesList" class="tm-alliances-list"></div>
+            </div>
+
+            <div class="tm-panel tm-bracket-panel">
+              <div class="tm-panel-head">
+                <h2>Elimination Bracket</h2>
+                <span class="tm-champion-badge font-mono" id="tmChampionBanner" style="display:none;"></span>
+              </div>
+              <div id="tmBracketTree" class="tm-bracket-tree"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 6: TEAMS & HARDWARE INSPECTION -->
+        <section class="tm-view" id="tmViewTeams">
+          <div class="tm-view-header">
+            <div>
+              <h1>Teams &amp; Hardware Inspection</h1>
+              <p>Manage registered teams, check-in status, CSV roster imports, and VEX V5 hardware compliance checklists.</p>
+            </div>
+            <div class="tm-view-actions">
+              <button type="button" id="btnTmOpenCsvImport" class="suite-btn-subtle">Bulk CSV Import</button>
+              <button type="button" id="btnTmAddTeamModal" class="tm-btn-primary">+ Add Team</button>
+            </div>
+          </div>
+
+          <div class="tm-stats-strip">
+            <div class="tm-stat-cell">
+              <span class="tm-stat-label">Registered Teams</span>
+              <strong class="font-mono tabular-nums" id="tmStatTotalTeams">0</strong>
+            </div>
+            <div class="tm-stat-cell">
+              <span class="tm-stat-label">Checked In</span>
+              <strong class="font-mono tabular-nums" id="tmStatCheckedIn">0</strong>
+            </div>
+            <div class="tm-stat-cell">
+              <span class="tm-stat-label">Inspection Passed</span>
+              <strong class="font-mono tabular-nums" id="tmStatInspPassed">0</strong>
+            </div>
+            <div class="tm-stat-cell">
+              <span class="tm-stat-label">Pending Inspection</span>
+              <strong class="font-mono tabular-nums" id="tmStatInspPending">0</strong>
+            </div>
+          </div>
+
+          <div class="tm-panel">
+            <div class="tm-table-toolbar">
+              <div class="tm-filter-tabs" id="tmTeamFilterTabs">
+                <button type="button" class="tm-filter-btn active" data-t-filter="all">All Teams</button>
+                <button type="button" class="tm-filter-btn" data-t-filter="Not Started">Not Started</button>
+                <button type="button" class="tm-filter-btn" data-t-filter="Partial">Partial</button>
+                <button type="button" class="tm-filter-btn" data-t-filter="Passed">Passed</button>
+              </div>
+              <input type="text" id="tmTeamSearch" class="tm-search-input" placeholder="Search team #, name, org..." />
+            </div>
+
+            <div class="tm-table-wrap">
+              <table class="tm-table">
+                <thead>
+                  <tr>
+                    <th>Team #</th>
+                    <th>Team Name</th>
+                    <th>Organization</th>
+                    <th>Check-In</th>
+                    <th>Inspection</th>
+                    <th class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tmTeamsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 7: AUDIENCE & PIT DISPLAYS -->
+        <section class="tm-view" id="tmViewDisplays">
+          <div class="tm-view-header">
+            <div>
+              <h1>Audience &amp; Pit Displays</h1>
+              <p>Control what appears on arena projectors and pit monitors. Pop-out windows stay synchronized in real time.</p>
+            </div>
+            <div class="tm-view-actions">
+              <a href="?display=audience" target="_blank" rel="noopener" class="tm-btn-primary">Launch Audience Window</a>
+              <a href="?display=pit" target="_blank" rel="noopener" class="suite-btn-subtle">Launch Pit Window</a>
+            </div>
+          </div>
+
+          <div class="tm-panel">
+            <div class="tm-panel-head">
+              <h2>Audience Screen Switcher</h2>
+              <div class="tm-seg-group" id="tmAudienceModePicker">
+                <button type="button" class="tm-seg-btn active" data-disp-mode="match">Live Match / Timer</button>
+                <button type="button" class="tm-seg-btn" data-disp-mode="rankings">Rankings</button>
+                <button type="button" class="tm-seg-btn" data-disp-mode="skills">Skills Top 10</button>
+                <button type="button" class="tm-seg-btn" data-disp-mode="bracket">Elim Bracket</button>
+              </div>
+            </div>
+            <div id="tmDisplayPreviewFrame" class="tm-display-preview-box"></div>
+          </div>
+        </section>
+
+        <!-- VIEW 8: EVENT SETUP & DWAB TM SERVER BRIDGE -->
+        <section class="tm-view" id="tmViewSetup">
+          <div class="tm-view-header">
+            <div>
+              <h1>Event Setup &amp; DWAB TM Bridge</h1>
+              <p>Configure event metadata, match timing, field sets, backups, or link to an external DWAB Tech VEX Tournament Manager instance.</p>
+            </div>
+          </div>
+
+          <div class="tm-two-col-even">
+            <div class="tm-panel">
+              <div class="tm-panel-head"><h2>Event Configuration</h2></div>
+              <form id="tmEventSetupForm" class="tm-stack-form">
+                <label>Event Name
+                  <input type="text" id="tmCfgName" required />
+                </label>
+                <div class="tm-form-row-2">
+                  <label>Event Code / SKU
+                    <input type="text" id="tmCfgSku" />
+                  </label>
+                  <label>Division Name
+                    <input type="text" id="tmCfgDivision" />
+                  </label>
+                </div>
+                <div class="tm-form-row-2">
+                  <label>Date
+                    <input type="date" id="tmCfgDate" />
+                  </label>
+                  <label>Location
+                    <input type="text" id="tmCfgLocation" />
+                  </label>
+                </div>
+                <div class="tm-form-row-3">
+                  <label>Auton (sec)
+                    <input type="number" id="tmCfgAutonSec" min="5" max="60" value="15" class="font-mono" />
+                  </label>
+                  <label>Driver (sec)
+                    <input type="number" id="tmCfgDriverSec" min="15" max="300" value="105" class="font-mono" />
+                  </label>
+                  <label>Skills (sec)
+                    <input type="number" id="tmCfgSkillsSec" min="15" max="120" value="60" class="font-mono" />
+                  </label>
+                </div>
+                <button type="submit" class="tm-btn-primary">Save Event Settings</button>
+              </form>
+
+              <div class="tm-divider"></div>
+              <div class="tm-panel-head"><h2>Tournament Data</h2></div>
+              <div class="tm-inline-actions wrap">
+                <button type="button" id="btnTmLoadSample" class="suite-btn-subtle">Load Sample 12-Team Event</button>
+                <button type="button" id="btnTmExportJson" class="suite-btn-subtle">Export Tournament JSON</button>
+                <button type="button" id="btnTmImportJson" class="suite-btn-subtle">Import Tournament JSON</button>
+                <input type="file" id="tmImportJsonInput" accept=".json" hidden />
+                <button type="button" id="btnTmResetAll" class="tm-btn-danger-outline">Reset Tournament</button>
+              </div>
+            </div>
+
+            <div class="tm-panel">
+              <div class="tm-panel-head"><h2>DWAB Tech VEX TM LAN Server Bridge</h2></div>
+              <p class="tm-helper-copy">
+                Connect to a desktop VEX Tournament Manager web server on your local network (e.g. <code>http://192.168.1.50</code> or <code>http://localhost:8080</code>) to verify server reachability and inspect live API endpoints, or run 100% standalone right here.
+              </p>
+              <div class="tm-stack-form">
+                <label>Tournament Manager Server URL
+                  <input type="text" id="tmDwabHostInput" placeholder="http://192.168.1.50" class="font-mono" />
+                </label>
+                <label>Endpoint Path
+                  <input type="text" id="tmDwabEndpointInput" value="/api/v2/event" class="font-mono" />
+                </label>
+                <div class="tm-inline-actions">
+                  <button type="button" id="btnTmTestDwab" class="tm-btn-primary">Probe TM Server</button>
+                  <span id="tmDwabStatusText" class="tm-muted-meta font-mono">Standalone mode active</span>
+                </div>
+                <pre id="tmDwabOutput" class="tm-code-well">Standalone Tournament Engine active. Changes persist to /api/tm/state and broadcast to Audience/Pit displays.</pre>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Standalone Audience / Pit Display Shell (?display=audience or ?display=pit) -->
+  <div id="tmStandaloneDisplay" class="tm-standalone-display" hidden>
+    <div class="tm-disp-topbar">
+      <div class="tm-disp-brand">
+        <strong id="tmDispEventTitle">V5RC Tournament</strong>
+        <span id="tmDispBadge" class="font-mono">AUDIENCE DISPLAY</span>
+      </div>
+      <div class="tm-disp-controls">
+        <a href="tm.html" class="suite-btn-xs">Back to TM Console</a>
+      </div>
+    </div>
+    <div id="tmStandaloneBody" class="tm-standalone-body"></div>
+  </div>
+
+  <!-- Add / Edit Team Modal -->
+  <div id="tmTeamModal" class="modal-overlay" hidden>
+    <div class="modal-box tm-modal-box">
+      <div class="tm-modal-head">
+        <h3 id="tmTeamModalTitle">Add Team</h3>
+        <button type="button" id="btnTmTeamModalClose" class="modal-close-btn">✕</button>
+      </div>
+      <form id="tmTeamForm" class="tm-stack-form">
+        <input type="hidden" id="tmEditTeamIdx" value="-1" />
+        <div class="tm-form-row-2">
+          <label>Team Number
+            <input type="text" id="tmInTeamNum" placeholder="e.g. 1234A" required class="font-mono" />
+          </label>
+          <label>Organization / School
+            <input type="text" id="tmInTeamOrg" placeholder="e.g. Robotics Club" />
+          </label>
+        </div>
+        <label>Team Name
+          <input type="text" id="tmInTeamName" placeholder="e.g. Apex Autonomous" required />
+        </label>
+        <label>City / Region
+          <input type="text" id="tmInTeamLoc" placeholder="e.g. San Jose, CA" />
+        </label>
+        <div class="tm-modal-foot">
+          <button type="button" id="btnTmTeamCancel" class="suite-btn-subtle">Cancel</button>
+          <button type="submit" class="tm-btn-primary">Save Team</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bulk CSV Import Modal -->
+  <div id="tmCsvModal" class="modal-overlay" hidden>
+    <div class="modal-box tm-modal-box">
+      <div class="tm-modal-head">
+        <h3>Bulk Import Teams (CSV)</h3>
+        <button type="button" id="btnTmCsvClose" class="modal-close-btn">✕</button>
+      </div>
+      <div class="tm-stack-form">
+        <p class="tm-helper-copy">Paste one team per line: <code>TeamNumber, TeamName, Organization, City</code></p>
+        <textarea id="tmCsvInput" rows="8" class="font-mono" placeholder="1010A, Ten Ton Robotics, West Vancouver Secondary, BC
+2145Z, Apex Robotics, Central High, OH
+8888X, Vector Drive, Tech Academy, CA"></textarea>
+        <div class="tm-modal-foot">
+          <button type="button" id="btnTmCsvCancel" class="suite-btn-subtle">Cancel</button>
+          <button type="button" id="btnTmCsvApply" class="tm-btn-primary">Import Teams</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hardware Inspection Checklist Modal -->
+  <div id="tmInspModal" class="modal-overlay" hidden>
+    <div class="modal-box tm-modal-box">
+      <div class="tm-modal-head">
+        <h3 id="tmInspModalTitle">Hardware Inspection</h3>
+        <button type="button" id="btnTmInspClose" class="modal-close-btn">✕</button>
+      </div>
+      <div class="tm-stack-form">
+        <div class="tm-insp-checklist" id="tmInspChecklist">
+          <label class="tm-check"><input type="checkbox" data-insp="sizing" /> <span>Fits cleanly inside 18" × 18" × 18" sizing box</span></label>
+          <label class="tm-check"><input type="checkbox" data-insp="brain" /> <span>Single V5 Robot Brain with current VEXos firmware</span></label>
+          <label class="tm-check"><input type="checkbox" data-insp="battery" /> <span>Legal V5 Robot Battery &amp; main power accessible</span></label>
+          <label class="tm-check"><input type="checkbox" data-insp="motors" /> <span>Legal motor / pneumatic count within V5RC power limits</span></label>
+          <label class="tm-check"><input type="checkbox" data-insp="radio" /> <span>V5 Robot Radio / VEXnet 3.0 functional and visible</span></label>
+          <label class="tm-check"><input type="checkbox" data-insp="plates" /> <span>Red &amp; Blue Team License Plates mounted on opposite sides</span></label>
+          <label class="tm-check"><input type="checkbox" data-insp="safety" /> <span>No sharp edges, entanglement hazards, or field-damaging parts</span></label>
+        </div>
+        <div class="tm-form-row-2">
+          <label>Inspector Name
+            <input type="text" id="tmInspInspector" placeholder="e.g. Head Inspector" />
+          </label>
+          <label>Status Override
+            <select id="tmInspStatusSelect">
+              <option value="Not Started">Not Started</option>
+              <option value="Partial">Partial</option>
+              <option value="Passed">Passed</option>
+            </select>
+          </label>
+        </div>
+        <label>Notes
+          <input type="text" id="tmInspNotes" placeholder="Optional inspection notes..." />
+        </label>
+        <div class="tm-modal-foot">
+          <button type="button" id="btnTmInspCancel" class="suite-btn-subtle">Cancel</button>
+          <button type="button" id="btnTmInspSave" class="tm-btn-primary">Save Inspection</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Elimination Match Score Modal -->
+  <div id="tmElimScoreModal" class="modal-overlay" hidden>
+    <div class="modal-box tm-modal-box">
+      <div class="tm-modal-head">
+        <h3 id="tmElimModalTitle">Score Elimination Match</h3>
+        <button type="button" id="btnTmElimClose" class="modal-close-btn">✕</button>
+      </div>
+      <div class="tm-stack-form">
+        <div class="tm-form-row-2">
+          <label><span id="tmElimRedLbl">Red Alliance</span> Score
+            <input type="number" id="tmElimRedScore" min="0" value="0" class="font-mono" />
+          </label>
+          <label><span id="tmElimBlueLbl">Blue Alliance</span> Score
+            <input type="number" id="tmElimBlueScore" min="0" value="0" class="font-mono" />
+          </label>
+        </div>
+        <div class="tm-modal-foot">
+          <button type="button" id="btnTmElimCancel" class="suite-btn-subtle">Cancel</button>
+          <button type="button" id="btnTmElimSave" class="tm-btn-primary">Submit &amp; Advance Winner</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="version.js?v=20261113.k1"></script>
+  <script src="theme.js?v=20261113.k1"></script>
+  <script src="v5-brain-serial.js?v=20261113.k1"></script>
+  <script src="tm.js?v=20261113.k1"></script>
+</body>
+</html>

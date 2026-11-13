@@ -43,7 +43,7 @@ export function updateBuildVersion() {
   console.log(`[build] Updated version.js to build: ${nextBuild}`);
 
   // Also update cache-busting query strings in all suite HTML files
-  const htmlFiles = ['index.html', 'ide.html', 'translator.html', 'stats.html', 'tools.html', 'team.html', 'admin.html', 'documentation.html'];
+  const htmlFiles = ['index.html', 'ide.html', 'translator.html', 'stats.html', 'tools.html', 'team.html', 'admin.html', 'documentation.html', 'tm.html'];
   for (const f of htmlFiles) {
     const filePath = path.join(__dirname, f);
     if (fs.existsSync(filePath)) {
