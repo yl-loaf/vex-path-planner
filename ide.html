@@ -167,6 +167,7 @@
               <input type="file" id="ideZipFileInput" accept=".zip,.tar.gz,.pros,.vpath,.json" hidden />
             </div>
           </div>
+          <div id="ideAutonSelectorBanner" hidden style="margin:6px 8px 4px;padding:8px 10px;border-radius:6px;background:rgba(14,165,233,0.1);border:1px solid rgba(56,189,248,0.35);font-size:0.74rem;color:#e2e8f0;"></div>
           <div class="ide-file-tree" id="ideFileTree">
             <!-- Dynamically populated files -->
           </div>
@@ -818,6 +819,43 @@
       </div>
       <div class="modal-footer" style="padding:12px 20px;background:#09111e;border-top:1px solid #1e293b;display:flex;justify-content:flex-end;">
         <button type="button" id="btnPatHelpModalDone" class="primary" style="padding:7px 16px;font-size:0.8rem;">Got It</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multi-Folder Project & Auton File Picker Modal -->
+  <div id="projectFolderPickerModal" class="modal-backdrop" hidden>
+    <div class="modal-card" style="max-width:620px;background:#0b1329;border:1px solid #334155;border-radius:8px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.85);overflow:hidden;padding:0;">
+      <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e293b;background:#0f172a;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.45rem;">📂</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:#f8fafc;font-weight:700;">Select Project Folder &amp; Autons File</h3>
+            <span id="projectFolderPickerSubtitle" style="font-size:0.75rem;color:#94a3b8;">Multiple project folders or autonomous files detected in repository</span>
+          </div>
+        </div>
+        <button type="button" id="btnFolderPickerClose" class="modal-close" style="background:none;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-body" style="padding:18px 20px;color:#e2e8f0;max-height:70vh;overflow-y:auto;">
+        <div style="margin-bottom:14px;">
+          <label for="inputFolderProjectName" style="display:block;font-size:0.78rem;color:#cbd5e1;margin-bottom:5px;font-weight:600;">Workspace Name:</label>
+          <input type="text" id="inputFolderProjectName" placeholder="Project Name" style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid #334155;background:#0f172a;color:#fff;font-size:0.86rem;" />
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:0.78rem;color:#cbd5e1;margin-bottom:6px;font-weight:600;">Choose Repository Folder to Import:</label>
+          <div id="projectFolderList" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+
+        <div style="margin-bottom:4px;">
+          <label for="selectProjectAutonFile" style="display:block;font-size:0.78rem;color:#cbd5e1;margin-bottom:5px;font-weight:600;">Primary Autonomous Routines File (mapped to <code style="color:#38bdf8;">src/autons.cpp</code>):</label>
+          <select id="selectProjectAutonFile" style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-family:monospace;font-size:0.84rem;"></select>
+          <span id="folderAutonHint" style="display:block;margin-top:5px;font-size:0.73rem;color:#94a3b8;">UI selector files (e.g. auton-selector.cpp) are kept intact while real autonomous routines are loaded into the Planner.</span>
+        </div>
+      </div>
+      <div class="modal-footer" style="padding:12px 20px;background:#09111e;border-top:1px solid #1e293b;display:flex;justify-content:flex-end;gap:10px;">
+        <button type="button" id="btnFolderPickerCancel" class="btn-subtle" style="padding:7px 14px;font-size:0.82rem;">Cancel</button>
+        <button type="button" id="btnFolderPickerConfirm" class="primary" style="padding:7px 16px;font-size:0.84rem;font-weight:700;">Import Selected Folder</button>
       </div>
     </div>
   </div>

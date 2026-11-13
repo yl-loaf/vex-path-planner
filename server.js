@@ -2070,38 +2070,43 @@ app.post('/api/github/clone', async (req, res) => {
     const zip = await JSZip.loadAsync(buffer);
 
     const IGNORED_PATH_PREFIXES = [
-      '.cache/', '.clangd/', '.vscode/', '.git/', 'bin/', 'build/', 'firmware/', 'dist/', 'node_modules/'
+      '.cache/', '.clangd/', '.vscode/', '.git/', 'bin/', 'build/', 'firmware/', 'dist/', 'node_modules/', '__macosx/'
     ];
     const IGNORED_EXTENSIONS = [
-      '.idx', '.bin', '.elf', '.o', '.a', '.d', '.map', '.gch', '.pch', '.so', '.dylib', '.dll', '.exe', '.zip', '.tar', '.gz', '.7z', '.iso', '.png', '.jpg', '.jpeg'
+      '.idx', '.bin', '.elf', '.o', '.a', '.d', '.map', '.gch', '.pch', '.so', '.dylib', '.dll', '.exe', '.zip', '.tar', '.gz', '.7z', '.iso', '.png', '.jpg', '.jpeg', '.ico', '.pdf', '.woff', '.woff2', '.ttf'
     ];
 
     const extractedFiles = {};
 
-    // GitHub zipball has a top-level folder like owner-repo-sha/
-    let prefixCut = 0;
-    const entryNames = Object.keys(zip.files);
-    if (entryNames.length > 0) {
-      const firstEntry = entryNames[0];
-      const slashIdx = firstEntry.indexOf('/');
-      if (slashIdx !== -1) {
-        prefixCut = slashIdx + 1;
+    // GitHub zipball usually wraps all entries inside a single top-level folder (owner-repo-sha/)
+    let commonPrefix = '';
+    const nonDirNames = Object.keys(zip.files).filter((k) => !zip.files[k].dir && !k.startsWith('__MACOSX/'));
+    if (nonDirNames.length > 0) {
+      const firstSlash = nonDirNames[0].indexOf('/');
+      if (firstSlash > 0) {
+        const candidatePrefix = nonDirNames[0].substring(0, firstSlash + 1);
+        if (nonDirNames.every((name) => name.startsWith(candidatePrefix))) {
+          commonPrefix = candidatePrefix;
+        }
       }
     }
 
     for (const [relativePath, fileObj] of Object.entries(zip.files)) {
       if (fileObj.dir) continue;
 
-      let normPath = prefixCut > 0 ? relativePath.substring(prefixCut) : relativePath;
+      let normPath = relativePath.replace(/\\/g, '/');
+      if (commonPrefix && normPath.startsWith(commonPrefix)) {
+        normPath = normPath.substring(commonPrefix.length);
+      }
+      normPath = normPath.replace(/^(\.\/|\/)+/, '');
       if (!normPath) continue;
-      normPath = normPath.replace(/\\/g, '/');
 
+      const lower = normPath.toLowerCase();
       // Check ignored prefixes
-      if (IGNORED_PATH_PREFIXES.some(prefix => normPath.startsWith(prefix) || normPath.includes('/' + prefix))) {
+      if (IGNORED_PATH_PREFIXES.some(prefix => lower.startsWith(prefix) || lower.includes('/' + prefix))) {
         continue;
       }
       // Check ignored extensions
-      const lower = normPath.toLowerCase();
       if (IGNORED_EXTENSIONS.some(ext => lower.endsWith(ext))) {
         continue;
       }

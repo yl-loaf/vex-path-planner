@@ -16305,11 +16305,11 @@ lemlib::ControllerSettings ${currentMode}_controller(
     }
 
     const indent = typeof getIndentString === "function" ? getIndentString() : "    ";
-    if (!force && !window.ProjectManager.hasCodeDifference(paths, indent)) {
+    const autonRoutines = window.ProjectManager.getAutonRoutines();
+    if (!force && autonsCode && autonsCode.trim().length > 0 && !window.ProjectManager.hasCodeDifference(paths, indent)) {
       return;
     }
 
-    const autonRoutines = window.ProjectManager.getAutonRoutines();
     if (!autonRoutines || autonRoutines.length === 0) return;
 
     // Convert parsed routines into planner paths
@@ -16373,7 +16373,8 @@ lemlib::ControllerSettings ${currentMode}_controller(
       } catch (_) {}
 
       if (showNotification) {
-        showToast(`📁 Synchronized ${newPaths.length} autonomous routine${newPaths.length === 1 ? '' : 's'} from src/autons.cpp`);
+        const srcLabel = (autonsCode && autonsCode.trim().length > 0) ? "src/autons.cpp" : "project C++ source";
+        showToast(`📁 Synchronized ${newPaths.length} autonomous routine${newPaths.length === 1 ? '' : 's'} from ${srcLabel}`);
       }
     }
   }
@@ -16927,7 +16928,7 @@ lemlib::ControllerSettings ${currentMode}_controller(
                     message: "Parsing symbols & LemLib configurations..."
                   });
                 }
-                window.ProjectManager.wipeProject();
+                await window.ProjectManager.wipeProject();
                 data.updatedAt = Date.now();
                 data.isDefault = false;
                 data.cloudSynced = false;
@@ -16936,6 +16937,15 @@ lemlib::ControllerSettings ${currentMode}_controller(
                 data.rawCppPreserved = true;
                 if (window.ProjectManager.normalizeFiles) {
                   data.files = window.ProjectManager.normalizeFiles(data.files);
+                }
+                if (!data.library && typeof window.ProjectManager.detectLibraryForFiles === "function") {
+                  data.library = window.ProjectManager.detectLibraryForFiles(data.files);
+                }
+                if (!data.autonSelector && typeof window.ProjectManager.detectAutonSelectorInfo === "function") {
+                  data.autonSelector = window.ProjectManager.detectAutonSelectorInfo(data.files);
+                }
+                if (data.library) {
+                  try { localStorage.setItem("vex_active_library", normalizeLibraryId(data.library)); } catch (_) {}
                 }
                 window.ProjectManager.project = data;
                 if (window.ImportProgressModal) {
@@ -18234,6 +18244,9 @@ lemlib::ControllerSettings ${currentMode}_controller(
       }
 
       const code = window.ProjectManager.getFile("src/autons.cpp");
+      const fallbackRoutines = (!code || !code.trim().length) && typeof window.ProjectManager.getAutonRoutines === "function"
+        ? window.ProjectManager.getAutonRoutines()
+        : [];
       const projUpdatedAt = Number(proj.updatedAt) || 0;
       const rawPlanner = localStorage.getItem(STORAGE_KEY);
       let plannerTime = 0;
@@ -18246,16 +18259,19 @@ lemlib::ControllerSettings ${currentMode}_controller(
 
       const indent = typeof getIndentString === "function" ? getIndentString() : "    ";
       const hasDiff = window.ProjectManager.hasCodeDifference(paths, indent);
+      const isDefaultProj = typeof window.ProjectManager.isDefaultProject === "function"
+        ? window.ProjectManager.isDefaultProject()
+        : !!proj.isDefault;
 
-      // Protect raw C++ code: IF code exists in src/autons.cpp and differs from visual blocks:
+      // Protect raw C++ code: IF code exists in src/autons.cpp (or fallback routines exist in src/main.cpp) and differs from visual blocks:
       if (code && code.trim().length > 0) {
         if (hasDiff) {
           const isFirstVisit = !localStorage.getItem("lemlib_first_visit_done") || localStorage.getItem("lemlib_tutorial_completed_v1") !== "true";
-          if (proj.importedProject || proj.lastAutonEditor === "ide" || proj.rawCppPreserved) {
+          if (proj.importedProject || proj.lastAutonEditor === "ide" || proj.rawCppPreserved || !isDefaultProj) {
             console.log("📥 Loading autonomous routines from imported/IDE C++ code (src/autons.cpp)...");
             loadProjectAutonsIntoPlanner(false, true);
-          } else if (isFirstVisit) {
-            // First time visitor: do NOT show the resolve diffs modal, sync cleanly
+          } else if (isFirstVisit && isDefaultProj) {
+            // First time visitor on starter template: sync cleanly without diff prompt
             console.log("🌟 First visit detected: syncing visual blocks into autons.cpp cleanly without diff prompt.");
             window.ProjectManager.updateAutonCppFromPlanner(paths, indent);
           } else {
@@ -18265,9 +18281,12 @@ lemlib::ControllerSettings ${currentMode}_controller(
         } else if (!paths || paths.length === 0) {
           loadProjectAutonsIntoPlanner(false, false);
         }
+      } else if (fallbackRoutines.length > 0) {
+        console.log("📥 Loading autonomous routines from project C++ fallback (e.g. src/main.cpp)...");
+        loadProjectAutonsIntoPlanner(false, true);
       } else if (paths && paths.length > 0) {
-        // Planner has routines, but src/autons.cpp is empty: only sync if not imported or raw C++ preserved
-        if (!proj.importedProject && proj.lastAutonEditor !== "ide" && !proj.rawCppPreserved) {
+        // Planner has routines, but src/autons.cpp is empty: only sync if starter default project
+        if (isDefaultProj && !proj.importedProject && proj.lastAutonEditor !== "ide" && !proj.rawCppPreserved) {
           syncPlannerIntoProjectManager({ ask: false, force: true });
         }
       }

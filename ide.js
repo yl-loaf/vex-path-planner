@@ -91,53 +91,282 @@
   }
   window.isIgnoredFile = isIgnoredFile;
 
-  function applyNewImportedProject(projName, filesMap) {
-    // Clean up common root prefix if files are double-nested like "MyProject/src/main.cpp"
-    // CRITICAL: NEVER strip "src", "include", or "firmware" as a root folder!
-    const paths = Object.keys(filesMap || {});
-    if (paths.length > 0) {
-      const firstSegment = paths[0].split("/")[0];
-      if (
-        firstSegment &&
-        firstSegment !== "src" &&
-        firstSegment !== "include" &&
-        firstSegment !== "firmware" &&
-        paths.length > 1 &&
-        paths.every(p => p.startsWith(firstSegment + "/"))
-      ) {
-        const cleanedMap = {};
-        const prefix = firstSegment + "/";
-        for (const [k, v] of Object.entries(filesMap)) {
-          cleanedMap[k.substring(prefix.length)] = v;
+  function formatLibraryLabel(lib) {
+    const map = {
+      lemlib: "LemLib",
+      ez_template: "EZ-Template",
+      rw_template: "RW-Template",
+      jar_template: "JAR-Template",
+      custom: "Custom V5"
+    };
+    return map[lib] || "LemLib";
+  }
+
+  function escapeHtmlIde(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function promptProjectFolderSelection(defaultProjName, discovery) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("projectFolderPickerModal");
+      const listEl = document.getElementById("projectFolderList");
+      const selectAutonEl = document.getElementById("selectProjectAutonFile");
+      const nameInput = document.getElementById("inputFolderProjectName");
+      const subtitleEl = document.getElementById("projectFolderPickerSubtitle");
+      const hintEl = document.getElementById("folderAutonHint");
+      const btnConfirm = document.getElementById("btnFolderPickerConfirm");
+      const btnCancel = document.getElementById("btnFolderPickerCancel");
+      const btnClose = document.getElementById("btnFolderPickerClose");
+
+      if (!modal || !listEl || !selectAutonEl || !btnConfirm) {
+        const firstFolder = discovery.folders[0];
+        resolve({
+          cancelled: false,
+          selectedFolder: firstFolder ? firstFolder.folder : "",
+          selectedAutonFile: firstFolder ? firstFolder.primaryAuton : "",
+          chosenName: defaultProjName
+        });
+        return;
+      }
+
+      const folders = discovery.folders || [];
+      let selectedIdx = 0;
+      let userEditedName = false;
+
+      if (subtitleEl) {
+        subtitleEl.textContent = folders.length > 1
+          ? `Found ${folders.length} project folders in "${defaultProjName}". Pick which folder & autons file to load.`
+          : `Multiple autonomous candidate files found in "${defaultProjName}". Confirm which file contains your autons.`;
+      }
+
+      const computeSuggestedName = (folderObj) => {
+        if (!folderObj || !folderObj.folder) return defaultProjName;
+        const leaf = folderObj.folder.split("/").pop();
+        if (!defaultProjName || defaultProjName === "GitHub_Project" || defaultProjName === "Imported_PROS_Project") {
+          return leaf;
         }
-        filesMap = cleanedMap;
+        return folders.length > 1 ? `${defaultProjName} (${leaf})` : defaultProjName;
+      };
+
+      if (nameInput) {
+        nameInput.value = computeSuggestedName(folders[0]);
+        nameInput.oninput = () => { userEditedName = true; };
+      }
+
+      const populateAutonSelect = (folderObj) => {
+        selectAutonEl.innerHTML = "";
+        if (!folderObj) return;
+        const candidates = folderObj.autonCandidates || [];
+        const scopedPaths = Object.keys(folderObj.scopedFiles || {}).filter((f) => /\.(cpp|c|cc)$/i.test(f));
+
+        if (candidates.length === 0 && scopedPaths.length === 0) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "-- No C++ files found in folder --";
+          selectAutonEl.appendChild(opt);
+          return;
+        }
+
+        const seen = new Set();
+        candidates.forEach((cand, idx) => {
+          seen.add(cand.path);
+          const opt = document.createElement("option");
+          opt.value = cand.path;
+          const tags = [];
+          if (idx === 0 && !cand.isSelectorFile) tags.push("Recommended");
+          if (cand.isSelectorFile) tags.push("Selector UI — Skip");
+          else if (cand.score >= 500) tags.push("Autons Match");
+          opt.textContent = tags.length ? `${cand.path} [${tags.join(", ")}]` : cand.path;
+          selectAutonEl.appendChild(opt);
+        });
+
+        scopedPaths.forEach((p) => {
+          if (seen.has(p)) return;
+          const opt = document.createElement("option");
+          opt.value = p;
+          opt.textContent = p;
+          selectAutonEl.appendChild(opt);
+        });
+
+        if (folderObj.primaryAuton) {
+          selectAutonEl.value = folderObj.primaryAuton;
+        }
+
+        if (hintEl) {
+          if (folderObj.selectorInfo && folderObj.selectorInfo.hasSelector) {
+            const count = folderObj.selectorInfo.routes ? folderObj.selectorInfo.routes.length : 0;
+            hintEl.textContent = `${folderObj.selectorInfo.kind === "rw_template" ? "RW-Template" : "EZ-Template"} Auton Selector detected (${folderObj.selectorInfo.sourceFile}${count ? `, ${count} routes` : ""}). Selector file stays intact while real routines map to src/autons.cpp.`;
+            hintEl.style.color = "#38bdf8";
+          } else {
+            hintEl.textContent = "UI selector files (e.g. auton-selector.cpp) are kept intact while real autonomous routines are loaded into the Planner.";
+            hintEl.style.color = "#94a3b8";
+          }
+        }
+      };
+
+      const renderFolders = () => {
+        listEl.innerHTML = "";
+        folders.forEach((f, idx) => {
+          const isSel = idx === selectedIdx;
+          const card = document.createElement("button");
+          card.type = "button";
+          card.style.cssText = `width:100%;text-align:left;padding:10px 12px;border-radius:6px;border:1px solid ${isSel ? "#38bdf8" : "#334155"};background:${isSel ? "rgba(56,189,248,0.12)" : "#0f172a"};color:#f8fafc;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;`;
+          const libLabel = formatLibraryLabel(f.library);
+          const selectorBadge = f.selectorInfo && f.selectorInfo.hasSelector
+            ? `<span style="font-size:0.68rem;padding:2px 6px;border-radius:3px;background:rgba(16,185,129,0.18);color:#34d399;border:1px solid rgba(16,185,129,0.4);">Auton Selector</span>`
+            : "";
+          card.innerHTML = `
+            <div style="min-width:0;">
+              <div style="font-family:monospace;font-weight:700;font-size:0.86rem;color:${isSel ? "#38bdf8" : "#f1f5f9"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${isSel ? "● " : "○ "}${escapeHtmlIde(f.displayName)}
+              </div>
+              <div style="font-size:0.73rem;color:#94a3b8;margin-top:3px;">
+                ${f.fileCount} files (${f.cppCount} C++/H) • Auton: <code style="color:#cbd5e1;">${escapeHtmlIde(f.primaryAuton || "none")}</code>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+              ${selectorBadge}
+              <span style="font-size:0.7rem;padding:2px 7px;border-radius:3px;background:#1e293b;color:#e2e8f0;border:1px solid #475569;font-weight:600;">${escapeHtmlIde(libLabel)}</span>
+            </div>
+          `;
+          card.onclick = () => {
+            selectedIdx = idx;
+            if (!userEditedName && nameInput) {
+              nameInput.value = computeSuggestedName(f);
+            }
+            renderFolders();
+            populateAutonSelect(f);
+          };
+          listEl.appendChild(card);
+        });
+      };
+
+      renderFolders();
+      populateAutonSelect(folders[selectedIdx]);
+
+      modal.hidden = false;
+      modal.classList.add("open");
+
+      const cleanup = (result) => {
+        modal.hidden = true;
+        modal.classList.remove("open");
+        btnConfirm.onclick = null;
+        if (btnCancel) btnCancel.onclick = null;
+        if (btnClose) btnClose.onclick = null;
+        resolve(result);
+      };
+
+      btnConfirm.onclick = () => {
+        const chosen = folders[selectedIdx] || folders[0];
+        cleanup({
+          cancelled: false,
+          selectedFolder: chosen ? chosen.folder : "",
+          selectedAutonFile: selectAutonEl.value || (chosen ? chosen.primaryAuton : ""),
+          chosenName: (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : defaultProjName
+        });
+      };
+
+      const onCancel = () => cleanup({ cancelled: true });
+      if (btnCancel) btnCancel.onclick = onCancel;
+      if (btnClose) btnClose.onclick = onCancel;
+    });
+  }
+
+  async function applyNewImportedProject(projName, filesMap) {
+    if (!filesMap || typeof filesMap !== "object" || Object.keys(filesMap).length === 0) {
+      showToast("No valid source files found in selected project folder.", "error");
+      return;
+    }
+
+    let workingFiles = filesMap;
+    let selectedFolder = "";
+    let selectedAutonFile = "";
+    let finalProjName = projName || "Imported_PROS_Project";
+
+    if (window.ProjectManager && typeof window.ProjectManager.discoverProjectFolders === "function") {
+      const discovery = window.ProjectManager.discoverProjectFolders(filesMap);
+      workingFiles = discovery.baseFiles;
+
+      if (discovery.needsSelection && discovery.folders.length > 0) {
+        const choice = await promptProjectFolderSelection(finalProjName, discovery);
+        if (!choice || choice.cancelled) {
+          showToast("Repository import cancelled.");
+          return;
+        }
+        selectedFolder = choice.selectedFolder || "";
+        selectedAutonFile = choice.selectedAutonFile || "";
+        finalProjName = choice.chosenName || finalProjName;
+      } else if (discovery.folders.length === 1) {
+        selectedFolder = discovery.folders[0].folder || "";
+        selectedAutonFile = discovery.folders[0].primaryAuton || "";
+      }
+    } else {
+      const paths = Object.keys(workingFiles);
+      if (paths.length > 0) {
+        const firstSegment = paths[0].split("/")[0];
+        if (
+          firstSegment &&
+          firstSegment !== "src" &&
+          firstSegment !== "include" &&
+          firstSegment !== "firmware" &&
+          paths.length > 1 &&
+          paths.every(p => p.startsWith(firstSegment + "/"))
+        ) {
+          const cleanedMap = {};
+          const prefix = firstSegment + "/";
+          for (const [k, v] of Object.entries(workingFiles)) {
+            cleanedMap[k.substring(prefix.length)] = v;
+          }
+          workingFiles = cleanedMap;
+        }
       }
     }
 
-    const fileCount = Object.keys(filesMap).length;
-    if (fileCount === 0) {
-      alert("No valid source files found in selected project folder.");
+    const previewCount = selectedFolder
+      ? Object.keys(workingFiles).filter(p => p.startsWith(selectedFolder + "/")).length
+      : Object.keys(workingFiles).length;
+
+    if (previewCount === 0) {
+      showToast("No valid source files found in selected project folder.", "error");
       return;
     }
 
     const currentProjectName = (window.ProjectManager && window.ProjectManager.project && window.ProjectManager.project.name) || "";
-    const isDifferentName = !currentProjectName || (projName && currentProjectName.trim().toLowerCase() !== projName.trim().toLowerCase());
+    const isDifferentName = !currentProjectName || (finalProjName && currentProjectName.trim().toLowerCase() !== finalProjName.trim().toLowerCase());
+    const challengeLabel = selectedFolder ? `${finalProjName} [${selectedFolder}] (${previewCount} files)` : `${finalProjName} (${previewCount} files)`;
 
-    window.promptWipeChallenge(`${projName} (${fileCount} files)`, async () => {
+    window.promptWipeChallenge(challengeLabel, async () => {
       isImportingProject = true;
       window.isImportingProject = true;
 
-      // Normalize files through ProjectManager to ensure canonical aliases (src/autons.cpp etc.) are always present
+      // Normalize files through ProjectManager to scope to chosen folder & map chosen autons.cpp cleanly
       const normalizedFiles = window.ProjectManager && typeof window.ProjectManager.normalizeFiles === "function"
-        ? window.ProjectManager.normalizeFiles(filesMap)
-        : filesMap;
+        ? window.ProjectManager.normalizeFiles(workingFiles, { selectedFolder, selectedAutonFile, autoScope: true })
+        : workingFiles;
 
+      const detectedLib = window.ProjectManager && typeof window.ProjectManager.detectLibraryForFiles === "function"
+        ? window.ProjectManager.detectLibraryForFiles(normalizedFiles)
+        : (localStorage.getItem("vex_active_library") || "lemlib");
+
+      const selectorInfo = window.ProjectManager && typeof window.ProjectManager.detectAutonSelectorInfo === "function"
+        ? window.ProjectManager.detectAutonSelectorInfo(normalizedFiles)
+        : { hasSelector: false, kind: null, sourceFile: null, routes: [] };
+
+      try {
+        localStorage.setItem("vex_active_library", detectedLib);
+      } catch (_) {}
+
+      const fileCount = Object.keys(normalizedFiles).length;
       const totalBytes = Object.values(normalizedFiles).reduce((sum, content) => sum + (typeof content === "string" ? content.length : 0), 0);
 
       if (window.ImportProgressModal) {
         window.ImportProgressModal.show({
           title: isDifferentName ? "Creating New Project Workspace" : "Importing Project Workspace",
-          subtitle: `Project "${projName}" (${fileCount} files)`,
+          subtitle: `Project "${finalProjName}" (${fileCount} files • ${formatLibraryLabel(detectedLib)})`,
           totalBytes: totalBytes,
           totalFiles: fileCount
         });
@@ -155,13 +384,17 @@
       monacoModels.clear();
 
       if (window.ProjectManager) {
-        window.ProjectManager.wipeProject();
+        await window.ProjectManager.wipeProject();
         window.ProjectManager.project = {
-          name: projName,
+          name: finalProjName,
           version: "1.0.0",
           target: "v5",
-          kernel: "4.1.0",
+          kernel: detectedLib === "rw_template" || detectedLib === "jar_template" ? "vexcode" : "4.1.0",
           lemlibVersion: "0.5.4",
+          library: detectedLib,
+          subprojectFolder: selectedFolder || "",
+          autonSourceFile: selectedAutonFile || "",
+          autonSelector: selectorInfo,
           createdAt: Date.now(),
           updatedAt: Date.now(),
           files: normalizedFiles,
@@ -187,7 +420,7 @@
           pct: 25,
           currentBytes: Math.round(totalBytes * 0.25),
           totalBytes: totalBytes,
-          message: "Indexing C++ motor/sensor devices & LemLib symbols..."
+          message: `Indexing C++ motor/sensor devices (${formatLibraryLabel(detectedLib)})...`
         });
       }
 
@@ -242,23 +475,27 @@
 
       // Prioritize src/autons.cpp as the primary file to open
       const mainAuton = fileList.find(f => f === "src/autons.cpp") ||
+                        (selectedAutonFile && fileList.includes(selectedAutonFile) ? selectedAutonFile : null) ||
                         fileList.find(f => f === "autons.cpp" || f === "src/auton.cpp" || f === "auton.cpp") ||
-                        fileList.find(f => f.toLowerCase().includes("auton") && f.endsWith(".cpp")) ||
+                        fileList.find(f => f.toLowerCase().includes("auton") && !f.toLowerCase().includes("selector") && f.endsWith(".cpp")) ||
                         fileList.find(f => f === "src/main.cpp" || f === "main.cpp") ||
                         fileList[0] || "src/autons.cpp";
 
       const mainCpp = fileList.find(f => f === "src/main.cpp" || f === "main.cpp");
+      const selectorCpp = selectorInfo && selectorInfo.sourceFile && fileList.includes(selectorInfo.sourceFile) ? selectorInfo.sourceFile : null;
       const configH = fileList.find(f => f === "include/robot-config.h" || f === "robot-config.h" || f === "include/main.h");
 
-      openTabs = [mainAuton, configH, mainCpp].filter(Boolean).filter(f => activeProjectFiles[f] !== undefined);
+      openTabs = Array.from(new Set([mainAuton, selectorCpp, configH, mainCpp].filter(Boolean).filter(f => activeProjectFiles[f] !== undefined)));
       if (openTabs.length === 0) openTabs = [mainAuton];
 
       activeFile = mainAuton;
       renderProjectHeader();
+      renderAutonSelectorBanner();
       renderFileTree();
       renderTabs();
       loadFile(activeFile);
       renderSymbols();
+      updateDiagnosticsUI();
 
       isImportingProject = false;
       window.isImportingProject = false;
@@ -276,14 +513,14 @@
         try {
           const hasDriveAuth = !!(localStorage.getItem("gdrive_access_token") || (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser));
           if (hasDriveAuth) {
-            const driveFileName = `${projName}.vexproj.json`;
+            const driveFileName = `${finalProjName}.vexproj.json`;
             const driveRes = await window.GoogleDriveSync.saveProject(window.ProjectManager.project, driveFileName, isDifferentName);
             if (driveRes && driveRes.fileId) {
               window.ProjectManager.project.gdriveFileId = driveRes.fileId;
               await window.ProjectManager.saveLocal(true);
-              console.log(`[GoogleDriveSync] Created new Google Drive file for project "${projName}": ${driveRes.fileId}`);
+              console.log(`[GoogleDriveSync] Created new Google Drive file for project "${finalProjName}": ${driveRes.fileId}`);
               if (typeof showToast === "function") {
-                showToast(`📁 Created new project "${projName}" and new file in Google Drive!`);
+                showToast(`📁 Created new project "${finalProjName}" and new file in Google Drive!`);
               }
             }
           }
@@ -292,6 +529,9 @@
         }
       }
 
+      const selectorNote = selectorInfo && selectorInfo.hasSelector
+        ? ` • ${selectorInfo.kind === "rw_template" ? "RW" : "EZ"} Auton Selector (${selectorInfo.routes?.length || 0} routes)`
+        : "";
       const currentUser = cloudUser || (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) || (localStorage.getItem("lemlib_saved_google_user") ? JSON.parse(localStorage.getItem("lemlib_saved_google_user")) : null);
       if (currentUser && window.ProjectManager) {
         try {
@@ -299,17 +539,17 @@
           await window.ProjectManager.saveToCloud(null, false);
           updateAutosaveUI("synced", null, finalStr);
           if (typeof showToast === "function") {
-            showToast(`💥 Workspace imported & synced to server! "${projName}" (${fileCount} files).`);
+            showToast(`💥 Workspace imported & synced to server! "${finalProjName}" (${fileCount} files • ${formatLibraryLabel(detectedLib)}${selectorNote}).`);
           }
         } catch (cloudErr) {
           console.error("Cloud sync on import failed:", cloudErr);
           if (typeof showToast === "function") {
-            showToast(`💥 Workspace imported locally (${fileCount} files). Cloud sync notice: ${cloudErr.message}`);
+            showToast(`💥 Workspace imported locally (${fileCount} files • ${formatLibraryLabel(detectedLib)}${selectorNote}). Cloud sync notice: ${cloudErr.message}`);
           }
         }
       } else {
         if (typeof showToast === "function") {
-          showToast(`💥 Workspace updated! Imported "${projName}" (${fileCount} files, ${finalStr}). Log in with Google to sync across devices.`);
+          showToast(`💥 Workspace updated! Imported "${finalProjName}" (${fileCount} files • ${formatLibraryLabel(detectedLib)}${selectorNote}).`);
         }
       }
     });
@@ -679,10 +919,33 @@
     }
   }
 
-  function init() {
+  async function init() {
+    if (window.ProjectManager && typeof window.ProjectManager.whenReady === "function") {
+      try {
+        await window.ProjectManager.whenReady();
+      } catch (e) {
+        console.warn("[IDE] ProjectManager.whenReady notice:", e);
+      }
+    }
+
+    const fileKeys = Object.keys(ProjectManager?.project?.files || {});
+    if (fileKeys.length > 0) {
+      if (!fileKeys.includes(activeFile)) {
+        activeFile = fileKeys.includes("src/autons.cpp") ? "src/autons.cpp"
+          : (fileKeys.includes("src/main.cpp") ? "src/main.cpp" : fileKeys[0]);
+      }
+      openTabs = openTabs.filter(f => fileKeys.includes(f));
+      if (!openTabs.includes(activeFile)) openTabs.unshift(activeFile);
+    }
+
+    if (ProjectManager && typeof ProjectManager.getProjectLibrary === "function" && (!ProjectManager.isDefaultProject || !ProjectManager.isDefaultProject())) {
+      try { localStorage.setItem("vex_active_library", ProjectManager.getProjectLibrary()); } catch (_) {}
+    }
+
     initAuth();
     initAutosave();
     renderProjectHeader();
+    renderAutonSelectorBanner();
     renderFileTree();
     renderTabs();
     loadFile(activeFile);
@@ -708,6 +971,7 @@
       renderProjectHeader();
       if (reason !== "dirty") {
         renderSymbols();
+        renderAutonSelectorBanner();
       }
       if (activeFile) {
         const latest = ProjectManager.getFile(activeFile);
@@ -737,10 +1001,10 @@
     openTabs = openTabs.filter(f => fileKeys.includes(f));
 
     if (!fileKeys.includes(activeFile)) {
-      if (fileKeys.includes("src/main.cpp")) {
-        activeFile = "src/main.cpp";
-      } else if (fileKeys.includes("src/autons.cpp")) {
+      if (fileKeys.includes("src/autons.cpp")) {
         activeFile = "src/autons.cpp";
+      } else if (fileKeys.includes("src/main.cpp")) {
+        activeFile = "src/main.cpp";
       } else {
         activeFile = fileKeys[0];
       }
@@ -750,10 +1014,12 @@
     }
 
     renderProjectHeader();
+    renderAutonSelectorBanner();
     renderFileTree();
     renderTabs();
     loadFile(activeFile);
     renderSymbols();
+    updateDiagnosticsUI();
   }
 
   function subscribeToIdeCloud(uid) {
@@ -1217,6 +1483,61 @@
       const lib = ProjectManager.getProjectLibrary();
       if (sel.value !== lib) sel.value = lib;
     }
+  }
+
+  function renderAutonSelectorBanner() {
+    const banner = document.getElementById("ideAutonSelectorBanner");
+    if (!banner || !window.ProjectManager || typeof window.ProjectManager.detectAutonSelectorInfo !== "function") return;
+    const files = window.ProjectManager.project?.files || {};
+    const info = window.ProjectManager.detectAutonSelectorInfo(files);
+    if (!info || !info.hasSelector) {
+      banner.hidden = true;
+      banner.innerHTML = "";
+      return;
+    }
+
+    banner.hidden = false;
+    const title = info.kind === "rw_template" ? "RW Auton Selector" : "EZ Auton Selector";
+    const routes = Array.isArray(info.routes) ? info.routes : [];
+    const routeHtml = routes.slice(0, 10).map((r) => {
+      const label = r.label || r.fnName || `Case ${r.index}`;
+      return `<button type="button" class="ide-selector-route-btn" data-fn="${escapeHtmlIde(r.fnName || "")}" title="Jump to ${escapeHtmlIde(r.fnName || "")}()" style="background:rgba(15,23,42,0.85);color:#e2e8f0;border:1px solid #334155;border-radius:3px;padding:2px 6px;font-size:0.68rem;font-family:monospace;cursor:pointer;">${r.index != null ? r.index + ": " : ""}${escapeHtmlIde(label)}</button>`;
+    }).join("");
+
+    banner.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:${routes.length ? "5px" : "0"};">
+        <strong style="color:#38bdf8;font-size:0.72rem;letter-spacing:0.02em;">${escapeHtmlIde(title)}</strong>
+        <button type="button" id="btnOpenSelectorSource" style="background:none;border:none;color:#94a3b8;font-family:monospace;font-size:0.68rem;cursor:pointer;text-decoration:underline;padding:0;" title="Open ${escapeHtmlIde(info.sourceFile)}">${escapeHtmlIde(info.sourceFile)}</button>
+      </div>
+      ${routes.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${routeHtml}</div>` : `<div style="color:#94a3b8;font-size:0.69rem;">Selector detected (no switch routes extracted yet)</div>`}
+    `;
+
+    const btnSrc = banner.querySelector("#btnOpenSelectorSource");
+    if (btnSrc && info.sourceFile && files[info.sourceFile] !== undefined) {
+      btnSrc.onclick = () => switchToFile(info.sourceFile, 1);
+    }
+
+    banner.querySelectorAll(".ide-selector-route-btn").forEach((btn) => {
+      btn.onclick = () => {
+        const fn = btn.getAttribute("data-fn");
+        if (!fn) return;
+        const searchOrder = ["src/autons.cpp", ...Object.keys(files).filter((f) => /\.(cpp|h|hpp)$/i.test(f) && f !== "src/autons.cpp")];
+        const fnRe = new RegExp(`\\b${fn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`);
+        for (const f of searchOrder) {
+          const content = files[f];
+          if (!content) continue;
+          const lines = content.split(/\r?\n/);
+          const lineIdx = lines.findIndex((ln) => fnRe.test(ln) && !ln.trim().startsWith("//"));
+          if (lineIdx !== -1) {
+            switchToFile(f, lineIdx + 1);
+            return;
+          }
+        }
+        if (info.sourceFile && files[info.sourceFile] !== undefined) {
+          switchToFile(info.sourceFile, 1);
+        }
+      };
+    });
   }
 
   const collapsedFolders = new Set();
@@ -2828,7 +3149,7 @@
       if (!fileList || fileList.length === 0) return;
       const validFiles = Array.from(fileList).filter(f => !isIgnoredFile(f.webkitRelativePath || f.name, f.size));
       if (validFiles.length === 0) {
-        alert("No valid C++/header files found in the chosen folder.");
+        showToast("No valid C++/header files found in the chosen folder.", "error");
         return;
       }
 
@@ -2911,7 +3232,7 @@
 
     async function processZipFile(zipFile) {
       if (typeof JSZip === "undefined") {
-        alert("JSZip library is unavailable. Please check your network connection.");
+        showToast("JSZip library is unavailable. Please check your network connection.", "error");
         return;
       }
       try {
@@ -2936,7 +3257,7 @@
 
         if (entryPaths.length === 0) {
           if (window.ImportProgressModal) window.ImportProgressModal.hide();
-          alert("No source files found in ZIP archive.");
+          showToast("No source files found in ZIP archive.", "error");
           return;
         }
 
@@ -2989,7 +3310,7 @@
       } catch (err) {
         if (window.ImportProgressModal) window.ImportProgressModal.hide();
         console.error("ZIP import error:", err);
-        alert("Failed to parse ZIP folder: " + err.message);
+        showToast("Failed to parse ZIP folder: " + err.message, "error");
       }
     }
 
@@ -3020,7 +3341,7 @@
             applyNewImportedProject(dirHandle.name, filesMap);
             return true;
           } else {
-            alert("No valid source files found in selected folder.");
+            showToast("No valid source files found in selected folder.", "error");
             return true;
           }
         } catch (err) {
@@ -3096,7 +3417,7 @@
               if (data.files) {
                 applyNewImportedProject(data.name || file.name.replace(/\.json$/i, ""), data.files);
               }
-            } catch (err) { alert("Invalid project JSON"); }
+            } catch (err) { showToast("Invalid project JSON: " + err.message, "error"); }
           };
           reader.readAsText(file);
         }
@@ -3284,6 +3605,7 @@
       }
 
       renderProjectHeader();
+      renderAutonSelectorBanner();
       renderSymbols();
       updateDiagnosticsUI();
       if (typeof showToast === "function") {
@@ -4668,17 +4990,15 @@
         extractedFiles = {};
 
         let prefixCut = 0;
-        const entryNames = Object.keys(zip.files);
-        if (entryNames.length > 0) {
-          const firstEntry = entryNames[0];
-          const slashIdx = firstEntry.indexOf('/');
-          if (slashIdx !== -1) {
-            prefixCut = slashIdx + 1;
+        const nonDirEntries = Object.keys(zip.files).filter(k => !zip.files[k].dir);
+        if (nonDirEntries.length > 0) {
+          const firstSeg = nonDirEntries[0].split('/')[0];
+          if (firstSeg && nonDirEntries.every(k => k.startsWith(firstSeg + '/'))) {
+            prefixCut = firstSeg.length + 1;
           }
         }
 
         let processed = 0;
-        const nonDirEntries = Object.keys(zip.files).filter(k => !zip.files[k].dir);
         const totalEntries = nonDirEntries.length || 1;
 
         for (const [relativePath, fileObj] of Object.entries(zip.files)) {
@@ -5053,7 +5373,7 @@
         const files = window.ProjectManager?.project?.files || {};
         const fileKeys = Object.keys(files);
         if (fileKeys.length === 0) {
-          alert("Workspace is empty. Nothing to push.");
+          showToast("Workspace is empty. Nothing to push.", "error");
           return;
         }
 

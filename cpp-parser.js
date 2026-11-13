@@ -130,9 +130,10 @@
       return "jar_template";
     }
     // RW-Template signatures
-    if (/\b(?:setOdom|turnToAngle)\s*\(/i.test(rawCode) ||
+    if (/\b(?:setOdom|turnToAngle|driveChassis|stopChassis)\s*\(/i.test(rawCode) ||
+        /\bboomerang\s*\([^)]*,\s*[-+]?1\s*,/i.test(rawCode) ||
         (/\b(?:driveTo|swing)\s*\(/i.test(rawCode) && !/chassis\.swingTo/i.test(rawCode)) ||
-        (/moveToPoint\s*\([^)]*,\s*[-+]?1\s*,/i.test(rawCode) && /\bwait\s*\(\s*\d+\s*,\s*(?:msec|vex::msec|sec)\s*\)/i.test(rawCode)) ||
+        (/moveToPoint\s*\([^)]*,\s*[-+]?1\s*,/i.test(rawCode) && /\b(?:wait|vex::wait|task::sleep)\s*\(/i.test(rawCode)) ||
         /\bRW[- ]?Template\b/i.test(rawCode)) {
       return "rw_template";
     }
@@ -2474,6 +2475,36 @@
         if (act.async) act.showFlowchart = true;
         pushMotionAction(act);
         log.push(`Parsed moveToPose(${act.x}, ${act.y}, ${act.theta}°) timeout: ${act.timeout}ms, lead: ${act.lead}`);
+        continue;
+      }
+
+      const rwBoomerangMatch = line.match(/^(?:([a-zA-Z0-9_]+)\s*(?:\.|->)\s*)?boomerang\s*\(([^;]+)\)\s*;?$/i);
+      if (rwBoomerangMatch && isValidChassisReceiver(rwBoomerangMatch[1], "boomerang", customFnsMap)) {
+        flushCustomBlock();
+        const args = splitCppArgsSafe(rwBoomerangMatch[2]);
+        const act = createDefaultAction("moveToPose", defaultMaxSpeed, defaultMinSpeed);
+        act.x = evaluateNumericArg(args[0], paramEnv) || 0;
+        act.y = evaluateNumericArg(args[1], paramEnv) || 0;
+        const dirRaw = args[2] ? args[2].trim() : "1";
+        const dirVal = evaluateNumericArg(dirRaw, paramEnv);
+        act.forwards = !(dirRaw === "-1" || /rev/i.test(dirRaw) || (!isNaN(dirVal) && dirVal < 0));
+        act.theta = evaluateNumericArg(args[3], paramEnv) || 0;
+        if (args[4] != null) {
+          const leadOrTime = evaluateNumericArg(args[4], paramEnv);
+          if (!isNaN(leadOrTime) && leadOrTime > 0 && leadOrTime <= 1.5) act.lead = leadOrTime;
+          else if (!isNaN(leadOrTime) && leadOrTime >= 50) act.timeout = parseInt(leadOrTime, 10);
+        }
+        if (args[5] != null) {
+          const v5 = evaluateNumericArg(args[5], paramEnv);
+          if (!isNaN(v5) && v5 >= 50) act.timeout = parseInt(v5, 10);
+        }
+        if (inlineComment) act.label = inlineComment;
+        else if (pendingComments.length > 0) {
+          act.label = pendingComments.join(" · ").trim();
+          pendingComments = [];
+        }
+        pushMotionAction(act);
+        log.push(`Parsed RW boomerang(${act.x}, ${act.y}, ${act.theta}°) forwards: ${act.forwards}`);
         continue;
       }
 

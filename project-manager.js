@@ -934,6 +934,7 @@ int main() {
             this.project._idb ||
             !this.project.files ||
             Object.keys(this.project.files).length === 0 ||
+            (idbProj.importedProject && !this.project.importedProject && !this.isDirty) ||
             (idbTimestamp > currentTimestamp && !this.isDirty);
 
           if (needsLoad) {
@@ -943,8 +944,8 @@ int main() {
             this.indexVariables();
             this.notifyListeners("load");
           }
-        } else if (this.project && !this.project._idb) {
-          // Sync existing project into IDB
+        } else if (this.project && !this.project._idb && !this.project.isDefault) {
+          // Sync existing non-default project into IDB
           await idbPut(IDB_PROJECT_KEY, this.project);
         }
       } catch (err) {
@@ -1044,8 +1045,15 @@ int main() {
                 createdAt: parsed.updatedAt || Date.now(),
                 updatedAt: parsed.updatedAt || Date.now(),
                 files: { ...this.getTemplatesForLibrary(lib) },
-                activeAuton: "red_rush_auton",
-                cloudSynced: true,
+                activeAuton: parsed.activeAuton || "red_rush_auton",
+                cloudSynced: Boolean(parsed.cloudSynced),
+                isDefault: parsed.isDefault === true ? true : false,
+                importedProject: Boolean(parsed.importedProject),
+                lastAutonEditor: parsed.lastAutonEditor || "ide",
+                rawCppPreserved: parsed.rawCppPreserved !== undefined ? Boolean(parsed.rawCppPreserved) : Boolean(parsed.importedProject),
+                subprojectFolder: parsed.subprojectFolder || "",
+                autonSourceFile: parsed.autonSourceFile || "",
+                autonSelector: parsed.autonSelector || null,
                 _idb: true
               };
             }
@@ -1172,10 +1180,19 @@ int main() {
       } catch (e) {
         console.error("Wipe storage error:", e);
       }
-      idbDelete(IDB_PROJECT_KEY);
       this.project = null;
       this.isDirty = false;
+      this.changedFiles.clear();
+      this.lastSavedFileHashes.clear();
+      this.versions = {};
+      try {
+        idbDelete("file_versions_history").catch(() => {});
+      } catch (_) {}
+      const delPromise = idbDelete(IDB_PROJECT_KEY).catch((e) => {
+        console.warn("IndexedDB wipe warning:", e);
+      });
       this.notifyListeners("wipe");
+      return delPromise;
     }
 
     async exportProjectZip() {
@@ -1325,8 +1342,18 @@ int main() {
           localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify({
             _idb: true,
             name: this.project.name || "Override_LemLib_Bot",
+            library: this.project.library || "lemlib",
             version: this.project.version || "1.0.0",
             updatedAt: this.project.updatedAt,
+            activeAuton: this.project.activeAuton || "red_rush_auton",
+            cloudSynced: Boolean(this.project.cloudSynced),
+            isDefault: Boolean(this.project.isDefault),
+            importedProject: Boolean(this.project.importedProject),
+            lastAutonEditor: this.project.lastAutonEditor || "ide",
+            rawCppPreserved: Boolean(this.project.rawCppPreserved),
+            subprojectFolder: this.project.subprojectFolder || "",
+            autonSourceFile: this.project.autonSourceFile || "",
+            autonSelector: this.project.autonSelector || null,
             fileCount: Object.keys(this.project.files || {}).length
           }));
           localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
@@ -1379,8 +1406,18 @@ int main() {
           localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify({
             _idb: true,
             name: this.project.name || "Override_LemLib_Bot",
+            library: this.project.library || "lemlib",
             version: this.project.version || "1.0.0",
             updatedAt: this.project.updatedAt,
+            activeAuton: this.project.activeAuton || "red_rush_auton",
+            cloudSynced: Boolean(this.project.cloudSynced),
+            isDefault: Boolean(this.project.isDefault),
+            importedProject: Boolean(this.project.importedProject),
+            lastAutonEditor: this.project.lastAutonEditor || "ide",
+            rawCppPreserved: Boolean(this.project.rawCppPreserved),
+            subprojectFolder: this.project.subprojectFolder || "",
+            autonSourceFile: this.project.autonSourceFile || "",
+            autonSelector: this.project.autonSelector || null,
             fileCount: Object.keys(this.project.files || {}).length
           }));
           localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
@@ -1425,8 +1462,18 @@ int main() {
           localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify({
             _idb: true,
             name: this.project.name || "Override_LemLib_Bot",
+            library: this.project.library || "lemlib",
             version: this.project.version || "1.0.0",
             updatedAt: this.project.updatedAt,
+            activeAuton: this.project.activeAuton || "red_rush_auton",
+            cloudSynced: Boolean(this.project.cloudSynced),
+            isDefault: Boolean(this.project.isDefault),
+            importedProject: Boolean(this.project.importedProject),
+            lastAutonEditor: this.project.lastAutonEditor || "ide",
+            rawCppPreserved: Boolean(this.project.rawCppPreserved),
+            subprojectFolder: this.project.subprojectFolder || "",
+            autonSourceFile: this.project.autonSourceFile || "",
+            autonSelector: this.project.autonSelector || null,
             fileCount: Object.keys(this.project.files || {}).length
           }));
           localStorage.setItem(STORAGE_KEY_PROJECT_DIRTY, "false");
@@ -1483,74 +1530,465 @@ int main() {
       this.notifyListeners("dirty");
     }
 
-    // Normalizes file structures from imported folder trees, ZIP archives, and JSON dumps
-    normalizeFiles(filesMap) {
+    // Detect active robotics library from a multi-file map + directory layout
+    detectLibraryForFiles(filesMap) {
+      if (!filesMap || typeof filesMap !== "object") return "lemlib";
+      const paths = Object.keys(filesMap);
+      const lowerPaths = paths.map((p) => p.toLowerCase());
+
+      // 1. Prioritize user auton / main / robot-config code over vendor headers
+      const priorityCode = paths
+        .filter((p) => {
+          const lp = p.toLowerCase();
+          if (lp.includes("lemlib/") || lp.includes("ez-template/") || lp.includes("jar-template/") || lp.includes("pros/") || lp.includes("okapi/")) {
+            return false;
+          }
+          return lp.endsWith(".cpp") || lp.endsWith(".c") || lp.endsWith(".h") || lp.endsWith(".hpp");
+        })
+        .map((p) => filesMap[p] || "")
+        .join("\n");
+
+      const checkCode = priorityCode.trim()
+        ? priorityCode
+        : Object.values(filesMap).filter((v) => typeof v === "string").join("\n");
+
+      // Strong structural hints (VEXcode / PROS templates)
+      if (lowerPaths.some((p) => p.includes("auton-selector") || p.includes("auton_selector"))) {
+        if (/\b(?:setOdom|moveToPoint|turnToAngle|boomerang|driveTo|swing)\s*\(/.test(checkCode) || lowerPaths.some((p) => p.endsWith("vex.h"))) {
+          return "rw_template";
+        }
+      }
+
+      if (typeof window !== "undefined" && window.CppTranslator && typeof window.CppTranslator.detectLibraryFromCode === "function") {
+        const detected = window.CppTranslator.detectLibraryFromCode(checkCode);
+        if (detected && detected !== "lemlib") return normalizeLibId(detected);
+        if (/\blemlib\b|chassis\.(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|setPose)/i.test(checkCode)) {
+          return "lemlib";
+        }
+      }
+
+      if (/\b(?:pid_odom_set|pid_drive_set|pid_turn_set|pid_swing_set|odom_xyt_set|ez::)\b/.test(checkCode) ||
+          lowerPaths.some((p) => p.includes("ez-template"))) {
+        return "ez_template";
+      }
+      if (/\b(?:drive_to_point|drive_to_pose|drive_distance|turn_to_angle|set_coordinates)\b/.test(checkCode) ||
+          lowerPaths.some((p) => p.includes("jar-template"))) {
+        return "jar_template";
+      }
+      if (/\b(?:setOdom|turnToAngle|boomerang|driveChassis|stopChassis)\b/.test(checkCode) ||
+          (/\bmoveToPoint\s*\([^)]*,\s*[-+]?1\s*,/.test(checkCode) && /\b(?:wait|vex::wait|task::sleep)\s*\(/.test(checkCode))) {
+        return "rw_template";
+      }
+      if (lowerPaths.some((p) => p.includes("lemlib"))) return "lemlib";
+      return "lemlib";
+    }
+
+    // Score & rank candidate autonomous C++ files inside a folder (strictly deprioritizing selector/UI helpers)
+    rankAutonCandidates(filesMap) {
+      if (!filesMap || typeof filesMap !== "object") return [];
+      const scored = [];
+      for (const [path, content] of Object.entries(filesMap)) {
+        if (typeof content !== "string" || !content.trim()) continue;
+        const lp = path.toLowerCase().replace(/\\/g, "/");
+        if (!lp.endsWith(".cpp") && !lp.endsWith(".c") && !lp.endsWith(".cc")) continue;
+        if (lp.includes("/lemlib/") || lp.includes("/ez-template/") || lp.includes("/jar-template/") || lp.includes("/pros/")) continue;
+
+        const base = lp.split("/").pop();
+        let score = 0;
+
+        if (lp === "src/autons.cpp" || lp === "autons.cpp") score += 1200;
+        else if (lp === "src/autonomous.cpp" || lp === "autonomous.cpp") score += 1050;
+        else if (lp === "src/auton.cpp" || lp === "auton.cpp") score += 950;
+        else if (/(?:^|\/)(?:src\/)?(?:autons|autonomous|routes)\/[^/]+\.cpp$/.test(lp)) score += 700;
+        else if (/auton/.test(base)) score += 300;
+        else if (lp === "src/main.cpp" || lp === "main.cpp") score += 120;
+
+        // Strictly deprioritize selector, PID/Odom engine, and hardware config files
+        if (/selector|config|odom|pid|drive|chassis|subsystem|intake|lift|arm|clamp|gui|screen|display|lvgl|util|helper|menu|pre_auton/.test(base)) {
+          score -= 1100;
+        }
+
+        // Content signals
+        const hasMotion = /\b(?:moveToPoint|moveToPose|turnToHeading|turnToPoint|swingToHeading|swingToPoint|boomerang|setPose|setOdom|turnToAngle|driveTo|pid_odom_set|pid_drive_set|pid_turn_set|odom_xyt_set|drive_to_point|drive_to_pose|drive_distance|set_coordinates)\s*\(/.test(content);
+        const fnCount = (content.match(/\bvoid\s+[a-zA-Z0-9_]+\s*\(\s*(?:void)?\s*\)\s*\{/g) || []).length;
+        if (hasMotion) score += 450;
+        if (fnCount > 0) score += Math.min(200, fnCount * 40);
+
+        scored.push({
+          path,
+          score,
+          hasMotion,
+          fnCount,
+          isSelectorFile: /selector/.test(base),
+          size: content.length
+        });
+      }
+
+      scored.sort((a, b) => b.score - a.score || b.fnCount - a.fnCount || a.path.length - b.path.length);
+      return scored;
+    }
+
+    // Detect RW-Template / EZ-Template / switch-based Auton Selector metadata
+    detectAutonSelectorInfo(filesMap) {
+      const files = filesMap || (this.project && this.project.files) || {};
+      const entries = Object.entries(files);
+      let selectorFile = null;
+      let selectorType = null;
+      const routes = [];
+      const seenNames = new Set();
+
+      const addRoute = (label, fnName, index, file) => {
+        const key = (fnName || label || "").toLowerCase();
+        if (!key || seenNames.has(key)) return;
+        seenNames.add(key);
+        routes.push({ label: label || fnName, fnName: fnName || label, index, file });
+      };
+
+      const extractBalancedSwitchBody = (src, openBraceIdx) => {
+        let depth = 0;
+        let i = openBraceIdx;
+        let inStr = false;
+        let strChar = "";
+        let inLineComment = false;
+        let inBlockComment = false;
+        while (i < src.length) {
+          const ch = src[i];
+          const nx = src[i + 1];
+          if (inLineComment) {
+            if (ch === "\n") inLineComment = false;
+            i++; continue;
+          }
+          if (inBlockComment) {
+            if (ch === "*" && nx === "/") { inBlockComment = false; i += 2; continue; }
+            i++; continue;
+          }
+          if (inStr) {
+            if (ch === "\\") { i += 2; continue; }
+            if (ch === strChar) inStr = false;
+            i++; continue;
+          }
+          if (ch === "/" && nx === "/") { inLineComment = true; i += 2; continue; }
+          if (ch === "/" && nx === "*") { inBlockComment = true; i += 2; continue; }
+          if (ch === "\"" || ch === "'") { inStr = true; strChar = ch; i++; continue; }
+          if (ch === "{") depth++;
+          else if (ch === "}") {
+            depth--;
+            if (depth === 0) return src.slice(openBraceIdx + 1, i);
+          }
+          i++;
+        }
+        return src.slice(openBraceIdx + 1);
+      };
+
+      // 1. Check dedicated selector files first (RW-Template auton-selector.cpp/.h, EZ auton_selector)
+      for (const [path, content] of entries) {
+        if (typeof content !== "string") continue;
+        const lp = path.toLowerCase();
+        if (lp.includes("auton-selector") || lp.includes("auton_selector") || lp.endsWith("/selector.cpp") || lp === "selector.cpp") {
+          selectorFile = path;
+          selectorType = "rw_selector";
+        }
+      }
+
+      for (const [path, content] of entries) {
+        if (typeof content !== "string" || !content.trim()) continue;
+        const lp = path.toLowerCase();
+        if (!lp.endsWith(".cpp") && !lp.endsWith(".c") && !lp.endsWith(".h") && !lp.endsWith(".hpp")) continue;
+
+        // EZ-Template ez::as::auton_selector.autons_add({ Auton("Name", fn), ... }) or { "Name", fn }
+        const ezRegex = /Auton\s*\(\s*"([^"]+)"\s*,\s*([a-zA-Z0-9_]+)/g;
+        let ezM;
+        while ((ezM = ezRegex.exec(content)) !== null) {
+          selectorType = "ez_selector";
+          if (!selectorFile) selectorFile = path;
+          addRoute(ezM[1].trim(), ezM[2].trim(), routes.length, path);
+        }
+
+        const autonsAddRegex = /autons_add\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
+        let addM;
+        while ((addM = autonsAddRegex.exec(content)) !== null) {
+          selectorType = "ez_selector";
+          if (!selectorFile) selectorFile = path;
+          const pairRegex = /\{\s*"([^"]+)"\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}/g;
+          let pM;
+          while ((pM = pairRegex.exec(addM[1])) !== null) {
+            addRoute(pM[1].trim(), pM[2].trim(), routes.length, path);
+          }
+        }
+
+        // RW-Template / VEXcode switch (current_auton_selection) / switch (auton)
+        const switchHeadRegex = /switch\s*\(\s*([a-zA-Z0-9_]*auton[a-zA-Z0-9_]*|[a-zA-Z0-9_]*select[a-zA-Z0-9_]*|auton_type)\s*\)\s*\{/gi;
+        let swM;
+        while ((swM = switchHeadRegex.exec(content)) !== null) {
+          if (!selectorType) selectorType = selectorFile ? "rw_selector" : "rw_selector";
+          if (!selectorFile) selectorFile = path;
+          const swBody = extractBalancedSwitchBody(content, swM.index + swM[0].length - 1);
+          const caseRegex = /case\s+([a-zA-Z0-9_:]+)\s*:([\s\S]*?)(?=\bcase\b|\bdefault\b|$)/g;
+          let cM;
+          while ((cM = caseRegex.exec(swBody)) !== null) {
+            const caseVal = cM[1].trim();
+            const caseBody = cM[2];
+            const callMatch = caseBody.match(/\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\s*\)\s*;/);
+            const commentMatch = caseBody.match(/\/\/\s*([^\n]+)/);
+            if (callMatch && !["break", "wait", "delay", "stopChassis"].includes(callMatch[1])) {
+              addRoute(
+                commentMatch ? commentMatch[1].trim() : `${callMatch[1]}`,
+                callMatch[1],
+                caseVal,
+                path
+              );
+            }
+          }
+        }
+
+        // RW-Template style selector state indicators without explicit case body matched above
+        if (!selectorType && /\b(?:current_auton_selection|auton_selection|displayAutonSelector|drawAutonSelector|runAutonSelector|AutonSelector)\b/.test(content)) {
+          selectorType = "rw_selector";
+          if (!selectorFile) selectorFile = path;
+        }
+      }
+
+      const kind = selectorType === "ez_selector" ? "ez_template" : (selectorType ? "rw_template" : null);
+      return {
+        hasSelector: Boolean(selectorType || routes.length > 0),
+        type: selectorType,
+        kind,
+        selectorFile,
+        sourceFile: selectorFile,
+        routes
+      };
+    }
+
+    // Discover subproject folders inside multi-folder GitHub repos / archives / dropped folders
+    discoverProjectFolders(rawFilesMap) {
+      if (!rawFilesMap || typeof rawFilesMap !== "object") {
+        return { baseFiles: {}, wrapperName: "", folders: [], needsSelection: false };
+      }
+
+      let baseFiles = {};
+      for (const [rawKey, rawVal] of Object.entries(rawFilesMap)) {
+        if (!rawKey) continue;
+        const cleanKey = rawKey.replace(/\\/g, "/").replace(/^(\.\/|\/)+/, "").trim();
+        if (!cleanKey) continue;
+        baseFiles[cleanKey] = typeof rawVal === "string" ? rawVal : String(rawVal || "");
+      }
+
+      // Unwrap outer single archive wrapper directory (e.g. Owner-Repo-sha/) ONLY if every file shares it
+      // and it is not already a VEX project subdirectory (src/include/firmware)
+      let wrapperName = "";
+      for (let depth = 0; depth < 3; depth++) {
+        const keys = Object.keys(baseFiles);
+        if (keys.length <= 1) break;
+        const firstSeg = keys[0].split("/")[0];
+        const lowerFirst = (firstSeg || "").toLowerCase();
+        if (!firstSeg || !keys[0].includes("/") || ["src", "include", "firmware", "autons"].includes(lowerFirst)) break;
+        if (!keys.every((k) => k.startsWith(firstSeg + "/"))) break;
+
+        const unwrapped = {};
+        const prefixLen = firstSeg.length + 1;
+        for (const [k, v] of Object.entries(baseFiles)) {
+          unwrapped[k.substring(prefixLen)] = v;
+        }
+        wrapperName = firstSeg;
+        baseFiles = unwrapped;
+      }
+
+      const allPaths = Object.keys(baseFiles);
+      const candidateDirs = new Set();
+
+      for (const p of allPaths) {
+        const lp = p.toLowerCase();
+        const parts = p.split("/");
+
+        // Ignore library internal folders from creating spurious project roots
+        if (/^(?:.*\/)?(?:firmware|include\/(?:pros|lemlib|okapi|ez-template|jar-template|api)|bin|build|\.git)\//i.test(p)) {
+          continue;
+        }
+
+        if (parts.length === 1) {
+          if (/\.(cpp|c|cc|h|hpp|v5code|v5cpp|vex|pros)$/i.test(lp) || lp === "project.pros" || lp === "makefile") {
+            candidateDirs.add("");
+          }
+          continue;
+        }
+
+        // Pattern: <dir>/src/..., <dir>/include/..., <dir>/project.pros, <dir>/Makefile, <dir>/*.v5code
+        const srcIdx = parts.findIndex((seg) => seg.toLowerCase() === "src" || seg.toLowerCase() === "include");
+        if (srcIdx === 0) {
+          candidateDirs.add("");
+          continue;
+        }
+        if (srcIdx > 0) {
+          candidateDirs.add(parts.slice(0, srcIdx).join("/"));
+          continue;
+        }
+
+        const fileNameLower = parts[parts.length - 1].toLowerCase();
+        if (fileNameLower === "project.pros" || fileNameLower === "makefile" || /\.(v5code|v5cpp|vex)$/.test(fileNameLower)) {
+          candidateDirs.add(parts.slice(0, -1).join("/"));
+          continue;
+        }
+
+        // Flat code folder without src/: e.g. CompBot/autons.cpp or SkillsBot/main.cpp
+        if (/\.(cpp|c|cc)$/.test(fileNameLower)) {
+          const parentDir = parts.slice(0, -1).join("/");
+          candidateDirs.add(parentDir);
+        }
+      }
+
+      // Collapse folders that are strictly nested subdirs of an already-discovered project folder
+      // (for example, `CompBot/subsystems` when `CompBot` already has `CompBot/src/` or `CompBot/project.pros`)
+      const dirList = Array.from(candidateDirs);
+      const filteredDirs = dirList.filter((dir) => {
+        if (dir === "") return true;
+        const segments = dir.split("/");
+        for (let i = 1; i < segments.length; i++) {
+          const ancestor = segments.slice(0, i).join("/");
+          if (candidateDirs.has(ancestor)) {
+            const ancestorHasMarker = allPaths.some((p) => {
+              const rel = ancestor ? (p.startsWith(ancestor + "/") ? p.substring(ancestor.length + 1) : "") : p;
+              return /^(?:src|include)\//i.test(rel) || /^(?:project\.pros|makefile|.*\.(?:v5code|v5cpp|vex))$/i.test(rel);
+            });
+            if (ancestorHasMarker) return false;
+          }
+        }
+        return true;
+      });
+
+      // If "" is only present because of stray root files AND there are real subfolder projects, drop "" unless root itself has main/autons
+      const rootHasProjectFiles = allPaths.some((p) => /^(?:src|include)\//i.test(p) || /^(?:main|auton|autons|autonomous|robot-config)\.(?:cpp|c|h|hpp)$/i.test(p) || /^(?:project\.pros|.*\.(?:v5code|v5cpp|vex))$/i.test(p));
+      const finalDirs = filteredDirs.filter((d) => d !== "" || rootHasProjectFiles);
+      const effectiveDirs = finalDirs.length > 0 ? finalDirs : (filteredDirs.length > 0 ? filteredDirs : [""]);
+
+      const folders = effectiveDirs.map((dir) => {
+        const prefix = dir ? dir + "/" : "";
+        const scopedFiles = {};
+        for (const [k, v] of Object.entries(baseFiles)) {
+          if (!dir) {
+            // If user picks root alongside subfolder projects, exclude sibling project subdirs
+            const belongsToSubdir = effectiveDirs.some((other) => other && other !== "" && k.startsWith(other + "/"));
+            if (!belongsToSubdir) scopedFiles[k] = v;
+          } else if (k.startsWith(prefix)) {
+            scopedFiles[k.substring(prefix.length)] = v;
+          }
+        }
+
+        const autonCandidates = this.rankAutonCandidates(scopedFiles);
+        const primaryAuton = autonCandidates.length > 0 ? autonCandidates[0].path : null;
+        const library = this.detectLibraryForFiles(scopedFiles);
+        const selectorInfo = this.detectAutonSelectorInfo(scopedFiles);
+        const cppCount = Object.keys(scopedFiles).filter((f) => /\.(cpp|c|cc|h|hpp)$/i.test(f)).length;
+
+        return {
+          folder: dir,
+          displayName: dir || "Root (/)",
+          fileCount: Object.keys(scopedFiles).length,
+          cppCount,
+          library,
+          autonCandidates,
+          primaryAuton,
+          selectorInfo,
+          scopedFiles
+        };
+      }).filter((f) => f.fileCount > 0);
+
+      folders.sort((a, b) => {
+        // Put folders that actually contain autonomous code / PROS/VEX projects first
+        const aScore = (a.primaryAuton ? 100 : 0) + a.cppCount;
+        const bScore = (b.primaryAuton ? 100 : 0) + b.cppCount;
+        return bScore - aScore || a.displayName.localeCompare(b.displayName);
+      });
+
+      const needsSelection =
+        folders.length > 1 ||
+        (folders.length === 1 && folders[0].autonCandidates.filter((c) => !c.isSelectorFile && c.score >= 300).length > 1);
+
+      return {
+        baseFiles,
+        wrapperName,
+        folders,
+        needsSelection
+      };
+    }
+
+    // Normalizes file structures from imported folder trees, ZIP archives, GitHub repos, and JSON dumps
+    normalizeFiles(filesMap, options = {}) {
       if (!filesMap || typeof filesMap !== "object") return {};
-      const normalized = {};
+      let workingMap = {};
 
       // 1. Sanitize keys: backslashes to slashes, strip leading ./ and /, trim
       for (const [rawKey, rawContent] of Object.entries(filesMap)) {
         if (!rawKey) continue;
         const cleanKey = rawKey.replace(/\\/g, "/").replace(/^(\.\/|\/)+/, "").trim();
-        const content = typeof rawContent === "string" ? rawContent : String(rawContent || "");
-        normalized[cleanKey] = content;
+        if (!cleanKey) continue;
+        workingMap[cleanKey] = typeof rawContent === "string" ? rawContent : String(rawContent || "");
       }
 
-      // 2. Canonical autonomous routine discovery & synchronization
-      // Matches src/autons.cpp, autons.cpp, src/auton.cpp, auton.cpp, src/autonomous.cpp, autonomous.cpp
-      const autonCandidates = [
-        "src/autons.cpp",
-        "autons.cpp",
-        "src/auton.cpp",
-        "auton.cpp",
-        "src/autonomous.cpp",
-        "autonomous.cpp"
-      ];
+      // 2. Scope strictly to chosen project folder when provided (or auto-discover single subproject folder)
+      if (typeof options.selectedFolder === "string" && options.selectedFolder.trim() !== "") {
+        const prefix = options.selectedFolder.replace(/\\/g, "/").replace(/^(\.\/|\/)+|\/+$/g, "") + "/";
+        const scoped = {};
+        for (const [k, v] of Object.entries(workingMap)) {
+          if (k.startsWith(prefix)) {
+            scoped[k.substring(prefix.length)] = v;
+          }
+        }
+        if (Object.keys(scoped).length > 0) {
+          workingMap = scoped;
+        }
+      } else if (options.autoScope !== false) {
+        const discovered = this.discoverProjectFolders(workingMap);
+        if (discovered.folders.length === 1 && discovered.folders[0].folder) {
+          workingMap = discovered.folders[0].scopedFiles;
+        }
+      }
 
-      // Find first candidate key that has non-empty content
-      let foundAutonKey = autonCandidates.find(k => normalized[k] && typeof normalized[k] === "string" && normalized[k].trim().length > 0);
-      
-      // Fallback: check any file with 'auton' in name ending in .cpp
-      if (!foundAutonKey) {
-        foundAutonKey = Object.keys(normalized).find(k => {
-          const lk = k.toLowerCase();
-          return lk.includes("auton") && lk.endsWith(".cpp") && normalized[k] && normalized[k].trim().length > 0;
-        });
+      const normalized = { ...workingMap };
+
+      // 3. Canonical autonomous routine discovery (NEVER mistake selector files like auton-selector.cpp for autons.cpp)
+      let foundAutonKey = null;
+      if (options.selectedAutonFile && normalized[options.selectedAutonFile] && normalized[options.selectedAutonFile].trim().length > 0) {
+        foundAutonKey = options.selectedAutonFile;
+      } else {
+        const ranked = this.rankAutonCandidates(normalized);
+        const bestCandidate = ranked.find((c) => !c.isSelectorFile && c.score > 0 && c.path !== "src/main.cpp" && c.path !== "main.cpp");
+        if (bestCandidate) {
+          foundAutonKey = bestCandidate.path;
+        } else {
+          const autonCandidates = [
+            "src/autons.cpp",
+            "autons.cpp",
+            "src/autonomous.cpp",
+            "autonomous.cpp",
+            "src/auton.cpp",
+            "auton.cpp"
+          ];
+          foundAutonKey = autonCandidates.find((k) => normalized[k] && normalized[k].trim().length > 0) || null;
+        }
       }
 
       if (foundAutonKey) {
         const autonCode = normalized[foundAutonKey];
-        // Ensure BOTH "src/autons.cpp" AND "autons.cpp" contain the imported routine
         normalized["src/autons.cpp"] = autonCode;
-        normalized["autons.cpp"] = autonCode;
-        console.log(`[ProjectManager] Successfully mapped imported autonomous code from "${foundAutonKey}" to "src/autons.cpp" (${autonCode.length} characters)`);
+        // Remove identical root alias duplicate if both src/autons.cpp and autons.cpp would clutter tree/compiler
+        if (foundAutonKey === "autons.cpp" && normalized["autons.cpp"] === normalized["src/autons.cpp"]) {
+          delete normalized["autons.cpp"];
+        }
+        console.log(`[ProjectManager] Mapped autonomous code from "${foundAutonKey}" -> "src/autons.cpp" (${autonCode.length} chars)`);
       }
 
-      // 3. Canonical main.cpp discovery
-      const mainKey = Object.keys(normalized).find(k => k === "src/main.cpp" || k === "main.cpp");
-      if (mainKey && normalized[mainKey]) {
-        normalized["src/main.cpp"] = normalized[mainKey];
-        normalized["main.cpp"] = normalized[mainKey];
-      }
-
-      // 4. Canonical headers discovery
-      const mainHKey = Object.keys(normalized).find(k => k === "include/main.h" || k === "main.h");
-      if (mainHKey && normalized[mainHKey]) {
-        normalized["include/main.h"] = normalized[mainHKey];
-        normalized["main.h"] = normalized[mainHKey];
-      }
-
-      const robotConfigHKey = Object.keys(normalized).find(k => k === "include/robot-config.h" || k === "robot-config.h");
-      if (robotConfigHKey && normalized[robotConfigHKey]) {
-        normalized["include/robot-config.h"] = normalized[robotConfigHKey];
-        normalized["robot-config.h"] = normalized[robotConfigHKey];
-      }
-
-      const robotConfigCppKey = Object.keys(normalized).find(k => k === "src/robot-config.cpp" || k === "robot-config.cpp");
-      if (robotConfigCppKey && normalized[robotConfigCppKey]) {
-        normalized["src/robot-config.cpp"] = normalized[robotConfigCppKey];
-        normalized["robot-config.cpp"] = normalized[robotConfigCppKey];
-      }
+      // 4. Canonical non-duplicating normalization for flat repos (only migrate root file -> canonical path if canonical missing)
+      const promoteIfCanonicalMissing = (rootName, canonicalName) => {
+        if (!normalized[canonicalName] && normalized[rootName]) {
+          normalized[canonicalName] = normalized[rootName];
+          delete normalized[rootName];
+        }
+      };
+      promoteIfCanonicalMissing("main.cpp", "src/main.cpp");
+      promoteIfCanonicalMissing("main.h", "include/main.h");
+      promoteIfCanonicalMissing("vex.h", "include/vex.h");
+      promoteIfCanonicalMissing("robot-config.h", "include/robot-config.h");
+      promoteIfCanonicalMissing("robot-config.cpp", "src/robot-config.cpp");
 
       return normalized;
     }
@@ -1583,17 +2021,17 @@ int main() {
         const autonCandidates = [
           "src/autons.cpp",
           "autons.cpp",
-          "src/auton.cpp",
-          "auton.cpp",
           "src/autonomous.cpp",
-          "autonomous.cpp"
+          "autonomous.cpp",
+          "src/auton.cpp",
+          "auton.cpp"
         ];
+        if (this.project.autonSourceFile && this.project.files[this.project.autonSourceFile]) {
+          return this.project.files[this.project.autonSourceFile];
+        }
         for (const candidate of autonCandidates) {
           const val = this.project.files[candidate];
           if (val !== undefined && typeof val === "string" && val.length > 0) {
-            // Keep canonical primary keys in sync
-            this.project.files["src/autons.cpp"] = val;
-            this.project.files["autons.cpp"] = val;
             return val;
           }
         }
@@ -1607,9 +2045,15 @@ int main() {
         }
       }
 
-      // 5. Robust alias resolution for include/main.h
+      // 5. Robust alias resolution for include/main.h & vex.h
       if (clean === "include/main.h" || clean === "main.h") {
         const val = this.project.files["include/main.h"] ?? this.project.files["main.h"];
+        if (val !== undefined && typeof val === "string") {
+          return val;
+        }
+      }
+      if (clean === "include/vex.h" || clean === "vex.h") {
+        const val = this.project.files["include/vex.h"] ?? this.project.files["vex.h"];
         if (val !== undefined && typeof val === "string") {
           return val;
         }
@@ -1650,11 +2094,14 @@ int main() {
       const baseline = this.lastSavedFileHashes.get(clean) ?? this.lastSavedFileHashes.get(filename);
       this.project.files[clean] = content;
 
-      // Keep canonical aliases in sync
+      // Keep any existing alias & mapped auton source file in sync without spawning duplicates
       if (clean === "src/autons.cpp" || clean === "autons.cpp") {
         this.project.files["src/autons.cpp"] = content;
         if (this.project.files["autons.cpp"] !== undefined) {
           this.project.files["autons.cpp"] = content;
+        }
+        if (this.project.autonSourceFile && this.project.autonSourceFile !== "src/autons.cpp" && this.project.files[this.project.autonSourceFile] !== undefined) {
+          this.project.files[this.project.autonSourceFile] = content;
         }
       } else if (clean === "src/main.cpp" || clean === "main.cpp") {
         this.project.files["src/main.cpp"] = content;
@@ -1866,6 +2313,7 @@ int main() {
     }
 
     updateVersionCountBadges() {
+      if (typeof document === "undefined" || typeof document.getElementById !== "function") return;
       const list = this.getVersionHistory(this._activeVersionFile || "src/autons.cpp");
       const count = list.length;
       const ideBadge = document.getElementById("ideVersionCount");
@@ -2257,8 +2705,8 @@ int main() {
           const trimmed = line.trim();
           if (trimmed.startsWith("//") || trimmed.startsWith("/*")) return;
 
-          // 1. Motors & MotorGroups (PROS + VEXcode)
-          const motorMatch = trimmed.match(/(?:extern\s+)?(?:pros::(?:v5::)?Motor|vex::motor|motor)\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          // 1. Motors & MotorGroups (PROS + VEXcode including '=' syntax)
+          const motorMatch = trimmed.match(/(?:extern\s+)?(?:pros::(?:v5::)?Motor|vex::motor|motor)\s+([a-zA-Z0-9_]+)\s*(?:=\s*(?:vex::)?motor\s*)?(?:\(([^)]*)\)|;)/);
           if (motorMatch && motorMatch[1] && !motorMatch[1].includes("Group") && !motorMatch[1].includes("group") && !["left_front", "right_front", "Left1", "Right1"].includes(motorMatch[1])) {
             const name = motorMatch[1];
             const args = motorMatch[2] || "";
@@ -2276,8 +2724,8 @@ int main() {
             }
           }
 
-          // MotorGroups (PROS + VEXcode)
-          const groupMatch = trimmed.match(/(?:extern\s+)?(?:pros::(?:v5::)?MotorGroup|vex::motor_group|motor_group)\s+([a-zA-Z0-9_]+)/);
+          // MotorGroups (PROS + VEXcode including '=' syntax)
+          const groupMatch = trimmed.match(/(?:extern\s+)?(?:pros::(?:v5::)?MotorGroup|pros::v5::MotorGroup|vex::motor_group|motor_group)\s+([a-zA-Z0-9_]+)/);
           if (groupMatch && groupMatch[1]) {
             const name = groupMatch[1];
             const isVex = trimmed.includes("vex::") || trimmed.includes("motor_group");
@@ -2293,8 +2741,8 @@ int main() {
             }
           }
 
-          // 2. Pneumatics / ADI DigitalOut (PROS + VEXcode)
-          const pistonMatch = trimmed.match(/(?:extern\s+)?(?:(?:pros::)?(?:adi::)?(?:DigitalOut|ADIDigitalOut)|(?:vex::)?(?:digital_out|pneumatics))\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          // 2. Pneumatics / ADI DigitalOut (PROS + VEXcode including '=' syntax)
+          const pistonMatch = trimmed.match(/(?:extern\s+)?(?:(?:pros::)?(?:adi::)?(?:DigitalOut|ADIDigitalOut)|(?:vex::)?(?:digital_out|pneumatics))\s+([a-zA-Z0-9_]+)\s*(?:=\s*(?:vex::)?(?:digital_out|pneumatics)\s*)?(?:\(([^)]*)\)|;)/);
           if (pistonMatch && pistonMatch[1]) {
             const name = pistonMatch[1];
             const port = pistonMatch[2] || "Port";
@@ -2312,8 +2760,8 @@ int main() {
             }
           }
 
-          // 3. Sensors (PROS + VEXcode IMU, Rotation, Distance, GPS, Optical)
-          const sensorMatch = trimmed.match(/(?:extern\s+)?(?:(?:pros::)?(Imu|Rotation|Distance|GPS|Optical)|(?:vex::)?(inertial|rotation|distance|gps|optical))\s+([a-zA-Z0-9_]+)\s*(?:\(([^)]*)\))?/);
+          // 3. Sensors (PROS + VEXcode IMU, Rotation, Distance, GPS, Optical, Brain/Controller)
+          const sensorMatch = trimmed.match(/(?:extern\s+)?(?:(?:pros::)?(Imu|Rotation|Distance|GPS|Optical|Controller)|(?:vex::)?(inertial|rotation|distance|gps|optical|brain|controller|bumper|limit))\s+([a-zA-Z0-9_]+)\s*(?:=\s*(?:vex::)?[a-zA-Z0-9_]+\s*)?(?:\(([^)]*)\)|;)/);
           if (sensorMatch && sensorMatch[3]) {
             const rawType = sensorMatch[1] || sensorMatch[2];
             const isVex = Boolean(sensorMatch[2]);
@@ -2332,14 +2780,14 @@ int main() {
           }
 
           // 4. Chassis (LemLib, EZ-Template, JAR-Template)
-          const chassisMatch = trimmed.match(/(?:extern\s+)?(?:(lemlib::Chassis|ez::Drive|Drive))\s+([a-zA-Z0-9_]+)/);
+          const chassisMatch = trimmed.match(/(?:extern\s+)?(?:(lemlib::Chassis|ez::Drive|Chassis|Drive))\s+([a-zA-Z0-9_]+)/);
           if (chassisMatch && chassisMatch[2]) {
             const cType = chassisMatch[1];
             const name = chassisMatch[2];
             if (!isIgnoredSymbol(name) && !symbols.chassis.some(c => c.name === name)) {
               symbols.chassis.push({
                 name,
-                type: cType.includes("::") ? cType : (cType === "Drive" ? "Drive" : "lemlib::Chassis"),
+                type: cType.includes("::") ? cType : (cType === "Drive" ? "Drive" : cType),
                 file: fileName,
                 line: lineIdx + 1,
               });
@@ -2352,7 +2800,7 @@ int main() {
           if (fnMatch && fnMatch[1]) {
             const fnName = fnMatch[1];
             const params = fnMatch[2];
-            if (!isIgnoredSymbol(fnName) && !["initialize", "disabled", "competition_initialize", "autonomous", "opcontrol"].includes(fnName)) {
+            if (!isIgnoredSymbol(fnName) && !["initialize", "disabled", "competition_initialize", "autonomous", "opcontrol", "usercontrol", "pre_auton", "main"].includes(fnName)) {
               if (!symbols.functions.some(f => f.name === fnName)) {
                 const paramParts = params.trim() && params.trim() !== "void" ? params.split(",").map(p => p.trim()).filter(Boolean) : [];
                 let defaultSnippet = `${fnName}();`;
@@ -2786,10 +3234,18 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     // -------------------------------------------------------------
-    // Extract Autonomous Routines from src/autons.cpp
+    // Extract Autonomous Routines from src/autons.cpp (with main.cpp & RW selector awareness)
     // -------------------------------------------------------------
     getAutonRoutines() {
-      const code = this.getFile("src/autons.cpp") || this.getFile("autons.cpp");
+      let code = this.getFile("src/autons.cpp") || this.getFile("autons.cpp");
+      let usingMainFallback = false;
+      if (!code || !code.trim()) {
+        const mainCode = this.getFile("src/main.cpp") || this.getFile("main.cpp");
+        if (mainCode && mainCode.trim()) {
+          code = mainCode;
+          usingMainFallback = true;
+        }
+      }
       if (!code || !code.trim()) return [{ name: "autonomous", body: "" }];
 
       const allFunctions = [];
@@ -2859,10 +3315,45 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         allFunctions.push({ name, paramsRaw, hasParams, body });
       }
 
-      // If there are 0-parameter autonomous routines, exclude parameterized helper functions
-      // (e.g. void driveTo(double x, double y, double theta)) from routine tabs so they act as helpers
-      const zeroParamRoutines = allFunctions.filter((fn) => !fn.hasParams);
-      const routines = (zeroParamRoutines.length > 0 ? zeroParamRoutines : allFunctions).map((fn) => ({
+      const NON_AUTON_HELPERS = new Set([
+        "initialize", "disabled", "competition_initialize", "opcontrol", "usercontrol",
+        "pre_auton", "main", "default_constants", "odom_constants",
+        "displayautonselector", "drawautonselector", "drawselector", "autonselector",
+        "auton_selector", "selectauton", "cycleauton", "nextauton", "prevauton",
+        "screen_callback", "on_center_button", "calibrateimu", "calibrate"
+      ]);
+      const isUiOrSelectorHelper = (fn) => {
+        const lname = fn.name.toLowerCase();
+        if (NON_AUTON_HELPERS.has(lname)) return true;
+        if (usingMainFallback && lname !== "autonomous" && !/auton|skills|solo|awp|rush|neg|pos|red|blue|left|right|match|elims|qual/i.test(lname)) {
+          return true;
+        }
+        if (/(?:selector|screen|display|draw|gui|lvgl|lcd|menu|constants)/i.test(lname) && !/\b(?:moveToPoint|moveToPose|turnToHeading|turnToAngle|pid_odom_set|pid_drive_set|drive_to_point|boomerang|setPose|setOdom)\s*\(/.test(fn.body)) {
+          return true;
+        }
+        return false;
+      };
+
+      // Exclude parameterized helpers and UI/selector helper functions when autonomous routines exist
+      const zeroParamRoutines = allFunctions.filter((fn) => !fn.hasParams && !isUiOrSelectorHelper(fn));
+      const selectorInfo = this.detectAutonSelectorInfo(this.project?.files);
+      let candidateList = zeroParamRoutines.length > 0 ? zeroParamRoutines : allFunctions.filter((fn) => !isUiOrSelectorHelper(fn));
+      if (candidateList.length === 0) {
+        candidateList = allFunctions;
+      }
+
+      // If main.cpp fallback only has `void autonomous()` calling a routine in another file, check if selector routes exist
+      if (selectorInfo && selectorInfo.routes && selectorInfo.routes.length > 0) {
+        const orderMap = new Map();
+        selectorInfo.routes.forEach((r, idx) => orderMap.set(r.fnName.toLowerCase(), idx));
+        candidateList.sort((a, b) => {
+          const ia = orderMap.has(a.name.toLowerCase()) ? orderMap.get(a.name.toLowerCase()) : 9999;
+          const ib = orderMap.has(b.name.toLowerCase()) ? orderMap.get(b.name.toLowerCase()) : 9999;
+          return ia - ib;
+        });
+      }
+
+      const routines = candidateList.map((fn) => ({
         name: fn.name,
         body: fn.body,
       }));
@@ -2870,7 +3361,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
       if (routines.length === 0) {
         routines.push({
           name: "autonomous",
-          body: code,
+          body: usingMainFallback ? "" : code,
         });
       }
       return routines;
@@ -3150,12 +3641,43 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
       const generated = this.generateAutonCppCode(plannerPaths, indent, lib);
       if (mode === "replace") {
-        this.setFile("src/autons.cpp", generated);
+        let finalCode = generated;
+        // Preserve RW-Template / custom selector helper blocks & extra #includes if present in existing autons.cpp
+        if (existing && /\b(?:current_auton_selection|auton_selection|autonSelector|drawAutonSelector|displayAutonSelector|runAuton|auton-selector)\b/.test(existing)) {
+          const existingIncludes = existing.match(/^\s*#include\s+[<"][^>"]+[>"]/gm) || [];
+          const missingIncludes = existingIncludes.filter((inc) => !finalCode.includes(inc.trim()));
+          if (missingIncludes.length > 0) {
+            finalCode = finalCode.replace(/(#include\s+[<"][^>"]+[>"]\s*\n+)/, `$1${missingIncludes.join("\n")}\n`);
+          }
+          // Preserve any selector helper function (`displayAutonSelector`, `runAuton`, `autonSelector`) that isn't a planner routine
+          const routineNamesLower = new Set(plannerPaths.map((p, idx) => (p.name ? p.name.toLowerCase().replace(/[^a-z0-9_]/g, "_") : `auton_${idx + 1}`)));
+          const helperRegex = /void\s+([a-zA-Z0-9_]+)\s*\([^)]*\)\s*\{/g;
+          let hm;
+          const preservedHelpers = [];
+          while ((hm = helperRegex.exec(existing)) !== null) {
+            const hName = hm[1];
+            const startIdx = hm.index;
+            let depth = 1;
+            let i = helperRegex.lastIndex;
+            for (; i < existing.length && depth > 0; i++) {
+              if (existing[i] === "{") depth++;
+              else if (existing[i] === "}") depth--;
+            }
+            if (!routineNamesLower.has(hName.toLowerCase()) && /selector|switch\s*\(/i.test(existing.substring(startIdx, i))) {
+              preservedHelpers.push(existing.substring(startIdx, i));
+            }
+            helperRegex.lastIndex = i;
+          }
+          if (preservedHelpers.length > 0) {
+            finalCode += `\n// Preserved Auton Selector Helpers\n` + preservedHelpers.join("\n\n") + "\n";
+          }
+        }
+        this.setFile("src/autons.cpp", finalCode);
         if (this.project) {
           this.project.lastAutonEditor = "blocks";
           this.project.rawCppPreserved = false;
         }
-        return generated;
+        return finalCode;
       }
 
       if (mode === "append") {
@@ -3310,7 +3832,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           return;
         }
 
-        // 3. String literal validation & string stripping
+        // 3. String literal validation & string stripping (supports raw strings R"(...)" & escaped quotes)
         let codeWithoutStrings = "";
         let inString = false;
         let stringQuote = "";
@@ -3318,12 +3840,21 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         for (let i = 0; i < codePart.length; i++) {
           const ch = codePart[i];
           const prevCh = i > 0 ? codePart[i - 1] : "";
+          const nextCh = i + 1 < codePart.length ? codePart[i + 1] : "";
 
           if (inString) {
-            if (ch === stringQuote && prevCh !== "\\") {
+            const escaped = prevCh === "\\" && (i < 2 || codePart[i - 2] !== "\\");
+            if (ch === stringQuote && !escaped) {
               inString = false;
             }
           } else {
+            if (ch === "R" && nextCh === '"' && codePart.indexOf("(", i + 2) !== -1) {
+              const rawEnd = codePart.indexOf(')"', i + 2);
+              if (rawEnd !== -1) {
+                i = rawEnd + 1;
+                continue;
+              }
+            }
             if (ch === '"' || ch === "'") {
               inString = true;
               stringQuote = ch;
@@ -3464,7 +3995,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           statementStartLine = 0;
         }
 
-        // Accumulate multi-line statements
+        // Accumulate multi-line statements cleanly (do not reset inside multi-line {...} arguments or lambdas)
         if (!statementBuffer) {
           statementStartLine = lineNum;
         }
@@ -3477,9 +4008,9 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
           statementStartLine = 0;
 
           if (fullStmt && !/^[)\]}\s]+$/.test(fullStmt)) {
-            const isFunctionCall = /[a-zA-Z0-9_:]+\s*\([^)]*\)/.test(fullStmt);
+            const isFunctionCall = /[a-zA-Z0-9_:<>]+\s*\(/.test(fullStmt);
             const isAssignmentOrOp = /=|\+=|-=|\*=|\/=|%=|\+\+|--|<<|>>/.test(fullStmt);
-            const isReturnOrBreak = /^(return|break|continue|goto)\b/.test(fullStmt);
+            const isReturnOrBreak = /^(return|break|continue|goto|using|typedef)\b/.test(fullStmt);
             const isDeclaration = /^(?:const\s+|static\s+|volatile\s+|extern\s+|unsigned\s+|signed\s+|inline\s+|constexpr\s+)*([a-zA-Z0-9_:<>\*\&]+)\s+([a-zA-Z0-9_]+)/.test(fullStmt);
 
             if (!isFunctionCall && !isAssignmentOrOp && !isReturnOrBreak && !isDeclaration) {
@@ -3492,9 +4023,12 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
               });
             }
           }
-        } else if (codeWithoutStrings.endsWith("{") || codeWithoutStrings.endsWith("}")) {
-          statementBuffer = "";
-          statementStartLine = 0;
+        } else if ((codeWithoutStrings.endsWith("{") || codeWithoutStrings.endsWith("}")) && !isInsideParensOrBrackets) {
+          // Only clear statement buffer at standalone top-level blocks outside parameter lists/lambdas
+          if (globalBracketStack.length <= 1 || !/\(/.test(statementBuffer)) {
+            statementBuffer = "";
+            statementStartLine = 0;
+          }
         }
 
         // 8. LemLib API Parameter Validation (Supports Pose overloads & coordinates)
@@ -3687,9 +4221,27 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         "E_CONTROLLER_DIGITAL_R1", "E_CONTROLLER_DIGITAL_R2", "E_CONTROLLER_DIGITAL_L1", "E_CONTROLLER_DIGITAL_L2"
       ]);
 
-      // Scan all project source and header files for diagnostics
-      const cppFiles = fileNames.filter(f => f.endsWith(".cpp") || f.endsWith(".c"));
-      const projectFilesToScan = fileNames.filter(f => f.endsWith(".cpp") || f.endsWith(".c") || f.endsWith(".h") || f.endsWith(".hpp"));
+      // Scan all project source and header files for diagnostics (deduplicating alias mirrors)
+      const aliasPairs = [
+        ["autons.cpp", "src/autons.cpp"],
+        ["main.cpp", "src/main.cpp"],
+        ["main.h", "include/main.h"],
+        ["vex.h", "include/vex.h"],
+        ["robot-config.h", "include/robot-config.h"],
+        ["robot-config.cpp", "src/robot-config.cpp"]
+      ];
+      const skipAliasSet = new Set();
+      for (const [rootAlias, canonical] of aliasPairs) {
+        if (files[canonical] !== undefined && files[rootAlias] !== undefined && files[canonical] === files[rootAlias]) {
+          skipAliasSet.add(rootAlias);
+        }
+      }
+      if (this.project?.autonSourceFile && files["src/autons.cpp"] !== undefined && files[this.project.autonSourceFile] === files["src/autons.cpp"] && this.project.autonSourceFile !== "src/autons.cpp") {
+        skipAliasSet.add(this.project.autonSourceFile);
+      }
+
+      const cppFiles = fileNames.filter(f => !skipAliasSet.has(f) && (f.endsWith(".cpp") || f.endsWith(".c")));
+      const projectFilesToScan = fileNames.filter(f => !skipAliasSet.has(f) && (f.endsWith(".cpp") || f.endsWith(".c") || f.endsWith(".h") || f.endsWith(".hpp")));
 
       projectFilesToScan.forEach(fileName => {
         const content = files[fileName];
@@ -3940,6 +4492,7 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
 
           const docPayload = {
             name: this.project.name || "Override_LemLib_Bot",
+            library: this.getProjectLibrary(),
             version: this.project.version || "1.0.0",
             target: this.project.target || "v5",
             kernel: this.project.kernel || "4.1.0",
@@ -3948,6 +4501,11 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
             updatedAt: now,
             authorEmail: user.email || email,
             isDefault: false,
+            importedProject: Boolean(this.project.importedProject),
+            lastAutonEditor: this.project.lastAutonEditor || "blocks",
+            rawCppPreserved: Boolean(this.project.rawCppPreserved),
+            subprojectFolder: this.project.subprojectFolder || "",
+            autonSourceFile: this.project.autonSourceFile || "",
             totalFiles: Object.keys(cleanFiles).length,
             files: (totalFilesJsonSize < 200 * 1024 && (!compressedPayload || compressedPayload.length < 500000)) ? cleanFiles : primaryFiles,
             chunkCount: 0,
@@ -4001,6 +4559,8 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
     }
 
     async loadFromCloud(force = false) {
+      // Ensure IndexedDB local project hydration completes before evaluating precedence
+      await this.whenReady().catch(() => {});
       let user = null;
       if (typeof firebase !== "undefined" && firebase.auth && firebase.auth().currentUser) {
         user = firebase.auth().currentUser;
@@ -4189,8 +4749,12 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         }
       }
 
+      const detectedCloudLib = normalizeLibId(candidateData.library || this.detectLibraryForFiles(filesMap));
+      const selectorMeta = candidateData.autonSelector || this.detectAutonSelectorInfo(filesMap);
+
       this.project = {
         name: candidateData.name || "Override_LemLib_Bot",
+        library: detectedCloudLib,
         version: candidateData.version || "1.0.0",
         target: candidateData.target || "v5",
         kernel: candidateData.kernel || "4.1.0",
@@ -4200,7 +4764,16 @@ lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sens
         updatedAt: cloudTime || Date.now(),
         cloudSynced: true,
         isDefault: isCloudDefault,
+        importedProject: Boolean(candidateData.importedProject),
+        lastAutonEditor: candidateData.lastAutonEditor || (candidateData.importedProject ? "ide" : "blocks"),
+        rawCppPreserved: candidateData.rawCppPreserved !== undefined ? Boolean(candidateData.rawCppPreserved) : Boolean(candidateData.importedProject),
+        subprojectFolder: candidateData.subprojectFolder || "",
+        autonSourceFile: candidateData.autonSourceFile || "",
+        autonSelector: selectorMeta
       };
+      try {
+        localStorage.setItem("vex_active_library", detectedCloudLib);
+      } catch (_) {}
 
       if (candidateData.versions && typeof candidateData.versions === "object") {
         this.versions = candidateData.versions;
